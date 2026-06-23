@@ -4,6 +4,7 @@ package agent
 
 import (
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -39,7 +40,7 @@ func TestGetDataDir(t *testing.T) {
 	t.Run("DATA_DIR environment variable", func(t *testing.T) {
 		tempDir := t.TempDir()
 
-		t.Setenv("BESZEL_AGENT_DATA_DIR", tempDir)
+		t.Setenv("PULSE_AGENT_DATA_DIR", tempDir)
 
 		result, err := GetDataDir()
 		require.NoError(t, err)
@@ -48,7 +49,10 @@ func TestGetDataDir(t *testing.T) {
 
 	// Test with invalid explicit dataDir
 	t.Run("invalid explicit data dir", func(t *testing.T) {
-		invalidPath := "/invalid/path/that/cannot/be/created"
+		tempDir := t.TempDir()
+		parentFile := filepath.Join(tempDir, "not-a-directory")
+		require.NoError(t, os.WriteFile(parentFile, []byte("test"), 0644))
+		invalidPath := filepath.Join(parentFile, "child")
 		_, err := GetDataDir(invalidPath)
 		assert.Error(t, err)
 	})
@@ -78,7 +82,7 @@ func TestTestDataDirs(t *testing.T) {
 	// Test with multiple directories, first one valid
 	t.Run("multiple dirs - first valid", func(t *testing.T) {
 		tempDir := t.TempDir()
-		invalidDir := "/invalid/path"
+		invalidDir := invalidChildPath(t)
 		result, err := testDataDirs([]string{tempDir, invalidDir})
 		require.NoError(t, err)
 		assert.Equal(t, tempDir, result)
@@ -87,7 +91,7 @@ func TestTestDataDirs(t *testing.T) {
 	// Test with multiple directories, second one valid
 	t.Run("multiple dirs - second valid", func(t *testing.T) {
 		tempDir := t.TempDir()
-		invalidDir := "/invalid/path"
+		invalidDir := invalidChildPath(t)
 		result, err := testDataDirs([]string{invalidDir, tempDir})
 		require.NoError(t, err)
 		assert.Equal(t, tempDir, result)
@@ -109,11 +113,20 @@ func TestTestDataDirs(t *testing.T) {
 
 	// Test with no valid directories
 	t.Run("no valid directories", func(t *testing.T) {
-		invalidPaths := []string{"/invalid/path1", "/invalid/path2"}
+		invalidPaths := []string{invalidChildPath(t), invalidChildPath(t)}
 		_, err := testDataDirs(invalidPaths)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "data directory not found")
 	})
+}
+
+func invalidChildPath(t testing.TB) string {
+	t.Helper()
+
+	tempDir := t.TempDir()
+	parentFile := filepath.Join(tempDir, "not-a-directory")
+	require.NoError(t, os.WriteFile(parentFile, []byte("test"), 0644))
+	return filepath.Join(parentFile, "child")
 }
 
 func TestIsValidDataDir(t *testing.T) {
@@ -217,12 +230,17 @@ func TestDirectoryIsWritable(t *testing.T) {
 		if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
 			t.Skip("Skipping non-writable directory test on", runtime.GOOS)
 		}
+		currentUser, err := user.Current()
+		require.NoError(t, err)
+		if currentUser.Uid == "0" {
+			t.Skip("Skipping non-writable directory test when running as root")
+		}
 
 		tempDir := t.TempDir()
 		readOnlyDir := filepath.Join(tempDir, "readonly")
 
 		// Create the directory
-		err := os.Mkdir(readOnlyDir, 0755)
+		err = os.Mkdir(readOnlyDir, 0755)
 		require.NoError(t, err)
 
 		// Make it read-only

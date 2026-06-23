@@ -6,6 +6,9 @@
 		"useIgnoreFile": true,
 		"defaultBranch": "main"
 	},
+	"files": {
+		"includes": ["**", "!src/locales"]
+	},
 	"formatter": {
 		"enabled": true,
 		"indentStyle": "tab",
@@ -80,6 +83,29 @@
 				"rules": {
 					"correctness": {
 						"noUnusedVariables": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["**/*.css"],
+			"linter": {
+				"rules": {
+					"complexity": {
+						"noImportantStyles": "off"
+					},
+					"suspicious": {
+						"noUnknownAtRules": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["src/components/ui/icons.tsx"],
+			"linter": {
+				"rules": {
+					"a11y": {
+						"noSvgWithoutTitle": "off"
 					}
 				}
 			}

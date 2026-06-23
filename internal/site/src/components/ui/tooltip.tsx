@@ -21,7 +21,7 @@ function TooltipTrigger({ ...props }: React.ComponentProps<typeof TooltipPrimiti
 
 function TooltipContent({
 	className,
-	sideOffset = 0,
+	sideOffset = 6,
 	children,
 	...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
@@ -31,14 +31,14 @@ function TooltipContent({
 				data-slot="tooltip-content"
 				sideOffset={sideOffset}
 				className={cn(
-					"bg-popover text-popover-foreground border animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-fit origin-(--radix-tooltip-content-transform-origin) rounded-md px-3 py-1.5 text-sm text-balance",
+					"z-50 w-fit max-w-xs origin-(--radix-tooltip-content-transform-origin) rounded-md border border-foreground/10 bg-foreground px-2.5 py-1.5 text-xs leading-relaxed text-background text-balance shadow-tooltip animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-1 data-[side=left]:slide-in-from-right-1 data-[side=right]:slide-in-from-left-1 data-[side=top]:slide-in-from-bottom-1",
 					className
 				)}
 				{...props}
 			>
 				{children}
 				<TooltipPrimitive.Arrow
-					className="bg-popover border z-50 fill-popover size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] will-change-transform"
+					className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] border border-foreground/10 bg-foreground fill-foreground will-change-transform"
 					style={{ clipPath: "inset(25% 0 0 25%)" }}
 				/>
 			</TooltipPrimitive.Content>

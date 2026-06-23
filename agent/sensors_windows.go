@@ -1,6 +1,6 @@
 //go:build windows
 
-//go:generate dotnet build -c Release lhm/beszel_lhm.csproj
+//go:generate dotnet build -c Release lhm/pulse_lhm.csproj
 
 package agent
 
@@ -44,17 +44,17 @@ type lhmProcess struct {
 var lhmFs embed.FS
 
 var (
-	beszelLhm     *lhmProcess
-	beszelLhmOnce sync.Once
-	useLHM        = os.Getenv("LHM") == "true"
+	pulseLhm     *lhmProcess
+	pulseLhmOnce sync.Once
+	useLHM       = os.Getenv("LHM") == "true"
 )
 
 var errNoSensors = errors.New("no sensors found (try running as admin with LHM=true)")
 
 // newlhmProcess copies the embedded LHM executable to a temporary directory and starts it.
 func newlhmProcess() (*lhmProcess, error) {
-	destDir := filepath.Join(os.TempDir(), "beszel")
-	execPath := filepath.Join(destDir, "beszel_lhm.exe")
+	destDir := filepath.Join(os.TempDir(), "pulse")
+	execPath := filepath.Join(destDir, "pulse_lhm.exe")
 
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create temp directory: %w", err)
@@ -214,9 +214,11 @@ func (lhm *lhmProcess) getTemps(ctx context.Context) (temps []sensors.Temperatur
 	return temps, nil
 }
 
-// getSensorTemps attempts to pull sensor temperatures from the embedded LHM process.
+var getSensorTemps = getWindowsSensorTemps
+
+// getWindowsSensorTemps attempts to pull sensor temperatures from the embedded LHM process.
 // NB: LibreHardwareMonitorLib requires admin privileges to access all available sensors.
-func getSensorTemps(ctx context.Context) (temps []sensors.TemperatureStat, err error) {
+func getWindowsSensorTemps(ctx context.Context) (temps []sensors.TemperatureStat, err error) {
 	defer func() {
 		if err != nil {
 			slog.Debug("Error reading sensors", "err", err)
@@ -228,19 +230,21 @@ func getSensorTemps(ctx context.Context) (temps []sensors.TemperatureStat, err e
 	}
 
 	// Initialize process once
-	beszelLhmOnce.Do(func() {
-		beszelLhm, err = newlhmProcess()
+	pulseLhmOnce.Do(func() {
+		pulseLhm, err = newlhmProcess()
 	})
 
 	if err != nil {
-		return temps, fmt.Errorf("failed to initialize lhm: %w", err)
+		slog.Warn("LHM helper unavailable; falling back to gopsutil sensors", "err", err)
+		return sensors.TemperaturesWithContext(ctx)
 	}
 
-	if beszelLhm == nil {
-		return temps, fmt.Errorf("lhm not available")
+	if pulseLhm == nil {
+		slog.Warn("LHM helper unavailable; falling back to gopsutil sensors")
+		return sensors.TemperaturesWithContext(ctx)
 	}
 
-	return beszelLhm.getTemps(ctx)
+	return pulseLhm.getTemps(ctx)
 }
 
 // cleanup terminates the process and closes resources

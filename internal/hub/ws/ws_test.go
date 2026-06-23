@@ -3,17 +3,14 @@
 package ws
 
 import (
-	"crypto/ed25519"
 	"testing"
 	"time"
 
 	"github.com/blang/semver"
-	"github.com/henrygd/beszel/internal/common"
+	"gutenacht.site/pulse/internal/common"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/ssh"
 )
 
 // TestGetUpgrader tests the singleton upgrader
@@ -87,28 +84,9 @@ func TestWsConn_SendMessage_CBOR(t *testing.T) {
 	assert.Equal(t, testData.Action, decodedData.Action, "Action should match")
 }
 
-// TestWsConn_GetFingerprint_SignatureGeneration tests signature creation logic
-func TestWsConn_GetFingerprint_SignatureGeneration(t *testing.T) {
-	// Generate test key pair
-	_, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-
-	signer, err := ssh.NewSignerFromKey(privKey)
-	require.NoError(t, err)
-
-	token := "test-token"
-
-	// This will timeout since conn is nil, but we can verify the signature logic
-	// We can't test the full flow, but we can test that the signature is created properly
-	challenge := []byte(token)
-	signature, err := signer.Sign(nil, challenge)
-	assert.NoError(t, err, "Should create signature successfully")
-	assert.NotEmpty(t, signature.Blob, "Signature blob should not be empty")
-	assert.Equal(t, signer.PublicKey().Type(), signature.Format, "Signature format should match key type")
-
-	// Test the fingerprint request structure
+// TestWsConn_GetFingerprint_RequestFormat tests fingerprint request encoding.
+func TestWsConn_GetFingerprint_RequestFormat(t *testing.T) {
 	fpRequest := common.FingerprintRequest{
-		Signature:   signature.Blob,
 		NeedSysInfo: true,
 	}
 
@@ -119,7 +97,6 @@ func TestWsConn_GetFingerprint_SignatureGeneration(t *testing.T) {
 	var decodedFpRequest common.FingerprintRequest
 	err = cbor.Unmarshal(fpData, &decodedFpRequest)
 	assert.NoError(t, err, "Should decode fingerprint request from CBOR")
-	assert.Equal(t, fpRequest.Signature, decodedFpRequest.Signature, "Signature should match")
 	assert.Equal(t, fpRequest.NeedSysInfo, decodedFpRequest.NeedSysInfo, "NeedSysInfo should match")
 
 	// Test the full hub request structure

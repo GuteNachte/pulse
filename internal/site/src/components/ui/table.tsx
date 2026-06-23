@@ -13,11 +13,7 @@ Table.displayName = "Table"
 
 const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
 	({ className, ...props }, ref) => (
-		<thead
-			ref={ref}
-			className={cn("bg-table-header border-b border-border/50 [&_tr]:border-b", className)}
-			{...props}
-		/>
+		<thead ref={ref} className={cn("border-b border-border bg-table-header [&_tr]:border-b", className)} {...props} />
 	)
 )
 TableHeader.displayName = "TableHeader"
@@ -31,7 +27,11 @@ TableBody.displayName = "TableBody"
 
 const TableFooter = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
 	({ className, ...props }, ref) => (
-		<tfoot ref={ref} className={cn("border-t bg-muted/50 font-medium last:[&>tr]:border-b-0", className)} {...props} />
+		<tfoot
+			ref={ref}
+			className={cn("border-t border-border/70 bg-surface-soft font-medium last:[&>tr]:border-b-0", className)}
+			{...props}
+		/>
 	)
 )
 TableFooter.displayName = "TableFooter"
@@ -41,7 +41,7 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
 		<tr
 			ref={ref}
 			className={cn(
-				"border-b border-border/60 hover:bg-muted/40 dark:hover:bg-muted/20 data-[state=selected]:bg-muted!",
+				"border-b border-border/65 transition-colors hover:bg-surface-soft data-[state=selected]:bg-surface-soft!",
 				className
 			)}
 			{...props}
@@ -55,7 +55,7 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
 		<th
 			ref={ref}
 			className={cn(
-				"h-12 px-4 text-start align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pe-0",
+				"h-10 px-3 text-start align-middle text-xs font-semibold text-muted-foreground [&:has([role=checkbox])]:pe-0",
 				className
 			)}
 			{...props}
@@ -66,7 +66,7 @@ TableHead.displayName = "TableHead"
 
 const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(
 	({ className, ...props }, ref) => (
-		<td ref={ref} className={cn("p-4 align-middle [&:has([role=checkbox])]:pe-0", className)} {...props} />
+		<td ref={ref} className={cn("px-3 py-3 align-middle [&:has([role=checkbox])]:pe-0", className)} {...props} />
 	)
 )
 TableCell.displayName = "TableCell"

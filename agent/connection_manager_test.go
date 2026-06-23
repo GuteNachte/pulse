@@ -3,44 +3,31 @@
 package agent
 
 import (
-	"crypto/ed25519"
 	"errors"
-	"fmt"
 	"net"
 	"net/url"
 	"testing"
 	"time"
 
+	"gutenacht.site/pulse/internal/entities/system"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/ssh"
 )
 
 func createTestAgent(t *testing.T) *Agent {
 	dataDir := t.TempDir()
-	agent, err := NewAgent(dataDir)
-	require.NoError(t, err)
-	return agent
-}
-
-func createTestServerOptions(t *testing.T) ServerOptions {
-	// Generate test key pair
-	_, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	sshPubKey, err := ssh.NewPublicKey(privKey.Public().(ed25519.PublicKey))
-	require.NoError(t, err)
-
-	// Find available port
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	port := listener.Addr().(*net.TCPAddr).Port
-	listener.Close()
-
-	return ServerOptions{
-		Network: "tcp",
-		Addr:    fmt.Sprintf("127.0.0.1:%d", port),
-		Keys:    []ssh.PublicKey{sshPubKey},
+	require.NoError(t, SaveFingerprint(dataDir, "test-fingerprint"))
+	agent := &Agent{
+		fsStats:         make(map[string]*system.FsStats),
+		diskPrev:        make(map[uint16]map[string]prevDisk),
+		netIoStats:      make(map[uint16]system.NetIoStats),
+		cache:           NewSystemDataCache(),
+		dataDir:         dataDir,
+		handlerRegistry: NewHandlerRegistry(),
 	}
+	agent.connectionManager = newConnectionManager(agent)
+	return agent
 }
 
 // TestConnectionManager_NewConnectionManager tests connection manager creation
@@ -74,9 +61,6 @@ func TestConnectionManager_StateTransitions(t *testing.T) {
 	cm.handleStateChange(WebSocketConnected)
 	assert.Equal(t, WebSocketConnected, cm.State, "State should change to WebSocketConnected")
 
-	cm.handleStateChange(SSHConnected)
-	assert.Equal(t, SSHConnected, cm.State, "State should change to SSHConnected")
-
 	cm.handleStateChange(Disconnected)
 	assert.Equal(t, Disconnected, cm.State, "State should change to Disconnected")
 
@@ -109,34 +93,10 @@ func TestConnectionManager_EventHandling(t *testing.T) {
 			expectedState: WebSocketConnected,
 		},
 		{
-			name:          "SSH connect from disconnected",
-			initialState:  Disconnected,
-			event:         SSHConnect,
-			expectedState: SSHConnected,
-		},
-		{
 			name:          "WebSocket disconnect from connected",
 			initialState:  WebSocketConnected,
 			event:         WebSocketDisconnect,
 			expectedState: Disconnected,
-		},
-		{
-			name:          "SSH disconnect from connected",
-			initialState:  SSHConnected,
-			event:         SSHDisconnect,
-			expectedState: Disconnected,
-		},
-		{
-			name:          "WebSocket disconnect from SSH connected (no change)",
-			initialState:  SSHConnected,
-			event:         WebSocketDisconnect,
-			expectedState: SSHConnected,
-		},
-		{
-			name:          "SSH disconnect from WebSocket connected (no change)",
-			initialState:  WebSocketConnected,
-			event:         SSHDisconnect,
-			expectedState: WebSocketConnected,
 		},
 	}
 
@@ -192,15 +152,15 @@ func TestConnectionManager_WebSocketConnectionFlow(t *testing.T) {
 	assert.Equal(t, Disconnected, cm.State, "State should remain Disconnected after failed connection")
 
 	// Test with invalid URL
-	t.Setenv("BESZEL_AGENT_HUB_URL", "1,33%")
-	t.Setenv("BESZEL_AGENT_TOKEN", "test-token")
+	t.Setenv("PULSE_AGENT_HUB_URL", "1,33%")
+	t.Setenv("PULSE_AGENT_TOKEN", "test-token")
 
 	_, err2 := newWebSocketClient(agent)
 	assert.Error(t, err2, "WebSocket client creation should fail with invalid URL")
 
 	// Test with missing token
-	t.Setenv("BESZEL_AGENT_HUB_URL", "http://localhost:8080")
-	t.Setenv("BESZEL_AGENT_TOKEN", "")
+	t.Setenv("PULSE_AGENT_HUB_URL", "http://localhost:8080")
+	t.Setenv("PULSE_AGENT_TOKEN", "")
 
 	_, err3 := newWebSocketClient(agent)
 	assert.Error(t, err3, "WebSocket client creation should fail without token")
@@ -229,8 +189,8 @@ func TestConnectionManager_ConnectWithRateLimit(t *testing.T) {
 	cm := agent.connectionManager
 
 	// Set up environment for WebSocket client creation
-	t.Setenv("BESZEL_AGENT_HUB_URL", "ws://localhost:8080")
-	t.Setenv("BESZEL_AGENT_TOKEN", "test-token")
+	t.Setenv("PULSE_AGENT_HUB_URL", "ws://localhost:8080")
+	t.Setenv("PULSE_AGENT_TOKEN", "test-token")
 
 	// Create WebSocket client
 	wsClient, err := newWebSocketClient(agent)
@@ -257,11 +217,10 @@ func TestConnectionManager_ConnectWithRateLimit(t *testing.T) {
 func TestConnectionManager_StartWithInvalidConfig(t *testing.T) {
 	agent := createTestAgent(t)
 	cm := agent.connectionManager
-	serverOptions := createTestServerOptions(t)
 
 	// Test starting when already started
 	cm.eventChan = make(chan ConnectionEvent, 5)
-	err := cm.Start(serverOptions)
+	err := cm.Start()
 	assert.Error(t, err, "Should error when starting already started connection manager")
 }
 
@@ -276,8 +235,8 @@ func TestConnectionManager_CloseWebSocket(t *testing.T) {
 	}, "Should not panic when closing nil WebSocket client")
 
 	// Set up environment and create WebSocket client
-	t.Setenv("BESZEL_AGENT_HUB_URL", "ws://localhost:8080")
-	t.Setenv("BESZEL_AGENT_TOKEN", "test-token")
+	t.Setenv("PULSE_AGENT_HUB_URL", "ws://localhost:8080")
+	t.Setenv("PULSE_AGENT_TOKEN", "test-token")
 
 	wsClient, err := newWebSocketClient(agent)
 	require.NoError(t, err)
@@ -298,6 +257,15 @@ func TestConnectionManager_ConnectFlow(t *testing.T) {
 	assert.NotPanics(t, func() {
 		cm.connect()
 	}, "Connect should not panic without WebSocket client")
+}
+
+func TestConnectionManager_ConnectKeepsRetryingWebSocket(t *testing.T) {
+	agent := createTestAgent(t)
+	cm := agent.connectionManager
+
+	cm.connect()
+
+	assert.NotNil(t, cm.wsTicker, "WebSocket-only agent should keep retrying WebSocket")
 }
 
 func TestShouldExitOnErr(t *testing.T) {
@@ -335,7 +303,7 @@ func TestShouldExitOnErr(t *testing.T) {
 		},
 		{
 			name:     "env var true, matching error with extra context",
-			err:      createDialErr("lookup beszel.server.lan on [::1]:53: read udp [::1]:44557->[::1]:53: read: connection refused"),
+			err:      createDialErr("lookup pulse.server.lan on [::1]:53: read udp [::1]:44557->[::1]:53: read: connection refused"),
 			envValue: "true",
 			expected: true,
 		},

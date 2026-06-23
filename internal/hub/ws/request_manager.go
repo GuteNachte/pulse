@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/henrygd/beszel/internal/common"
 	"github.com/lxzan/gws"
+	"gutenacht.site/pulse/internal/common"
 )
 
 // RequestID uniquely identifies a request

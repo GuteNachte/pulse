@@ -345,7 +345,7 @@ type SmartInfoForSata struct {
 	ScsiProduct     string       `json:"scsi_product"`
 	// LogicalBlockSize  int                `json:"logical_block_size"`
 	// PhysicalBlockSize int                `json:"physical_block_size"`
-	// RotationRate      int                `json:"rotation_rate"`
+	RotationRate *int `json:"rotation_rate,omitempty"`
 	// FormFactor        FormFactorInfo     `json:"form_factor"`
 	// Trim                         TrimInfo                     `json:"trim"`
 	// InSmartctlDatabase           bool                         `json:"in_smartctl_database"`
@@ -406,6 +406,7 @@ type SmartInfoForScsi struct {
 	ScsiVersion               string                    `json:"scsi_version"`
 	SerialNumber              string                    `json:"serial_number"`
 	UserCapacity              UserCapacity              `json:"user_capacity"`
+	RotationRate              *int                      `json:"rotation_rate,omitempty"`
 	Temperature               TemperatureInfoScsi       `json:"temperature"`
 	SmartStatus               SmartStatusInfo           `json:"smart_status"`
 	PowerOnTime               PowerOnTimeScsi           `json:"power_on_time"`
@@ -494,7 +495,7 @@ type SmartInfoForNvme struct {
 	FirmwareVersion string           `json:"firmware_version"`
 	// NVMePCIVendor                 NVMePCIVendor                 `json:"nvme_pci_vendor"`
 	// NVMeIEEEOUIIdentifier         uint32                        `json:"nvme_ieee_oui_identifier"`
-	NVMeTotalCapacity             uint64                        `json:"nvme_total_capacity"`
+	NVMeTotalCapacity uint64 `json:"nvme_total_capacity"`
 	// NVMeUnallocatedCapacity       uint64                        `json:"nvme_unallocated_capacity"`
 	// NVMeControllerID              uint16                        `json:"nvme_controller_id"`
 	// NVMeVersion                   VersionStringInfo             `json:"nvme_version"`
@@ -527,6 +528,7 @@ type SmartData struct {
 	SmartStatus     string            `json:"s,omitempty" cbor:"5,keyasint,omitempty"`
 	DiskName        string            `json:"dn,omitempty" cbor:"6,keyasint,omitempty"`
 	DiskType        string            `json:"dt,omitempty" cbor:"7,keyasint,omitempty"`
+	MediaType       string            `json:"mt,omitempty" cbor:"10,keyasint,omitempty"`
 	Temperature     uint8             `json:"t,omitempty" cbor:"8,keyasint,omitempty"`
 	Attributes      []*SmartAttribute `json:"a,omitempty" cbor:"9,keyasint,omitempty"`
 }

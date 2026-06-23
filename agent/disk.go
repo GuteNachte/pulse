@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/henrygd/beszel/agent/utils"
-	"github.com/henrygd/beszel/internal/entities/system"
+	"gutenacht.site/pulse/agent/utils"
+	"gutenacht.site/pulse/internal/entities/system"
 
 	"github.com/shirou/gopsutil/v4/disk"
 )
@@ -20,7 +20,6 @@ import (
 type fsRegistrationContext struct {
 	filesystem     string // value of optional FILESYSTEM env var
 	isWindows      bool
-	efPath         string // path to extra filesystems (default "/extra-filesystems")
 	diskIoCounters map[string]disk.IOCountersStat
 }
 
@@ -62,31 +61,6 @@ func prevDiskFromCounter(d disk.IOCountersStat, t time.Time) prevDisk {
 	}
 }
 
-// parseFilesystemEntry parses a filesystem entry in the format "device__customname"
-// Returns the device/filesystem part and the custom name part
-func parseFilesystemEntry(entry string) (device, customName string) {
-	entry = strings.TrimSpace(entry)
-	if parts := strings.SplitN(entry, "__", 2); len(parts) == 2 {
-		device = strings.TrimSpace(parts[0])
-		customName = strings.TrimSpace(parts[1])
-	} else {
-		device = entry
-	}
-	return device, customName
-}
-
-// extraFilesystemPartitionInfo derives the I/O device and optional display name
-// for a mounted /extra-filesystems partition. Prefer the partition device reported
-// by the system and only use the folder name for custom naming metadata.
-func extraFilesystemPartitionInfo(p disk.PartitionStat) (device, customName string) {
-	device = strings.TrimSpace(p.Device)
-	folderDevice, customName := parseFilesystemEntry(filepath.Base(p.Mountpoint))
-	if device == "" {
-		device = folderDevice
-	}
-	return device, customName
-}
-
 func isDockerSpecialMountpoint(mountpoint string) bool {
 	switch mountpoint {
 	case "/etc/hosts", "/etc/resolv.conf", "/etc/hostname":
@@ -120,18 +94,8 @@ func registerFilesystemStats(existing map[string]*system.FsStats, device, mountp
 			}
 		}
 	} else {
-		// Check if non-root has diskstats and prefer the folder device for
-		// /extra-filesystems mounts when the discovered partition device is a
-		// mapper path (e.g. luks UUID) that obscures the underlying block device.
+		// Check if non-root has diskstats.
 		if _, ioMatch := ctx.diskIoCounters[key]; !ioMatch {
-			if strings.HasPrefix(mountpoint, ctx.efPath) {
-				folderDevice, _ := parseFilesystemEntry(filepath.Base(mountpoint))
-				if folderDevice != "" {
-					if matchedKey, match := findIoDevice(folderDevice, ctx.diskIoCounters); match {
-						key = matchedKey
-					}
-				}
-			}
 			if _, ioMatch = ctx.diskIoCounters[key]; !ioMatch {
 				if matchedKey, match := findIoDevice(key, ctx.diskIoCounters); match {
 					key = matchedKey
@@ -229,75 +193,6 @@ func (d *diskDiscovery) addLastResortRootFs() {
 	d.agent.fsStats[rootKey] = &system.FsStats{Root: true, Mountpoint: d.rootMountPoint}
 }
 
-// findPartitionByFilesystemSetting matches an EXTRA_FILESYSTEMS entry against a
-// discovered partition either by mountpoint or by device suffix.
-func findPartitionByFilesystemSetting(filesystem string, partitions []disk.PartitionStat) (disk.PartitionStat, bool) {
-	for _, p := range partitions {
-		if strings.HasSuffix(p.Device, filesystem) || p.Mountpoint == filesystem {
-			return p, true
-		}
-	}
-	return disk.PartitionStat{}, false
-}
-
-// addConfiguredExtraFsEntry resolves one EXTRA_FILESYSTEMS entry, preferring a
-// discovered partition and falling back to any path that disk.Usage accepts.
-func (d *diskDiscovery) addConfiguredExtraFsEntry(filesystem, customName string) {
-	if p, found := findPartitionByFilesystemSetting(filesystem, d.partitions); found {
-		d.addFsStat(p.Device, p.Mountpoint, false, customName)
-		return
-	}
-
-	if _, err := d.usageFn(filesystem); err == nil {
-		d.addFsStat(filepath.Base(filesystem), filesystem, false, customName)
-		return
-	} else {
-		slog.Error("Invalid filesystem", "name", filesystem, "err", err)
-	}
-}
-
-// addConfiguredExtraFilesystems parses and registers the comma-separated
-// EXTRA_FILESYSTEMS env var entries.
-func (d *diskDiscovery) addConfiguredExtraFilesystems(extraFilesystems string) {
-	for fsEntry := range strings.SplitSeq(extraFilesystems, ",") {
-		filesystem, customName := parseFilesystemEntry(fsEntry)
-		d.addConfiguredExtraFsEntry(filesystem, customName)
-	}
-}
-
-// addPartitionExtraFs registers partitions mounted under /extra-filesystems so
-// their display names can come from the folder name while their I/O keys still
-// prefer the underlying partition device. Only direct children are matched to
-// avoid registering nested virtual mounts (e.g. /proc, /sys) that are returned by
-// disk.Partitions(true) when the host root is bind-mounted in /extra-filesystems.
-func (d *diskDiscovery) addPartitionExtraFs(p disk.PartitionStat) {
-	if filepath.Dir(p.Mountpoint) != d.ctx.efPath {
-		return
-	}
-	device, customName := extraFilesystemPartitionInfo(p)
-	d.addFsStat(device, p.Mountpoint, false, customName)
-}
-
-// addExtraFilesystemFolders handles bare directories under /extra-filesystems
-// that may not appear in partition discovery, while skipping mountpoints that
-// were already registered from higher-fidelity sources.
-func (d *diskDiscovery) addExtraFilesystemFolders(folderNames []string) {
-	existingMountpoints := make(map[string]bool, len(d.agent.fsStats))
-	for _, stats := range d.agent.fsStats {
-		existingMountpoints[stats.Mountpoint] = true
-	}
-
-	for _, folderName := range folderNames {
-		mountpoint := filepath.Join(d.ctx.efPath, folderName)
-		slog.Debug("/extra-filesystems", "mountpoint", mountpoint)
-		if existingMountpoints[mountpoint] {
-			continue
-		}
-		device, customName := parseFilesystemEntry(folderName)
-		d.addFsStat(device, mountpoint, false, customName)
-	}
-}
-
 // Sets up the filesystems to monitor for disk usage and I/O.
 func (a *Agent) initializeDiskInfo() {
 	filesystem, _ := utils.GetEnv("FILESYSTEM")
@@ -326,7 +221,6 @@ func (a *Agent) initializeDiskInfo() {
 		filesystem:     filesystem,
 		isWindows:      isWindows,
 		diskIoCounters: diskIoCounters,
-		efPath:         "/extra-filesystems",
 	}
 
 	// Get the appropriate root mount point for this system
@@ -340,28 +234,11 @@ func (a *Agent) initializeDiskInfo() {
 
 	hasRoot = discovery.addConfiguredRootFs()
 
-	// Add EXTRA_FILESYSTEMS env var values to fsStats
-	if extraFilesystems, exists := utils.GetEnv("EXTRA_FILESYSTEMS"); exists {
-		discovery.addConfiguredExtraFilesystems(extraFilesystems)
-	}
-
 	// Process partitions for various mount points
 	for _, p := range partitions {
 		if !hasRoot && isRootFallbackPartition(p, discovery.rootMountPoint) {
 			hasRoot = discovery.addPartitionRootFs(p.Device, p.Mountpoint)
 		}
-		discovery.addPartitionExtraFs(p)
-	}
-
-	// Check all folders in /extra-filesystems and add them if not already present
-	if folders, err := os.ReadDir(discovery.ctx.efPath); err == nil {
-		folderNames := make([]string, 0, len(folders))
-		for _, folder := range folders {
-			if folder.IsDir() {
-				folderNames = append(folderNames, folder.Name())
-			}
-		}
-		discovery.addExtraFilesystemFolders(folderNames)
 	}
 
 	// If no root filesystem set, try the most active I/O device as a last
@@ -374,7 +251,7 @@ func (a *Agent) initializeDiskInfo() {
 	a.initializeDiskIoStats(diskIoCounters)
 }
 
-// Removes extra filesystems that mirror root usage (https://github.com/henrygd/beszel/issues/1428).
+// Removes extra filesystems that mirror root usage (https://gutenacht.site/pulse/issues/1428).
 func (a *Agent) pruneDuplicateRootExtraFilesystems() {
 	var rootMountpoint string
 	for _, stats := range a.fsStats {
@@ -593,6 +470,9 @@ func (a *Agent) updateDiskUsage(systemStats *system.Stats) {
 func (a *Agent) updateDiskIo(cacheTimeMs uint16, systemStats *system.Stats) {
 	// disk i/o (cache-aware per interval)
 	if ioCounters, err := disk.IOCounters(a.fsNames...); err == nil {
+		if a.diskPrev == nil {
+			a.diskPrev = make(map[uint16]map[string]prevDisk)
+		}
 		// Ensure map for this interval exists
 		if _, ok := a.diskPrev[cacheTimeMs]; !ok {
 			a.diskPrev[cacheTimeMs] = make(map[string]prevDisk)

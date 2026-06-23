@@ -1,12 +1,16 @@
-import type { RecordModel } from "pocketbase"
-import type { Unit, Os, BatteryState, HourFormat, ConnectionType, ServiceStatus, ServiceSubState } from "@/lib/enums"
+﻿import type { RecordModel } from "pocketbase"
+import type { Unit, Os, BatteryState, HourFormat, ConnectionType } from "@/lib/enums"
+import type { ComponentType } from "react"
 
 // global window properties
 declare global {
-	var BESZEL: {
+	var PULSE: {
 		BASE_PATH: string
 		HUB_VERSION: string
 		HUB_URL: string
+		AGENT_HUB_URL: string
+		BUILD_COMMIT?: string
+		BUILD_TIME?: string
 		OAUTH_DISABLE_POPUP: boolean
 	}
 }
@@ -25,9 +29,22 @@ export interface FingerprintRecord extends RecordModel {
 
 export interface SystemRecord extends RecordModel {
 	name: string
-	host: string
+	display_name?: string
+	role?: string
+	custom_role?: string
+	primary_use?: string
+	is_nas?: boolean
+	description?: string
+	suppress_offline_alerts?: boolean
+	hide_from_home?: boolean
+	is_local?: boolean
+	pairing_confirmed?: boolean
+	target_ip?: string
+	connect_ip?: string
+	reported_ips?: string[]
+	fingerprint_summary?: string
+	agent_profile?: string
 	status: "up" | "down" | "paused" | "pending"
-	port: string
 	info: SystemInfo
 	v: string
 	updated: string
@@ -62,22 +79,65 @@ export interface SystemInfo {
 	b: number
 	/** bandwidth bytes */
 	bb?: number
+	/** bandwidth bytes by direction [sent, received] */
+	bbd?: [number, number]
 	/** agent version */
 	v: string
 	/** system is using podman */
 	p?: boolean
 	/** highest gpu utilization */
 	g?: number
+	/** gpu data is available even when current utilization is 0 */
+	gs?: boolean
 	/** dashboard display temperature */
 	dt?: number
 	/** operating system */
 	os?: Os
 	/** connection type */
 	ct?: ConnectionType
+	/** Agent connection IP observed by Hub */
+	ip?: string
 	/** extra filesystem percentages */
 	efs?: Record<string, number>
 	/** services [totalServices, numFailedServices] */
 	sv?: [number, number]
+	/** generic monitored services [totalServices, nonRunningServices] */
+	msv?: [number, number]
+	/** agent declared capabilities */
+	cap?: AgentCapabilities
+}
+
+export interface AgentCapabilities {
+	platform: string
+	arch: string
+	agent_version: string
+	install_method?: string
+	run_mode?: string
+	agent_profile?: string
+	privilege: string
+	collection: string[]
+	operations: string[]
+	unsupported_reasons?: Record<string, string>
+	last_update?: AgentUpdateResult
+	collection_results?: Record<string, CapabilityStatus>
+	diagnostics?: Record<string, CapabilityStatus>
+}
+
+export type CapabilityState = "confirmed" | "unavailable" | "unsupported" | "unknown" | "failed" | "stale"
+
+export interface CapabilityStatus {
+	state: CapabilityState
+	checked_at?: string
+	reason?: string
+	detail?: string
+	count?: number
+}
+
+export interface AgentUpdateResult {
+	status: "succeeded" | "failed"
+	version?: string
+	message?: string
+	time?: string
 }
 
 export interface SystemStats {
@@ -156,6 +216,8 @@ export interface SystemStats {
 export interface GPUData {
 	/** name */
 	n: string
+	/** GPU type: discrete or integrated */
+	gt?: "discrete" | "integrated" | string
 	/** memory used (mb) */
 	mu?: number
 	/** memory total (mb) */
@@ -234,28 +296,76 @@ export interface AlertRecord extends RecordModel {
 	// user: string
 }
 
+export interface AlertPolicyRecord extends RecordModel {
+	id: string
+	user: string
+	name: string
+	value: number
+	min: number
+}
+
 export interface AlertsHistoryRecord extends RecordModel {
 	alert: string
+	alert_id?: string
 	user: string
 	system: string
 	name: string
 	val: number
+	value?: number
 	created: string
 	resolved?: string | null
+	acknowledged_at?: string | null
+	acknowledged_by?: string
+	silenced_until?: string | null
+	silenced_by?: string
+	silence_reason?: string
 }
 
-export interface QuietHoursRecord extends RecordModel {
-	id: string
+export interface NotificationFailureRecord extends RecordModel {
 	user: string
-	system: string
-	type: "one-time" | "daily"
-	start: string
-	end: string
-	expand?: {
-		system?: {
-			name: string
-		}
-	}
+	system?: string
+	title: string
+	target: string
+	fingerprint: string
+	error: string
+	count: number
+	created: string
+	updated: string
+}
+
+export interface NotificationChannelHealthRecord extends RecordModel {
+	user: string
+	target: string
+	fingerprint: string
+	status: "unknown" | "healthy" | "failed"
+	last_title?: string
+	last_error?: string
+	success_count?: number
+	failure_count?: number
+	last_checked_at?: string | null
+	last_success_at?: string | null
+	last_failure_at?: string | null
+	last_test_at?: string | null
+	created: string
+	updated: string
+}
+
+export interface AlertNotificationStateRecord extends RecordModel {
+	user: string
+	system?: string
+	fingerprint: string
+	alert_id: string
+	title?: string
+	status: "sent" | "failed" | "suppressed" | "resolved"
+	last_error?: string
+	suppressed_count?: number
+	last_attempt_at?: string | null
+	last_sent_at?: string | null
+	last_suppressed_at?: string | null
+	next_allowed_at?: string | null
+	last_resolved_at?: string | null
+	created: string
+	updated: string
 }
 
 export interface ContainerRecord extends RecordModel {
@@ -269,6 +379,11 @@ export interface ContainerRecord extends RecordModel {
 	net: number
 	health: number
 	status: string
+	stack_project?: string
+	stack_service?: string
+	stack_number?: string
+	stack_config?: string
+	stack_working_dir?: string
 	updated: number
 }
 
@@ -288,7 +403,6 @@ export interface ChartTimeData {
 
 export interface UserSettings {
 	chartTime: ChartTimes
-	emails?: string[]
 	webhooks?: string[]
 	unitTemp?: Unit
 	unitNet?: Unit
@@ -324,7 +438,7 @@ export interface ChartData {
 export interface AlertInfo {
 	name: () => string
 	unit: string
-	icon: any
+	icon: ComponentType<{ className?: string }>
 	desc: () => string
 	max?: number
 	min?: number
@@ -354,6 +468,8 @@ export interface SmartData {
 	dn?: string
 	/** disk type */
 	dt?: string
+	/** media type: nvme, ssd, hdd */
+	mt?: string
 	/** temperature */
 	t?: number
 	/** attributes */
@@ -386,10 +502,55 @@ export interface SystemDetailsRecord extends RecordModel {
 	cores: number
 	threads: number
 	cpu: string
+	cpu_vendor?: string
+	cpu_frequency_mhz?: number
 	os: Os
 	os_name: string
 	memory: number
+	memory_modules?: MemoryModuleDetails[]
 	podman: boolean
+	container_runtime_name?: string
+	container_runtime_version?: string
+	network_interfaces?: NetworkInterfaceDetails[]
+	virtualization?: VirtualizationDetails
+}
+
+export interface VirtualizationDetails {
+	type?: string
+	role?: string
+	name?: string
+	virtual_machines?: VirtualMachineDetails[]
+}
+
+export interface VirtualMachineDetails {
+	id?: string
+	name: string
+	status?: string
+	vcpu?: number
+	memory?: number
+}
+
+export interface MemoryModuleDetails {
+	locator?: string
+	capacity?: number
+	memory_type?: string
+	speed_mhz?: number
+	configured_mhz?: number
+	manufacturer?: string
+	part_number?: string
+}
+
+export interface NetworkInterfaceDetails {
+	name: string
+	display_name?: string
+	mac?: string
+	link_speed?: number
+	status?: string
+	ip_method?: string
+	ipv4?: string[]
+	ipv6?: string[]
+	gateways?: string[]
+	dns_servers?: string[]
 }
 
 export interface SmartDeviceRecord extends RecordModel {
@@ -403,146 +564,108 @@ export interface SmartDeviceRecord extends RecordModel {
 	firmware: string
 	serial: string
 	type: string
+	media_type?: string
 	hours: number
 	cycles: number
 	attributes: SmartAttribute[]
 	updated: string
 }
 
-export interface SystemdRecord extends RecordModel {
+export interface MonitoredServiceRecord extends RecordModel {
 	system: string
+	platform: "windows" | "linux" | "darwin" | "android"
 	name: string
-	state: ServiceStatus
-	sub: ServiceSubState
-	cpu: number
-	cpuPeak: number
-	memory: number
-	memPeak: number
+	display_name?: string
+	state: number
+	start_type?: string
 	updated: number
 }
 
-export interface SystemdServiceDetails {
-	AccessSELinuxContext: string
-	ActivationDetails: any[]
-	ActiveEnterTimestamp: number
-	ActiveEnterTimestampMonotonic: number
-	ActiveExitTimestamp: number
-	ActiveExitTimestampMonotonic: number
-	ActiveState: string
-	After: string[]
-	AllowIsolate: boolean
-	AssertResult: boolean
-	AssertTimestamp: number
-	AssertTimestampMonotonic: number
-	Asserts: any[]
-	Before: string[]
-	BindsTo: any[]
-	BoundBy: any[]
-	CPUUsageNSec: number
-	CanClean: any[]
-	CanFreeze: boolean
-	CanIsolate: boolean
-	CanLiveMount: boolean
-	CanReload: boolean
-	CanStart: boolean
-	CanStop: boolean
-	CollectMode: string
-	ConditionResult: boolean
-	ConditionTimestamp: number
-	ConditionTimestampMonotonic: number
-	Conditions: any[]
-	ConflictedBy: any[]
-	Conflicts: string[]
-	ConsistsOf: any[]
-	DebugInvocation: boolean
-	DefaultDependencies: boolean
-	Description: string
-	Documentation: string[]
-	DropInPaths: any[]
-	ExecMainPID: number
-	FailureAction: string
-	FailureActionExitStatus: number
-	Following: string
-	FragmentPath: string
-	FreezerState: string
-	Id: string
-	IgnoreOnIsolate: boolean
-	InactiveEnterTimestamp: number
-	InactiveEnterTimestampMonotonic: number
-	InactiveExitTimestamp: number
-	InactiveExitTimestampMonotonic: number
-	InvocationID: string
-	Job: Array<number | string>
-	JobRunningTimeoutUSec: number
-	JobTimeoutAction: string
-	JobTimeoutRebootArgument: string
-	JobTimeoutUSec: number
-	JoinsNamespaceOf: any[]
-	LoadError: string[]
-	LoadState: string
-	MainPID: number
-	Markers: any[]
-	MemoryCurrent: number
-	MemoryLimit: number
-	MemoryPeak: number
-	NRestarts: number
-	Names: string[]
-	NeedDaemonReload: boolean
-	OnFailure: any[]
-	OnFailureJobMode: string
-	OnFailureOf: any[]
-	OnSuccess: any[]
-	OnSuccessJobMode: string
-	OnSuccessOf: any[]
-	PartOf: any[]
-	Perpetual: boolean
-	PropagatesReloadTo: any[]
-	PropagatesStopTo: any[]
-	RebootArgument: string
-	Refs: any[]
-	RefuseManualStart: boolean
-	RefuseManualStop: boolean
-	ReloadPropagatedFrom: any[]
-	RequiredBy: any[]
-	Requires: string[]
-	RequiresMountsFor: any[]
-	Requisite: any[]
-	RequisiteOf: any[]
-	Result: string
-	SliceOf: any[]
-	SourcePath: string
-	StartLimitAction: string
-	StartLimitBurst: number
-	StartLimitIntervalUSec: number
-	StateChangeTimestamp: number
-	StateChangeTimestampMonotonic: number
-	StopPropagatedFrom: any[]
-	StopWhenUnneeded: boolean
-	SubState: string
-	SuccessAction: string
-	SuccessActionExitStatus: number
-	SurviveFinalKillSignal: boolean
-	TasksCurrent: number
-	TasksMax: number
-	Transient: boolean
-	TriggeredBy: string[]
-	Triggers: any[]
-	UnitFilePreset: string
-	UnitFileState: string
-	UpheldBy: any[]
-	Upholds: any[]
-	WantedBy: any[]
-	Wants: string[]
-	WantsMountsFor: any[]
+export interface WebsiteMonitorRecord extends RecordModel {
+	user: string
+	system?: string
+	name: string
+	url: string
+	description?: string
+	internal_url?: string
+	external_url?: string
+	targets?: string
+	expected_content?: string
+	icon_url?: string
+	group?: string
+	interval_seconds: number
+	timeout_seconds: number
+	enabled: boolean
+	last_status?: "unknown" | "up" | "down"
+	last_status_code?: number
+	last_latency_ms?: number
+	last_error?: string
+	last_failure_category?: WebsiteMonitorFailureCategory
+	last_checked?: string
+	uptime_24h?: number
 }
 
-export interface BeszelInfo {
-	key: string // public key
+export interface WebsiteMonitorCheckRecord extends RecordModel {
+	user: string
+	monitor: string
+	target?: string
+	url?: string
+	ip_version?: "IPv4" | "IPv6" | string
+	status: "up" | "down"
+	status_code?: number
+	latency_ms?: number
+	error?: string
+	failure_category?: WebsiteMonitorFailureCategory
+	created: string
+}
+
+export type OperationFailureCode =
+	| "offline"
+	| "agent_disconnected"
+	| "timeout"
+	| "protected"
+	| "unsupported"
+	| "denied"
+	| "invalid_request"
+	| "not_found"
+	| "failed"
+
+export type WebsiteMonitorFailureCategory =
+	| "dns"
+	| "tcp"
+	| "tls"
+	| "http"
+	| "timeout"
+	| "redirect"
+	| "content"
+	| "network"
+	| "unknown"
+
+export interface PulseInfo {
 	v: string // version
 	cu: boolean // check updates
+	agent_hub_url?: string
+	environment?: "development" | "production" | string
+	build_commit?: string
+	build_time?: string
+	agent_target_version?: string
+	agent_actual_versions?: AgentVersionSummary[]
+	agent_total_systems?: number
+	agent_online_systems?: number
+	readiness?: PulseReadinessCheck[]
 }
 
-export interface UpdateInfo {
-	v: string // new version
-	url: string // url to new version
+export interface AgentVersionSummary {
+	version: string
+	count: number
+	online: number
+}
+
+export type PulseReadinessStatus = "ok" | "warning" | "danger" | "unknown" | "info"
+
+export interface PulseReadinessCheck {
+	id: string
+	title: string
+	status: PulseReadinessStatus
+	detail?: string
 }

@@ -1,27 +1,20 @@
 import { t } from "@lingui/core/macro"
 import { Plural, Trans } from "@lingui/react/macro"
-import { useStore } from "@nanostores/react"
-import { getPagePath } from "@nanostores/router"
-import { ChevronDownIcon, GlobeIcon, ServerIcon } from "lucide-react"
-import { lazy, memo, Suspense, useMemo, useState } from "react"
-import { $router, Link } from "@/components/router"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { lazy, Suspense, useEffect, useState } from "react"
 import { Input } from "@/components/ui/input"
+import { LoadingState } from "@/components/ui/loading-state"
 import { Switch } from "@/components/ui/switch"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "@/components/ui/use-toast"
 import { alertInfo } from "@/lib/alerts"
 import { pb } from "@/lib/api"
-import { $alerts, $systems } from "@/lib/stores"
+import { $systems } from "@/lib/stores"
 import { cn, debounce } from "@/lib/utils"
-import type { AlertInfo, AlertRecord, SystemRecord } from "@/types"
+import type { AlertInfo, AlertPolicyRecord, AlertRecord, SystemRecord } from "@/types"
 
 const Slider = lazy(() => import("@/components/ui/slider"))
 
-const endpoint = "/api/beszel/user-alerts"
+const endpoint = "/api/pulse/user-alerts"
+const globalPoliciesEndpoint = "/api/pulse/alert-policies"
 
 const alertDebounce = 400
 
@@ -54,6 +47,9 @@ const upsertAlerts = debounce(
 
 /** Delete alerts for a given name and systems */
 const deleteAlerts = debounce(async ({ name, systems }: { name: string; systems: string[] }) => {
+	if (!systems.length) {
+		return
+	}
 	try {
 		await pb.send<{ success: boolean }>(endpoint, {
 			method: "DELETE",
@@ -64,157 +60,157 @@ const deleteAlerts = debounce(async ({ name, systems }: { name: string; systems:
 	}
 }, alertDebounce)
 
-export const AlertDialogContent = memo(function AlertDialogContent({ system }: { system: SystemRecord }) {
-	const alerts = useStore($alerts)
-	const systems = useStore($systems)
-	const [overwriteExisting, setOverwriteExisting] = useState<boolean | "indeterminate">(false)
-	const [currentTab, setCurrentTab] = useState("system")
-	// copyKey is used to force remount AlertContent components with
-	// new alert data after copying alerts from another system
-	const [copyKey, setCopyKey] = useState(0)
-
-	const systemAlerts = alerts[system.id] ?? new Map()
-
-	// Systems that have at least one alert configured (excluding the current system)
-	const systemsWithAlerts = useMemo(
-		() => systems.filter((s) => s.id !== system.id && alerts[s.id]?.size),
-		[systems, alerts, system.id]
-	)
-
-	async function copyAlertsFromSystem(sourceSystemId: string) {
-		const sourceAlerts = $alerts.get()[sourceSystemId]
-		if (!sourceAlerts?.size) return
-		try {
-			const currentTargetAlerts = $alerts.get()[system.id] ?? new Map()
-			// Alert names present on target but absent from source should be deleted
-			const namesToDelete = Array.from(currentTargetAlerts.keys()).filter((name) => !sourceAlerts.has(name))
-			await Promise.all([
-				...Array.from(sourceAlerts.values()).map(({ name, value, min }) =>
-					pb.send<{ success: boolean }>(endpoint, {
-						method: "POST",
-						body: { name, value, min, systems: [system.id], overwrite: true },
-						requestKey: name,
-					})
-				),
-				...namesToDelete.map((name) =>
-					pb.send<{ success: boolean }>(endpoint, {
-						method: "DELETE",
-						body: { name, systems: [system.id] },
-						requestKey: name,
-					})
-				),
-			])
-			// Optimistically update the store so components re-mount with correct data
-			// before the realtime subscription event arrives.
-			const newSystemAlerts = new Map<string, AlertRecord>()
-			for (const alert of sourceAlerts.values()) {
-				newSystemAlerts.set(alert.name, { ...alert, system: system.id, triggered: false })
-			}
-			$alerts.setKey(system.id, newSystemAlerts)
-			setCopyKey((k) => k + 1)
-		} catch (error) {
-			failedUpdateToast(error)
-		}
+const upsertGlobalPolicy = debounce(async ({ name, value, min }: { name: string; value: number; min: number }) => {
+	try {
+		await pb.send<{ success: boolean }>(globalPoliciesEndpoint, {
+			method: "POST",
+			body: { name, value, min },
+		})
+	} catch (error) {
+		failedUpdateToast(error)
 	}
+}, alertDebounce)
 
-	// We need to keep a copy of alerts when we switch to global tab. If we always compare to
-	// current alerts, it will only be updated when first checked, then won't be updated because
-	// after that it exists.
-	const alertsWhenGlobalSelected = useMemo(() => {
-		return currentTab === "global" ? structuredClone(alerts) : alerts
-	}, [currentTab])
+const deleteGlobalPolicy = debounce(async ({ name }: { name: string }) => {
+	try {
+		await pb.send<{ success: boolean }>(globalPoliciesEndpoint, {
+			method: "DELETE",
+			body: { name },
+		})
+	} catch (error) {
+		failedUpdateToast(error)
+	}
+}, alertDebounce)
+
+function policyToAlertRecord(policy: AlertPolicyRecord): AlertRecord {
+	return {
+		...policy,
+		system: "",
+		triggered: false,
+	}
+}
+
+export function GlobalAlertSettings() {
+	const [policies, setPolicies] = useState<Map<string, AlertPolicyRecord>>(new Map())
+	const [loading, setLoading] = useState(true)
+
+	useEffect(() => {
+		let cancelled = false
+		async function loadPolicies() {
+			try {
+				const response = await pb.send<{ items: AlertPolicyRecord[] }>(globalPoliciesEndpoint, { method: "GET" })
+				if (!cancelled) {
+					setPolicies(new Map(response.items.map((policy) => [policy.name, policy])))
+				}
+			} catch (error) {
+				if (!cancelled) {
+					failedUpdateToast(error)
+				}
+			} finally {
+				if (!cancelled) {
+					setLoading(false)
+				}
+			}
+		}
+		loadPolicies()
+		return () => {
+			cancelled = true
+		}
+	}, [])
+
+	const enabledCount = policies.size
 
 	return (
-		<>
-			<DialogHeader>
-				<DialogTitle className="text-xl">
-					<Trans>Alerts</Trans>
-				</DialogTitle>
-				<DialogDescription>
-					<Trans>
-						See{" "}
-						<Link href={getPagePath($router, "settings", { name: "notifications" })} className="link">
-							notification settings
-						</Link>{" "}
-						to configure how you receive alerts.
-					</Trans>
-				</DialogDescription>
-			</DialogHeader>
-			<Tabs defaultValue="system" onValueChange={setCurrentTab}>
-				<div className="flex items-center justify-between mb-1 -mt-0.5">
-					<TabsList>
-						<TabsTrigger value="system">
-							<ServerIcon className="me-2 h-3.5 w-3.5" />
-							<span className="truncate max-w-60">{system.name}</span>
-						</TabsTrigger>
-						<TabsTrigger value="global">
-							<GlobeIcon className="me-1.5 h-3.5 w-3.5" />
-							<Trans>All Systems</Trans>
-						</TabsTrigger>
-					</TabsList>
-					{systemsWithAlerts.length > 0 && currentTab === "system" && (
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<Button variant="ghost" size="sm" className="text-muted-foreground text-xs gap-1.5">
-									<Trans context="Copy alerts from another system">Copy from</Trans>
-									<ChevronDownIcon className="h-3.5 w-3.5" />
-								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end" className="max-h-100 overflow-auto">
-								{systemsWithAlerts.map((s) => (
-									<DropdownMenuItem key={s.id} className="min-w-44" onSelect={() => copyAlertsFromSystem(s.id)}>
-										{s.name}
-									</DropdownMenuItem>
-								))}
-							</DropdownMenuContent>
-						</DropdownMenu>
-					)}
+		<div className="grid gap-4">
+			<div className="grid gap-3 rounded-lg border border-border/70 bg-surface-soft p-3 shadow-none sm:p-4">
+				<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+					<div className="min-w-0">
+						<h3 className="text-base font-semibold sm:text-lg">所有机器资源告警规则</h3>
+						<p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+							这里设置 CPU、内存、磁盘、网络、GPU 等基础资源的统一告警阈值，会应用到所有机器。
+						</p>
+					</div>
+					<div className="w-fit shrink-0 rounded-md border border-border/70 bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground shadow-none tabular-nums">
+						{loading ? "读取中" : `已启用 ${enabledCount} 项`}
+					</div>
 				</div>
-				<TabsContent value="system">
-					<div key={copyKey} className="grid gap-3">
-						{alertKeys.map((name) => (
+				<div className="grid gap-3">
+					{alertKeys.map((name) => {
+						const policy = policies.get(name)
+						return (
 							<AlertContent
-								key={name}
+								key={`${name}-${policy?.value ?? "off"}-${policy?.min ?? "off"}`}
 								alertKey={name}
 								data={alertInfo[name as keyof typeof alertInfo]}
-								alert={systemAlerts.get(name)}
-								system={system}
+								alert={policy ? policyToAlertRecord(policy) : undefined}
+								global
+								overwriteExisting
+								onGlobalUpsert={(payload) => {
+									setPolicies((current) => {
+										const next = new Map(current)
+										const existing = next.get(payload.name)
+										next.set(payload.name, {
+											...existing,
+											...payload,
+											id: existing?.id ?? payload.name,
+										} as AlertPolicyRecord)
+										return next
+									})
+									upsertGlobalPolicy(payload)
+								}}
+								onGlobalDelete={(name) => {
+									setPolicies((current) => {
+										const next = new Map(current)
+										next.delete(name)
+										return next
+									})
+									deleteGlobalPolicy({ name })
+								}}
 							/>
-						))}
-					</div>
-				</TabsContent>
-				<TabsContent value="global">
-					<label
-						htmlFor="ovw"
-						className="mb-3 flex gap-2 items-center justify-center cursor-pointer border rounded-sm py-3 px-4 border-destructive text-destructive font-semibold text-sm"
-					>
-						<Checkbox
-							id="ovw"
-							className="text-destructive border-destructive data-[state=checked]:bg-destructive"
-							checked={overwriteExisting}
-							onCheckedChange={setOverwriteExisting}
-						/>
-						<Trans>Overwrite existing alerts</Trans>
-					</label>
-					<div className="grid gap-3">
-						{alertKeys.map((name) => (
-							<AlertContent
-								key={name}
-								alertKey={name}
-								system={system}
-								alert={systemAlerts.get(name)}
-								data={alertInfo[name as keyof typeof alertInfo]}
-								global={true}
-								overwriteExisting={!!overwriteExisting}
-								initialAlertsState={alertsWhenGlobalSelected}
-							/>
-						))}
-					</div>
-				</TabsContent>
-			</Tabs>
-		</>
+						)
+					})}
+				</div>
+			</div>
+			<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+				<AlertCategoryCard title="网站告警" status="随监控启用" items={["可用性", "响应状态", "延迟"]} />
+				<AlertCategoryCard title="容器告警" status="随容器监控启用" items={["运行状态", "健康检查", "编排聚合"]} />
+				<AlertCategoryCard title="软件告警" status="随软件规则启用" items={["运行状态", "进程匹配"]} />
+				<AlertCategoryCard title="服务告警" status="随服务规则启用" items={["运行状态", "服务控制"]} />
+			</div>
+		</div>
 	)
-})
+}
+
+function AlertCategoryCard({ title, status, items }: { title: string; status: string; items: string[] }) {
+	const enabled = status !== "未启用"
+	return (
+		<div className="rounded-lg border border-border/70 bg-card p-3 shadow-none transition-[background-color,border-color] duration-150 ease-out hover:border-foreground/10 hover:bg-surface-soft">
+			<div className="mb-2 flex items-center justify-between gap-2">
+				<div className="font-medium">{title}</div>
+				<div
+					className={cn(
+						"rounded-md border px-2 py-0.5 text-xs font-medium",
+						enabled
+							? "border-emerald-500/25 bg-card text-emerald-700 dark:text-emerald-300"
+							: "border-border/70 bg-surface-soft text-muted-foreground"
+					)}
+				>
+					{status}
+				</div>
+			</div>
+			<div className="flex flex-wrap gap-1.5">
+				{items.map((item) => (
+					<span
+						key={item}
+						className="rounded-md border border-border/70 bg-surface-soft px-2 py-0.5 text-xs text-muted-foreground"
+					>
+						{item}
+					</span>
+				))}
+			</div>
+		</div>
+	)
+}
 
 export function AlertContent({
 	alertKey,
@@ -224,20 +220,24 @@ export function AlertContent({
 	global = false,
 	overwriteExisting = false,
 	initialAlertsState = {},
+	onGlobalUpsert,
+	onGlobalDelete,
 }: {
 	alertKey: string
 	data: AlertInfo
-	system: SystemRecord
+	system?: SystemRecord
 	alert?: AlertRecord
 	global?: boolean
 	overwriteExisting?: boolean
 	initialAlertsState?: Record<string, Map<string, AlertRecord>>
+	onGlobalUpsert?: (payload: { name: string; value: number; min: number }) => void
+	onGlobalDelete?: (name: string) => void
 }) {
 	const { name } = alertData
 
 	const singleDescription = alertData.singleDesc?.()
 
-	const [checked, setChecked] = useState(global ? false : !!alert)
+	const [checked, setChecked] = useState(!!alert)
 	const [min, setMin] = useState(alert?.min || 10)
 	const [value, setValue] = useState(alert?.value || (singleDescription ? 0 : (alertData.start ?? 80)))
 
@@ -247,7 +247,7 @@ export function AlertContent({
 	function getSystemIds(): string[] {
 		// if not global, update only the current system
 		if (!global) {
-			return [system.id]
+			return system ? [system.id] : []
 		}
 		// if global, update all systems when overwriteExisting is true
 		// update only systems without an existing alert when overwriteExisting is false
@@ -262,6 +262,10 @@ export function AlertContent({
 	}
 
 	function sendUpsert(min: number, value: number) {
+		if (global && onGlobalUpsert) {
+			onGlobalUpsert({ name: alertKey, value, min })
+			return
+		}
 		const systems = getSystemIds()
 		systems.length &&
 			upsertAlerts({
@@ -273,16 +277,24 @@ export function AlertContent({
 	}
 
 	return (
-		<div className="rounded-lg border border-muted-foreground/15 hover:border-muted-foreground/20 transition-colors duration-100 group">
+		<div
+			className={cn(
+				"group rounded-lg border bg-card shadow-none transition-[background-color,border-color] duration-150 ease-out hover:border-foreground/10 hover:bg-surface-soft",
+				checked ? "border-primary/30" : "border-border/70"
+			)}
+		>
 			<label
 				htmlFor={`s${name}`}
-				className={cn("flex flex-row items-center justify-between gap-4 cursor-pointer p-4", {
+				className={cn("flex cursor-pointer flex-row items-start justify-between gap-4 p-3 sm:p-4", {
 					"pb-0": checked,
 				})}
 			>
-				<div className="grid gap-1 select-none">
-					<p className="font-semibold flex gap-3 items-center">
-						<Icon className="h-4 w-4 opacity-85" /> {alertData.name()}
+				<div className="grid min-w-0 gap-1 select-none">
+					<p className="flex items-center gap-3 font-semibold">
+						<span className="grid size-8 shrink-0 place-items-center rounded-md border border-border/70 bg-surface-soft text-muted-foreground transition-colors group-hover:text-foreground">
+							<Icon className="h-4 w-4 opacity-85" />
+						</span>
+						<span className="min-w-0 truncate">{alertData.name()}</span>
 					</p>
 					{!checked && <span className="block text-sm text-muted-foreground">{alertData.desc()}</span>}
 				</div>
@@ -295,8 +307,15 @@ export function AlertContent({
 							// if alert checked, create or update alert
 							sendUpsert(min, value)
 						} else {
+							if (global && onGlobalDelete) {
+								onGlobalDelete(alertKey)
+								return
+							}
 							// if unchecked, delete alert (unless global and overwriteExisting is false)
-							deleteAlerts({ name: alertKey, systems: getSystemIds() })
+							const systems = getSystemIds()
+							if (systems.length) {
+								deleteAlerts({ name: alertKey, systems })
+							}
 							// when force deleting all alerts of a type, also remove them from initialAlertsState
 							if (overwriteExisting) {
 								for (const curAlerts of Object.values(initialAlertsState)) {
@@ -308,8 +327,8 @@ export function AlertContent({
 				/>
 			</label>
 			{checked && (
-				<div className="grid sm:grid-cols-2 mt-1.5 gap-5 px-4 pb-5 tabular-nums text-muted-foreground">
-					<Suspense fallback={<div className="h-10" />}>
+				<div className="mt-3 grid gap-4 border-t border-border/70 px-3 pb-4 pt-4 text-muted-foreground tabular-nums sm:grid-cols-2 sm:px-4 sm:pb-5">
+					<Suspense fallback={<LoadingState compact title="正在加载阈值控件" />}>
 						{!singleDescription && (
 							<div>
 								<p id={`v${name}`} className="text-sm block h-6">
@@ -331,7 +350,7 @@ export function AlertContent({
 										</Trans>
 									)}
 								</p>
-								<div className="flex gap-3 items-center">
+								<div className="flex items-center gap-3">
 									<Slider
 										aria-labelledby={`v${name}`}
 										value={[value]}
@@ -356,7 +375,7 @@ export function AlertContent({
 										step={alertData.step ?? 1}
 										min={alertData.min ?? 1}
 										max={alertData.max ?? 99}
-										className="w-16 h-8 text-center px-1"
+										className="h-10 w-20 px-2 text-center"
 									/>
 								</div>
 							</div>
@@ -374,7 +393,7 @@ export function AlertContent({
 									<Plural value={min} one="minute" other="minutes" />
 								</Trans>
 							</p>
-							<div className="flex gap-3 items-center">
+							<div className="flex items-center gap-3">
 								<Slider
 									aria-labelledby={`t${name}`}
 									value={[min]}
@@ -396,7 +415,7 @@ export function AlertContent({
 									}}
 									min={1}
 									max={60}
-									className="w-16 h-8 text-center px-1"
+									className="h-10 w-20 px-2 text-center"
 								/>
 							</div>
 						</div>

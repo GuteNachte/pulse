@@ -1,9 +1,9 @@
-import { t } from "@lingui/core/macro"
+﻿import { t } from "@lingui/core/macro"
 import { useRef, useMemo } from "react"
 import AreaChartDefault, { type DataPoint } from "@/components/charts/area-chart"
 import LineChartDefault from "@/components/charts/line-chart"
 import { Unit } from "@/lib/enums"
-import { cn, decimalString, formatBytes, toFixedFloat } from "@/lib/utils"
+import { cn, decimalString, formatBytes, percentTickString, percentValueString, toFixedFloat } from "@/lib/utils"
 import type { ChartData, GPUData, SystemStatsRecord } from "@/types"
 import { ChartCard } from "../chart-card"
 
@@ -65,7 +65,7 @@ export function GpuPowerChart({
 		}
 		const sorted = Array.from(totals.values()).sort((a, b) => b.total - a.total)
 		return sorted.map(
-			(entry, i): DataPoint => ({
+			(entry, i): GpuPowerDataPoint => ({
 				label: entry.label,
 				dataKey: (data: SystemStatsRecord) => {
 					const gpu = data.stats?.g?.[entry.gpuId]
@@ -81,7 +81,7 @@ export function GpuPowerChart({
 		<ChartCard
 			empty={dataEmpty}
 			grid={grid}
-			title={t`GPU Power Draw`}
+			title={getGpuPowerTitle(dataPoints)}
 			description={t`Average power consumption of GPUs`}
 		>
 			<LineChartDefault
@@ -96,33 +96,28 @@ export function GpuPowerChart({
 	)
 }
 
-/** GPU detail grid (engines + per-GPU usage/VRAM) — rendered outside the main 2-col grid */
+function getGpuPowerTitle(dataPoints: GpuPowerDataPoint[]) {
+	const gpuNames = new Set(dataPoints.map((point) => point.label.replace(/ package$/, "")))
+	if (gpuNames.size === 1) {
+		return `${Array.from(gpuNames)[0]} 功耗`
+	}
+	return "GPU 功耗"
+}
+
+/** GPU detail grid: total usage and display memory. */
 export function GpuDetailCharts({
 	chartData,
 	grid,
 	dataEmpty,
 	lastGpus,
-	hasGpuEnginesData,
 }: {
 	chartData: ChartData
 	grid: boolean
 	dataEmpty: boolean
 	lastGpus: Record<string, GPUData>
-	hasGpuEnginesData: boolean
 }) {
 	return (
-		<div className="grid xl:grid-cols-2 gap-4">
-			{hasGpuEnginesData && (
-				<ChartCard
-					legend={true}
-					empty={dataEmpty}
-					grid={grid}
-					title={t`GPU Engines`}
-					description={t`Average utilization of GPU engines`}
-				>
-					<GpuEnginesChart chartData={chartData} />
-				</ChartCard>
-			)}
+		<div className="contents">
 			{Object.keys(lastGpus).map((id) => {
 				const gpu = lastGpus[id] as GPUData
 				return (
@@ -131,21 +126,21 @@ export function GpuDetailCharts({
 							className={cn(grid && "!col-span-1")}
 							empty={dataEmpty}
 							grid={grid}
-							title={`${gpu.n} ${t`Usage`}`}
+							title={`${gpu.n} 负载`}
 							description={t`Average utilization of ${gpu.n}`}
 						>
 							<AreaChartDefault
 								chartData={chartData}
 								dataPoints={[
 									{
-										label: t`Usage`,
+										label: "负载",
 										dataKey: ({ stats }) => stats?.g?.[id]?.u ?? 0,
 										color: 1,
 										opacity: 0.35,
 									},
 								]}
-								tickFormatter={(val) => `${toFixedFloat(val, 2)}%`}
-								contentFormatter={({ value }) => `${decimalString(value)}%`}
+								tickFormatter={(val) => percentTickString(val)}
+								contentFormatter={({ value }) => percentValueString(value)}
 							/>
 						</ChartCard>
 
@@ -153,7 +148,7 @@ export function GpuDetailCharts({
 							<ChartCard
 								empty={dataEmpty}
 								grid={grid}
-								title={`${gpu.n} VRAM`}
+								title={`${gpu.n} 显存`}
 								description={t`Precise utilization at the recorded time`}
 							>
 								<AreaChartDefault
@@ -193,7 +188,7 @@ function GpuEnginesChart({ chartData }: { chartData: ChartData }) {
 		if (!gpus) continue
 		for (const id in gpus) {
 			if (gpus[id].e) {
-				enginesKey = id + "\0" + Object.keys(gpus[id].e).sort().join("\0")
+				enginesKey = `${id}\0${Object.keys(gpus[id].e).sort().join("\0")}`
 				break
 			}
 		}
@@ -225,8 +220,8 @@ function GpuEnginesChart({ chartData }: { chartData: ChartData }) {
 			legend={true}
 			chartData={chartData}
 			dataPoints={dataPoints}
-			tickFormatter={(val) => `${toFixedFloat(val, 2)}%`}
-			contentFormatter={({ value }) => `${decimalString(value)}%`}
+			tickFormatter={(val) => percentTickString(val)}
+			contentFormatter={({ value }) => percentValueString(value)}
 		/>
 	)
 }

@@ -13,15 +13,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/henrygd/beszel/agent/deltatracker"
-	"github.com/henrygd/beszel/agent/utils"
-	"github.com/henrygd/beszel/internal/entities/container"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gutenacht.site/pulse/agent/deltatracker"
+	"gutenacht.site/pulse/agent/utils"
+	"gutenacht.site/pulse/internal/entities/container"
 )
 
 var defaultCacheTimeMs = uint16(60_000)
@@ -164,8 +166,50 @@ func TestBuildDockerContainerEndpoint(t *testing.T) {
 	t.Run("invalid container ID is rejected", func(t *testing.T) {
 		_, err := buildDockerContainerEndpoint("../../version", "json", nil)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid container id")
+		assert.Contains(t, err.Error(), "invalid container id or name")
 	})
+
+	t.Run("container name is allowed", func(t *testing.T) {
+		endpoint, err := buildDockerContainerEndpoint("harbor-log", "restart", nil)
+		require.NoError(t, err)
+		assert.Equal(t, "http://localhost/containers/harbor-log/restart", endpoint)
+	})
+}
+
+func TestControlContainerRequestsExpectedDockerEndpoint(t *testing.T) {
+	rt := &recordingRoundTripper{
+		statusCode: http.StatusNoContent,
+	}
+	dm := &dockerManager{
+		client: &http.Client{Transport: rt},
+	}
+
+	err := dm.controlContainer(context.Background(), "restart_container", "0123456789ab")
+	require.NoError(t, err)
+	assert.True(t, rt.called)
+	assert.Equal(t, "/containers/0123456789ab/restart", rt.lastPath)
+	assert.Equal(t, strconv.Itoa(dockerRestartStopTimeoutSeconds), rt.lastQuery["t"])
+}
+
+func TestControlContainerUsesControlClient(t *testing.T) {
+	statsRt := &recordingRoundTripper{
+		statusCode: http.StatusInternalServerError,
+		body:       "stats client should not be used",
+	}
+	controlRt := &recordingRoundTripper{
+		statusCode: http.StatusNoContent,
+	}
+	dm := &dockerManager{
+		client:        &http.Client{Transport: statsRt, Timeout: time.Millisecond},
+		controlClient: &http.Client{Transport: controlRt},
+	}
+
+	err := dm.controlContainer(context.Background(), "restart_container", "0123456789ab")
+	require.NoError(t, err)
+	assert.False(t, statsRt.called)
+	assert.True(t, controlRt.called)
+	assert.Equal(t, "/containers/0123456789ab/restart", controlRt.lastPath)
+	assert.Equal(t, strconv.Itoa(dockerRestartStopTimeoutSeconds), controlRt.lastQuery["t"])
 }
 
 func TestContainerDetailsRequestsValidateContainerID(t *testing.T) {
@@ -179,7 +223,7 @@ func TestContainerDetailsRequestsValidateContainerID(t *testing.T) {
 
 	_, err := dm.getContainerInfo(context.Background(), "../version")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid container id")
+	assert.Contains(t, err.Error(), "invalid container id or name")
 	assert.False(t, rt.called, "request should be rejected before dispatching to Docker API")
 }
 
@@ -1126,6 +1170,235 @@ func TestContainerStatsEndToEndWithRealData(t *testing.T) {
 	assert.Equal(t, testTime, testStats.PrevReadTime)
 }
 
+func TestUpdateContainerStatsCopiesComposeLabels(t *testing.T) {
+	composeFile := filepath.Join(t.TempDir(), "docker-compose.yml")
+	require.NoError(t, os.WriteFile(composeFile, []byte("services:\n  worker:\n    image: alpine\n"), 0o600))
+
+	dm := &dockerManager{
+		client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			assert.Equal(t, "/containers/abcdef123456/stats", req.URL.EscapedPath())
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Header:     make(http.Header),
+				Body: io.NopCloser(strings.NewReader(`{
+					"read":"2026-05-29T17:00:00Z",
+					"cpu_stats":{"cpu_usage":{"total_usage":100000000},"system_cpu_usage":200000000},
+					"memory_stats":{"usage":1048576,"stats":{"inactive_file":262144}},
+					"networks":{"eth0":{"rx_bytes":1024,"tx_bytes":2048}}
+				}`)),
+				Request: req,
+			}, nil
+		})},
+		containerStatsMap:   make(map[string]*container.Stats),
+		apiStats:            &container.ApiStats{},
+		lastCpuContainer:    make(map[uint16]map[string]uint64),
+		lastCpuSystem:       make(map[uint16]map[string]uint64),
+		lastCpuReadTime:     make(map[uint16]map[string]time.Time),
+		networkSentTrackers: make(map[uint16]*deltatracker.DeltaTracker[string, uint64]),
+		networkRecvTrackers: make(map[uint16]*deltatracker.DeltaTracker[string, uint64]),
+		lastNetworkReadTime: make(map[uint16]map[string]time.Time),
+	}
+
+	ctr := &container.ApiInfo{
+		IdShort: "abcdef123456",
+		Names:   []string{"/codex-control-test"},
+		Status:  "Up 2 minutes",
+		Image:   "alpine",
+		Labels: map[string]string{
+			"com.docker.compose.project":          "codex-stack-test",
+			"com.docker.compose.service":          "worker",
+			"com.docker.compose.container-number": "1",
+			"com.docker.compose.config_files":     composeFile,
+		},
+	}
+
+	require.NoError(t, dm.updateContainerStats(ctr, defaultCacheTimeMs))
+	stats := dm.containerStatsMap[ctr.IdShort]
+	require.NotNil(t, stats)
+	assert.Equal(t, "codex-stack-test", stats.Stack.Project)
+	assert.Equal(t, "worker", stats.Stack.Service)
+	assert.Equal(t, "1", stats.Stack.Number)
+	assert.Contains(t, stats.Stack.Config, "services:")
+	assert.Contains(t, stats.Stack.Config, "image: alpine")
+}
+
+func TestUpdateContainerStatsClearsPreviousComposeLabels(t *testing.T) {
+	dm := &dockerManager{
+		client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Header:     make(http.Header),
+				Body: io.NopCloser(strings.NewReader(`{
+					"read":"2026-05-29T17:00:00Z",
+					"cpu_stats":{"cpu_usage":{"total_usage":100000000},"system_cpu_usage":200000000},
+					"memory_stats":{"usage":1048576,"stats":{"inactive_file":262144}},
+					"networks":{"eth0":{"rx_bytes":1024,"tx_bytes":2048}}
+				}`)),
+				Request: req,
+			}, nil
+		})},
+		containerStatsMap:   make(map[string]*container.Stats),
+		apiStats:            &container.ApiStats{},
+		lastCpuContainer:    make(map[uint16]map[string]uint64),
+		lastCpuSystem:       make(map[uint16]map[string]uint64),
+		lastCpuReadTime:     make(map[uint16]map[string]time.Time),
+		networkSentTrackers: make(map[uint16]*deltatracker.DeltaTracker[string, uint64]),
+		networkRecvTrackers: make(map[uint16]*deltatracker.DeltaTracker[string, uint64]),
+		lastNetworkReadTime: make(map[uint16]map[string]time.Time),
+	}
+	dm.containerStatsMap["abcdef123456"] = &container.Stats{
+		Name: "pulse",
+		Id:   "abcdef123456",
+		Stack: container.StackInfo{
+			Project: "stale-project",
+			Service: "stale-service",
+			Number:  "1",
+		},
+	}
+
+	ctr := &container.ApiInfo{
+		IdShort: "abcdef123456",
+		Names:   []string{"/pulse"},
+		Status:  "Up 2 minutes",
+		Image:   "pulse",
+		Labels:  map[string]string{},
+	}
+
+	require.NoError(t, dm.updateContainerStats(ctr, defaultCacheTimeMs))
+	stats := dm.containerStatsMap[ctr.IdShort]
+	require.NotNil(t, stats)
+	assert.Empty(t, stats.Stack.Project)
+	assert.Empty(t, stats.Stack.Service)
+	assert.Empty(t, stats.Stack.Number)
+}
+
+func TestGetDockerStatsDoesNotReuseContainerLabels(t *testing.T) {
+	requestCounts := map[string]int{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCounts[r.URL.EscapedPath()]++
+		switch r.URL.EscapedPath() {
+		case "/containers/json":
+			w.Header().Set("Server", "Docker/25.0.1 (linux)")
+			w.WriteHeader(http.StatusOK)
+			if requestCounts[r.URL.EscapedPath()] == 1 {
+				fmt.Fprint(w, `[{
+					"Id":"abcdef1234567890",
+					"Names":["/codex-control-test"],
+					"Status":"Up 2 minutes",
+					"Image":"alpine",
+					"Labels":{
+						"com.docker.compose.project":"codex-stack-test",
+						"com.docker.compose.service":"worker",
+						"com.docker.compose.container-number":"1"
+					}
+				}]`)
+				return
+			}
+			fmt.Fprint(w, `[{
+				"Id":"abcdef1234567890",
+				"Names":["/pulse"],
+				"Status":"Up 3 minutes",
+				"Image":"pulse",
+				"Labels":{}
+			}]`)
+		case "/containers/abcdef123456/stats":
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, `{
+				"read":"2026-05-29T17:00:00Z",
+				"cpu_stats":{"cpu_usage":{"total_usage":100000000},"system_cpu_usage":200000000},
+				"memory_stats":{"usage":1048576,"stats":{"inactive_file":262144}},
+				"networks":{"eth0":{"rx_bytes":1024,"tx_bytes":2048}}
+			}`)
+		case "/version":
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, `{"Version":"25.0.1"}`)
+		default:
+			t.Fatalf("unexpected request path: %s", r.URL.EscapedPath())
+		}
+	}))
+	defer server.Close()
+
+	dm := newDockerManagerForVersionTest(server)
+	dm.goodDockerVersion = true
+	dm.sem = make(chan struct{}, 5)
+	dm.apiStats = &container.ApiStats{}
+
+	firstStats, err := dm.getDockerStats(defaultCacheTimeMs)
+	require.NoError(t, err)
+	require.Len(t, firstStats, 1)
+	assert.Equal(t, "codex-stack-test", firstStats[0].Stack.Project)
+
+	secondStats, err := dm.getDockerStats(defaultCacheTimeMs)
+	require.NoError(t, err)
+	require.Len(t, secondStats, 1)
+	assert.Empty(t, secondStats[0].Stack.Project)
+	assert.Empty(t, secondStats[0].Stack.Service)
+}
+
+func TestGetDockerStatsDoesNotBleedLabelsBetweenContainersInSameResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.EscapedPath() {
+		case "/containers/json":
+			w.Header().Set("Server", "Docker/25.0.1 (linux)")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, `[{
+				"Id":"b24eeb9e6faf0000",
+				"Names":["/registryctl"],
+				"Status":"Up an hour",
+				"Image":"goharbor/harbor-registryctl:v2.14.4",
+				"Labels":{
+					"com.docker.compose.project":"harbor",
+					"com.docker.compose.service":"registryctl",
+					"com.docker.compose.container-number":"1",
+					"com.docker.compose.project.working_dir":"/opt/harbor"
+				}
+			},{
+				"Id":"54939d04426a0000",
+				"Names":["/pulse-agent"],
+				"Status":"Up an hour",
+				"Image":"registry.example.com/infra/pulse-agent:1.0.1",
+				"Labels":{}
+			}]`)
+		case "/containers/b24eeb9e6faf/stats", "/containers/54939d04426a/stats":
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, `{
+				"read":"2026-05-29T17:00:00Z",
+				"cpu_stats":{"cpu_usage":{"total_usage":100000000},"system_cpu_usage":200000000},
+				"memory_stats":{"usage":1048576,"stats":{"inactive_file":262144}},
+				"networks":{"eth0":{"rx_bytes":1024,"tx_bytes":2048}}
+			}`)
+		case "/version":
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, `{"Version":"25.0.1"}`)
+		default:
+			t.Fatalf("unexpected request path: %s", r.URL.EscapedPath())
+		}
+	}))
+	defer server.Close()
+
+	dm := newDockerManagerForVersionTest(server)
+	dm.goodDockerVersion = true
+	dm.sem = make(chan struct{}, 5)
+	dm.apiStats = &container.ApiStats{}
+
+	stats, err := dm.getDockerStats(defaultCacheTimeMs)
+	require.NoError(t, err)
+	require.Len(t, stats, 2)
+
+	byName := make(map[string]*container.Stats, len(stats))
+	for _, stat := range stats {
+		byName[stat.Name] = stat
+	}
+	require.NotNil(t, byName["registryctl"])
+	require.NotNil(t, byName["pulse-agent"])
+	assert.Equal(t, "harbor", byName["registryctl"].Stack.Project)
+	assert.Equal(t, "registryctl", byName["registryctl"].Stack.Service)
+	assert.Empty(t, byName["pulse-agent"].Stack.Project)
+	assert.Empty(t, byName["pulse-agent"].Stack.Service)
+}
+
 func TestGetLogsDetectsMultiplexedWithoutContentType(t *testing.T) {
 	// Docker multiplexed frame: [stream][0,0,0][len(4 bytes BE)][payload]
 	frame := []byte{
@@ -1474,9 +1747,9 @@ func TestUpdateContainerStatsUsesPodmanInspectHealthFallback(t *testing.T) {
 
 	ctr := &container.ApiInfo{
 		IdShort: "0123456789ab",
-		Names:   []string{"/beszel"},
+		Names:   []string{"/pulse"},
 		Status:  "Up 2 minutes",
-		Image:   "beszel:latest",
+		Image:   "pulse:latest",
 	}
 
 	err := dm.updateContainerStats(ctr, defaultCacheTimeMs)
@@ -1896,4 +2169,97 @@ func TestConvertContainerPortsToString(t *testing.T) {
 			assert.Nil(t, ctr.Ports, "ctr.Ports should be nil after formatContainerPorts")
 		})
 	}
+}
+
+func TestComposeStackInfoFromLabels(t *testing.T) {
+	stack := composeStackInfoFromLabels(map[string]string{
+		"com.docker.compose.project":              " codex-stack-test ",
+		"com.docker.compose.service":              " worker ",
+		"com.docker.compose.container-number":     " 1 ",
+		"com.docker.compose.project.config_files": " /tmp/docker-compose.yml ",
+		"com.docker.compose.project.working_dir":  " /tmp ",
+	})
+
+	assert.Equal(t, "codex-stack-test", stack.Project)
+	assert.Equal(t, "worker", stack.Service)
+	assert.Equal(t, "1", stack.Number)
+	assert.Equal(t, "/tmp/docker-compose.yml", stack.Config)
+	assert.Equal(t, "/tmp", stack.WorkingDir)
+	assert.True(t, stack.Trusted)
+}
+
+func TestComposeStackInfoFromLabelsSupportsLegacyConfigKey(t *testing.T) {
+	stack := composeStackInfoFromLabels(map[string]string{
+		"com.docker.compose.project":      "codex-stack-test",
+		"com.docker.compose.service":      "worker",
+		"com.docker.compose.config_files": "/tmp/legacy.yml",
+	})
+
+	assert.Equal(t, "codex-stack-test", stack.Project)
+	assert.Equal(t, "/tmp/legacy.yml", stack.Config)
+	assert.True(t, stack.Trusted)
+}
+
+func TestComposeStackInfoFromLabelsRequiresProjectAndService(t *testing.T) {
+	assert.Empty(t, composeStackInfoFromLabels(map[string]string{
+		"com.docker.compose.project": "harbor",
+	}))
+	assert.Empty(t, composeStackInfoFromLabels(map[string]string{
+		"com.docker.compose.service": "registry",
+	}))
+}
+
+func TestReadComposeStackConfigReadsMultipleFiles(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "compose.yml")
+	second := filepath.Join(dir, "override.yml")
+	require.NoError(t, os.WriteFile(first, []byte("services:\n  app:\n    image: app\n"), 0o600))
+	require.NoError(t, os.WriteFile(second, []byte("services:\n  app:\n    restart: unless-stopped\n"), 0o600))
+
+	config := readComposeStackConfig(first+","+second, "")
+
+	assert.Contains(t, config, "# "+first)
+	assert.Contains(t, config, "image: app")
+	assert.Contains(t, config, "# "+second)
+	assert.Contains(t, config, "restart: unless-stopped")
+}
+
+func TestReadComposeStackConfigUsesWorkingDirForRelativePath(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "compose.yml"), []byte("services:\n  worker:\n    image: alpine\n    environment:\n      TOKEN: \"secret-value\"\n"), 0o600))
+
+	config := readComposeStackConfig("compose.yml", dir)
+
+	assert.Contains(t, config, "services:")
+	assert.Contains(t, config, "worker:")
+	assert.Contains(t, config, `TOKEN: "<redacted>"`)
+	assert.NotContains(t, config, "secret-value")
+}
+
+func TestReadComposeStackConfigReportsUnreadableFile(t *testing.T) {
+	config := readComposeStackConfig("/definitely/missing/docker-compose.yml", "")
+
+	assert.Contains(t, config, "# /definitely/missing/docker-compose.yml")
+	assert.Contains(t, config, "Read failed:")
+}
+
+func TestRedactComposeConfigSecrets(t *testing.T) {
+	config := redactComposeConfigSecrets(`services:
+  app:
+    image: demo
+    environment:
+      TOKEN: "abc"
+      PASSWORD=secret
+      PUBLIC_URL: "https://example.test"
+      - API_KEY=xyz
+      - NORMAL=value`)
+
+	assert.Contains(t, config, `TOKEN: "<redacted>"`)
+	assert.Contains(t, config, `PASSWORD="<redacted>"`)
+	assert.Contains(t, config, `- API_KEY="<redacted>"`)
+	assert.Contains(t, config, `PUBLIC_URL: "https://example.test"`)
+	assert.Contains(t, config, `- NORMAL=value`)
+	assert.NotContains(t, config, "abc")
+	assert.NotContains(t, config, "secret")
+	assert.NotContains(t, config, "xyz")
 }

@@ -4,31 +4,40 @@ import { I18nProvider } from "@lingui/react"
 import { useStore } from "@nanostores/react"
 import { DirectionProvider } from "@radix-ui/react-direction"
 // import { Suspense, lazy, useEffect, StrictMode } from "react"
-import { lazy, memo, Suspense, useEffect } from "react"
+import { lazy, memo, Suspense, useEffect, useState } from "react"
 import ReactDOM from "react-dom/client"
+import { ArrowLeftIcon, HomeIcon, SearchXIcon } from "lucide-react"
 import Navbar from "@/components/navbar.tsx"
-import { $router } from "@/components/router.tsx"
+import { $router, Link } from "@/components/router.tsx"
 import Settings from "@/components/routes/settings/layout.tsx"
 import { ThemeProvider } from "@/components/theme-provider.tsx"
+import { Button } from "@/components/ui/button.tsx"
+import { LoadingState } from "@/components/ui/loading-state.tsx"
 import { Toaster } from "@/components/ui/toaster.tsx"
 import { alertManager } from "@/lib/alerts"
-import { isAdmin, pb, updateUserSettings } from "@/lib/api.ts"
+import { initializePocketBaseRuntime, isPocketBaseAutoCancel, pb, updateUserSettings, verifyAuth } from "@/lib/api.ts"
+import { pageTitle } from "@/lib/branding"
 import { dynamicActivate, getLocale } from "@/lib/i18n"
-import {
-	$authenticated,
-	$copyContent,
-	$direction,
-	$newVersion,
-	$publicKey,
-	$userSettings,
-	defaultLayoutWidth,
-} from "@/lib/stores.ts"
+import { syncAgentHubURLFromRuntime } from "@/lib/runtime-info"
+import { $authenticated, $copyContent, $direction } from "@/lib/stores.ts"
 import * as systemsManager from "@/lib/systemsManager.ts"
-import type { BeszelInfo, UpdateInfo } from "./types"
+import { MobileBottomNav } from "@/components/mobile/mobile-bottom-nav"
+import { MobileHubSetup } from "@/components/mobile/mobile-hub-setup"
+import { MobileOfflineBanner, MobileSnapshotBridge } from "@/components/mobile/mobile-offline"
+import { useMobileLayout } from "@/components/mobile/mobile-ui"
+import { ensureMobileNotificationPermission } from "@/lib/mobile-notifications"
+import { isAndroidApp } from "@/lib/mobile-runtime"
+import { cn } from "@/lib/utils"
+
+dynamicActivate(getLocale())
 
 const LoginPage = lazy(() => import("@/components/login/login.tsx"))
 const Home = lazy(() => import("@/components/routes/home.tsx"))
+const Clients = lazy(() => import("@/components/routes/clients.tsx"))
 const Containers = lazy(() => import("@/components/routes/containers.tsx"))
+const Websites = lazy(() => import("@/components/routes/websites.tsx"))
+const AlertsCenter = lazy(() => import("@/components/routes/alerts.tsx"))
+const NotificationsCenter = lazy(() => import("@/components/routes/notifications.tsx"))
 const Smart = lazy(() => import("@/components/routes/smart.tsx"))
 const SystemDetail = lazy(() => import("@/components/routes/system.tsx"))
 const CopyToClipboardDialog = lazy(() => import("@/components/copy-to-clipboard.tsx"))
@@ -41,12 +50,10 @@ const App = memo(() => {
 		const unsubscribeAuth = pb.authStore.onChange(() => {
 			$authenticated.set(pb.authStore.isValid)
 		})
-		// get general info for authenticated users, such as public key and version
-		pb.send<BeszelInfo>("/api/beszel/info", {}).then((data) => {
-			$publicKey.set(data.key)
-			// check for updates if enabled
-			if (data.cu && isAdmin()) {
-				pb.send<UpdateInfo>("/api/beszel/update", {}).then($newVersion.set)
+		// get general hub info for authenticated users
+		syncAgentHubURLFromRuntime().catch((error) => {
+			if (!isPocketBaseAutoCancel(error)) {
+				console.error(error)
 			}
 		})
 		// get user settings
@@ -70,13 +77,21 @@ const App = memo(() => {
 	}, [])
 
 	if (!page) {
-		return <h1 className="text-3xl text-center my-14">404</h1>
+		return <NotFoundPage />
 	} else if (page.route === "home") {
 		return <Home />
+	} else if (page.route === "clients") {
+		return <Clients />
 	} else if (page.route === "system") {
 		return <SystemDetail id={page.params.id} />
 	} else if (page.route === "containers") {
 		return <Containers />
+	} else if (page.route === "websites") {
+		return <Websites />
+	} else if (page.route === "alerts") {
+		return <AlertsCenter />
+	} else if (page.route === "notifications") {
+		return <NotificationsCenter />
 	} else if (page.route === "smart") {
 		return <Smart />
 	} else if (page.route === "settings") {
@@ -84,46 +99,164 @@ const App = memo(() => {
 	}
 })
 
+function NotFoundPage() {
+	useEffect(() => {
+		document.title = pageTitle("页面不存在")
+	}, [])
+
+	return (
+		<section className="mx-auto grid min-h-[calc(100svh-10rem)] w-full max-w-3xl place-items-center py-10 sm:py-16">
+			<div className="w-full rounded-lg border border-border/70 bg-card p-3 shadow-none">
+				<div className="rounded-md bg-surface-soft p-5 text-center sm:p-8">
+					<div className="mx-auto grid size-12 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground shadow-none">
+						<SearchXIcon className="size-5" strokeWidth={1.9} />
+					</div>
+					<div className="mt-5 text-xs font-medium text-muted-foreground">404 / Not found</div>
+					<h1 className="mt-2 text-balance text-2xl font-semibold tracking-[-0.03em] text-foreground sm:text-3xl">
+						这个页面不存在
+					</h1>
+					<p className="mx-auto mt-3 max-w-md text-pretty text-sm leading-relaxed text-muted-foreground">
+						链接可能已经失效，或当前版本没有这个入口。你可以回到首页继续查看监控状态。
+					</p>
+					<div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-center">
+						<Button variant="outline" className="gap-2" onClick={() => window.history.back()}>
+							<ArrowLeftIcon className="size-4" />
+							返回上一页
+						</Button>
+						<Button asChild className="gap-2">
+							<Link href="/">
+								<HomeIcon className="size-4" />
+								回到首页
+							</Link>
+						</Button>
+					</div>
+				</div>
+			</div>
+		</section>
+	)
+}
+
 const Layout = () => {
 	const authenticated = useStore($authenticated)
 	const copyContent = useStore($copyContent)
 	const direction = useStore($direction)
-	const { layoutWidth } = useStore($userSettings, { keys: ["layoutWidth"] })
+	const page = useStore($router)
+	const { isMobile } = useMobileLayout()
+	const [runtimeReady, setRuntimeReady] = useState(false)
+	const [hubConfigured, setHubConfigured] = useState(true)
 
 	useEffect(() => {
 		document.documentElement.dir = direction
 	}, [direction])
 
+	useEffect(() => {
+		let ignore = false
+		initializePocketBaseRuntime()
+			.then(async (runtime) => {
+				if (ignore) {
+					return
+				}
+				if (pb.authStore.isValid) {
+					await verifyAuth()
+				}
+				if (ignore) {
+					return
+				}
+				setHubConfigured(runtime.hubConfigured)
+				setRuntimeReady(true)
+				$authenticated.set(pb.authStore.isValid)
+				registerServiceWorker()
+				ensureMobileNotificationPermission().catch((error) => console.error("mobile notification permission", error))
+			})
+			.catch((error) => {
+				console.error(error)
+				if (!ignore) {
+					setRuntimeReady(true)
+					setHubConfigured(false)
+				}
+			})
+		return () => {
+			ignore = true
+		}
+	}, [])
+
+	if (!runtimeReady) {
+		return (
+			<div className="grid min-h-svh place-items-center bg-background px-4">
+				<LoadingState title="正在启动 Pulse" description="连接 Hub 并恢复本地运行环境" />
+			</div>
+		)
+	}
+
+	if (!hubConfigured) {
+		return <MobileHubSetup onReady={() => setHubConfigured(true)} />
+	}
+
 	return (
 		<DirectionProvider dir={direction}>
 			{!authenticated ? (
-				<Suspense>
+				<Suspense fallback={<AppRouteLoading title="正在打开登录页" />}>
 					<LoginPage />
 				</Suspense>
 			) : (
-				<div style={{ "--container": `${layoutWidth ?? defaultLayoutWidth}px` } as React.CSSProperties}>
+				<div className={cn(isMobile && "pulse-mobile-root", isMobile && isAndroidApp() && "pulse-android-app")}>
 					<div className="container">
 						<Navbar />
 					</div>
-					<div className="container relative">
-						<App />
+					<div className={cn("container relative", isMobile ? "pulse-mobile-content" : "pb-0")}>
+						<MobileOfflineBanner />
+						<Suspense fallback={<AppRouteLoading title="正在加载页面" />}>
+							<App />
+						</Suspense>
+						<MobileSnapshotBridge />
 						{copyContent && (
-							<Suspense>
+							<Suspense fallback={<AppRouteLoading title="正在准备复制内容" compact />}>
 								<CopyToClipboardDialog content={copyContent} />
 							</Suspense>
 						)}
 					</div>
+					<MobileBottomNav activeRoute={page?.route} />
 				</div>
 			)}
 		</DirectionProvider>
 	)
 }
 
-const I18nApp = () => {
-	useEffect(() => {
-		dynamicActivate(getLocale())
-	}, [])
+function AppRouteLoading({ title, compact = false }: { title: string; compact?: boolean }) {
+	return (
+		<LoadingState
+			title={title}
+			description="正在加载页面资源"
+			compact={compact}
+			className={compact ? "min-h-0 p-0" : "my-4"}
+		/>
+	)
+}
 
+function registerServiceWorker() {
+	if (!("serviceWorker" in navigator)) {
+		return
+	}
+	if (isAndroidApp()) {
+		navigator.serviceWorker.getRegistrations().then((registrations) => {
+			for (const registration of registrations) {
+				registration.unregister().catch((error) => console.error("service worker unregister", error))
+			}
+		})
+		if ("caches" in window) {
+			caches
+				.keys()
+				.then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+				.catch((error) => console.error("service worker cache cleanup", error))
+		}
+		return
+	}
+	const base = (globalThis.PULSE?.BASE_PATH || "").replace(/\/$/, "")
+	const swUrl = `${base}/sw.js`
+	navigator.serviceWorker.register(swUrl).catch((error) => console.error("service worker", error))
+}
+
+const I18nApp = () => {
 	return (
 		<I18nProvider i18n={i18n}>
 			<ThemeProvider>
@@ -134,7 +267,14 @@ const I18nApp = () => {
 	)
 }
 
-ReactDOM.createRoot(document.getElementById("app") as HTMLElement).render(
+const appElement = document.getElementById("app") as HTMLElement
+const rootStore = globalThis as typeof globalThis & {
+	__pulseRoot?: ReturnType<typeof ReactDOM.createRoot>
+}
+const root = rootStore.__pulseRoot ?? ReactDOM.createRoot(appElement)
+rootStore.__pulseRoot = root
+
+root.render(
 	// strict mode in dev mounts / unmounts components twice
 	// and breaks the clipboard dialog
 	//<StrictMode>

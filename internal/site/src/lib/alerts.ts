@@ -2,9 +2,10 @@ import { t } from "@lingui/core/macro"
 import { CpuIcon, HardDriveIcon, MemoryStickIcon, ServerIcon } from "lucide-react"
 import type { RecordSubscription } from "pocketbase"
 import { EthernetIcon, GpuIcon } from "@/components/ui/icons"
-import { $alerts } from "@/lib/stores"
+import { notifyMobileAlert } from "@/lib/mobile-notifications"
+import { $alerts, $allSystemsById } from "@/lib/stores"
 import type { AlertInfo, AlertRecord } from "@/types"
-import { pb } from "./api"
+import { isPocketBaseAutoCancel, pb } from "./api"
 import { ThermometerIcon, BatteryMediumIcon, HourglassIcon } from "@/components/ui/icons"
 
 /** Alert info for each alert type */
@@ -104,7 +105,7 @@ export const alertManager = (() => {
 
 	/** Fetch alerts from collection */
 	async function fetchAlerts(): Promise<AlertRecord[]> {
-		return await collection.getFullList<AlertRecord>({ fields, sort: "updated" })
+		return await collection.getFullList<AlertRecord>({ fields, sort: "updated", requestKey: null })
 	}
 
 	/** Format alerts into a map of system id to alert name to alert record */
@@ -147,6 +148,15 @@ export const alertManager = (() => {
 				const groups = { create: [], update: [], delete: [] } as Record<string, AlertRecord[]>
 				for (const { action, record } of batch.values()) {
 					groups[action]?.push(record)
+					if (action !== "delete" && record.triggered) {
+						const system = $allSystemsById.get()[record.system]
+						const systemName = system?.name || record.system
+						notifyMobileAlert(
+							"Pulse 告警",
+							`${systemName} 触发 ${record.name}`,
+							`${record.id}:${record.triggered}`
+						).catch((error) => console.error("mobile notification", error))
+					}
 				}
 				for (const key in groups) {
 					if (groups[key].length) {
@@ -167,8 +177,14 @@ export const alertManager = (() => {
 	}
 
 	async function refresh() {
-		const records = await fetchAlerts()
-		add(records)
+		try {
+			const records = await fetchAlerts()
+			add(records)
+		} catch (error) {
+			if (!isPocketBaseAutoCancel(error)) {
+				console.error("Failed to fetch alerts:", error)
+			}
+		}
 	}
 
 	return {

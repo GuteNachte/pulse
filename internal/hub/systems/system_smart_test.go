@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/henrygd/beszel/internal/hub/expirymap"
 	"github.com/stretchr/testify/assert"
+	"gutenacht.site/pulse/internal/hub/expirymap"
 )
 
 func TestRecordSmartFetchResult(t *testing.T) {

@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/henrygd/beszel/agent/utils"
-	"github.com/henrygd/beszel/internal/entities/system"
+	"gutenacht.site/pulse/agent/utils"
+	"gutenacht.site/pulse/internal/entities/system"
 )
 
 const (
@@ -27,7 +27,7 @@ const (
 	nvtopCmd        string = "nvtop"
 	powermetricsCmd string = "powermetrics"
 	macmonCmd       string = "macmon"
-	noGPUFoundMsg   string = "no GPU found - see https://beszel.dev/guide/gpu"
+	noGPUFoundMsg   string = "no GPU found"
 
 	// Command retry and timeout constants
 	retryWaitTime     time.Duration = 5 * time.Second
@@ -36,6 +36,9 @@ const (
 	// Unit Conversions
 	mebibytesInAMegabyte float64 = 1.024  // nvidia-smi reports memory in MiB
 	milliwattsInAWatt    float64 = 1000.0 // tegrastats reports power in mW
+
+	gpuTypeDiscrete   string = "discrete"
+	gpuTypeIntegrated string = "integrated"
 )
 
 // GPUManager manages data collection for GPUs (either Nvidia or AMD)
@@ -91,6 +94,7 @@ const (
 	collectorSourceNvidiaSMI    collectorSource = collectorSource(nvidiaSmiCmd)
 	collectorSourceIntelGpuTop  collectorSource = collectorSource(intelGpuStatsCmd)
 	collectorSourceAmdSysfs     collectorSource = "amd_sysfs"
+	collectorSourceWindowsPerf  collectorSource = "windows_perf"
 	collectorSourceRocmSMI      collectorSource = collectorSource(rocmSmiCmd)
 	collectorSourceMacmon       collectorSource = collectorSource(macmonCmd)
 	collectorSourcePowermetrics collectorSource = collectorSource(powermetricsCmd)
@@ -98,6 +102,7 @@ const (
 	collectorGroupIntel         string          = "intel"
 	collectorGroupAmd           string          = "amd"
 	collectorGroupApple         string          = "apple"
+	collectorGroupWindows       string          = "windows"
 )
 
 func isValidCollectorSource(source collectorSource) bool {
@@ -107,6 +112,7 @@ func isValidCollectorSource(source collectorSource) bool {
 		collectorSourceNvidiaSMI,
 		collectorSourceIntelGpuTop,
 		collectorSourceAmdSysfs,
+		collectorSourceWindowsPerf,
 		collectorSourceRocmSMI,
 		collectorSourceMacmon,
 		collectorSourcePowermetrics:
@@ -120,6 +126,7 @@ type gpuCapabilities struct {
 	hasNvidiaSmi    bool
 	hasRocmSmi      bool
 	hasAmdSysfs     bool
+	hasWindowsPerf  bool
 	hasTegrastats   bool
 	hasIntelGpuTop  bool
 	hasNvtop        bool
@@ -191,7 +198,7 @@ func (gm *GPUManager) getJetsonParser() func(output []byte) bool {
 	powerPattern := regexp.MustCompile(`(GPU_SOC|CPU_GPU_CV)\s+(\d+)mW|VDD_SYS_GPU\s+(\d+)/\d+`)
 
 	// jetson devices have only one gpu so we'll just initialize here
-	gpuData := &system.GPUData{Name: "GPU"}
+	gpuData := &system.GPUData{Name: "GPU", Type: gpuTypeIntegrated}
 	gm.GpuDataMap["0"] = gpuData
 
 	return func(output []byte) bool {
@@ -253,7 +260,7 @@ func (gm *GPUManager) parseNvidiaData(output []byte) bool {
 		// add gpu if not exists
 		if _, ok := gm.GpuDataMap[id]; !ok {
 			name := strings.TrimPrefix(fields[1], "NVIDIA ")
-			gm.GpuDataMap[id] = &system.GPUData{Name: strings.TrimSuffix(name, " Laptop GPU")}
+			gm.GpuDataMap[id] = &system.GPUData{Name: strings.TrimSuffix(name, " Laptop GPU"), Type: gpuTypeDiscrete}
 		}
 		// update gpu data
 		gpu := gm.GpuDataMap[id]
@@ -288,7 +295,7 @@ func (gm *GPUManager) parseAmdData(output []byte) bool {
 
 		id := v.ID
 		if _, ok := gm.GpuDataMap[id]; !ok {
-			gm.GpuDataMap[id] = &system.GPUData{Name: v.Name}
+			gm.GpuDataMap[id] = &system.GPUData{Name: v.Name, Type: classifyGpuType(v.Name)}
 		}
 		gpu := gm.GpuDataMap[id]
 		gpu.Temperature, _ = strconv.ParseFloat(v.Temperature, 64)
@@ -358,7 +365,7 @@ func (gm *GPUManager) calculateGPUAverage(id string, gpu *system.GPUData, cacheK
 		// If GPU appears suspended (instantaneous values are 0), return zero values
 		// Otherwise return last known average for temporary collection gaps
 		if gpu.Temperature == 0 && gpu.MemoryUsed == 0 {
-			return system.GPUData{Name: gpu.Name}
+			return system.GPUData{Name: gpu.Name, Type: gpu.Type}
 		}
 		return gm.lastAvgData[id] // zero value if not found
 	}
@@ -419,9 +426,72 @@ func (gm *GPUManager) calculateIntelGPUUsage(gpuAvg, gpu *system.GPUData, lastSn
 
 // updateInstantaneousValues updates values that should reflect current state, not averages
 func (gm *GPUManager) updateInstantaneousValues(gpuAvg *system.GPUData, gpu *system.GPUData) {
+	gpuAvg.Type = gpu.Type
 	gpuAvg.Temperature = utils.TwoDecimals(gpu.Temperature)
 	gpuAvg.MemoryUsed = utils.TwoDecimals(gpu.MemoryUsed)
 	gpuAvg.MemoryTotal = utils.TwoDecimals(gpu.MemoryTotal)
+}
+
+func classifyGpuType(name string) string {
+	if isIntegratedGpuName(name) {
+		return gpuTypeIntegrated
+	}
+	if isDiscreteGpuName(name) {
+		return gpuTypeDiscrete
+	}
+	return ""
+}
+
+func isIntegratedGpuName(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "" {
+		return false
+	}
+	if strings.Contains(lower, "intel") ||
+		strings.Contains(lower, "iris") ||
+		strings.Contains(lower, "uhd") ||
+		strings.Contains(lower, "apple gpu") ||
+		strings.Contains(lower, "mali") ||
+		strings.Contains(lower, "adreno") ||
+		strings.Contains(lower, "radeon(tm)") ||
+		strings.Contains(lower, "amd radeon graphics") ||
+		strings.HasPrefix(lower, "amd gpu (") ||
+		strings.Contains(lower, "radeon 610m") ||
+		strings.Contains(lower, "radeon 660m") ||
+		strings.Contains(lower, "radeon 680m") ||
+		strings.Contains(lower, "radeon 740m") ||
+		strings.Contains(lower, "radeon 760m") ||
+		strings.Contains(lower, "radeon 780m") ||
+		strings.Contains(lower, "radeon 840m") ||
+		strings.Contains(lower, "radeon 860m") ||
+		strings.Contains(lower, "radeon 880m") ||
+		strings.Contains(lower, "radeon 890m") ||
+		strings.Contains(lower, "radeon vega") ||
+		strings.Contains(lower, "ryzen embedded") ||
+		strings.Contains(lower, "apu") {
+		return true
+	}
+	return false
+}
+
+func isDiscreteGpuName(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "" {
+		return false
+	}
+	return strings.Contains(lower, "nvidia") ||
+		strings.Contains(lower, "geforce") ||
+		strings.Contains(lower, "rtx") ||
+		strings.Contains(lower, "gtx") ||
+		strings.Contains(lower, "quadro") ||
+		strings.Contains(lower, "tesla") ||
+		strings.Contains(lower, "a100") ||
+		strings.Contains(lower, "h100") ||
+		strings.Contains(lower, "radeon rx") ||
+		strings.Contains(lower, "rx ") ||
+		strings.Contains(lower, "radeon pro") ||
+		strings.Contains(lower, "instinct") ||
+		strings.Contains(lower, "firepro")
 }
 
 // storeSnapshot saves the current GPU state for this cache key
@@ -468,11 +538,14 @@ func (gm *GPUManager) discoverGpuCapabilities() gpuCapabilities {
 			caps.hasPowermetrics = true
 		}
 	}
+	if runtime.GOOS == "windows" {
+		caps.hasWindowsPerf = true
+	}
 	return caps
 }
 
 func hasAnyGpuCollector(caps gpuCapabilities) bool {
-	return caps.hasNvidiaSmi || caps.hasRocmSmi || caps.hasAmdSysfs || caps.hasTegrastats || caps.hasIntelGpuTop || caps.hasNvtop || caps.hasMacmon || caps.hasPowermetrics
+	return caps.hasAmdSysfs || caps.hasWindowsPerf || caps.hasIntelGpuTop || caps.hasNvidiaSmi || runtime.GOOS == "windows"
 }
 
 func (gm *GPUManager) startIntelCollector() {
@@ -484,7 +557,7 @@ func (gm *GPUManager) startIntelCollector() {
 				if failures > maxFailureRetries {
 					break
 				}
-				slog.Warn("Error collecting Intel GPU data; see https://beszel.dev/guide/gpu", "err", err)
+				slog.Warn("Error collecting Intel GPU data", "err", err)
 				time.Sleep(retryWaitTime)
 				continue
 			}
@@ -568,6 +641,13 @@ func (gm *GPUManager) collectorDefinitions(caps gpuCapabilities) map[collectorSo
 			available: caps.hasAmdSysfs,
 			start: func(_ func()) bool {
 				return gm.startAmdSysfsCollector()
+			},
+		},
+		collectorSourceWindowsPerf: {
+			group:     collectorGroupWindows,
+			available: caps.hasWindowsPerf,
+			start: func(_ func()) bool {
+				return gm.startWindowsPerformanceCounterCollector()
 			},
 		},
 		collectorSourceRocmSMI: {
@@ -686,27 +766,22 @@ func (gm *GPUManager) startCollectorsByPriority(priorities []collectorSource, ca
 // resolveLegacyCollectorPriority builds the default collector order when GPU_COLLECTOR is unset.
 func (gm *GPUManager) resolveLegacyCollectorPriority(caps gpuCapabilities) []collectorSource {
 	priorities := make([]collectorSource, 0, 4)
-
-	if caps.hasNvidiaSmi && !caps.hasTegrastats {
-		if nvml, _ := utils.GetEnv("NVML"); nvml == "true" {
-			priorities = append(priorities, collectorSourceNVML, collectorSourceNvidiaSMI)
-		} else {
-			priorities = append(priorities, collectorSourceNvidiaSMI)
-		}
+	if runtime.GOOS == "windows" {
+		priorities = append(priorities, collectorSourceNVML)
 	}
-
-	if caps.hasRocmSmi {
-		if val, _ := utils.GetEnv("AMD_SYSFS"); val == "true" {
-			priorities = append(priorities, collectorSourceAmdSysfs)
-		} else {
-			priorities = append(priorities, collectorSourceRocmSMI)
-		}
-	} else if caps.hasAmdSysfs {
+	if caps.hasNvidiaSmi {
+		priorities = append(priorities, collectorSourceNvidiaSMI)
+	}
+	if caps.hasAmdSysfs {
 		priorities = append(priorities, collectorSourceAmdSysfs)
 	}
 
 	if caps.hasIntelGpuTop {
 		priorities = append(priorities, collectorSourceIntelGpuTop)
+	}
+
+	if caps.hasWindowsPerf {
+		priorities = append(priorities, collectorSourceWindowsPerf)
 	}
 
 	// Apple collectors are currently opt-in only for testing.
@@ -720,10 +795,6 @@ func (gm *GPUManager) resolveLegacyCollectorPriority(caps gpuCapabilities) []col
 	// 	priorities = append(priorities, collectorSourcePowermetrics)
 	// }
 
-	// Keep nvtop as a last resort only when no vendor collector exists.
-	if len(priorities) == 0 && caps.hasNvtop {
-		priorities = append(priorities, collectorSourceNVTop)
-	}
 	return priorities
 }
 
@@ -736,17 +807,11 @@ func NewGPUManager() (*GPUManager, error) {
 	caps := gm.discoverGpuCapabilities()
 	gm.GpuDataMap = make(map[string]*system.GPUData)
 
-	// Jetson devices should always use tegrastats (ignore GPU_COLLECTOR).
-	if caps.hasTegrastats {
-		gm.startTegraStatsCollector("3700")
-		return &gm, nil
-	}
-
 	// Respect explicit collector selection before capability auto-detection.
 	if collectorConfig, ok := utils.GetEnv("GPU_COLLECTOR"); ok && strings.TrimSpace(collectorConfig) != "" {
 		priorities := parseCollectorPriority(collectorConfig)
 		if gm.startCollectorsByPriority(priorities, caps) == 0 {
-			return nil, fmt.Errorf("no configured GPU collectors are available")
+			return nil, fmt.Errorf("no configured integrated GPU collectors are available")
 		}
 		return &gm, nil
 	}

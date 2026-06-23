@@ -2,100 +2,77 @@ body:
   - type: checkboxes
     id: terms
     attributes:
-      label: Welcome!
+      label: 提交前确认
       description: |
-        Thank you for reaching out to the Beszel community for support! To help us assist you better, please make sure to review the following points before submitting your request:
-
-        Please note:
-        - For translation-related issues or requests, please use the [Crowdin project](https://crowdin.com/project/beszel).
-        **- Please do not submit support reqeusts that are specific to ZFS. We plan to add integration with ZFS utilities in the near future.**
-
+        请提供 Pulse 版本、部署方式、系统环境和你已经尝试过的排查步骤。
       options:
-      - label: I have read the [Documentation](https://beszel.dev/guide/getting-started)
-        required: true
-      - label: I have checked the [Common Issues Guide](https://beszel.dev/guide/common-issues) and my problem was not mentioned there.
-        required: true
-      - label: I have searched open and closed issues and discussions and my problem was not mentioned before.
-        required: true
-      - label: I have verified I am using the latest version available. You can check the latest release [here](https://github.com/henrygd/beszel/releases).
-        required: true
+        - label: 我已经确认正在使用当前维护版本。
+          required: true
+        - label: 我已经搜索过现有问题和讨论。
+          required: true
+        - label: 我已经准备好相关日志或截图。
+          required: true
 
   - type: dropdown
     id: component
     attributes:
-      label: Component
-      description: Which part of Beszel is this about?
+      label: 模块
+      description: 这个问题主要发生在哪一部分？
       options:
         - Hub
         - Agent
         - Hub & Agent
-    default: 0
+        - Web UI
+        - Deploy
+      default: 0
     validations:
       required: true
 
   - type: textarea
     id: description
     attributes:
-      label: Problem Description
-      description: |
-        How to write a good bug report?
-
-        - Respect the issue template as much as possible.
-        - The title should be short and descriptive.
-        - Explain the conditions which led you to report this issue: the context.
-        - The context should lead to something, a problem that you’re facing.
-        - Remain clear and concise.
-        - Format your messages to help the reader focus on what matters and understand the structure of your message, use [Markdown syntax](https://help.github.com/articles/github-flavored-markdown)
+      label: 问题描述
+      description: 请描述你的问题、目标和已经尝试过的操作。
     validations:
       required: true
 
   - type: input
     id: system
     attributes:
-      label: OS / Architecture
-      placeholder: linux/amd64 (agent), freebsd/arm64 (hub)
+      label: 系统 / 架构
+      placeholder: linux/amd64 (agent), windows/amd64 (hub)
     validations:
       required: true
-  
-#  - type: input
-#    id: version
-#    attributes:
-#      label: Beszel version
-#      placeholder: 0.9.1
-#    validations:
-#      required: true
 
   - type: dropdown
     id: install-method
     attributes:
-      label: Installation method
+      label: 安装方式
       options:
         - Docker
         - Binary
-        - Nix
-        - Unraid
-        - Coolify
-        - Other (please describe above)
+        - FlyNAS
+        - Other
     validations:
       required: true
-  
+
   - type: textarea
     id: config
     attributes:
-      label: Configuration
-      description: Please provide any relevant service configuration
+      label: 配置
+      description: 请提供相关服务配置。
       render: yaml
 
   - type: textarea
     id: hub-logs
     attributes:
       label: Hub Logs
-      description: Check the logs page in PocketBase (`/_/#/logs`) for relevant errors (copy JSON).
+      description: 请提供 Hub 相关日志。
       render: json
 
   - type: textarea
     id: agent-logs
     attributes:
       label: Agent Logs
-      description: Please provide any logs from the agent, if relevant. Use `LOG_LEVEL=debug` for more info.
+      description: 如问题涉及 Agent，请提供 Agent 日志。
       render: shell

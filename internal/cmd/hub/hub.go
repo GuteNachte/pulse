@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/henrygd/beszel"
-	"github.com/henrygd/beszel/internal/hub"
-	_ "github.com/henrygd/beszel/internal/migrations"
+	"gutenacht.site/pulse"
+	"gutenacht.site/pulse/internal/hub"
+	_ "gutenacht.site/pulse/internal/migrations"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
@@ -39,19 +39,19 @@ func getBaseApp() *pocketbase.PocketBase {
 	isDev := os.Getenv("ENV") == "dev"
 
 	baseApp := pocketbase.NewWithConfig(pocketbase.Config{
-		DefaultDataDir: beszel.AppName + "_data",
+		DefaultDataDir: pulse.AppName + "_data",
 		DefaultDev:     isDev,
 	})
-	baseApp.RootCmd.Version = beszel.Version
-	baseApp.RootCmd.Use = beszel.AppName
+	baseApp.RootCmd.Version = pulse.Version
+	baseApp.RootCmd.Use = pulse.AppName
 	baseApp.RootCmd.Short = ""
 	// add update command
 	updateCmd := &cobra.Command{
 		Use:   "update",
-		Short: "Update " + beszel.AppName + " to the latest version",
+		Short: "Show Pulse Hub update instructions",
 		Run:   hub.Update,
 	}
-	updateCmd.Flags().Bool("china-mirrors", false, "Use mirror (gh.beszel.dev) instead of GitHub")
+	updateCmd.Flags().Bool("china-mirrors", false, "Deprecated compatibility flag")
 	baseApp.RootCmd.AddCommand(updateCmd)
 	// add health command
 	baseApp.RootCmd.AddCommand(newHealthCmd())

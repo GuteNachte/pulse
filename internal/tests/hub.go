@@ -5,9 +5,11 @@ package tests
 
 import (
 	"fmt"
+	"runtime"
 	"testing"
+	"time"
 
-	"github.com/henrygd/beszel/internal/hub"
+	"gutenacht.site/pulse/internal/hub"
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
@@ -119,7 +121,18 @@ func ClearCollection(t testing.TB, app core.App, collectionName string) error {
 
 func (h *TestHub) Cleanup() {
 	h.GetAlertManager().Stop()
-	h.GetSystemManager().RemoveAllSystems()
+	for range 20 {
+		h.GetSystemManager().RemoveAllSystems()
+		if h.GetSystemManager().GetSystemCount() == 0 {
+			runtime.Gosched()
+			time.Sleep(10 * time.Millisecond)
+			if h.GetSystemManager().GetSystemCount() == 0 {
+				break
+			}
+		}
+		runtime.Gosched()
+		time.Sleep(25 * time.Millisecond)
+	}
 	h.TestApp.Cleanup()
 }
 
@@ -128,8 +141,6 @@ func CreateSystems(app core.App, count int, userId string, status string) ([]*co
 	for i := range count {
 		system, err := CreateRecord(app, "systems", map[string]any{
 			"name":  fmt.Sprintf("test-system-%d", i),
-			"host":  fmt.Sprintf("127.0.0.%d", i),
-			"port":  "33914",
 			"users": []string{userId},
 		})
 		if err != nil {

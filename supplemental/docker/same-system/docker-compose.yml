@@ -1,26 +1,44 @@
 services:
-  beszel:
-    image: 'henrygd/beszel'
-    container_name: 'beszel'
-    restart: unless-stopped
-    ports:
-      - '8090:8090'
-    volumes:
-      - ./beszel_data:/beszel_data
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
-
-  beszel-agent:
-    image: 'henrygd/beszel-agent' #Add -nvidia for nvidia gpus
-    container_name: 'beszel-agent'
+  pulse-hub:
+    image: registry.example.com/infra/pulse-hub:1.0.5
+    container_name: pulse-hub
     restart: unless-stopped
     network_mode: host
-    # runtime: nvidia # when using beszel-agent-nvidia
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./pulse_data:/pulse_data
+    command: ["serve", "--dir=/pulse_data", "--http=0.0.0.0:8090"]
+
+  pulse-agent:
+    image: registry.example.com/infra/pulse-agent:1.0.5
+    container_name: pulse-agent
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    depends_on:
+      - pulse-hub
+    security_opt:
+      # Docker 默认会屏蔽 /sys/firmware；放开后才能读取 DMI 内存条详情。
+      - systempaths=unconfined
+    volumes:
+      # 同机部署时需要读写 Docker socket，才能控制本机容器和 Compose 堆栈。
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /:/host:ro
+      # 读取 SMBIOS / DMI 硬件信息，用于采集内存条型号、容量、频率等详情。
+      - /sys/firmware/dmi:/sys/firmware/dmi:ro
+      - ./pulse_agent_data:/var/lib/pulse-agent
+    # 如果宿主机存在核显设备或需要更完整的 DMI 采集，再按需打开下面的映射。
+    # devices:
+    #   - /dev/dri:/dev/dri
+    #   - /dev/mem:/dev/mem
+    cap_add:
+      - CAP_PERFMON
+      - CAP_SYS_RAWIO
     environment:
-      PORT: 45876
-      KEY: '...'
-      # FILESYSTEM: /dev/sda1 # set to the correct filesystem for disk I/O stats
-      # NVIDIA_VISIBLE_DEVICES: all # when using beszel-agent-nvidia
-      # NVIDIA_DRIVER_CAPABILITIES: utility # when using beszel-agent-nvidia
+      TOKEN: "${PULSE_LOCAL_AGENT_TOKEN:-pulse-local-agent}"
+      HUB_URL: "${PULSE_AGENT_HUB_URL:-http://127.0.0.1:8090}"
+      INSTALL_METHOD: docker
+      RUN_MODE: docker
+      AGENT_PROFILE: linux-container
+
+
+

@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/henrygd/beszel/agent/utils"
-	"github.com/henrygd/beszel/internal/entities/system"
+	"gutenacht.site/pulse/agent/utils"
+	"gutenacht.site/pulse/internal/entities/system"
 )
 
 var amdgpuNameCache = struct {
@@ -105,7 +105,7 @@ func (gm *GPUManager) updateAmdGpuData(cardPath string) bool {
 	usage, usageErr := readSysfsFloat(filepath.Join(devicePath, "gpu_busy_percent"))
 	memUsed, memUsedErr := readSysfsFloat(filepath.Join(devicePath, "mem_info_vram_used"))
 	memTotal, _ := readSysfsFloat(filepath.Join(devicePath, "mem_info_vram_total"))
-	// if gtt is present, add it to the memory used and total (https://github.com/henrygd/beszel/issues/1569#issuecomment-3837640484)
+	// if gtt is present, add it to the memory used and total (https://gutenacht.site/pulse/issues/1569#issuecomment-3837640484)
 	if gttUsed, err := readSysfsFloat(filepath.Join(devicePath, "mem_info_gtt_used")); err == nil && gttUsed > 0 {
 		if gttTotal, err := readSysfsFloat(filepath.Join(devicePath, "mem_info_gtt_total")); err == nil {
 			memUsed += gttUsed
@@ -137,7 +137,11 @@ func (gm *GPUManager) updateAmdGpuData(cardPath string) bool {
 
 	gpu, ok := gm.GpuDataMap[id]
 	if !ok {
-		gpu = &system.GPUData{Name: getAmdGpuName(devicePath)}
+		name := getAmdGpuName(devicePath)
+		if name == "" {
+			return false
+		}
+		gpu = &system.GPUData{Name: name, Type: classifyGpuType(name)}
 		gm.GpuDataMap[id] = gpu
 	}
 
@@ -275,7 +279,10 @@ func cacheMissingAmdgpuName(deviceID, revisionID string) {
 func getAmdGpuName(devicePath string) string {
 	// Try product_name first (works for some enterprise GPUs)
 	if prod, err := utils.ReadStringFileLimited(filepath.Join(devicePath, "product_name"), 128); err == nil {
-		return prod
+		if isAmdIntegratedGpuName(prod) {
+			return prod
+		}
+		return ""
 	}
 
 	// Read PCI device ID and look it up
@@ -287,17 +294,58 @@ func getAmdGpuName(devicePath string) string {
 		}
 
 		if name, found, done := getCachedAmdgpuName(id, revision); found {
-			return name
+			if isAmdIntegratedGpuName(name) {
+				return name
+			}
+			return ""
 		} else if !done {
 			if name, exact, ok := lookupAmdgpuNameInFile(id, revision, "/usr/share/libdrm/amdgpu.ids"); ok {
 				cacheAmdgpuName(id, revision, name, exact)
-				return normalizeAmdgpuName(name)
+				normalized := normalizeAmdgpuName(name)
+				if isAmdIntegratedGpuName(normalized) {
+					return normalized
+				}
+				return ""
 			}
 			cacheMissingAmdgpuName(id, revision)
 		}
 
-		return fmt.Sprintf("AMD GPU (%s)", id)
+		if isLikelyAmdIntegratedDeviceID(id) {
+			return fmt.Sprintf("AMD GPU (%s)", id)
+		}
+		return ""
 	}
 
-	return "AMD GPU"
+	return ""
+}
+
+func isAmdIntegratedGpuName(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "" {
+		return false
+	}
+	integratedMarkers := []string{"radeon 610m", "radeon 660m", "radeon 680m", "radeon 740m", "radeon 760m", "radeon 780m", "radeon 840m", "radeon 860m", "radeon 880m", "radeon 890m", "radeon vega", "ryzen embedded"}
+	for _, marker := range integratedMarkers {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	if strings.Contains(lower, "rx ") || strings.Contains(lower, "pro ") || strings.Contains(lower, "instinct") || strings.Contains(lower, "firepro") {
+		return false
+	}
+	return strings.Contains(lower, "apu")
+}
+
+func isLikelyAmdIntegratedDeviceID(deviceID string) bool {
+	id := normalizeHexID(deviceID)
+	if id == "" {
+		return false
+	}
+	value, err := strconv.ParseUint(id, 16, 16)
+	if err != nil {
+		return false
+	}
+	return (value >= 0x1300 && value <= 0x16ff) ||
+		(value >= 0x1900 && value <= 0x19ff) ||
+		(value >= 0x9800 && value <= 0x98ff)
 }

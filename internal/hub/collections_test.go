@@ -5,20 +5,24 @@ package hub_test
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
+	"time"
 
-	beszelTests "github.com/henrygd/beszel/internal/tests"
 	"github.com/pocketbase/pocketbase/core"
 	pbTests "github.com/pocketbase/pocketbase/tests"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	pulseHub "gutenacht.site/pulse/internal/hub"
+	pulseTests "gutenacht.site/pulse/internal/tests"
 )
 
 func TestCollectionRulesDefault(t *testing.T) {
-	hub, _ := beszelTests.NewTestHub(t.TempDir())
+	hub, _ := pulseTests.NewTestHub(t.TempDir())
 	defer hub.Cleanup()
 
 	const isUserMatchesUser = `@request.auth.id != "" && user = @request.auth.id`
+	const isUserMatchesUserNotReadonly = `@request.auth.id != "" && user = @request.auth.id && @request.auth.role != "readonly"`
 
 	const isUserInUsers = `@request.auth.id != "" && users.id ?= @request.auth.id`
 	const isUserInUsersNotReadonly = `@request.auth.id != "" && users.id ?= @request.auth.id && @request.auth.role != "readonly"`
@@ -30,7 +34,7 @@ func TestCollectionRulesDefault(t *testing.T) {
 	usersCollection, err := hub.FindCollectionByNameOrId("users")
 	assert.NoError(t, err, "Failed to find users collection")
 	assert.True(t, usersCollection.PasswordAuth.Enabled)
-	assert.Equal(t, usersCollection.PasswordAuth.IdentityFields, []string{"email"})
+	assert.Equal(t, []string{"username", "email"}, usersCollection.PasswordAuth.IdentityFields)
 	assert.Nil(t, usersCollection.CreateRule)
 	assert.False(t, usersCollection.MFA.Enabled)
 
@@ -47,9 +51,9 @@ func TestCollectionRulesDefault(t *testing.T) {
 	require.NoError(t, err, "Failed to find alerts collection")
 	assert.Equal(t, isUserMatchesUser, *alertsCollection.ListRule)
 	assert.Nil(t, alertsCollection.ViewRule)
-	assert.Equal(t, isUserMatchesUser, *alertsCollection.CreateRule)
-	assert.Equal(t, isUserMatchesUser, *alertsCollection.UpdateRule)
-	assert.Equal(t, isUserMatchesUser, *alertsCollection.DeleteRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *alertsCollection.CreateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *alertsCollection.UpdateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *alertsCollection.DeleteRule)
 
 	// alerts_history collection
 	alertsHistoryCollection, err := hub.FindCollectionByNameOrId("alerts_history")
@@ -58,7 +62,59 @@ func TestCollectionRulesDefault(t *testing.T) {
 	assert.Nil(t, alertsHistoryCollection.ViewRule)
 	assert.Nil(t, alertsHistoryCollection.CreateRule)
 	assert.Nil(t, alertsHistoryCollection.UpdateRule)
-	assert.Equal(t, isUserMatchesUser, *alertsHistoryCollection.DeleteRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *alertsHistoryCollection.DeleteRule)
+	assert.NotNil(t, alertsHistoryCollection.Fields.GetByName("acknowledged_at"))
+	assert.NotNil(t, alertsHistoryCollection.Fields.GetByName("acknowledged_by"))
+	assert.NotNil(t, alertsHistoryCollection.Fields.GetByName("silenced_until"))
+	assert.NotNil(t, alertsHistoryCollection.Fields.GetByName("silenced_by"))
+	assert.NotNil(t, alertsHistoryCollection.Fields.GetByName("silence_reason"))
+
+	// alert_policies collection
+	alertPoliciesCollection, err := hub.FindCollectionByNameOrId("alert_policies")
+	require.NoError(t, err, "Failed to find alert_policies collection")
+	assert.Equal(t, isUserMatchesUser, *alertPoliciesCollection.ListRule)
+	assert.Equal(t, isUserMatchesUser, *alertPoliciesCollection.ViewRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *alertPoliciesCollection.CreateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *alertPoliciesCollection.UpdateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *alertPoliciesCollection.DeleteRule)
+
+	agentPairingCodesCollection, err := hub.FindCollectionByNameOrId("agent_pairing_codes")
+	require.NoError(t, err, "Failed to find agent_pairing_codes collection")
+	assert.Equal(t, isUserMatchesUser, *agentPairingCodesCollection.ListRule)
+	assert.Equal(t, isUserMatchesUser, *agentPairingCodesCollection.ViewRule)
+	assert.Nil(t, agentPairingCodesCollection.CreateRule)
+	assert.Nil(t, agentPairingCodesCollection.UpdateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *agentPairingCodesCollection.DeleteRule)
+
+	// notification_failures collection
+	notificationFailuresCollection, err := hub.FindCollectionByNameOrId("notification_failures")
+	require.NoError(t, err, "Failed to find notification_failures collection")
+	assert.Equal(t, isUserMatchesUser, *notificationFailuresCollection.ListRule)
+	assert.Equal(t, isUserMatchesUser, *notificationFailuresCollection.ViewRule)
+	assert.Nil(t, notificationFailuresCollection.CreateRule)
+	assert.Nil(t, notificationFailuresCollection.UpdateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *notificationFailuresCollection.DeleteRule)
+
+	notificationChannelHealthCollection, err := hub.FindCollectionByNameOrId("notification_channel_health")
+	require.NoError(t, err, "Failed to find notification_channel_health collection")
+	assert.Equal(t, isUserMatchesUser, *notificationChannelHealthCollection.ListRule)
+	assert.Equal(t, isUserMatchesUser, *notificationChannelHealthCollection.ViewRule)
+	assert.Nil(t, notificationChannelHealthCollection.CreateRule)
+	assert.Nil(t, notificationChannelHealthCollection.UpdateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *notificationChannelHealthCollection.DeleteRule)
+	assert.NotNil(t, notificationChannelHealthCollection.Fields.GetByName("last_success_at"))
+	assert.NotNil(t, notificationChannelHealthCollection.Fields.GetByName("last_failure_at"))
+	assert.NotNil(t, notificationChannelHealthCollection.Fields.GetByName("last_test_at"))
+
+	alertNotificationStatesCollection, err := hub.FindCollectionByNameOrId("alert_notification_states")
+	require.NoError(t, err, "Failed to find alert_notification_states collection")
+	assert.Equal(t, isUserMatchesUser, *alertNotificationStatesCollection.ListRule)
+	assert.Equal(t, isUserMatchesUser, *alertNotificationStatesCollection.ViewRule)
+	assert.Nil(t, alertNotificationStatesCollection.CreateRule)
+	assert.Nil(t, alertNotificationStatesCollection.UpdateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *alertNotificationStatesCollection.DeleteRule)
+	assert.NotNil(t, alertNotificationStatesCollection.Fields.GetByName("next_allowed_at"))
+	assert.NotNil(t, alertNotificationStatesCollection.Fields.GetByName("suppressed_count"))
 
 	// containers collection
 	containersCollection, err := hub.FindCollectionByNameOrId("containers")
@@ -83,18 +139,10 @@ func TestCollectionRulesDefault(t *testing.T) {
 	require.NoError(t, err, "Failed to find fingerprints collection")
 	assert.Equal(t, isUserInSystemUsers, *fingerprintsCollection.ListRule)
 	assert.Equal(t, isUserInSystemUsers, *fingerprintsCollection.ViewRule)
-	assert.Equal(t, isUserInSystemUsersNotReadonly, *fingerprintsCollection.CreateRule)
-	assert.Equal(t, isUserInSystemUsersNotReadonly, *fingerprintsCollection.UpdateRule)
-	assert.Equal(t, isUserInSystemUsersNotReadonly, *fingerprintsCollection.DeleteRule)
-
-	// quiet_hours collection
-	quietHoursCollection, err := hub.FindCollectionByNameOrId("quiet_hours")
-	require.NoError(t, err, "Failed to find quiet_hours collection")
-	assert.Equal(t, isUserMatchesUser, *quietHoursCollection.ListRule)
-	assert.Equal(t, isUserMatchesUser, *quietHoursCollection.ViewRule)
-	assert.Equal(t, isUserMatchesUser, *quietHoursCollection.CreateRule)
-	assert.Equal(t, isUserMatchesUser, *quietHoursCollection.UpdateRule)
-	assert.Equal(t, isUserMatchesUser, *quietHoursCollection.DeleteRule)
+	assert.Nil(t, fingerprintsCollection.CreateRule)
+	assert.Nil(t, fingerprintsCollection.UpdateRule)
+	assert.Nil(t, fingerprintsCollection.DeleteRule)
+	assert.True(t, fingerprintsCollection.Fields.GetByName("token").GetHidden())
 
 	// smart_devices collection
 	smartDevicesCollection, err := hub.FindCollectionByNameOrId("smart_devices")
@@ -123,15 +171,6 @@ func TestCollectionRulesDefault(t *testing.T) {
 	assert.Nil(t, systemStatsCollection.UpdateRule)
 	assert.Nil(t, systemStatsCollection.DeleteRule)
 
-	// systemd_services collection
-	systemdServicesCollection, err := hub.FindCollectionByNameOrId("systemd_services")
-	require.NoError(t, err, "Failed to find systemd_services collection")
-	assert.Equal(t, isUserInSystemUsers, *systemdServicesCollection.ListRule)
-	assert.Nil(t, systemdServicesCollection.ViewRule)
-	assert.Nil(t, systemdServicesCollection.CreateRule)
-	assert.Nil(t, systemdServicesCollection.UpdateRule)
-	assert.Nil(t, systemdServicesCollection.DeleteRule)
-
 	// systems collection
 	systemsCollection, err := hub.FindCollectionByNameOrId("systems")
 	require.NoError(t, err, "Failed to find systems collection")
@@ -149,35 +188,88 @@ func TestCollectionRulesDefault(t *testing.T) {
 	assert.Nil(t, universalTokensCollection.CreateRule)
 	assert.Nil(t, universalTokensCollection.UpdateRule)
 	assert.Nil(t, universalTokensCollection.DeleteRule)
+	assert.True(t, universalTokensCollection.Fields.GetByName("token").GetHidden())
 
 	// user_settings collection
 	userSettingsCollection, err := hub.FindCollectionByNameOrId("user_settings")
 	require.NoError(t, err, "Failed to find user_settings collection")
 	assert.Equal(t, isUserMatchesUser, *userSettingsCollection.ListRule)
 	assert.Nil(t, userSettingsCollection.ViewRule)
-	assert.Equal(t, isUserMatchesUser, *userSettingsCollection.CreateRule)
-	assert.Equal(t, isUserMatchesUser, *userSettingsCollection.UpdateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *userSettingsCollection.CreateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *userSettingsCollection.UpdateRule)
 	assert.Nil(t, userSettingsCollection.DeleteRule)
+
+	agentReleasesCollection, err := hub.FindCollectionByNameOrId("agent_releases")
+	require.NoError(t, err, "Failed to find agent_releases collection")
+	assert.Nil(t, agentReleasesCollection.Fields.GetByName("recommended"))
+	assert.NotNil(t, agentReleasesCollection.Fields.GetByName("disabled_reason"))
+
+	websiteMonitorsCollection, err := hub.FindCollectionByNameOrId("website_monitors")
+	require.NoError(t, err, "Failed to find website_monitors collection")
+	assert.NotNil(t, websiteMonitorsCollection.Fields.GetByName("expected_content"))
+	assert.NotNil(t, websiteMonitorsCollection.Fields.GetByName("last_failure_category"))
+
+	websiteMonitorChecksCollection, err := hub.FindCollectionByNameOrId("website_monitor_checks")
+	require.NoError(t, err, "Failed to find website_monitor_checks collection")
+	assert.NotNil(t, websiteMonitorChecksCollection.Fields.GetByName("failure_category"))
+}
+
+func TestOperationActionCollectionSupportsAllAllowedActions(t *testing.T) {
+	hub, _ := pulseTests.NewTestHub(t.TempDir())
+	defer hub.Cleanup()
+
+	collection, err := hub.FindCollectionByNameOrId("operation_actions")
+	require.NoError(t, err)
+	field := collection.Fields.GetByName("action")
+	selectField, ok := field.(*core.SelectField)
+	require.True(t, ok, "operation_actions.action should be a select field")
+	timeoutField, ok := collection.Fields.GetByName("timeout_seconds").(*core.NumberField)
+	require.True(t, ok, "operation_actions.timeout_seconds should be a number field")
+	require.NotNil(t, timeoutField.Max)
+	assert.Equal(t, float64(600), *timeoutField.Max)
+	stageField, ok := collection.Fields.GetByName("stage").(*core.SelectField)
+	require.True(t, ok, "operation_actions.stage should be a select field")
+	assert.ElementsMatch(t, []string{"queued", "validating", "executing", "completed"}, stageField.Values)
+	failureCodeField, ok := collection.Fields.GetByName("failure_code").(*core.SelectField)
+	require.True(t, ok, "operation_actions.failure_code should be a select field")
+	assert.ElementsMatch(t, pulseHub.OperationFailureCodes(), failureCodeField.Values)
+	assert.NotNil(t, collection.Fields.GetByName("started_at"))
+	assert.NotNil(t, collection.Fields.GetByName("completed_at"))
+	durationField, ok := collection.Fields.GetByName("duration_ms").(*core.NumberField)
+	require.True(t, ok, "operation_actions.duration_ms should be a number field")
+	require.NotNil(t, durationField.Min)
+	assert.Equal(t, float64(0), *durationField.Min)
+	auditCollection, err := hub.FindCollectionByNameOrId("operation_audit")
+	require.NoError(t, err)
+	auditOperationField, ok := auditCollection.Fields.GetByName("operation").(*core.RelationField)
+	require.True(t, ok, "operation_audit.operation should be a relation field")
+	assert.Equal(t, collection.Id, auditOperationField.CollectionId)
+	auditFailureCodeField, ok := auditCollection.Fields.GetByName("failure_code").(*core.SelectField)
+	require.True(t, ok, "operation_audit.failure_code should be a select field")
+	assert.ElementsMatch(t, pulseHub.OperationFailureCodes(), auditFailureCodeField.Values)
+
+	assert.ElementsMatch(t, pulseHub.AllowedOperationActions(), selectField.Values)
 }
 
 func TestCollectionRulesShareAllSystems(t *testing.T) {
 	t.Setenv("SHARE_ALL_SYSTEMS", "true")
-	hub, _ := beszelTests.NewTestHub(t.TempDir())
+	hub, _ := pulseTests.NewTestHub(t.TempDir())
 	defer hub.Cleanup()
 
 	const isUser = `@request.auth.id != ""`
 	const isUserNotReadonly = `@request.auth.id != "" && @request.auth.role != "readonly"`
 
 	const isUserMatchesUser = `@request.auth.id != "" && user = @request.auth.id`
+	const isUserMatchesUserNotReadonly = `@request.auth.id != "" && user = @request.auth.id && @request.auth.role != "readonly"`
 
 	// alerts collection
 	alertsCollection, err := hub.FindCollectionByNameOrId("alerts")
 	require.NoError(t, err, "Failed to find alerts collection")
 	assert.Equal(t, isUserMatchesUser, *alertsCollection.ListRule)
 	assert.Nil(t, alertsCollection.ViewRule)
-	assert.Equal(t, isUserMatchesUser, *alertsCollection.CreateRule)
-	assert.Equal(t, isUserMatchesUser, *alertsCollection.UpdateRule)
-	assert.Equal(t, isUserMatchesUser, *alertsCollection.DeleteRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *alertsCollection.CreateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *alertsCollection.UpdateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *alertsCollection.DeleteRule)
 
 	// alerts_history collection
 	alertsHistoryCollection, err := hub.FindCollectionByNameOrId("alerts_history")
@@ -186,7 +278,54 @@ func TestCollectionRulesShareAllSystems(t *testing.T) {
 	assert.Nil(t, alertsHistoryCollection.ViewRule)
 	assert.Nil(t, alertsHistoryCollection.CreateRule)
 	assert.Nil(t, alertsHistoryCollection.UpdateRule)
-	assert.Equal(t, isUserMatchesUser, *alertsHistoryCollection.DeleteRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *alertsHistoryCollection.DeleteRule)
+	assert.NotNil(t, alertsHistoryCollection.Fields.GetByName("acknowledged_at"))
+	assert.NotNil(t, alertsHistoryCollection.Fields.GetByName("acknowledged_by"))
+	assert.NotNil(t, alertsHistoryCollection.Fields.GetByName("silenced_until"))
+	assert.NotNil(t, alertsHistoryCollection.Fields.GetByName("silenced_by"))
+	assert.NotNil(t, alertsHistoryCollection.Fields.GetByName("silence_reason"))
+
+	// alert_policies collection
+	alertPoliciesCollection, err := hub.FindCollectionByNameOrId("alert_policies")
+	require.NoError(t, err, "Failed to find alert_policies collection")
+	assert.Equal(t, isUserMatchesUser, *alertPoliciesCollection.ListRule)
+	assert.Equal(t, isUserMatchesUser, *alertPoliciesCollection.ViewRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *alertPoliciesCollection.CreateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *alertPoliciesCollection.UpdateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *alertPoliciesCollection.DeleteRule)
+
+	agentPairingCodesCollection, err := hub.FindCollectionByNameOrId("agent_pairing_codes")
+	require.NoError(t, err, "Failed to find agent_pairing_codes collection")
+	assert.Equal(t, isUserMatchesUser, *agentPairingCodesCollection.ListRule)
+	assert.Equal(t, isUserMatchesUser, *agentPairingCodesCollection.ViewRule)
+	assert.Nil(t, agentPairingCodesCollection.CreateRule)
+	assert.Nil(t, agentPairingCodesCollection.UpdateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *agentPairingCodesCollection.DeleteRule)
+
+	// notification_failures collection
+	notificationFailuresCollection, err := hub.FindCollectionByNameOrId("notification_failures")
+	require.NoError(t, err, "Failed to find notification_failures collection")
+	assert.Equal(t, isUserMatchesUser, *notificationFailuresCollection.ListRule)
+	assert.Equal(t, isUserMatchesUser, *notificationFailuresCollection.ViewRule)
+	assert.Nil(t, notificationFailuresCollection.CreateRule)
+	assert.Nil(t, notificationFailuresCollection.UpdateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *notificationFailuresCollection.DeleteRule)
+
+	notificationChannelHealthCollection, err := hub.FindCollectionByNameOrId("notification_channel_health")
+	require.NoError(t, err, "Failed to find notification_channel_health collection")
+	assert.Equal(t, isUserMatchesUser, *notificationChannelHealthCollection.ListRule)
+	assert.Equal(t, isUserMatchesUser, *notificationChannelHealthCollection.ViewRule)
+	assert.Nil(t, notificationChannelHealthCollection.CreateRule)
+	assert.Nil(t, notificationChannelHealthCollection.UpdateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *notificationChannelHealthCollection.DeleteRule)
+
+	alertNotificationStatesCollection, err := hub.FindCollectionByNameOrId("alert_notification_states")
+	require.NoError(t, err, "Failed to find alert_notification_states collection")
+	assert.Equal(t, isUserMatchesUser, *alertNotificationStatesCollection.ListRule)
+	assert.Equal(t, isUserMatchesUser, *alertNotificationStatesCollection.ViewRule)
+	assert.Nil(t, alertNotificationStatesCollection.CreateRule)
+	assert.Nil(t, alertNotificationStatesCollection.UpdateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *alertNotificationStatesCollection.DeleteRule)
 
 	// containers collection
 	containersCollection, err := hub.FindCollectionByNameOrId("containers")
@@ -211,18 +350,10 @@ func TestCollectionRulesShareAllSystems(t *testing.T) {
 	require.NoError(t, err, "Failed to find fingerprints collection")
 	assert.Equal(t, isUser, *fingerprintsCollection.ListRule)
 	assert.Equal(t, isUser, *fingerprintsCollection.ViewRule)
-	assert.Equal(t, isUserNotReadonly, *fingerprintsCollection.CreateRule)
-	assert.Equal(t, isUserNotReadonly, *fingerprintsCollection.UpdateRule)
-	assert.Equal(t, isUserNotReadonly, *fingerprintsCollection.DeleteRule)
-
-	// quiet_hours collection
-	quietHoursCollection, err := hub.FindCollectionByNameOrId("quiet_hours")
-	require.NoError(t, err, "Failed to find quiet_hours collection")
-	assert.Equal(t, isUserMatchesUser, *quietHoursCollection.ListRule)
-	assert.Equal(t, isUserMatchesUser, *quietHoursCollection.ViewRule)
-	assert.Equal(t, isUserMatchesUser, *quietHoursCollection.CreateRule)
-	assert.Equal(t, isUserMatchesUser, *quietHoursCollection.UpdateRule)
-	assert.Equal(t, isUserMatchesUser, *quietHoursCollection.DeleteRule)
+	assert.Nil(t, fingerprintsCollection.CreateRule)
+	assert.Nil(t, fingerprintsCollection.UpdateRule)
+	assert.Nil(t, fingerprintsCollection.DeleteRule)
+	assert.True(t, fingerprintsCollection.Fields.GetByName("token").GetHidden())
 
 	// smart_devices collection
 	smartDevicesCollection, err := hub.FindCollectionByNameOrId("smart_devices")
@@ -251,15 +382,6 @@ func TestCollectionRulesShareAllSystems(t *testing.T) {
 	assert.Nil(t, systemStatsCollection.UpdateRule)
 	assert.Nil(t, systemStatsCollection.DeleteRule)
 
-	// systemd_services collection
-	systemdServicesCollection, err := hub.FindCollectionByNameOrId("systemd_services")
-	require.NoError(t, err, "Failed to find systemd_services collection")
-	assert.Equal(t, isUser, *systemdServicesCollection.ListRule)
-	assert.Nil(t, systemdServicesCollection.ViewRule)
-	assert.Nil(t, systemdServicesCollection.CreateRule)
-	assert.Nil(t, systemdServicesCollection.UpdateRule)
-	assert.Nil(t, systemdServicesCollection.DeleteRule)
-
 	// systems collection
 	systemsCollection, err := hub.FindCollectionByNameOrId("systems")
 	require.NoError(t, err, "Failed to find systems collection")
@@ -277,20 +399,21 @@ func TestCollectionRulesShareAllSystems(t *testing.T) {
 	assert.Nil(t, universalTokensCollection.CreateRule)
 	assert.Nil(t, universalTokensCollection.UpdateRule)
 	assert.Nil(t, universalTokensCollection.DeleteRule)
+	assert.True(t, universalTokensCollection.Fields.GetByName("token").GetHidden())
 
 	// user_settings collection
 	userSettingsCollection, err := hub.FindCollectionByNameOrId("user_settings")
 	require.NoError(t, err, "Failed to find user_settings collection")
 	assert.Equal(t, isUserMatchesUser, *userSettingsCollection.ListRule)
 	assert.Nil(t, userSettingsCollection.ViewRule)
-	assert.Equal(t, isUserMatchesUser, *userSettingsCollection.CreateRule)
-	assert.Equal(t, isUserMatchesUser, *userSettingsCollection.UpdateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *userSettingsCollection.CreateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *userSettingsCollection.UpdateRule)
 	assert.Nil(t, userSettingsCollection.DeleteRule)
 }
 
 func TestDisablePasswordAuth(t *testing.T) {
 	t.Setenv("DISABLE_PASSWORD_AUTH", "true")
-	hub, _ := beszelTests.NewTestHub(t.TempDir())
+	hub, _ := pulseTests.NewTestHub(t.TempDir())
 	defer hub.Cleanup()
 
 	usersCollection, err := hub.FindCollectionByNameOrId("users")
@@ -300,7 +423,7 @@ func TestDisablePasswordAuth(t *testing.T) {
 
 func TestUserCreation(t *testing.T) {
 	t.Setenv("USER_CREATION", "true")
-	hub, _ := beszelTests.NewTestHub(t.TempDir())
+	hub, _ := pulseTests.NewTestHub(t.TempDir())
 	defer hub.Cleanup()
 
 	usersCollection, err := hub.FindCollectionByNameOrId("users")
@@ -310,7 +433,7 @@ func TestUserCreation(t *testing.T) {
 
 func TestMFAOtp(t *testing.T) {
 	t.Setenv("MFA_OTP", "true")
-	hub, _ := beszelTests.NewTestHub(t.TempDir())
+	hub, _ := pulseTests.NewTestHub(t.TempDir())
 	defer hub.Cleanup()
 
 	usersCollection, err := hub.FindCollectionByNameOrId("users")
@@ -325,33 +448,39 @@ func TestMFAOtp(t *testing.T) {
 }
 
 func TestApiCollectionsAuthRules(t *testing.T) {
-	hub, _ := beszelTests.NewTestHub(t.TempDir())
+	hub, _ := pulseTests.NewTestHub(t.TempDir())
 	defer hub.Cleanup()
 
 	hub.StartHub()
 
-	user1, _ := beszelTests.CreateUser(hub, "user1@example.com", "password")
+	user1, _ := pulseTests.CreateUser(hub, "user1@example.com", "password")
 	user1Token, _ := user1.NewAuthToken()
 
-	user2, _ := beszelTests.CreateUser(hub, "user2@example.com", "password")
+	user2, _ := pulseTests.CreateUser(hub, "user2@example.com", "password")
 	// user2Token, _ := user2.NewAuthToken()
 
-	userReadonly, _ := beszelTests.CreateUserWithRole(hub, "userreadonly@example.com", "password", "readonly")
+	userReadonly, _ := pulseTests.CreateUserWithRole(hub, "userreadonly@example.com", "password", "readonly")
 	userReadonlyToken, _ := userReadonly.NewAuthToken()
 
-	userOneSystem, _ := beszelTests.CreateRecord(hub, "systems", map[string]any{
+	userOneSystem, _ := pulseTests.CreateRecord(hub, "systems", map[string]any{
 		"name":  "system1",
 		"users": []string{user1.Id},
 		"host":  "127.0.0.1",
 	})
 
-	sharedSystem, _ := beszelTests.CreateRecord(hub, "systems", map[string]any{
+	sharedSystem, _ := pulseTests.CreateRecord(hub, "systems", map[string]any{
 		"name":  "system2",
 		"users": []string{user1.Id, user2.Id},
 		"host":  "127.0.0.2",
 	})
 
-	userTwoSystem, _ := beszelTests.CreateRecord(hub, "systems", map[string]any{
+	readonlyPairingCode, _ := pulseTests.CreateRecord(hub, "agent_pairing_codes", map[string]any{
+		"user":       userReadonly.Id,
+		"code":       "RO1111",
+		"expires_at": time.Now().Add(time.Hour),
+	})
+
+	userTwoSystem, _ := pulseTests.CreateRecord(hub, "systems", map[string]any{
 		"name":  "system3",
 		"users": []string{user2.Id},
 		"host":  "127.0.0.2",
@@ -367,7 +496,7 @@ func TestApiCollectionsAuthRules(t *testing.T) {
 		return hub.TestApp
 	}
 
-	scenarios := []beszelTests.ApiScenario{
+	scenarios := []pulseTests.ApiScenario{
 		{
 			Name:               "Unauthorized user cannot list systems",
 			Method:             http.MethodGet,
@@ -495,6 +624,65 @@ func TestApiCollectionsAuthRules(t *testing.T) {
 				hub.SetCollectionAuthSettings()
 				systemsCount, _ := app.CountRecords("systems")
 				assert.EqualValues(t, 2, systemsCount)
+			},
+		},
+		{
+			Name:   "Readonly cannot create alert collection records",
+			Method: http.MethodPost,
+			URL:    "/api/collections/alerts/records",
+			Headers: map[string]string{
+				"Authorization": userReadonlyToken,
+			},
+			Body:            strings.NewReader(fmt.Sprintf(`{"user":"%s","system":"%s","name":"CPU","value":80,"min":10}`, userReadonly.Id, sharedSystem.Id)),
+			ExpectedStatus:  400,
+			ExpectedContent: []string{"Failed to create record."},
+			TestAppFactory:  testAppFactory,
+			BeforeTestFunc: func(t testing.TB, app *pbTests.TestApp, e *core.ServeEvent) {
+				count, _ := app.CountRecords("alerts")
+				assert.EqualValues(t, 0, count)
+			},
+			AfterTestFunc: func(t testing.TB, app *pbTests.TestApp, res *http.Response) {
+				count, _ := app.CountRecords("alerts")
+				assert.EqualValues(t, 0, count)
+			},
+		},
+		{
+			Name:   "Readonly cannot create user settings collection records",
+			Method: http.MethodPost,
+			URL:    "/api/collections/user_settings/records",
+			Headers: map[string]string{
+				"Authorization": userReadonlyToken,
+			},
+			Body:            strings.NewReader(fmt.Sprintf(`{"user":"%s","settings":{"theme":"dark"}}`, userReadonly.Id)),
+			ExpectedStatus:  400,
+			ExpectedContent: []string{"Failed to create record."},
+			TestAppFactory:  testAppFactory,
+			BeforeTestFunc: func(t testing.TB, app *pbTests.TestApp, e *core.ServeEvent) {
+				count, _ := app.CountRecords("user_settings")
+				assert.EqualValues(t, 0, count)
+			},
+			AfterTestFunc: func(t testing.TB, app *pbTests.TestApp, res *http.Response) {
+				count, _ := app.CountRecords("user_settings")
+				assert.EqualValues(t, 0, count)
+			},
+		},
+		{
+			Name:   "Readonly cannot delete agent pairing code collection records",
+			Method: http.MethodDelete,
+			URL:    fmt.Sprintf("/api/collections/agent_pairing_codes/records/%s", readonlyPairingCode.Id),
+			Headers: map[string]string{
+				"Authorization": userReadonlyToken,
+			},
+			ExpectedStatus:  404,
+			ExpectedContent: []string{"resource wasn't found"},
+			TestAppFactory:  testAppFactory,
+			BeforeTestFunc: func(t testing.TB, app *pbTests.TestApp, e *core.ServeEvent) {
+				count, _ := app.CountRecords("agent_pairing_codes")
+				assert.EqualValues(t, 1, count)
+			},
+			AfterTestFunc: func(t testing.TB, app *pbTests.TestApp, res *http.Response) {
+				count, _ := app.CountRecords("agent_pairing_codes")
+				assert.EqualValues(t, 1, count)
 			},
 		},
 		{

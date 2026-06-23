@@ -33,27 +33,28 @@ const InputTags = React.forwardRef<HTMLInputElement, InputTagsProps>(
 		return (
 			<div
 				className={cn(
-					"bg-background min-h-10 flex w-full flex-wrap gap-2 rounded-md border px-3 py-2 text-sm  placeholder:text-muted-foreground has-focus-visible:outline-hidden ring-offset-background has-focus-visible:ring-2 has-focus-visible:ring-ring has-focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+					"flex min-h-10 w-full flex-wrap items-center gap-1.5 rounded-md border border-input bg-card px-2.5 py-1.5 text-sm shadow-none ring-offset-background transition-[border-color,background-color] duration-150 ease-out placeholder:text-muted-foreground has-focus-visible:border-ring/70 has-focus-visible:outline-hidden has-focus-visible:ring-2 has-focus-visible:ring-ring/15 has-focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50",
 					className
 				)}
 			>
 				{value.map((item) => (
-					<Badge key={item}>
-						{item}
+					<Badge key={item} variant="secondary" className="min-h-10 gap-1 rounded-md border-border/70 bg-card px-2">
+						<span className="max-w-48 truncate">{item}</span>
 						<Button
 							variant="ghost"
 							size="icon"
-							className="ms-2 h-3 w-3"
+							className="-my-1.5 -me-1.5 size-10 rounded-md text-muted-foreground transition-[background-color,color,scale] hover:bg-surface-soft hover:text-foreground active:scale-[0.96]"
 							onClick={() => {
 								onChange(value.filter((i) => i !== item))
 							}}
+							aria-label={`移除 ${item}`}
 						>
-							<XIcon className="w-3" />
+							<XIcon className="size-3" />
 						</Button>
 					</Badge>
 				))}
 				<input
-					className="flex-1 outline-hidden bg-background placeholder:text-muted-foreground"
+					className="min-w-32 flex-1 bg-transparent px-1 py-1 outline-hidden placeholder:text-muted-foreground"
 					value={pendingDataPoint}
 					onChange={(e) => setPendingDataPoint(e.target.value)}
 					onKeyDown={(e) => {

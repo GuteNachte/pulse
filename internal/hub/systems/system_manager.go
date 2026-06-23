@@ -3,21 +3,19 @@ package systems
 import (
 	"errors"
 	"fmt"
+	"strings"
+	"sync/atomic"
 	"time"
 
-	"github.com/henrygd/beszel/internal/hub/ws"
+	"gutenacht.site/pulse/internal/alerts"
+	"gutenacht.site/pulse/internal/hub/ws"
 
-	"github.com/henrygd/beszel/internal/entities/system"
-	"github.com/henrygd/beszel/internal/hub/expirymap"
-
-	"github.com/henrygd/beszel/internal/common"
-
-	"github.com/henrygd/beszel"
+	"gutenacht.site/pulse/internal/entities/system"
+	"gutenacht.site/pulse/internal/hub/expirymap"
 
 	"github.com/blang/semver"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/store"
-	"golang.org/x/crypto/ssh"
 )
 
 // System status constants
@@ -31,30 +29,28 @@ const (
 	interval int = 60_000
 	// interval int = 10_000 // Debug interval for faster updates
 
-	// sessionTimeout is the maximum time to wait for SSH connections
-	sessionTimeout = 4 * time.Second
 )
 
 // errSystemExists is returned when attempting to add a system that already exists
 var errSystemExists = errors.New("system exists")
 
-// SystemManager manages a collection of monitored systems and their connections.
-// It handles system lifecycle, status updates, and maintains both SSH and WebSocket connections.
+// SystemManager manages a collection of monitored systems and their WebSocket connections.
 type SystemManager struct {
 	hub           hubLike                               // Hub interface for database and alert operations
 	systems       *store.Store[string, *System]         // Thread-safe store of active systems
-	sshConfig     *ssh.ClientConfig                     // SSH client configuration for system connections
 	smartFetchMap *expirymap.ExpiryMap[smartFetchState] // Stores last SMART fetch time/result; TTL is only for cleanup
+	shuttingDown  atomic.Bool                           // Prevents new updaters while the manager is being torn down
 }
 
 // hubLike defines the interface requirements for the hub dependency.
 // It extends core.App with system-specific functionality.
 type hubLike interface {
 	core.App
-	GetSSHKey(dataDir string) (ssh.Signer, error)
 	HandleSystemAlerts(systemRecord *core.Record, data *system.CombinedData) error
 	HandleStatusAlerts(status string, systemRecord *core.Record) error
 	CancelPendingStatusAlerts(systemID string)
+	SendAlert(data alerts.AlertMessageData) error
+	MakeLink(parts ...string) string
 }
 
 // NewSystemManager creates a new SystemManager instance with the provided hub.
@@ -77,20 +73,13 @@ func (sm *SystemManager) GetSystem(systemID string) (*System, error) {
 }
 
 // Initialize sets up the system manager by binding event hooks and starting existing systems.
-// It configures SSH client settings and begins monitoring all non-paused systems from the database.
-// Systems are started with staggered delays to prevent overwhelming the hub during startup.
+// It begins monitoring all non-paused systems from the database.
 func (sm *SystemManager) Initialize() error {
 	sm.bindEventHooks()
 
-	// Initialize SSH client configuration
-	err := sm.createSSHClientConfig()
-	if err != nil {
-		return err
-	}
-
 	// Load existing systems from database (excluding paused ones)
 	var systems []*System
-	err = sm.hub.DB().NewQuery("SELECT id, host, port, status FROM systems WHERE status != 'paused'").All(&systems)
+	err := sm.hub.DB().NewQuery("SELECT id, status FROM systems WHERE status != 'paused'").All(&systems)
 	if err != nil || len(systems) == 0 {
 		return err
 	}
@@ -142,16 +131,22 @@ func (sm *SystemManager) onTokenRotated(e *core.RecordEvent) error {
 }
 
 // onRecordCreate is called before a new system record is committed to the database.
-// It initializes the record with default values: empty info and pending status.
+// New systems are WebSocket-only; legacy host/port fields are intentionally not used.
 func (sm *SystemManager) onRecordCreate(e *core.RecordEvent) error {
 	e.Record.Set("info", system.Info{})
 	e.Record.Set("status", pending)
+	discardLegacySystemTransportFields(e.Record)
 	return e.Next()
 }
 
 // onRecordAfterCreateSuccess is called after a new system record is successfully created.
 // It adds the new system to the manager to begin monitoring.
 func (sm *SystemManager) onRecordAfterCreateSuccess(e *core.RecordEvent) error {
+	for _, userID := range e.Record.GetStringSlice("users") {
+		if err := alerts.ApplyGlobalAlertPoliciesToSystem(e.App, userID, e.Record.Id); err != nil {
+			e.App.Logger().Error("Error applying global alert policies", "err", err, "systemID", e.Record.Id, "userID", userID)
+		}
+	}
 	if err := sm.AddRecord(e.Record, nil); err != nil {
 		e.App.Logger().Error("Error adding record", "err", err)
 	}
@@ -159,18 +154,20 @@ func (sm *SystemManager) onRecordAfterCreateSuccess(e *core.RecordEvent) error {
 }
 
 // onRecordUpdate is called before a system record is updated in the database.
-// It clears system info when the status is changed to paused.
+// It clears system info when paused. Agent transport is WebSocket-only and has no
+// editable host/port configuration.
 func (sm *SystemManager) onRecordUpdate(e *core.RecordEvent) error {
 	if e.Record.GetString("status") == paused {
 		e.Record.Set("info", system.Info{})
 	}
+	discardLegacySystemTransportFields(e.Record)
 	return e.Next()
 }
 
 // onRecordAfterUpdateSuccess handles system record updates after they're committed to the database.
 // It manages system lifecycle based on status changes and triggers appropriate alerts.
 // Status transitions are handled as follows:
-// - paused: Closes SSH connection and deactivates alerts
+// - paused: Closes the active WebSocket connection and deactivates alerts
 // - pending: Starts monitoring (reuses WebSocket if available)
 // - up: Triggers system alerts
 // - down: Triggers status change alerts
@@ -187,7 +184,7 @@ func (sm *SystemManager) onRecordAfterUpdateSuccess(e *core.RecordEvent) error {
 	case paused:
 		if ok {
 			// Pause monitoring but keep system in manager for potential resume
-			system.closeSSHConnection()
+			system.closeWebSocketConnection()
 		}
 		_ = deactivateAlerts(e.App, e.Record.Id)
 		sm.hub.CancelPendingStatusAlerts(e.Record.Id)
@@ -204,6 +201,17 @@ func (sm *SystemManager) onRecordAfterUpdateSuccess(e *core.RecordEvent) error {
 		}
 		_ = deactivateAlerts(e.App, e.Record.Id)
 		return e.Next()
+	}
+
+	if e.Record.GetBool("suppress_offline_alerts") && !e.Record.Original().GetBool("suppress_offline_alerts") {
+		sm.hub.CancelPendingStatusAlerts(e.Record.Id)
+		_, _ = alerts.DeleteStatusAlertForSystem(e.App, e.Record.Id)
+	} else if !e.Record.GetBool("suppress_offline_alerts") && e.Record.Original().GetBool("suppress_offline_alerts") {
+		for _, userID := range e.Record.GetStringSlice("users") {
+			if err := alerts.ApplyGlobalAlertPoliciesToSystem(e.App, userID, e.Record.Id); err != nil {
+				e.App.Logger().Error("Error reapplying global alert policies", "err", err, "systemID", e.Record.Id, "userID", userID)
+			}
+		}
 	}
 
 	// Handle systems not in manager
@@ -241,7 +249,10 @@ func (sm *SystemManager) AddSystem(sys *System) error {
 	if sm.systems.Has(sys.Id) {
 		return errSystemExists
 	}
-	if sys.Id == "" || sys.Host == "" {
+	if sm.shuttingDown.Load() {
+		return nil
+	}
+	if sys.Id == "" {
 		return errors.New("system missing required fields")
 	}
 
@@ -250,6 +261,10 @@ func (sm *SystemManager) AddSystem(sys *System) error {
 	sys.ctx, sys.cancel = sys.getContext()
 	sys.data = &system.CombinedData{}
 	sm.systems.Set(sys.Id, sys)
+	if sm.shuttingDown.Load() {
+		_ = sm.RemoveSystem(sys.Id)
+		return nil
+	}
 
 	// Start monitoring in background
 	go sys.StartUpdater()
@@ -270,8 +285,7 @@ func (sm *SystemManager) RemoveSystem(systemID string) error {
 		system.cancel()
 	}
 
-	// Clean up all connections
-	system.closeSSHConnection()
+	// Clean up connection
 	system.closeWebSocketConnection()
 	sm.systems.Remove(systemID)
 	return nil
@@ -294,24 +308,31 @@ func (sm *SystemManager) AddRecord(record *core.Record, system *System) (err err
 
 	// Populate system from record
 	system.Status = record.GetString("status")
-	system.Host = record.GetString("host")
-	system.Port = record.GetString("port")
 
 	return sm.AddSystem(system)
+}
+
+func discardLegacySystemTransportFields(record *core.Record) {
+	record.Set("host", nil)
+	record.Set("port", nil)
 }
 
 // AddWebSocketSystem creates and adds a system with an established WebSocket connection.
 // This method is called when an agent connects via WebSocket with valid authentication.
 // The system is immediately added to monitoring with the provided connection and version info.
-func (sm *SystemManager) AddWebSocketSystem(systemId string, agentVersion semver.Version, wsConn *ws.WsConn) error {
+func (sm *SystemManager) AddWebSocketSystem(systemId string, agentVersion semver.Version, wsConn *ws.WsConn, remoteIP string) error {
 	systemRecord, err := sm.hub.FindRecordById("systems", systemId)
 	if err != nil {
 		return err
 	}
 	sm.resetFailedSmartFetchState(systemId)
+	if sm.systems.Has(systemId) {
+		_ = sm.RemoveSystem(systemId)
+	}
 
 	system := sm.NewSystem(systemId)
 	system.WsConn = wsConn
+	system.RemoteIP = strings.TrimSpace(remoteIP)
 	system.agentVersion = agentVersion
 
 	if err := sm.AddRecord(systemRecord, system); err != nil {
@@ -327,30 +348,6 @@ func (sm *SystemManager) resetFailedSmartFetchState(systemID string) {
 	if ok && !state.Successful {
 		sm.smartFetchMap.Remove(systemID)
 	}
-}
-
-// createSSHClientConfig initializes the SSH client configuration for connecting to an agent's server
-func (sm *SystemManager) createSSHClientConfig() error {
-	privateKey, err := sm.hub.GetSSHKey("")
-	if err != nil {
-		return err
-	}
-
-	sm.sshConfig = &ssh.ClientConfig{
-		User: "u",
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(privateKey),
-		},
-		Config: ssh.Config{
-			Ciphers:      common.DefaultCiphers,
-			KeyExchanges: common.DefaultKeyExchanges,
-			MACs:         common.DefaultMACs,
-		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		ClientVersion:   fmt.Sprintf("SSH-2.0-%s_%s", beszel.AppName, beszel.Version),
-		Timeout:         sessionTimeout,
-	}
-	return nil
 }
 
 // deactivateAlerts finds all triggered alerts for a system and sets them to inactive.

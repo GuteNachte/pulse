@@ -44,7 +44,7 @@ func (rm *responseModifier) RoundTrip(req *http.Request) (*http.Response, error)
 	return resp, nil
 }
 
-// startServer sets up the development server for Beszel
+// startServer sets up the development server for Pulse
 func (h *Hub) startServer(se *core.ServeEvent) error {
 	proxy := httputil.NewSingleHostReverseProxy(&url.URL{
 		Scheme: "http",
@@ -62,4 +62,8 @@ func (h *Hub) startServer(se *core.ServeEvent) error {
 	})
 	_ = osutils.LaunchURL(h.appURL)
 	return nil
+}
+
+func isDevelopmentBuild() bool {
+	return true
 }

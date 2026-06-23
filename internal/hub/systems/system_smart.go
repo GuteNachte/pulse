@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/henrygd/beszel/internal/entities/smart"
 	"github.com/pocketbase/pocketbase/core"
+	"gutenacht.site/pulse/internal/entities/smart"
+	"gutenacht.site/pulse/internal/entities/system"
 )
 
 type smartFetchState struct {
@@ -20,10 +21,12 @@ func (sys *System) FetchAndSaveSmartDevices() error {
 	smartData, err := sys.FetchSmartDataFromAgent()
 	if err != nil {
 		sys.recordSmartFetchResult(err, 0)
+		sys.updateSmartCapabilityResult(err, 0)
 		return err
 	}
 	err = sys.saveSmartDevices(smartData)
 	sys.recordSmartFetchResult(err, len(smartData))
+	sys.updateSmartCapabilityResult(err, len(smartData))
 	return err
 }
 
@@ -63,23 +66,63 @@ func (sys *System) smartFetchInterval() time.Duration {
 
 // saveSmartDevices saves SMART device data to the smart_devices collection
 func (sys *System) saveSmartDevices(smartData map[string]smart.SmartData) error {
-	if len(smartData) == 0 {
-		return nil
-	}
-
 	hub := sys.manager.hub
 	collection, err := hub.FindCachedCollectionByNameOrId("smart_devices")
 	if err != nil {
 		return err
 	}
 
+	activeRecordIds := make(map[string]struct{}, len(smartData))
+	if len(smartData) == 0 {
+		return sys.pruneStaleSmartDeviceRecords(activeRecordIds)
+	}
 	for deviceKey, device := range smartData {
+		activeRecordIds[makeStableHashId(sys.Id, deviceKey)] = struct{}{}
 		if err := sys.upsertSmartDeviceRecord(collection, deviceKey, device); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	return sys.pruneStaleSmartDeviceRecords(activeRecordIds)
+}
+
+func (sys *System) updateSmartCapabilityResult(err error, deviceCount int) {
+	if sys.manager == nil || sys.manager.hub == nil {
+		return
+	}
+	record, recordErr := sys.manager.hub.FindRecordById("systems", sys.Id)
+	if recordErr != nil || record == nil {
+		return
+	}
+	var info system.Info
+	if unmarshalErr := record.UnmarshalJSONField("info", &info); unmarshalErr != nil || info.Capabilities == nil {
+		return
+	}
+	if info.Capabilities.CollectionResults == nil {
+		info.Capabilities.CollectionResults = map[string]system.CapabilityStatus{}
+	}
+	if info.Capabilities.Diagnostics == nil {
+		info.Capabilities.Diagnostics = map[string]system.CapabilityStatus{}
+	}
+	status := system.CapabilityStatus{
+		State:     system.CapabilityStateUnavailable,
+		CheckedAt: time.Now().UTC().Format(time.RFC3339),
+		Reason:    "SMART collection completed but no readable devices were returned",
+		Count:     deviceCount,
+	}
+	if err != nil {
+		status.State = system.CapabilityStateFailed
+		status.Reason = err.Error()
+	} else if deviceCount > 0 {
+		status.State = system.CapabilityStateConfirmed
+		status.Reason = "SMART devices collected"
+	}
+	info.Capabilities.CollectionResults["smart"] = status
+	info.Capabilities.Diagnostics["smart"] = status
+	record.Set("info", info)
+	if saveErr := sys.manager.hub.SaveNoValidate(record); saveErr != nil {
+		sys.manager.hub.Logger().Warn("Failed to update SMART capability result", "system", sys.Id, "err", saveErr)
+	}
 }
 
 func (sys *System) upsertSmartDeviceRecord(collection *core.Collection, deviceKey string, device smart.SmartData) error {
@@ -110,11 +153,30 @@ func (sys *System) upsertSmartDeviceRecord(collection *core.Collection, deviceKe
 	record.Set("firmware", device.FirmwareVersion)
 	record.Set("serial", device.SerialNumber)
 	record.Set("type", device.DiskType)
+	record.Set("media_type", device.MediaType)
 	record.Set("hours", powerOnHours)
 	record.Set("cycles", powerCycles)
 	record.Set("attributes", device.Attributes)
 
 	return hub.SaveNoValidate(record)
+}
+
+func (sys *System) pruneStaleSmartDeviceRecords(activeRecordIds map[string]struct{}) error {
+	records, err := sys.manager.hub.FindRecordsByFilter("smart_devices", "system = {:system}", "", -1, 0, map[string]any{
+		"system": sys.Id,
+	})
+	if err != nil {
+		return err
+	}
+	for _, record := range records {
+		if _, ok := activeRecordIds[record.Id]; ok {
+			continue
+		}
+		if err := sys.manager.hub.Delete(record); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // extractPowerMetrics extracts power on hours and power cycles from SMART attributes

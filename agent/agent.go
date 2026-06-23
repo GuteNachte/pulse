@@ -1,22 +1,21 @@
-// Package agent implements the Beszel monitoring agent that collects and serves system metrics.
+// Package agent implements the Pulse monitoring agent that collects and serves system metrics.
 //
 // The agent runs on monitored systems and communicates collected data
-// to the Beszel hub for centralized monitoring and alerting.
+// to the Pulse hub for centralized monitoring and alerting.
 package agent
 
 import (
 	"log/slog"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/gliderlabs/ssh"
-	"github.com/henrygd/beszel"
-	"github.com/henrygd/beszel/agent/deltatracker"
-	"github.com/henrygd/beszel/agent/utils"
-	"github.com/henrygd/beszel/internal/common"
-	"github.com/henrygd/beszel/internal/entities/system"
-	gossh "golang.org/x/crypto/ssh"
+	"gutenacht.site/pulse"
+	"gutenacht.site/pulse/agent/deltatracker"
+	"gutenacht.site/pulse/agent/utils"
+	"gutenacht.site/pulse/internal/common"
+	"gutenacht.site/pulse/internal/entities/system"
 )
 
 const defaultDataCacheTimeMs uint16 = 60_000
@@ -43,11 +42,11 @@ type Agent struct {
 	cache                     *systemDataCache                                      // Cache for system stats based on cache time
 	connectionManager         *ConnectionManager                                    // Channel to signal connection events
 	handlerRegistry           *HandlerRegistry                                      // Registry for routing incoming messages
-	server                    *ssh.Server                                           // SSH server
 	dataDir                   string                                                // Directory for persisting data
-	keys                      []gossh.PublicKey                                     // SSH public keys
 	smartManager              *SmartManager                                         // Manages SMART data
-	systemdManager            *systemdManager                                       // Manages systemd services
+	serviceManager            *serviceManager                                       // Manages generic platform services
+	softwareManager           *softwareManager                                      // Manages regular software processes
+	gpuError                  string                                                // Last GPU initialization error for capability reporting
 }
 
 // NewAgent creates a new agent with the given data directory for persisting data.
@@ -97,7 +96,7 @@ func NewAgent(dataDir ...string) (agent *Agent, err error) {
 		}
 	}
 
-	slog.Debug(beszel.Version)
+	slog.Debug(pulse.Version)
 
 	// initialize docker manager
 	agent.dockerManager = newDockerManager(agent)
@@ -127,9 +126,13 @@ func NewAgent(dataDir ...string) (agent *Agent, err error) {
 	// initialize net io stats
 	agent.initializeNetIoStats()
 
-	agent.systemdManager, err = newSystemdManager()
+	agent.serviceManager, err = newServiceManager()
 	if err != nil {
-		slog.Debug("Systemd", "err", err)
+		slog.Debug("Services", "err", err)
+	}
+	agent.softwareManager, err = newSoftwareManager()
+	if err != nil {
+		slog.Debug("Software", "err", err)
 	}
 
 	agent.smartManager, err = NewSmartManager()
@@ -140,6 +143,7 @@ func NewAgent(dataDir ...string) (agent *Agent, err error) {
 	// initialize GPU manager
 	agent.gpuManager, err = NewGPUManager()
 	if err != nil {
+		agent.gpuError = err.Error()
 		slog.Debug("GPU", "err", err)
 	}
 
@@ -156,7 +160,10 @@ func (a *Agent) gatherStats(options common.DataRequestOptions) *system.CombinedD
 	defer a.Unlock()
 
 	cacheTimeMs := options.CacheTimeMs
-	data, isCached := a.cache.Get(cacheTimeMs)
+	monitoredServices := normalizeMonitoredServiceNames(options.MonitoredServices)
+	monitoredSoftware := normalizeMonitoredServiceNames(options.MonitoredSoftware)
+	cacheKey := cacheKeyForTypedDataOptions(cacheTimeMs, monitoredServices, monitoredSoftware)
+	data, isCached := a.cache.Get(cacheKey, cacheTimeMs)
 	if isCached {
 		slog.Debug("Cached data", "cacheTimeMs", cacheTimeMs)
 		return data
@@ -166,6 +173,7 @@ func (a *Agent) gatherStats(options common.DataRequestOptions) *system.CombinedD
 		Stats: a.getSystemStats(cacheTimeMs),
 		Info:  a.systemInfo,
 	}
+	data.Info.Capabilities = a.buildCapabilities()
 
 	// slog.Info("System data", "data", data, "cacheTimeMs", cacheTimeMs)
 
@@ -178,46 +186,37 @@ func (a *Agent) gatherStats(options common.DataRequestOptions) *system.CombinedD
 		}
 	}
 
-	// skip updating systemd services if cache time is not the default 60sec interval
-	if a.systemdManager != nil && cacheTimeMs == defaultDataCacheTimeMs {
-		totalCount := uint16(a.systemdManager.getServiceStatsCount())
-		if totalCount > 0 {
-			numFailed := a.systemdManager.getFailedServiceCount()
-			data.Info.Services = []uint16{totalCount, numFailed}
-		}
-		if a.systemdManager.hasFreshStats {
-			data.SystemdServices = a.systemdManager.getServiceStats(nil, false)
+	a.updateCapabilityResults(data)
+
+	if a.serviceManager != nil && cacheTimeMs == defaultDataCacheTimeMs {
+		services := a.serviceManager.getServiceStats(monitoredServices)
+		if len(services) > 0 {
+			data.Services = services
 		}
 	}
 
-	data.Stats.ExtraFs = make(map[string]*system.FsStats)
-	data.Info.ExtraFsPct = make(map[string]float64)
-	for name, stats := range a.fsStats {
-		if !stats.Root && stats.DiskTotal > 0 {
-			// Use custom name if available, otherwise use device name
-			key := name
-			if stats.Name != "" {
-				key = stats.Name
-			}
-			data.Stats.ExtraFs[key] = stats
-			// Add percentages to Info struct for dashboard
-			if stats.DiskTotal > 0 {
-				pct := utils.TwoDecimals((stats.DiskUsed / stats.DiskTotal) * 100)
-				data.Info.ExtraFsPct[key] = pct
-			}
+	if a.softwareManager != nil && runtime.GOOS == "windows" && cacheTimeMs == defaultDataCacheTimeMs {
+		software := a.softwareManager.getSoftwareStats(monitoredSoftware)
+		if len(software) > 0 {
+			data.Software = software
 		}
 	}
-	slog.Debug("Extra FS", "data", data.Stats.ExtraFs)
 
-	a.cache.Set(data, cacheTimeMs)
+	a.cache.Set(data, cacheKey)
 
 	return a.attachSystemDetails(data, cacheTimeMs, options.IncludeDetails)
 }
 
-// Start initializes and starts the agent with optional WebSocket connection
-func (a *Agent) Start(serverOptions ServerOptions) error {
-	a.keys = serverOptions.Keys
-	return a.connectionManager.Start(serverOptions)
+// Start initializes and starts the agent WebSocket connection.
+func (a *Agent) Start() error {
+	return a.connectionManager.Start()
+}
+
+func (a *Agent) Stop() error {
+	if a.connectionManager == nil {
+		return nil
+	}
+	return a.connectionManager.Stop()
 }
 
 func (a *Agent) getFingerprint() string {

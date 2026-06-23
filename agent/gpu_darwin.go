@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/henrygd/beszel/agent/utils"
-	"github.com/henrygd/beszel/internal/entities/system"
+	"gutenacht.site/pulse/agent/utils"
+	"gutenacht.site/pulse/internal/entities/system"
 )
 
 const (
@@ -33,7 +33,7 @@ const appleGPUID = "0"
 func (gm *GPUManager) startPowermetricsCollector() {
 	// Ensure single GPU entry for Apple GPU
 	if _, ok := gm.GpuDataMap[appleGPUID]; !ok {
-		gm.GpuDataMap[appleGPUID] = &system.GPUData{Name: "Apple GPU"}
+		gm.GpuDataMap[appleGPUID] = &system.GPUData{Name: "Apple GPU", Type: gpuTypeIntegrated}
 	}
 
 	go func() {
@@ -117,7 +117,7 @@ func (gm *GPUManager) parsePowermetricsData(output []byte) bool {
 	defer gm.Unlock()
 
 	if _, ok := gm.GpuDataMap[appleGPUID]; !ok {
-		gm.GpuDataMap[appleGPUID] = &system.GPUData{Name: "Apple GPU"}
+		gm.GpuDataMap[appleGPUID] = &system.GPUData{Name: "Apple GPU", Type: gpuTypeIntegrated}
 	}
 	gpu := gm.GpuDataMap[appleGPUID]
 
@@ -137,7 +137,7 @@ func (gm *GPUManager) parsePowermetricsData(output []byte) bool {
 // This collector does not require sudo. A single logical GPU is reported as id "0".
 func (gm *GPUManager) startMacmonCollector() {
 	if _, ok := gm.GpuDataMap[appleGPUID]; !ok {
-		gm.GpuDataMap[appleGPUID] = &system.GPUData{Name: "Apple GPU"}
+		gm.GpuDataMap[appleGPUID] = &system.GPUData{Name: "Apple GPU", Type: gpuTypeIntegrated}
 	}
 
 	go func() {
@@ -245,7 +245,7 @@ func (gm *GPUManager) parseMacmonLine(line []byte) bool {
 
 	gpu, ok := gm.GpuDataMap[appleGPUID]
 	if !ok {
-		gpu = &system.GPUData{Name: "Apple GPU"}
+		gpu = &system.GPUData{Name: "Apple GPU", Type: gpuTypeIntegrated}
 		gm.GpuDataMap[appleGPUID] = gpu
 	}
 	gpu.Temperature = sample.Temp.GPUTempAvg

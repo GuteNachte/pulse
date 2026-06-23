@@ -1,12 +1,13 @@
 package agent
 
 import (
+	"runtime"
 	"testing"
 
-	"github.com/henrygd/beszel/internal/common"
-	"github.com/henrygd/beszel/internal/entities/system"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gutenacht.site/pulse/internal/common"
+	"gutenacht.site/pulse/internal/entities/system"
 )
 
 func TestGatherStatsDoesNotAttachDetailsToCachedRequests(t *testing.T) {
@@ -18,7 +19,7 @@ func TestGatherStatsDoesNotAttachDetailsToCachedRequests(t *testing.T) {
 	cached := &system.CombinedData{
 		Info: system.Info{Hostname: "cached-host"},
 	}
-	agent.cache.Set(cached, defaultDataCacheTimeMs)
+	agent.cache.Set(cached, cacheKeyForTypedDataOptions(defaultDataCacheTimeMs, nil, nil))
 
 	response := agent.gatherStats(common.DataRequestOptions{CacheTimeMs: defaultDataCacheTimeMs})
 
@@ -58,4 +59,13 @@ func TestUpdateSystemDetailsMarksDetailsDirty(t *testing.T) {
 	assert.True(t, response.Details.Podman)
 	assert.False(t, agent.detailsDirty)
 	assert.Nil(t, original.Details)
+}
+
+func TestNonWindowsSoftwareManagerIsDisabled(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("non-windows software manager assertion")
+	}
+	manager, err := newSoftwareManager()
+	require.NoError(t, err)
+	assert.Nil(t, manager)
 }

@@ -30,29 +30,29 @@ export const ActiveAlerts = () => {
 		return { activeAlerts, alertsKey }
 	}, [alerts])
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: alertsKey is inclusive
 	return useMemo(() => {
 		if (activeAlerts.length === 0) {
 			return null
 		}
 		return (
-			<Card>
-				<CardHeader className="pb-4 px-2 sm:px-6 max-sm:pt-5 max-sm:pb-1">
-					<div className="px-2 sm:px-1">
-						<CardTitle>
+			<Card className="overflow-hidden border-border/70 bg-card shadow-none">
+				<CardHeader className="border-b border-border/70 bg-surface-soft px-5 py-4">
+					<div className="grid gap-1">
+						<CardTitle className="text-xl tracking-[-0.02em]">
 							<Trans>Active Alerts</Trans>
 						</CardTitle>
+						<p className="text-sm text-muted-foreground">当前触发中的告警会优先显示在首页顶部</p>
 					</div>
 				</CardHeader>
-				<CardContent className="max-sm:p-2">
+				<CardContent className="p-4">
 					{activeAlerts.length > 0 && (
-						<div className="grid sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+						<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
 							{activeAlerts.map((alert) => {
 								const info = alertInfo[alert.name as keyof typeof alertInfo]
 								return (
 									<Alert
 										key={alert.id}
-										className="hover:-translate-y-px duration-200 bg-transparent border-foreground/10 hover:shadow-md shadow-black/5"
+										className="border-border/70 bg-card shadow-none transition-[background-color,border-color,transform] duration-150 ease-out hover:border-foreground/10 hover:bg-surface-soft"
 									>
 										<info.icon className="h-4 w-4" />
 										<AlertTitle>

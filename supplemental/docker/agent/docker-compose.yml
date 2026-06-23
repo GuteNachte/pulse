@@ -1,18 +1,33 @@
 services:
-  beszel-agent:
-    image: 'henrygd/beszel-agent' #Or henrygd/beszel-agent-nvidia
-    container_name: 'beszel-agent'
+  pulse-agent:
+    image: registry.example.com/infra/pulse-agent:1.0.5
+    container_name: pulse-agent
     restart: unless-stopped
     network_mode: host
-    # Only when using henrygd/beszel-agent-nvidia
-    # runtime: nvidia
+    privileged: true
+    security_opt:
+      # Docker 默认会屏蔽 /sys/firmware；放开后才能读取 DMI 内存条详情。
+      - systempaths=unconfined
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      # monitor other disks / partitions by mounting a folder in /extra-filesystems
-      # - /mnt/disk/.beszel:/extra-filesystems/sda1:ro
+      # 用于监控并控制同一台机器上的 Docker / Podman 容器。
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /:/host:ro
+      # 读取 SMBIOS / DMI 硬件信息，用于采集内存条型号、容量、频率等详情。
+      - /sys/firmware/dmi:/sys/firmware/dmi:ro
+      - ./pulse_agent_data:/var/lib/pulse-agent
+    devices:
+      # Intel / AMD 核显采集需要把宿主机 GPU 设备交给容器。
+      - /dev/dri:/dev/dri
+      # 部分 NAS 系统的 dmidecode 需要读取 /dev/mem 才能拿到内存条详情。
+      - /dev/mem:/dev/mem
+    cap_add:
+      - CAP_PERFMON
+      - CAP_SYS_RAWIO
     environment:
-      PORT: 45876
-      KEY: 'ssh-ed25519 YOUR_PUBLIC_KEY'
-      # Only when using henrygd/beszel-agent-nvidia
-      # NVIDIA_VISIBLE_DEVICES: all 
-      # NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+      TOKEN: "YOUR_AGENT_TOKEN"
+      HUB_URL: "http://YOUR_HUB:8090"
+      INSTALL_METHOD: docker
+      RUN_MODE: docker
+      AGENT_PROFILE: linux-container
+
+

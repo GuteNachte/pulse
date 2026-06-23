@@ -1,43 +1,33 @@
-# Beszel
+# Pulse
 
-Beszel is a lightweight server monitoring platform that includes Docker statistics, historical data, and alert functions.
+Pulse is a self-hosted monitoring platform for machines, containers, services, software, websites, alerts, and release-managed agents.
 
-It has a friendly web interface, simple configuration, and is ready to use out of the box. It supports automatic backup, multi-user, OAuth authentication, and API access.
-
-[![agent Docker Image Size](https://img.shields.io/docker/image-size/henrygd/beszel-agent/latest?logo=docker&label=agent%20image%20size)](https://hub.docker.com/r/henrygd/beszel-agent)
-[![hub Docker Image Size](https://img.shields.io/docker/image-size/henrygd/beszel/latest?logo=docker&label=hub%20image%20size)](https://hub.docker.com/r/henrygd/beszel)
-[![MIT license](https://img.shields.io/github/license/henrygd/beszel?color=%239944ee)](https://github.com/henrygd/beszel/blob/main/LICENSE)
-[![Crowdin](https://badges.crowdin.net/beszel/localized.svg)](https://crowdin.com/project/beszel)
-
-![Screenshot of Beszel dashboard and system page, side by side. The dashboard shows metrics from multiple connected systems, while the system page shows detailed metrics for a single system.](https://henrygd-assets.b-cdn.net/beszel/screenshot-new.png)
+It is built for a private home lab / small infrastructure workflow: Hub and Agent versions are released together, Docker deployments use explicit version tags, and the local Hub machine can run its own protected Agent.
 
 ## Features
 
-- **Lightweight**: Smaller and less resource-intensive than leading solutions.
-- **Simple**: Easy setup with little manual configuration required.
+- **Lightweight**: Uses a compact Hub + Agent architecture.
+- **Simple**: Uses one Compose deployment for the Hub and the local Agent.
 - **Docker stats**: Tracks CPU, memory, and network usage history for each container.
-- **Alerts**: Configurable alerts for CPU, memory, disk, bandwidth, temperature, load average, and status.
-- **Multi-user**: Users manage their own systems. Admins can share systems across users.
-- **OAuth / OIDC**: Supports many OAuth2 providers. Password auth can be disabled.
-- **Automatic backups**: Save to and restore from disk or S3-compatible storage.
-<!-- - **REST API**: Use or update your data in your own scripts and applications. -->
+- **Alerts**: Global alert settings and alert history for resources, containers, services, software, and websites.
+- **Website monitoring**: Website checks are attached to their owning machine.
+- **Agent management**: Windows and Linux Agent releases are managed from the Hub.
+- **Backups**: Save to and restore from local disk.
 
 ## Architecture
 
-Beszel consists of two main components: the **hub** and the **agent**.
+Pulse consists of two main components: the **Hub** and the **Agent**.
 
-- **Hub**: A web application built on [PocketBase](https://pocketbase.io/) that provides a dashboard for viewing and managing connected systems.
-- **Agent**: Runs on each system you want to monitor and communicates system metrics to the hub.
+- **Hub**: A web application built on [PocketBase](https://pocketbase.io/) that provides dashboards, settings, alerts, and release management.
+- **Agent**: Runs on each monitored system and reports metrics, containers, service/software state, and host capabilities to the Hub.
 
-## Getting started
+## Local Development
 
-The [quick start guide](https://beszel.dev/guide/getting-started) and other documentation is available on our website, [beszel.dev](https://beszel.dev). You'll be up and running in a few minutes.
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\run-hub-dev.ps1 -Restart
+```
 
-## Screenshots
-
-![Dashboard](https://beszel.dev/image/dashboard.png)
-![System page](https://beszel.dev/image/system-full.png)
-![Notification Settings](https://beszel.dev/image/settings-notifications.png)
+Open `http://localhost:5173` for the Vite frontend and `http://localhost:8090` for the Hub API.
 
 ## Supported metrics
 
@@ -53,18 +43,6 @@ The [quick start guide](https://beszel.dev/guide/getting-started) and other docu
 - **Containers** - Status and metrics of all running Docker / Podman containers.
 - **S.M.A.R.T.** - Host system disk health (includes eMMC wear/EOL and Linux mdraid array health via sysfs when available).
 
-## Help and discussion
-
-Please search existing issues and discussions before opening a new one. I try my best to respond, but may not always have time to do so.
-
-#### Bug reports and feature requests
-
-Bug reports and feature requests can be posted on [GitHub issues](https://github.com/henrygd/beszel/issues).
-
-#### Support and general discussion
-
-Support requests and general discussion can be posted on [GitHub discussions](https://github.com/henrygd/beszel/discussions) or the community-run [Matrix room](https://matrix.to/#/#beszel:matrix.org): `#beszel:matrix.org`.
-
 ## License
 
-Beszel is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+Pulse contains customized application code and also retains third-party open source license obligations. See [LICENSE](LICENSE) for the upstream MIT license notice.

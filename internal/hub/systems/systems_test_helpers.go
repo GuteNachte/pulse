@@ -5,9 +5,11 @@ package systems
 import (
 	"context"
 	"fmt"
+	"time"
 
-	entities "github.com/henrygd/beszel/internal/entities/system"
 	"github.com/pocketbase/pocketbase/core"
+	"gutenacht.site/pulse/internal/entities/smart"
+	entities "gutenacht.site/pulse/internal/entities/system"
 )
 
 // The hub integration tests create/replace systems and cleanup the test apps quickly.
@@ -76,14 +78,14 @@ func (sm *SystemManager) GetSystemData(systemID string) *entities.CombinedData {
 	return sys.data
 }
 
-// TESTING ONLY: GetSystemHostPort returns the host and port for a system with the given ID
-// Returns empty strings if the system doesn't exist
-func (sm *SystemManager) GetSystemHostPort(systemID string) (string, string) {
+// TESTING ONLY: SystemHasLegacyHostPort returns whether a system still carries
+// the removed host/port transport fields in memory.
+func (sm *SystemManager) SystemHasLegacyHostPort(systemID string) bool {
 	sys, ok := sm.systems.GetOk(systemID)
 	if !ok {
-		return "", ""
+		return false
 	}
-	return sys.Host, sys.Port
+	return sys.hasLegacyHostPort()
 }
 
 // TESTING ONLY: SetSystemStatusInDB sets the status of a system directly and updates the database record
@@ -111,8 +113,16 @@ func (sm *SystemManager) SetSystemStatusInDB(systemID string, status string) boo
 
 // TESTING ONLY: RemoveAllSystems removes all systems from the store
 func (sm *SystemManager) RemoveAllSystems() {
+	sm.shuttingDown.Store(true)
 	for _, system := range sm.systems.GetAll() {
+		done := system.done
 		sm.RemoveSystem(system.Id)
+		if done != nil {
+			select {
+			case <-done:
+			case <-time.After(250 * time.Millisecond):
+			}
+		}
 	}
 	sm.smartFetchMap.StopCleaner()
 }
@@ -124,4 +134,23 @@ func (s *System) StopUpdater() {
 func (s *System) CreateRecords(data *entities.CombinedData) (*core.Record, error) {
 	s.data = data
 	return s.createRecords(data)
+}
+
+func (s *System) SaveSmartDevicesForTest(data map[string]smart.SmartData) error {
+	return s.saveSmartDevices(data)
+}
+
+func (s *System) GetMonitoredServiceNamesForTest() []string {
+	return s.getMonitoredServiceNames()
+}
+
+func (s *System) GetMonitoredSoftwareNamesForTest() []string {
+	return s.getMonitoredSoftwareNames()
+}
+
+func NewTestSystemForRecords(sm *SystemManager, record *core.Record) *System {
+	sys := sm.NewSystem(record.Id)
+	sys.manager = sm
+	sys.Status = record.GetString("status")
+	return sys
 }

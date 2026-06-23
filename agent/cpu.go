@@ -4,8 +4,8 @@ import (
 	"math"
 	"runtime"
 
-	"github.com/henrygd/beszel/internal/entities/system"
 	"github.com/shirou/gopsutil/v4/cpu"
+	"gutenacht.site/pulse/internal/entities/system"
 )
 
 var lastCpuTimes = make(map[uint16]cpu.TimesStat)

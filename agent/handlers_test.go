@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/henrygd/beszel/internal/common"
 	"github.com/stretchr/testify/assert"
+	"gutenacht.site/pulse/internal/common"
 )
 
 // MockHandler for testing

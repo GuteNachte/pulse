@@ -1,10 +1,7 @@
 import { atom, computed, listenKeys, map, type ReadableAtom } from "nanostores"
-import type { AlertMap, ChartTimes, SystemRecord, UpdateInfo, UserSettings } from "@/types"
+import type { AlertMap, ChartTimes, SystemRecord, UserSettings } from "@/types"
 import { pb } from "./api"
 import { Unit } from "./enums"
-
-/** Default layout width. Used as fallback when user setting is unset. */
-export const defaultLayoutWidth = 1580
 
 /** Store if user is authenticated */
 export const $authenticated = atom(pb.authStore.isValid)
@@ -21,15 +18,13 @@ export const $downSystems = map<Record<string, SystemRecord>>({})
 export const $pausedSystems = map<Record<string, SystemRecord>>({})
 /** List of all system records */
 export const $systems: ReadableAtom<SystemRecord[]> = computed($allSystemsById, Object.values)
+/** Whether the first systems collection refresh has completed */
+export const $systemsLoaded = atom(false)
+/** Whether the last systems collection refresh failed */
+export const $systemsLoadFailed = atom(false)
 
 /** Map of alert records by system id and alert name */
 export const $alerts = map<AlertMap>({})
-
-/** SSH public key */
-export const $publicKey = atom("")
-
-/** New version info if an update is available, otherwise undefined */
-export const $newVersion = atom<UpdateInfo | undefined>()
 
 /** Chart time period */
 export const $chartTime = atom<ChartTimes>("1h")
@@ -39,7 +34,6 @@ export const $maxValues = atom(false)
 
 // export const UserSettingsSchema = v.object({
 // 	chartTime: v.picklist(["1h", "12h", "24h", "1w", "30d"]),
-// 	emails: v.optional(v.array(v.pipe(v.string(), v.email())), [pb?.authStore?.record?.email ?? ""]),
 // 	webhooks: v.optional(v.array(v.string())),
 // 	colorWarn: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100))),
 // 	colorDanger: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100))),
@@ -51,7 +45,6 @@ export const $maxValues = atom(false)
 /** User settings */
 export const $userSettings = map<UserSettings>({
 	chartTime: "1h",
-	emails: [pb.authStore.record?.email || ""],
 	unitNet: Unit.Bytes,
 	unitTemp: Unit.Celsius,
 })

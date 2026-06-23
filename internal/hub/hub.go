@@ -2,53 +2,45 @@
 package hub
 
 import (
-	"crypto/ed25519"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
-	"path"
 	"strings"
 
-	"github.com/henrygd/beszel/internal/alerts"
-	"github.com/henrygd/beszel/internal/hub/config"
-	"github.com/henrygd/beszel/internal/hub/heartbeat"
-	"github.com/henrygd/beszel/internal/hub/systems"
-	"github.com/henrygd/beszel/internal/hub/utils"
-	"github.com/henrygd/beszel/internal/records"
-	"github.com/henrygd/beszel/internal/users"
+	"gutenacht.site/pulse/internal/alerts"
+	"gutenacht.site/pulse/internal/hub/config"
+	"gutenacht.site/pulse/internal/hub/systems"
+	"gutenacht.site/pulse/internal/hub/utils"
+	"gutenacht.site/pulse/internal/records"
+	"gutenacht.site/pulse/internal/users"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
-	"golang.org/x/crypto/ssh"
 )
 
 // Hub is the application. It embeds the PocketBase app and keeps references to subcomponents.
 type Hub struct {
 	core.App
 	*alerts.AlertManager
-	um     *users.UserManager
-	rm     *records.RecordManager
-	sm     *systems.SystemManager
-	hb     *heartbeat.Heartbeat
-	hbStop chan struct{}
-	pubKey string
-	signer ssh.Signer
-	appURL string
+	um           *users.UserManager
+	rm           *records.RecordManager
+	sm           *systems.SystemManager
+	loginLimiter *loginFailureLimiter
+	appURL       string
 }
 
 // NewHub creates a new Hub instance with default configuration
 func NewHub(app core.App) *Hub {
-	hub := &Hub{App: app}
+	hub := &Hub{App: app, loginLimiter: newLoginFailureLimiter()}
 	hub.AlertManager = alerts.NewAlertManager(hub)
 	hub.um = users.NewUserManager(hub)
 	hub.rm = records.NewRecordManager(hub)
 	hub.sm = systems.NewSystemManager(hub)
-	hub.hb = heartbeat.New(app, utils.GetEnv)
-	if hub.hb != nil {
-		hub.hbStop = make(chan struct{})
-	}
+	hub.bindAuthSecurityHooks()
+	hub.bindAgentReleaseHooks()
+	hub.bindWebsiteMonitorHooks()
+	hub.bindSystemDeleteProtectionHooks()
+	hub.bindCollectionAuditHooks()
 	_ = onAfterBootstrapAndMigrations(app, hub.initialize)
 	return hub
 }
@@ -85,6 +77,17 @@ func (h *Hub) StartHub() error {
 		if err := h.registerApiRoutes(e); err != nil {
 			return err
 		}
+		if count, err := h.syncLocalAgentReleases(); err != nil {
+			return err
+		} else if count > 0 {
+			h.Logger().Info("Local agent releases synced", "count", count)
+		}
+		if err := pruneOldAgentReleases(h.App, agentReleaseRetentionLimit); err != nil {
+			return err
+		}
+		if err := h.repairLocalSystemMarkers(); err != nil {
+			return err
+		}
 		// register cron jobs
 		if err := h.registerCronJobs(e); err != nil {
 			return err
@@ -96,10 +99,6 @@ func (h *Hub) StartHub() error {
 		// start system updates
 		if err := h.sm.Initialize(); err != nil {
 			return err
-		}
-		// start heartbeat if configured
-		if h.hb != nil {
-			go h.hb.Start(h.hbStop)
 		}
 		return e.Next()
 	})
@@ -140,59 +139,9 @@ func (h *Hub) registerCronJobs(_ *core.ServeEvent) error {
 	h.Cron().MustAdd("delete old records", "8 * * * *", h.rm.DeleteOldRecords)
 	// create longer records every 10 minutes
 	h.Cron().MustAdd("create longer records", "*/10 * * * *", h.rm.CreateLongerRecords)
+	// check due website monitors once per minute
+	h.Cron().MustAdd("check website monitors", "* * * * *", h.checkDueWebsiteMonitors)
 	return nil
-}
-
-// GetSSHKey generates key pair if it doesn't exist and returns signer
-func (h *Hub) GetSSHKey(dataDir string) (ssh.Signer, error) {
-	if h.signer != nil {
-		return h.signer, nil
-	}
-
-	if dataDir == "" {
-		dataDir = h.DataDir()
-	}
-
-	privateKeyPath := path.Join(dataDir, "id_ed25519")
-
-	// check if the key pair already exists
-	existingKey, err := os.ReadFile(privateKeyPath)
-	if err == nil {
-		private, err := ssh.ParsePrivateKey(existingKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse private key: %s", err)
-		}
-		pubKeyBytes := ssh.MarshalAuthorizedKey(private.PublicKey())
-		h.pubKey = strings.TrimSuffix(string(pubKeyBytes), "\n")
-		return private, nil
-	} else if !os.IsNotExist(err) {
-		// File exists but couldn't be read for some other reason
-		return nil, fmt.Errorf("failed to read %s: %w", privateKeyPath, err)
-	}
-
-	// Generate the Ed25519 key pair
-	_, privKey, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		return nil, err
-	}
-	privKeyPem, err := ssh.MarshalPrivateKey(privKey, "")
-	if err != nil {
-		return nil, err
-	}
-
-	if err := os.WriteFile(privateKeyPath, pem.EncodeToMemory(privKeyPem), 0600); err != nil {
-		return nil, fmt.Errorf("failed to write private key to %q: err: %w", privateKeyPath, err)
-	}
-
-	// These are fine to ignore the errors on, as we've literally just created a crypto.PublicKey | crypto.Signer
-	sshPrivate, _ := ssh.NewSignerFromSigner(privKey)
-	pubKeyBytes := ssh.MarshalAuthorizedKey(sshPrivate.PublicKey())
-	h.pubKey = strings.TrimSuffix(string(pubKeyBytes), "\n")
-
-	h.Logger().Info("ed25519 key pair generated successfully.")
-	h.Logger().Info("Saved to: " + privateKeyPath)
-
-	return sshPrivate, err
 }
 
 // MakeLink formats a link with the app URL and path segments.

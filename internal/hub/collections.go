@@ -1,8 +1,8 @@
 package hub
 
 import (
-	"github.com/henrygd/beszel/internal/hub/utils"
 	"github.com/pocketbase/pocketbase/core"
+	"gutenacht.site/pulse/internal/hub/utils"
 )
 
 type collectionRules struct {
@@ -13,7 +13,7 @@ type collectionRules struct {
 	delete *string
 }
 
-// setCollectionAuthSettings applies Beszel's collection auth settings.
+// setCollectionAuthSettings applies Pulse collection auth settings.
 func setCollectionAuthSettings(app core.App) error {
 	usersCollection, err := app.FindCollectionByNameOrId("users")
 	if err != nil {
@@ -27,7 +27,7 @@ func setCollectionAuthSettings(app core.App) error {
 	// disable email auth if DISABLE_PASSWORD_AUTH env var is set
 	disablePasswordAuth, _ := utils.GetEnv("DISABLE_PASSWORD_AUTH")
 	usersCollection.PasswordAuth.Enabled = disablePasswordAuth != "true"
-	usersCollection.PasswordAuth.IdentityFields = []string{"email"}
+	usersCollection.PasswordAuth.IdentityFields = []string{"username", "email"}
 	// allow oauth user creation if USER_CREATION is set
 	if userCreation, _ := utils.GetEnv("USER_CREATION"); userCreation == "true" {
 		cr := "@request.context = 'oauth2'"
@@ -56,6 +56,9 @@ func setCollectionAuthSettings(app core.App) error {
 	shareAllSystems, _ := utils.GetEnv("SHARE_ALL_SYSTEMS")
 
 	authenticatedRule := "@request.auth.id != \"\""
+	authenticatedNotReadonlyRule := authenticatedRule + " && @request.auth.role != \"readonly\""
+	userMatchesRule := authenticatedRule + " && user = @request.auth.id"
+	userMatchesNotReadonlyRule := userMatchesRule + " && @request.auth.role != \"readonly\""
 	systemsMemberRule := authenticatedRule + " && users.id ?= @request.auth.id"
 	systemMemberRule := authenticatedRule + " && system.users.id ?= @request.auth.id"
 
@@ -68,6 +71,30 @@ func setCollectionAuthSettings(app core.App) error {
 	systemsWriteRule := systemsReadRule + " && @request.auth.role != \"readonly\""
 	systemScopedWriteRule := systemScopedReadRule + " && @request.auth.role != \"readonly\""
 
+	if err := applyCollectionRules(app, []string{"alerts"}, collectionRules{
+		list:   &userMatchesRule,
+		create: &userMatchesNotReadonlyRule,
+		update: &userMatchesNotReadonlyRule,
+		delete: &userMatchesNotReadonlyRule,
+	}); err != nil {
+		return err
+	}
+
+	if err := applyCollectionRules(app, []string{"alerts_history"}, collectionRules{
+		list:   &userMatchesRule,
+		delete: &userMatchesNotReadonlyRule,
+	}); err != nil {
+		return err
+	}
+
+	if err := applyCollectionRules(app, []string{"user_settings"}, collectionRules{
+		list:   &userMatchesRule,
+		create: &userMatchesNotReadonlyRule,
+		update: &userMatchesNotReadonlyRule,
+	}); err != nil {
+		return err
+	}
+
 	if err := applyCollectionRules(app, []string{"systems"}, collectionRules{
 		list:   &systemsReadRule,
 		view:   &systemsReadRule,
@@ -78,7 +105,7 @@ func setCollectionAuthSettings(app core.App) error {
 		return err
 	}
 
-	if err := applyCollectionRules(app, []string{"containers", "container_stats", "system_stats", "systemd_services"}, collectionRules{
+	if err := applyCollectionRules(app, []string{"containers", "container_stats", "system_stats", "monitored_services", "monitored_software"}, collectionRules{
 		list: &systemScopedReadRule,
 	}); err != nil {
 		return err
@@ -93,6 +120,51 @@ func setCollectionAuthSettings(app core.App) error {
 	}
 
 	if err := applyCollectionRules(app, []string{"fingerprints"}, collectionRules{
+		list: &systemScopedReadRule,
+		view: &systemScopedReadRule,
+	}); err != nil {
+		return err
+	}
+
+	if err := applyCollectionRules(app, []string{"system_details"}, collectionRules{
+		list: &systemScopedReadRule,
+		view: &systemScopedReadRule,
+	}); err != nil {
+		return err
+	}
+
+	if err := applyCollectionRules(app, []string{"operation_actions"}, collectionRules{
+		list:   &systemScopedReadRule,
+		view:   &systemScopedReadRule,
+		create: nil,
+		update: nil,
+		delete: nil,
+	}); err != nil {
+		return err
+	}
+
+	operationAuditReadRule := authenticatedRule + " && (user = @request.auth.id || system.users.id ?= @request.auth.id)"
+	if shareAllSystems == "true" {
+		operationAuditReadRule = authenticatedRule + " && (user = @request.auth.id || system != \"\")"
+	}
+	if err := applyCollectionRules(app, []string{"operation_audit"}, collectionRules{
+		list: &operationAuditReadRule,
+		view: &operationAuditReadRule,
+	}); err != nil {
+		return err
+	}
+
+	if err := applyCollectionRules(app, []string{"script_templates"}, collectionRules{
+		list:   &authenticatedRule,
+		view:   &authenticatedRule,
+		create: &authenticatedNotReadonlyRule,
+		update: &authenticatedNotReadonlyRule,
+		delete: &authenticatedNotReadonlyRule,
+	}); err != nil {
+		return err
+	}
+
+	if err := applyCollectionRules(app, []string{"service_control_rules"}, collectionRules{
 		list:   &systemScopedReadRule,
 		view:   &systemScopedReadRule,
 		create: &systemScopedWriteRule,
@@ -102,9 +174,52 @@ func setCollectionAuthSettings(app core.App) error {
 		return err
 	}
 
-	if err := applyCollectionRules(app, []string{"system_details"}, collectionRules{
-		list: &systemScopedReadRule,
-		view: &systemScopedReadRule,
+	if err := applyCollectionRules(app, []string{"software_monitor_rules", "container_monitor_rules"}, collectionRules{
+		list:   &systemScopedReadRule,
+		view:   &systemScopedReadRule,
+		create: &systemScopedWriteRule,
+		update: &systemScopedWriteRule,
+		delete: &systemScopedWriteRule,
+	}); err != nil {
+		return err
+	}
+
+	if err := applyCollectionRules(app, []string{"notification_failures"}, collectionRules{
+		list:   &userMatchesRule,
+		view:   &userMatchesRule,
+		create: nil,
+		update: nil,
+		delete: &userMatchesNotReadonlyRule,
+	}); err != nil {
+		return err
+	}
+
+	if err := applyCollectionRules(app, []string{"notification_channel_health", "alert_notification_states"}, collectionRules{
+		list:   &userMatchesRule,
+		view:   &userMatchesRule,
+		create: nil,
+		update: nil,
+		delete: &userMatchesNotReadonlyRule,
+	}); err != nil {
+		return err
+	}
+
+	if err := applyCollectionRules(app, []string{"alert_policies"}, collectionRules{
+		list:   &userMatchesRule,
+		view:   &userMatchesRule,
+		create: &userMatchesNotReadonlyRule,
+		update: &userMatchesNotReadonlyRule,
+		delete: &userMatchesNotReadonlyRule,
+	}); err != nil {
+		return err
+	}
+
+	if err := applyCollectionRules(app, []string{"agent_pairing_codes"}, collectionRules{
+		list:   &userMatchesRule,
+		view:   &userMatchesRule,
+		create: nil,
+		update: nil,
+		delete: &userMatchesNotReadonlyRule,
 	}); err != nil {
 		return err
 	}

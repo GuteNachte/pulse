@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"io"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
-	"github.com/henrygd/beszel/agent/utils"
-	"github.com/henrygd/beszel/internal/entities/system"
+	"gutenacht.site/pulse/agent/utils"
+	"gutenacht.site/pulse/internal/entities/system"
 )
 
 const (
@@ -31,7 +32,7 @@ func (gm *GPUManager) updateIntelFromStats(sample *intelGpuStats) bool {
 	id := "i0" // prefix with i to avoid conflicts with nvidia card ids
 	gpuData, ok := gm.GpuDataMap[id]
 	if !ok {
-		gpuData = &system.GPUData{Name: "GPU", Engines: make(map[string]float64)}
+		gpuData = &system.GPUData{Name: getIntelGpuName(), Type: gpuTypeIntegrated, Engines: make(map[string]float64)}
 		gm.GpuDataMap[id] = gpuData
 	}
 
@@ -47,6 +48,59 @@ func (gm *GPUManager) updateIntelFromStats(sample *intelGpuStats) bool {
 
 	gpuData.Count++
 	return true
+}
+
+func getIntelGpuName() string {
+	if value, ok := utils.GetEnv("INTEL_GPU_NAME"); ok && strings.TrimSpace(value) != "" {
+		return strings.TrimSpace(value)
+	}
+	if name := detectIntelGpuNameFromSysfs(); name != "" {
+		return name
+	}
+	return "Intel GPU"
+}
+
+func detectIntelGpuNameFromSysfs() string {
+	cards, err := filepath.Glob("/sys/class/drm/card*/device/vendor")
+	if err != nil {
+		return ""
+	}
+	for _, vendorPath := range cards {
+		vendor, err := utils.ReadStringFileLimited(vendorPath, 64)
+		if err != nil || strings.ToLower(strings.TrimSpace(vendor)) != "0x8086" {
+			continue
+		}
+		devicePath := filepath.Join(filepath.Dir(vendorPath), "device")
+		deviceID, err := utils.ReadStringFileLimited(devicePath, 64)
+		if err != nil {
+			return "Intel GPU"
+		}
+		return intelGpuNameByDeviceID(deviceID)
+	}
+	return ""
+}
+
+func intelGpuNameByDeviceID(deviceID string) string {
+	id := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(deviceID)), "0x")
+	if id == "" {
+		return "Intel GPU"
+	}
+	value, err := strconv.ParseUint(id, 16, 16)
+	if err != nil {
+		return "Intel GPU"
+	}
+	switch {
+	case value >= 0x9a40 && value <= 0x9aff:
+		return "Intel Iris Xe Graphics"
+	case value >= 0x46a0 && value <= 0x46ff:
+		return "Intel Iris Xe Graphics"
+	case value >= 0xa780 && value <= 0xa7ff:
+		return "Intel UHD Graphics 770"
+	case value >= 0x3e90 && value <= 0x3eff:
+		return "Intel UHD Graphics 630"
+	default:
+		return "Intel GPU"
+	}
 }
 
 // collectIntelStats executes intel_gpu_top in text mode (-l) and parses the output

@@ -2,33 +2,39 @@ FROM --platform=$BUILDPLATFORM golang:alpine AS builder
 
 WORKDIR /app
 
+RUN apk add --no-cache nodejs npm
+
 # Download Go modules
 COPY ../go.mod ../go.sum ./
 RUN go mod download
 
 # Copy source files
 COPY . ./
-
-RUN apk add --no-cache \
-    unzip \
-    ca-certificates
+RUN cd internal/site && npm ci && npm run build
 
 RUN update-ca-certificates
 
 # Build
 ARG TARGETOS TARGETARCH
-RUN CGO_ENABLED=0 GOGC=75 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags "-w -s" -o /beszel ./internal/cmd/hub
+ARG HUB_VERSION=1.0.5
+ARG HUB_BUILD_COMMIT=unknown
+ARG HUB_BUILD_TIME=unknown
+RUN CGO_ENABLED=0 GOGC=75 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags "-w -s -X gutenacht.site/pulse.Version=$HUB_VERSION -X gutenacht.site/pulse.BuildCommit=$HUB_BUILD_COMMIT -X gutenacht.site/pulse.BuildTime=$HUB_BUILD_TIME" -o /pulse ./internal/cmd/hub
 
 # ? -------------------------
 FROM scratch
 
-COPY --from=builder /beszel /
+COPY --from=builder /pulse /
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY build/releases/agent /agent-releases
 
 # Ensure data persistence across container recreations
-VOLUME ["/beszel_data"]
+VOLUME ["/pulse_data"]
 
 EXPOSE 8090
 
-ENTRYPOINT [ "/beszel" ]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD ["/pulse", "health", "--url", "http://127.0.0.1:8090"]
+
+ENTRYPOINT [ "/pulse" ]
 CMD ["serve", "--http=0.0.0.0:8090"]

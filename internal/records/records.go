@@ -7,8 +7,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/henrygd/beszel/internal/entities/container"
-	"github.com/henrygd/beszel/internal/entities/system"
+	"gutenacht.site/pulse/internal/entities/container"
+	"gutenacht.site/pulse/internal/entities/system"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
@@ -314,7 +314,10 @@ func AverageSystemStatsSlice(records []system.Stats) system.Stats {
 			for id, value := range stats.GPUData {
 				gpu, ok := sum.GPUData[id]
 				if !ok {
-					gpu = system.GPUData{Name: value.Name}
+					gpu = system.GPUData{Name: value.Name, Type: value.Type}
+				}
+				if gpu.Type == "" {
+					gpu.Type = value.Type
 				}
 				gpu.Temperature += value.Temperature
 				gpu.MemoryUsed += value.MemoryUsed

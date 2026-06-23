@@ -34,6 +34,10 @@ func (am *AlertManager) HandleStatusAlerts(newStatus string, systemRecord *core.
 	if newStatus != "up" && newStatus != "down" {
 		return nil
 	}
+	if systemRecord.GetBool("suppress_offline_alerts") {
+		am.CancelPendingStatusAlerts(systemRecord.Id)
+		return nil
+	}
 
 	alerts := am.alertsCache.GetAlertsByName(systemRecord.Id, "Status")
 	if len(alerts) == 0 {
@@ -162,15 +166,17 @@ func (am *AlertManager) sendStatusAlert(alertStatus string, systemName string, a
 	return am.SendAlert(AlertMessageData{
 		UserID:   alertData.UserID,
 		SystemID: systemID,
+		AlertID:  alertData.Id,
 		Title:    title,
 		Message:  message,
 		Link:     am.hub.MakeLink("system", systemID),
 		LinkText: "View " + systemName,
+		Resolved: alertStatus == "up",
 	})
 }
 
 // resolveStatusAlerts resolves any triggered status alerts that weren't resolved
-// when system came up (https://github.com/henrygd/beszel/issues/1052).
+// when system came up (https://gutenacht.site/pulse/issues/1052).
 func resolveStatusAlerts(app core.App) error {
 	db := app.DB()
 	// Find all active status alerts where the system is actually up
@@ -218,6 +224,7 @@ func (am *AlertManager) restorePendingStatusAlerts() error {
 		WHERE a.name = 'Status'
 		AND a.triggered = false
 		AND s.status = 'down'
+		AND s.suppress_offline_alerts = false
 	`).All(&pending)
 	if err != nil {
 		return err

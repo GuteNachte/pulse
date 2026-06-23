@@ -1,20 +1,22 @@
-import { createRouter } from "@nanostores/router"
+﻿import { createRouter } from "@nanostores/router"
 
-const routes = {
+const routePaths = {
 	home: "/",
+	clients: "/clients",
 	containers: "/containers",
+	websites: "/websites",
+	alerts: "/alerts",
+	notifications: "/notifications",
 	smart: "/smart",
 	system: `/system/:id`,
 	settings: `/settings/:name?`,
-	forgot_password: `/forgot-password`,
-	request_otp: `/request-otp`,
 } as const
 
 /**
  * The base path of the application.
  * This is used to prepend the base path to all routes.
  */
-export const basePath = BESZEL?.BASE_PATH || ""
+export const basePath = globalThis.PULSE?.BASE_PATH || ""
 
 /**
  * Prepends the base path to the given path.
@@ -23,11 +25,9 @@ export const basePath = BESZEL?.BASE_PATH || ""
  */
 export const prependBasePath = (path: string) => (basePath + path).replaceAll("//", "/")
 
-// prepend base path to routes
-for (const route in routes) {
-	// @ts-expect-error need as const above to get nanostores to parse types properly
-	routes[route] = prependBasePath(routes[route])
-}
+const routes = Object.fromEntries(
+	Object.entries(routePaths).map(([route, path]) => [route, prependBasePath(path)])
+) as Record<keyof typeof routePaths, string>
 
 export const $router = createRouter(routes, { links: false })
 
@@ -40,8 +40,10 @@ export const navigate = (urlString: string) => {
 
 export function Link(props: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
 	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: Internal SPA links intentionally intercept anchor clicks for the Nanostores router.
 		<a
 			{...props}
+			// biome-ignore lint/a11y/useValidAnchor: The href is provided by callers and handled by the client-side router.
 			onClick={(e) => {
 				e.preventDefault()
 				const href = props.href || ""

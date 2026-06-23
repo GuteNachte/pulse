@@ -1,413 +1,591 @@
 import { t } from "@lingui/core/macro"
 import { Trans } from "@lingui/react/macro"
-import { getPagePath } from "@nanostores/router"
-import { KeyIcon, LoaderCircle, LockIcon, LogInIcon, MailIcon } from "lucide-react"
-import type { AuthMethodsList, AuthProviderInfo, OAuth2AuthConfig } from "pocketbase"
-import { useCallback, useEffect, useState } from "react"
+import {
+	AtSignIcon,
+	KeyRoundIcon,
+	LoaderCircle,
+	LockIcon,
+	LogInIcon,
+	RefreshCwIcon,
+	ShieldCheckIcon,
+	UserIcon,
+} from "lucide-react"
+import { useCallback, useMemo, useState, type InputHTMLAttributes, type ReactNode } from "react"
 import * as v from "valibot"
 import { buttonVariants } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/otp"
 import { pb } from "@/lib/api"
 import { $authenticated } from "@/lib/stores"
 import { cn } from "@/lib/utils"
-import { $router, Link, basePath, prependBasePath } from "../router"
 import { toast } from "../ui/use-toast"
-import { OtpInputForm } from "./otp-forms"
 
 const honeypot = v.literal("")
-const emailSchema = v.pipe(v.string(), v.rfcEmail(t`Invalid email address.`))
-const passwordSchema = v.pipe(
-	v.string(),
-	v.minLength(8, t`Password must be at least 8 characters.`),
-	v.maxBytes(72, t`Password must be less than 72 bytes.`)
-)
+const OTP_LENGTH = 6
 
-const LoginSchema = v.looseObject({
-	website: honeypot,
-	email: emailSchema,
-	password: passwordSchema,
-})
-
-const RegisterSchema = v.looseObject({
-	website: honeypot,
-	email: emailSchema,
-	password: passwordSchema,
-	passwordConfirm: passwordSchema,
-})
-
-export const showLoginFaliedToast = (description = t`Please check your credentials and try again`) => {
-	toast({
-		title: t`Login attempt failed`,
-		description,
-		variant: "destructive",
-	})
+type MfaChallenge = {
+	identity: string
+	mfaId: string
+	otpId: string
 }
 
-const getAuthProviderIcon = (provider: AuthProviderInfo) => {
-	let { name } = provider
-	if (name.startsWith("oidc")) {
-		name = "oidc"
+type MfaAuthError = {
+	status?: number
+	message?: string
+	response?: {
+		code?: number
+		mfaId?: string
+		message?: string
 	}
-	return prependBasePath(`/_/images/oauth2/${name}.svg`)
+}
+
+export type AuthFlowStage = "idle" | "submitting" | "admin-created" | "mfa-required" | "authenticated" | "error"
+
+type LoginErrorCategory =
+	| "hub_unreachable"
+	| "invalid_credentials"
+	| "mfa_required"
+	| "mfa_invalid"
+	| "permission_denied"
+	| "session_expired"
+	| "first_run_incomplete"
+	| "rate_limited"
+	| "unknown"
+
+type LoginErrorInfo = {
+	category: LoginErrorCategory
+	title: string
+	description: string
+}
+
+export const showLoginFaliedToast = (
+	error: LoginErrorInfo | string = {
+		category: "unknown",
+		title: "登录失败",
+		description: t`Please check your credentials and try again`,
+	}
+) => {
+	const info =
+		typeof error === "string"
+			? {
+					category: "unknown" as const,
+					title: "登录失败",
+					description: error,
+				}
+			: error
+	toast({
+		title: info.title,
+		description: info.description,
+		variant: "destructive",
+	})
 }
 
 export function UserAuthForm({
 	className,
 	isFirstRun,
-	authMethods,
+	onStageChange,
 	...props
 }: {
 	className?: string
 	isFirstRun: boolean
-	authMethods: AuthMethodsList
+	onStageChange?: (stage: AuthFlowStage) => void
 }) {
 	const [isLoading, setIsLoading] = useState<boolean>(false)
-	const [isOauthLoading, setIsOauthLoading] = useState<boolean>(false)
+	const [isResendingOtp, setIsResendingOtp] = useState<boolean>(false)
 	const [errors, setErrors] = useState<Record<string, string | undefined>>({})
-	const [mfaId, setMfaId] = useState<string | undefined>()
-	const [otpId, setOtpId] = useState<string | undefined>()
+	const [mfaChallenge, setMfaChallenge] = useState<MfaChallenge | null>(null)
+	const [otpCode, setOtpCode] = useState("")
+	const schemas = useMemo(() => createAuthSchemas(), [])
+	const setStage = useCallback((stage: AuthFlowStage) => onStageChange?.(stage), [onStageChange])
+
+	const startMfaChallenge = useCallback(
+		async (identity: string, mfaId: string) => {
+			const otpResponse = await pb.collection("users").requestOTP(identity)
+			setMfaChallenge({ identity, mfaId, otpId: otpResponse.otpId })
+			setOtpCode("")
+			setErrors({})
+			setStage("mfa-required")
+			toast({
+				title: "需要二次验证",
+				description: "验证码已发送到账号邮箱，请输入 6 位验证码完成登录。",
+			})
+		},
+		[setStage]
+	)
 
 	const handleSubmit = useCallback(
 		async (e: React.FormEvent<HTMLFormElement>) => {
 			e.preventDefault()
 			setIsLoading(true)
-			// store email for later use if mfa is enabled
-			let email = ""
 			try {
 				const formData = new FormData(e.target as HTMLFormElement)
-				const data = Object.fromEntries(formData) as Record<string, any>
-				const Schema = isFirstRun ? RegisterSchema : LoginSchema
+				const data = Object.fromEntries(formData)
+				const Schema = isFirstRun ? schemas.RegisterSchema : schemas.LoginSchema
 				const result = v.safeParse(Schema, data)
 				if (!result.success) {
-					console.log(result)
-					const errors = {}
+					const fieldErrors: Record<string, string | undefined> = {}
 					for (const issue of result.issues) {
-						// @ts-expect-error
-						errors[issue.path[0].key] = issue.message
+						const fieldKey = issue.path?.[0]?.key
+						if (typeof fieldKey === "string") {
+							fieldErrors[fieldKey] = issue.message
+						}
 					}
-					setErrors(errors)
+					setErrors(fieldErrors)
+					setStage("error")
 					return
 				}
+				setStage("submitting")
 				const { password, passwordConfirm } = result.output
-				email = result.output.email
 				if (isFirstRun) {
 					// check that passwords match
 					if (password !== passwordConfirm) {
-						const msg = "Passwords do not match"
+						const msg = "两次输入的密码不一致。"
 						setErrors({ passwordConfirm: msg })
+						setStage("error")
 						return
 					}
-					await pb.send("/api/beszel/create-user", {
+					const { username, email } = result.output
+					await pb.send("/api/pulse/create-user", {
 						method: "POST",
-						body: JSON.stringify({ email, password }),
+						body: JSON.stringify({ username, email, password }),
 					})
-					await pb.collection("users").authWithPassword(email, password)
+					setStage("admin-created")
+					try {
+						await pb.collection("users").authWithPassword(email, password)
+					} catch (err: unknown) {
+						const mfaId = getMfaId(err)
+						if (!mfaId) {
+							throw err
+						}
+						await startMfaChallenge(email, mfaId)
+						return
+					}
 				} else {
-					await pb.collection("users").authWithPassword(email, password)
+					try {
+						await pb.collection("users").authWithPassword(result.output.identity, password)
+					} catch (err: unknown) {
+						const mfaId = getMfaId(err)
+						if (!mfaId) {
+							throw err
+						}
+						await startMfaChallenge(result.output.identity, mfaId)
+						return
+					}
+				}
+				setStage("authenticated")
+				if (isFirstRun) {
+					toast({
+						title: "初始化完成",
+						description: "首个管理员已创建，正在进入 Pulse。",
+					})
 				}
 				$authenticated.set(true)
-			} catch (err: any) {
-				const mfaId = err?.response?.mfaId
-				if (!mfaId) {
-					showLoginFaliedToast()
-					throw err
-				}
-				setMfaId(mfaId)
-				try {
-					const { otpId } = await pb.collection("users").requestOTP(email)
-					setOtpId(otpId)
-				} catch (err) {
-					console.log({ err })
-					showLoginFaliedToast()
-				}
+			} catch (err: unknown) {
+				const info = getLoginErrorInfo(err, { isFirstRun })
+				setErrors({ root: info.description })
+				setStage("error")
+				showLoginFaliedToast(info)
 			} finally {
 				setIsLoading(false)
 			}
 		},
-		[isFirstRun]
+		[isFirstRun, schemas, setStage, startMfaChallenge]
 	)
 
-	const authProviders = authMethods.oauth2.providers ?? []
-	const oauthEnabled = authMethods.oauth2.enabled && authProviders.length > 0
-	const passwordEnabled = authMethods.password.enabled
-	const otpEnabled = authMethods.otp.enabled
-	const mfaEnabled = authMethods.mfa.enabled
-
-	function loginWithOauth(provider: AuthProviderInfo, forcePopup = false) {
-		setIsOauthLoading(true)
-
-		if (globalThis.BESZEL.OAUTH_DISABLE_POPUP) {
-			redirectToOauthProvider(provider)
-			return
-		}
-
-		const oAuthOpts: OAuth2AuthConfig = {
-			provider: provider.name,
-		}
-		// https://github.com/pocketbase/pocketbase/discussions/2429#discussioncomment-5943061
-		if (forcePopup || navigator.userAgent.match(/iPhone|iPad|iPod/i)) {
-			const authWindow = window.open()
-			if (!authWindow) {
-				setIsOauthLoading(false)
-				showLoginFaliedToast(t`Please enable pop-ups for this site`)
+	const handleMfaSubmit = useCallback(
+		async (e: React.FormEvent<HTMLFormElement>) => {
+			e.preventDefault()
+			if (!mfaChallenge) {
 				return
 			}
-			oAuthOpts.urlCallback = (url) => {
-				authWindow.location.href = url
+			const code = normalizeOtpCode(otpCode)
+			if (code.length !== OTP_LENGTH) {
+				setErrors({ otp: "请输入 6 位验证码。" })
+				return
 			}
-		}
-		pb.collection("users")
-			.authWithOAuth2(oAuthOpts)
-			.then(() => {
-				$authenticated.set(pb.authStore.isValid)
-			})
-			.catch(showLoginFaliedToast)
-			.finally(() => {
-				setIsOauthLoading(false)
-			})
-	}
-
-	/**
-	 * Redirects the user to the OAuth provider's authentication page in the same window.
-	 * Requires the app's base URL to be registered as a redirect URI with the OAuth provider.
-	 */
-	function redirectToOauthProvider(provider: AuthProviderInfo) {
-		const url = new URL(provider.authURL)
-		// url.searchParams.set("redirect_uri", `${window.location.origin}${basePath}`)
-		sessionStorage.setItem("provider", JSON.stringify(provider))
-		window.location.href = url.toString()
-	}
-
-	useEffect(() => {
-		// handle redirect-based OAuth callback if we have a code
-		const params = new URLSearchParams(window.location.search)
-		const code = params.get("code")
-		if (code) {
-			const state = params.get("state")
-			const provider: AuthProviderInfo = JSON.parse(sessionStorage.getItem("provider") ?? "{}")
-			if (!state || provider.state !== state) {
-				showLoginFaliedToast()
-			} else {
-				setIsOauthLoading(true)
-				window.history.replaceState({}, "", window.location.pathname)
-				pb.collection("users")
-					.authWithOAuth2Code(provider.name, code, provider.codeVerifier, `${window.location.origin}${basePath}`)
-					.then(() => $authenticated.set(pb.authStore.isValid))
-					.catch((e: unknown) => showLoginFaliedToast((e as Error).message))
-					.finally(() => setIsOauthLoading(false))
+			setIsLoading(true)
+			try {
+				await pb.collection("users").authWithOTP(mfaChallenge.otpId, code, { mfaId: mfaChallenge.mfaId })
+				setStage("authenticated")
+				$authenticated.set(true)
+			} catch (err: unknown) {
+				const info = getOtpLoginErrorInfo(err)
+				setErrors({ otp: info.description })
+				showLoginFaliedToast(info)
+			} finally {
+				setIsLoading(false)
 			}
-		}
+		},
+		[mfaChallenge, otpCode, setStage]
+	)
 
-		// auto login if password disabled and only one auth provider
-		if (!code && !passwordEnabled && authProviders.length === 1 && !sessionStorage.getItem("lo")) {
-			// Add a small timeout to ensure browser is ready to handle popups
-			setTimeout(() => loginWithOauth(authProviders[0], false), 300)
+	const handleResendOtp = useCallback(async () => {
+		if (!mfaChallenge) {
 			return
 		}
-
-		// refresh auth if not in above states (required for trusted auth header)
-		pb.collection("users")
-			.authRefresh()
-			.then((res) => {
-				pb.authStore.save(res.token, res.record)
-				$authenticated.set(!!pb.authStore.isValid)
+		setIsResendingOtp(true)
+		try {
+			const otpResponse = await pb.collection("users").requestOTP(mfaChallenge.identity)
+			setMfaChallenge({ ...mfaChallenge, otpId: otpResponse.otpId })
+			setOtpCode("")
+			setErrors({})
+			toast({
+				title: "验证码已重新发送",
+				description: "请使用最新收到的 6 位验证码完成登录。",
 			})
+		} catch (err: unknown) {
+			const info = getOtpRequestErrorInfo(err)
+			setErrors({ otp: info.description })
+			showLoginFaliedToast(info)
+		} finally {
+			setIsResendingOtp(false)
+		}
+	}, [mfaChallenge])
+
+	const resetMfaChallenge = useCallback(() => {
+		setMfaChallenge(null)
+		setOtpCode("")
+		setErrors({})
+		setStage("idle")
 	}, [])
 
-	if (!authMethods) {
-		return null
-	}
-
-	if (otpId && mfaId) {
-		return <OtpInputForm otpId={otpId} mfaId={mfaId} />
-	}
-
-	return (
-		<div className={cn("grid gap-6", className)} {...props}>
-			{passwordEnabled && (
-				<>
-					<form onSubmit={handleSubmit} onChange={() => setErrors({})}>
-						<div className="grid gap-2.5">
-							<div className="grid gap-1 relative">
-								<MailIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-								<Label className="sr-only" htmlFor="email">
-									<Trans>Email</Trans>
-								</Label>
-								<Input
-									id="email"
-									name="email"
-									required
-									placeholder="name@example.com"
-									type="text"
-									autoCapitalize="none"
-									autoComplete="email"
-									autoCorrect="off"
-									disabled={isLoading || isOauthLoading}
-									className={cn("ps-9", errors?.email && "border-red-500")}
-								/>
-								{errors?.email && <p className="px-1 text-xs text-red-600">{errors.email}</p>}
+	if (mfaChallenge) {
+		return (
+			<div
+				className={cn("grid gap-3 rounded-lg border border-border/70 bg-surface-soft p-2 shadow-none", className)}
+				{...props}
+			>
+				<form onSubmit={handleMfaSubmit} onChange={() => setErrors({})}>
+					<div className="grid gap-3">
+						<div className="grid gap-2 rounded-md border border-border/70 bg-card px-3 py-3 text-center shadow-none">
+							<div className="mx-auto flex size-10 items-center justify-center rounded-md border border-border/70 bg-surface-soft">
+								<ShieldCheckIcon className="size-5 text-primary" />
 							</div>
-							<div className="grid gap-1 relative">
-								<LockIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-								<Label className="sr-only" htmlFor="pass">
-									<Trans>Password</Trans>
-								</Label>
-								<Input
-									id="pass"
-									name="password"
-									placeholder={t`Password`}
-									required
-									type="password"
-									autoComplete="current-password"
-									disabled={isLoading || isOauthLoading}
-									className={cn("ps-9", errors?.password && "border-red-500")}
-								/>
-								{errors?.password && <p className="px-1 text-xs text-red-600">{errors.password}</p>}
+							<div className="grid gap-1">
+								<h2 className="text-base font-semibold tracking-tight">二次验证</h2>
+								<p className="text-pretty text-sm text-muted-foreground">
+									请输入发送到账号邮箱的 6 位验证码。验证码会短时间内过期。
+								</p>
 							</div>
-							{isFirstRun && (
-								<div className="grid gap-1 relative">
-									<LockIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-									<Label className="sr-only" htmlFor="pass2">
-										<Trans>Confirm password</Trans>
-									</Label>
-									<Input
-										id="pass2"
-										name="passwordConfirm"
-										placeholder={t`Confirm password`}
-										required
-										type="password"
-										autoComplete="current-password"
-										disabled={isLoading || isOauthLoading}
-										className={cn("ps-9", errors?.password && "border-red-500")}
-									/>
-									{errors?.passwordConfirm && <p className="px-1 text-xs text-red-600">{errors.passwordConfirm}</p>}
-								</div>
+						</div>
+						<div className="grid justify-center gap-2 rounded-md border border-border/70 bg-card px-3 py-3">
+							<div className="text-center text-xs font-medium text-muted-foreground">邮箱验证码</div>
+							<InputOTP
+								value={otpCode}
+								onChange={(value) => setOtpCode(normalizeOtpCode(value))}
+								maxLength={OTP_LENGTH}
+								disabled={isLoading || isResendingOtp}
+								autoFocus
+								containerClassName="justify-center"
+							>
+								<InputOTPGroup>
+									{Array.from({ length: OTP_LENGTH }).map((_, index) => (
+										<InputOTPSlot key={index} index={index} />
+									))}
+								</InputOTPGroup>
+							</InputOTP>
+							{errors?.otp && (
+								<p role="alert" className="max-w-72 px-1 text-center text-xs font-medium text-destructive">
+									{errors.otp}
+								</p>
 							)}
-							<div className="sr-only">
-								{/* honeypot */}
-								<label htmlFor="website">Website</label>
-								<input
-									id="website"
-									type="text"
-									name="website"
-									tabIndex={-1}
-									autoComplete="off"
-									data-1p-ignore
-									data-lpignore="true"
-									data-bwignore
-									data-form-type="other"
-									data-protonpass-ignore
-								/>
-							</div>
-							<button className={cn(buttonVariants())} disabled={isLoading}>
+						</div>
+						<div className="grid gap-2 rounded-md border border-border/70 bg-card p-2">
+							<button className={cn(buttonVariants(), "h-11 w-full")} disabled={isLoading || isResendingOtp}>
 								{isLoading ? (
 									<LoaderCircle className="me-2 h-4 w-4 animate-spin" />
 								) : (
-									<LogInIcon className="me-2 h-4 w-4" />
+									<KeyRoundIcon className="me-2 h-4 w-4" />
 								)}
-								{isFirstRun ? t`Create account` : t`Sign in`}
+								验证并登录
+							</button>
+							<button
+								type="button"
+								className={cn(buttonVariants({ variant: "outline" }), "h-10")}
+								disabled={isLoading || isResendingOtp}
+								onClick={handleResendOtp}
+							>
+								{isResendingOtp ? (
+									<LoaderCircle className="me-2 h-4 w-4 animate-spin" />
+								) : (
+									<RefreshCwIcon className="me-2 h-4 w-4" />
+								)}
+								重新发送
+							</button>
+							<button
+								type="button"
+								className={cn(buttonVariants({ variant: "ghost" }), "h-10 text-muted-foreground")}
+								disabled={isLoading || isResendingOtp}
+								onClick={resetMfaChallenge}
+							>
+								返回登录
 							</button>
 						</div>
-					</form>
-					{(isFirstRun || oauthEnabled || (otpEnabled && !mfaEnabled)) && (
-						// only show 'continue with' during onboarding or if we have auth providers
-						<div className="relative">
-							<div className="absolute inset-0 flex items-center">
-								<span className="w-full border-t" />
-							</div>
-							<div className="relative flex justify-center text-xs uppercase">
-								<span className="bg-background px-2 text-muted-foreground">
-									<Trans>Or continue with</Trans>
-								</span>
-							</div>
-						</div>
+						{errors?.root && (
+							<p
+								role="alert"
+								className="rounded-lg border border-destructive/30 bg-card px-3 py-2 text-sm font-medium text-destructive shadow-none"
+							>
+								{errors.root}
+							</p>
+						)}
+					</div>
+				</form>
+			</div>
+		)
+	}
+
+	return (
+		<div
+			className={cn("grid gap-3 rounded-lg border border-border/70 bg-surface-soft p-2 shadow-none", className)}
+			{...props}
+		>
+			<form onSubmit={handleSubmit} onChange={() => setErrors({})}>
+				<div className="grid gap-3">
+					{isFirstRun ? (
+						<>
+							<AuthField
+								icon={<UserIcon className="size-4" />}
+								id="username"
+								name="username"
+								label={<Trans>Username</Trans>}
+								required
+								placeholder="用户名"
+								type="text"
+								autoCapitalize="none"
+								autoComplete="username"
+								autoCorrect="off"
+								disabled={isLoading}
+								error={errors?.username}
+							/>
+							<AuthField
+								icon={<AtSignIcon className="size-4" />}
+								id="email"
+								name="email"
+								label={<Trans>Email</Trans>}
+								required
+								placeholder="邮箱"
+								type="email"
+								autoCapitalize="none"
+								autoComplete="email"
+								autoCorrect="off"
+								disabled={isLoading}
+								error={errors?.email}
+							/>
+						</>
+					) : (
+						<AuthField
+							icon={<UserIcon className="size-4" />}
+							id="identity"
+							name="identity"
+							label="账号"
+							required
+							placeholder="用户名或邮箱"
+							type="text"
+							autoCapitalize="none"
+							autoComplete="username"
+							autoCorrect="off"
+							disabled={isLoading}
+							error={errors?.identity}
+						/>
 					)}
-				</>
-			)}
-			{/* hide OTP button if MFA is enabled (it will be used as MFA) */}
-			{otpEnabled && !mfaEnabled && (
-				<div className="grid gap-2 -mt-1">
-					<Link href="/request-otp" type="button" className={cn(buttonVariants({ variant: "outline" }), "flex gap-2")}>
-						<KeyIcon className="size-4" />
-						<Trans>One-time password</Trans>
-					</Link>
-				</div>
-			)}
-			{oauthEnabled && (
-				<div className="grid gap-2 -mt-1">
-					{authMethods.oauth2.providers.map((provider) => (
-						<button
-							key={provider.name}
-							type="button"
-							className={cn(buttonVariants({ variant: "outline" }), {
-								"justify-self-center": !passwordEnabled,
-								"px-5": !passwordEnabled,
-							})}
-							onClick={() => loginWithOauth(provider)}
-							disabled={isLoading || isOauthLoading}
-						>
-							{isOauthLoading ? (
+					<AuthField
+						icon={<LockIcon className="size-4" />}
+						id="pass"
+						name="password"
+						label={<Trans>Password</Trans>}
+						placeholder={t`Password`}
+						required
+						type="password"
+						autoComplete="current-password"
+						disabled={isLoading}
+						error={errors?.password}
+					/>
+					{isFirstRun && (
+						<AuthField
+							icon={<LockIcon className="size-4" />}
+							id="pass2"
+							name="passwordConfirm"
+							label={<Trans>Confirm password</Trans>}
+							placeholder={t`Confirm password`}
+							required
+							type="password"
+							autoComplete="current-password"
+							disabled={isLoading}
+							error={errors?.passwordConfirm}
+						/>
+					)}
+					<input
+						id="website"
+						type="text"
+						name="website"
+						tabIndex={-1}
+						autoComplete="off"
+						aria-hidden="true"
+						className="hidden"
+						data-1p-ignore
+						data-lpignore="true"
+						data-bwignore
+						data-form-type="other"
+						data-protonpass-ignore
+					/>
+					<div className="grid gap-2 rounded-lg border border-border/70 bg-card p-2">
+						<button className={cn(buttonVariants(), "h-11 w-full")} disabled={isLoading}>
+							{isLoading ? (
 								<LoaderCircle className="me-2 h-4 w-4 animate-spin" />
 							) : (
-								<img
-									className="me-2 h-4 w-4 dark:brightness-0 dark:invert"
-									src={getAuthProviderIcon(provider)}
-									alt=""
-									// onError={(e) => {
-									// 	e.currentTarget.src = "/static/lock.svg"
-									// }}
-								/>
+								<LogInIcon className="me-2 h-4 w-4" />
 							)}
-							<span className="translate-y-px">{provider.displayName}</span>
+							{isFirstRun ? t`Create account` : t`Sign in`}
 						</button>
-					))}
+					</div>
+					{errors?.root && (
+						<p
+							role="alert"
+							className="rounded-lg border border-destructive/30 bg-card px-3 py-2 text-sm font-medium text-destructive shadow-none"
+						>
+							{errors.root}
+						</p>
+					)}
 				</div>
+			</form>
+		</div>
+	)
+}
+
+type AuthFieldProps = InputHTMLAttributes<HTMLInputElement> & {
+	error?: string
+	icon: ReactNode
+	label: ReactNode
+}
+
+function AuthField({ className, error, icon, id, label, ...inputProps }: AuthFieldProps) {
+	return (
+		<div
+			className={cn(
+				"grid gap-2 rounded-lg border border-border/70 bg-card p-2 shadow-none",
+				error && "border-destructive/35 bg-card"
 			)}
-			{!oauthEnabled && isFirstRun && (
-				// only show GitHub button / dialog during onboarding
-				<Dialog>
-					<DialogTrigger asChild>
-						<button type="button" className={cn(buttonVariants({ variant: "outline" }))}>
-							<img className="me-2 h-4 w-4 dark:invert" src={prependBasePath("/_/images/oauth2/github.svg")} alt="" />
-							<span className="translate-y-px">GitHub</span>
-						</button>
-					</DialogTrigger>
-					<DialogContent style={{ maxWidth: 440, width: "90%" }}>
-						<DialogHeader>
-							<DialogTitle>
-								<Trans>OAuth 2 / OIDC support</Trans>
-							</DialogTitle>
-						</DialogHeader>
-						<div className="text-primary/70 text-[0.95em] contents">
-							<p>
-								<Trans>Beszel supports OpenID Connect and many OAuth2 authentication providers.</Trans>
-							</p>
-							<p>
-								<Trans>
-									Please see{" "}
-									<a
-										href="https://beszel.dev/guide/oauth"
-										className={cn(buttonVariants({ variant: "link" }), "p-0 h-auto")}
-									>
-										the documentation
-									</a>{" "}
-									for instructions.
-								</Trans>
-							</p>
-						</div>
-					</DialogContent>
-				</Dialog>
-			)}
-			{passwordEnabled && !isFirstRun && (
-				<Link
-					href={getPagePath($router, "forgot_password")}
-					className="text-sm mx-auto hover:text-brand underline underline-offset-4 opacity-70 hover:opacity-100 transition-opacity"
-				>
-					<Trans>Forgot password?</Trans>
-				</Link>
+		>
+			<div className="flex min-w-0 items-center gap-2 px-1 text-muted-foreground">
+				<span className="grid size-5 shrink-0 place-items-center">{icon}</span>
+				<Label htmlFor={id} className="truncate text-xs font-medium">
+					{label}
+				</Label>
+			</div>
+			<Input
+				id={id}
+				aria-invalid={Boolean(error)}
+				className={cn("h-10 bg-card px-3.5 shadow-none", className)}
+				{...inputProps}
+			/>
+			{error && (
+				<p role="alert" className="px-1 text-xs font-medium text-destructive">
+					{error}
+				</p>
 			)}
 		</div>
 	)
+}
+
+function normalizeOtpCode(value: string) {
+	return value.replace(/\D/g, "").slice(0, OTP_LENGTH)
+}
+
+function getMfaId(error: unknown) {
+	const mfaId = (error as MfaAuthError)?.response?.mfaId
+	return typeof mfaId === "string" && mfaId.length > 0 ? mfaId : undefined
+}
+
+function getLoginErrorInfo(error: unknown, options?: { isFirstRun?: boolean }): LoginErrorInfo {
+	const authError = error as MfaAuthError
+	if (getMfaId(error)) {
+		return loginError("mfa_required", "需要二次验证", "该账号需要二次验证，请输入邮箱验证码完成登录。")
+	}
+	if (authError?.status === 0) {
+		return loginError(
+			"hub_unreachable",
+			"Hub 连接失败",
+			"无法连接到 Pulse Hub，请检查 Hub 地址、端口、防火墙，以及当前设备是否能访问 Hub。"
+		)
+	}
+	if (authError?.status === 429) {
+		return loginError("rate_limited", "登录被限速", "登录失败次数过多，请稍后再试。")
+	}
+	if (options?.isFirstRun && (authError?.status === 403 || authError?.status === 404 || authError?.status === 409)) {
+		return loginError(
+			"first_run_incomplete",
+			"初始化状态已变化",
+			"当前 Hub 已完成初始化或初始化入口不可用，请刷新后使用管理员账号登录。"
+		)
+	}
+	if (authError?.status === 401) {
+		return loginError("session_expired", "登录已过期", "登录状态已过期，请重新登录。")
+	}
+	if (authError?.status === 403) {
+		return loginError("permission_denied", "权限不足", "当前账号没有权限进入 Pulse。")
+	}
+	if (authError?.status === 400) {
+		return loginError("invalid_credentials", "账号或密码错误", "账号或密码不正确。")
+	}
+	return loginError("unknown", "登录失败", "登录请求失败，请稍后重试；如果问题持续存在，请查看 Hub 日志。")
+}
+
+function getOtpRequestErrorInfo(error: unknown): LoginErrorInfo {
+	const authError = error as MfaAuthError
+	if (authError?.status === 0) {
+		return loginError("hub_unreachable", "Hub 连接失败", "无法连接到 Pulse Hub，验证码没有发送成功。")
+	}
+	if (authError?.status === 400 || authError?.status === 404) {
+		return loginError("mfa_required", "验证码发送失败", "请使用绑定邮箱登录，或检查账号是否已配置邮箱验证码。")
+	}
+	return loginError("unknown", "验证码发送失败", "验证码发送失败，请稍后重试。")
+}
+
+function getOtpLoginErrorInfo(error: unknown): LoginErrorInfo {
+	const authError = error as MfaAuthError
+	if (authError?.status === 0) {
+		return loginError("hub_unreachable", "Hub 连接失败", "无法连接到 Pulse Hub，验证码没有提交成功。")
+	}
+	if (authError?.status === 400 || authError?.status === 401 || authError?.status === 403) {
+		return loginError("mfa_invalid", "验证码无效", "验证码无效或已过期，请确认后重试。")
+	}
+	return loginError("unknown", "验证码验证失败", "验证码验证失败，请稍后重试。")
+}
+
+function loginError(category: LoginErrorCategory, title: string, description: string): LoginErrorInfo {
+	return { category, title, description }
+}
+
+function createAuthSchemas() {
+	const usernameSchema = v.pipe(
+		v.string(),
+		v.trim(),
+		v.minLength(3, t`Username must be at least 3 characters.`),
+		v.maxLength(32, t`Username must be less than 32 characters.`),
+		v.regex(/^[a-zA-Z0-9_.-]+$/, t`Username can only contain letters, numbers, _.-`)
+	)
+	const identitySchema = v.pipe(v.string(), v.trim(), v.minLength(1, t`Username or email is required.`))
+	const emailSchema = v.pipe(v.string(), v.rfcEmail(t`Invalid email address.`))
+	const passwordSchema = v.pipe(
+		v.string(),
+		v.minLength(8, t`Password must be at least 8 characters.`),
+		v.maxBytes(72, t`Password must be less than 72 bytes.`)
+	)
+
+	return {
+		LoginSchema: v.looseObject({
+			website: honeypot,
+			identity: identitySchema,
+			password: passwordSchema,
+		}),
+		RegisterSchema: v.looseObject({
+			website: honeypot,
+			username: usernameSchema,
+			email: emailSchema,
+			password: passwordSchema,
+			passwordConfirm: passwordSchema,
+		}),
+	}
 }

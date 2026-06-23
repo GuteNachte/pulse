@@ -9,10 +9,10 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/henrygd/beszel/internal/entities/container"
-	"github.com/henrygd/beszel/internal/entities/system"
-	"github.com/henrygd/beszel/internal/hub/systems"
-	"github.com/henrygd/beszel/internal/tests"
+	"gutenacht.site/pulse/internal/entities/container"
+	"gutenacht.site/pulse/internal/entities/system"
+	"gutenacht.site/pulse/internal/hub/systems"
+	"gutenacht.site/pulse/internal/tests"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,8 +34,6 @@ func TestSystemManagerNew(t *testing.T) {
 
 		record, err := tests.CreateRecord(hub, "systems", map[string]any{
 			"name":  "it-was-coney-island",
-			"host":  "the-playground-of-the-world",
-			"port":  "33914",
 			"users": []string{user.Id},
 		})
 		require.NoError(t, err)
@@ -43,10 +41,7 @@ func TestSystemManagerNew(t *testing.T) {
 		assert.Equal(t, "pending", record.GetString("status"), "System status should be 'pending'")
 		assert.Equal(t, "pending", sm.GetSystemStatusFromStore(record.Id), "System status should be 'pending'")
 
-		// Verify the system host and port
-		host, port := sm.GetSystemHostPort(record.Id)
-		assert.Equal(t, record.GetString("host"), host, "System host should match")
-		assert.Equal(t, record.GetString("port"), port, "System port should match")
+		assert.False(t, sm.SystemHasLegacyHostPort(record.Id), "System should not carry legacy host/port transport fields")
 
 		time.Sleep(13 * time.Second)
 		synctest.Wait()
@@ -76,8 +71,6 @@ func TestSystemManagerNew(t *testing.T) {
 		// let's also make sure a system is removed from the store when the record is deleted
 		record, err = tests.CreateRecord(hub, "systems", map[string]any{
 			"name":  "there-was-no-place-like-it",
-			"host":  "in-the-whole-world",
-			"port":  "33914",
 			"users": []string{user.Id},
 		})
 		require.NoError(t, err)
@@ -130,6 +123,511 @@ func TestSystemManagerNew(t *testing.T) {
 	})
 }
 
+func TestSystemCreateRecordsDeletesStaleContainerRecords(t *testing.T) {
+	hub, err := tests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer hub.Cleanup()
+
+	user, err := tests.CreateUser(hub, "containers@test.com", "testtesttest")
+	require.NoError(t, err)
+
+	systemRecord, err := tests.CreateRecord(hub, "systems", map[string]any{
+		"name":  "container-system",
+		"users": []string{user.Id},
+	})
+	require.NoError(t, err)
+	otherSystemRecord, err := tests.CreateRecord(hub, "systems", map[string]any{
+		"name":  "other-container-system",
+		"users": []string{user.Id},
+	})
+	require.NoError(t, err)
+
+	_, err = tests.CreateRecord(hub, "containers", map[string]any{
+		"id":      "abcdef123456",
+		"system":  systemRecord.Id,
+		"name":    "old-agent",
+		"image":   "test-image",
+		"status":  "Up",
+		"updated": time.Now().UTC().UnixMilli(),
+	})
+	require.NoError(t, err)
+	_, err = tests.CreateRecord(hub, "containers", map[string]any{
+		"id":      "bbbbbb123456",
+		"system":  otherSystemRecord.Id,
+		"name":    "other-agent",
+		"image":   "test-image",
+		"status":  "Up",
+		"updated": time.Now().UTC().UnixMilli(),
+	})
+	require.NoError(t, err)
+
+	sys := systems.NewTestSystemForRecords(hub.GetSystemManager(), systemRecord)
+	_, err = sys.CreateRecords(&system.CombinedData{
+		Stats: system.Stats{},
+		Info:  system.Info{},
+		Containers: []*container.Stats{
+			{
+				Id:     "123456abcdef",
+				Name:   "worker",
+				Image:  "example/worker:1.0.0",
+				Status: "Up Less than a second",
+				Stack: container.StackInfo{
+					Project: "agent",
+					Service: "worker",
+					Trusted: true,
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	_, err = hub.FindRecordById("containers", "abcdef123456")
+	require.Error(t, err)
+
+	newRecord, err := hub.FindRecordById("containers", "123456abcdef")
+	require.NoError(t, err)
+	assert.Equal(t, systemRecord.Id, newRecord.GetString("system"))
+	assert.Equal(t, "agent", newRecord.GetString("stack_project"))
+	assert.Equal(t, "worker", newRecord.GetString("stack_service"))
+
+	otherRecord, err := hub.FindRecordById("containers", "bbbbbb123456")
+	require.NoError(t, err)
+	assert.Equal(t, otherSystemRecord.Id, otherRecord.GetString("system"))
+}
+
+func TestSystemCreateRecordsIgnoresUntrustedPartialContainerStackLabels(t *testing.T) {
+	hub, err := tests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer hub.Cleanup()
+
+	user, err := tests.CreateUser(hub, "containers-untrusted-stack@test.com", "testtesttest")
+	require.NoError(t, err)
+
+	systemRecord, err := tests.CreateRecord(hub, "systems", map[string]any{
+		"name":  "nacht",
+		"users": []string{user.Id},
+	})
+	require.NoError(t, err)
+
+	sys := systems.NewTestSystemForRecords(hub.GetSystemManager(), systemRecord)
+	_, err = sys.CreateRecords(&system.CombinedData{
+		Stats: system.Stats{},
+		Info:  system.Info{},
+		Containers: []*container.Stats{
+			{
+				Id:     "partialstack",
+				Name:   "loose-container",
+				Image:  "example/loose:1.0.0",
+				Status: "Up 2 minutes",
+				Stack:  container.StackInfo{Project: "harbor"},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	record, err := hub.FindRecordById("containers", "partialstack")
+	require.NoError(t, err)
+	assert.Equal(t, "", record.GetString("stack_project"))
+	assert.Equal(t, "", record.GetString("stack_service"))
+}
+
+func TestSystemCreateRecordsClearsPulseContainerStackLabels(t *testing.T) {
+	hub, err := tests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer hub.Cleanup()
+
+	user, err := tests.CreateUser(hub, "containers-stack@test.com", "testtesttest")
+	require.NoError(t, err)
+
+	systemRecord, err := tests.CreateRecord(hub, "systems", map[string]any{
+		"name":  "nacht",
+		"users": []string{user.Id},
+	})
+	require.NoError(t, err)
+
+	sys := systems.NewTestSystemForRecords(hub.GetSystemManager(), systemRecord)
+	_, err = sys.CreateRecords(&system.CombinedData{
+		Stats: system.Stats{},
+		Info:  system.Info{},
+		Containers: []*container.Stats{
+			{
+				Id:     "registryctl1",
+				Name:   "registryctl",
+				Image:  "goharbor/harbor-registryctl:v2.14.4",
+				Status: "Up 2 days",
+				Stack:  container.StackInfo{Project: "harbor", Service: "registryctl", Number: "1"},
+			},
+			{
+				Id:     "pulseagent1",
+				Name:   "pulse-agent",
+				Image:  "registry.example.com/infra/pulse-agent:1.0.3",
+				Status: "Up 26 hours",
+				Stack:  container.StackInfo{Project: "harbor", Service: "registryctl", Number: "1"},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	harborRecord, err := hub.FindRecordById("containers", "registryctl1")
+	require.NoError(t, err)
+	assert.Equal(t, "harbor", harborRecord.GetString("stack_project"))
+	assert.Equal(t, "registryctl", harborRecord.GetString("stack_service"))
+
+	agentRecord, err := hub.FindRecordById("containers", "pulseagent1")
+	require.NoError(t, err)
+	assert.Equal(t, "", agentRecord.GetString("stack_project"))
+	assert.Equal(t, "", agentRecord.GetString("stack_service"))
+	assert.Equal(t, "", agentRecord.GetString("stack_number"))
+}
+
+func TestSystemCreateRecordsPreservesLocalSystemDisplayName(t *testing.T) {
+	hub, err := tests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer hub.Cleanup()
+
+	user, err := tests.CreateUser(hub, "local-system@test.com", "testtesttest")
+	require.NoError(t, err)
+
+	systemRecord, err := tests.CreateRecord(hub, "systems", map[string]any{
+		"name":     "GuteNacht",
+		"is_local": true,
+		"users":    []string{user.Id},
+	})
+	require.NoError(t, err)
+
+	sys := systems.NewTestSystemForRecords(hub.GetSystemManager(), systemRecord)
+	_, err = sys.CreateRecords(&system.CombinedData{
+		Stats:   system.Stats{},
+		Info:    system.Info{},
+		Details: &system.Details{Hostname: "GuteNacht"},
+	})
+	require.NoError(t, err)
+
+	updatedRecord, err := hub.FindRecordById("systems", systemRecord.Id)
+	require.NoError(t, err)
+	assert.Equal(t, "GuteNacht", updatedRecord.GetString("name"))
+	assert.True(t, updatedRecord.GetBool("is_local"))
+}
+
+func TestSystemCreateRecordsMigratesLegacyLocalSystemName(t *testing.T) {
+	hub, err := tests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer hub.Cleanup()
+
+	user, err := tests.CreateUser(hub, "legacy-local-system@test.com", "testtesttest")
+	require.NoError(t, err)
+
+	systemRecord, err := tests.CreateRecord(hub, "systems", map[string]any{
+		"name":     "本机",
+		"is_local": true,
+		"users":    []string{user.Id},
+	})
+	require.NoError(t, err)
+
+	sys := systems.NewTestSystemForRecords(hub.GetSystemManager(), systemRecord)
+	_, err = sys.CreateRecords(&system.CombinedData{
+		Stats:   system.Stats{},
+		Info:    system.Info{},
+		Details: &system.Details{Hostname: "hub-hostname"},
+	})
+	require.NoError(t, err)
+
+	updatedRecord, err := hub.FindRecordById("systems", systemRecord.Id)
+	require.NoError(t, err)
+	assert.Equal(t, "hub-hostname", updatedRecord.GetString("name"))
+	assert.True(t, updatedRecord.GetBool("is_local"))
+}
+
+func TestSystemCreateRecordsClearsLocalMarkerForWindowsHostAgent(t *testing.T) {
+	hub, err := tests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer hub.Cleanup()
+
+	user, err := tests.CreateUser(hub, "stale-local-system@test.com", "testtesttest")
+	require.NoError(t, err)
+
+	systemRecord, err := tests.CreateRecord(hub, "systems", map[string]any{
+		"name":        "GuteNacht",
+		"is_local":    true,
+		"users":       []string{user.Id},
+		"description": "自己主要用的机器",
+	})
+	require.NoError(t, err)
+
+	sys := systems.NewTestSystemForRecords(hub.GetSystemManager(), systemRecord)
+	_, err = sys.CreateRecords(&system.CombinedData{
+		Stats: system.Stats{},
+		Info: system.Info{
+			Capabilities: &system.AgentCapabilities{
+				Platform:      "windows",
+				InstallMethod: "windows",
+				RunMode:       "windows_service",
+				AgentProfile:  "windows-host",
+			},
+		},
+		Details: &system.Details{Hostname: "GuteNacht"},
+	})
+	require.NoError(t, err)
+
+	updatedRecord, err := hub.FindRecordById("systems", systemRecord.Id)
+	require.NoError(t, err)
+	assert.Equal(t, "GuteNacht", updatedRecord.GetString("name"))
+	assert.False(t, updatedRecord.GetBool("is_local"))
+}
+
+func TestSystemCreateRecordsStoresAgentHostnameSeparatelyFromDisplayName(t *testing.T) {
+	hub, err := tests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer hub.Cleanup()
+
+	user, err := tests.CreateUser(hub, "remote-system@test.com", "testtesttest")
+	require.NoError(t, err)
+
+	systemRecord, err := tests.CreateRecord(hub, "systems", map[string]any{
+		"name":         "旧名称",
+		"display_name": "旧名称",
+		"is_local":     false,
+		"users":        []string{user.Id},
+	})
+	require.NoError(t, err)
+
+	sys := systems.NewTestSystemForRecords(hub.GetSystemManager(), systemRecord)
+	_, err = sys.CreateRecords(&system.CombinedData{
+		Stats:   system.Stats{},
+		Info:    system.Info{},
+		Details: &system.Details{Hostname: "remote-hostname"},
+	})
+	require.NoError(t, err)
+
+	updatedRecord, err := hub.FindRecordById("systems", systemRecord.Id)
+	require.NoError(t, err)
+	assert.Equal(t, "remote-hostname", updatedRecord.GetString("name"))
+	assert.Equal(t, "旧名称", updatedRecord.GetString("display_name"))
+	assert.False(t, updatedRecord.GetBool("is_local"))
+}
+
+func TestSystemCreateRecordsReplacesLegacyLocalNameOnNonLocalSystem(t *testing.T) {
+	hub, err := tests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer hub.Cleanup()
+
+	user, err := tests.CreateUser(hub, "remote-system-legacy-name@test.com", "testtesttest")
+	require.NoError(t, err)
+
+	systemRecord, err := tests.CreateRecord(hub, "systems", map[string]any{
+		"name":     "本机",
+		"is_local": false,
+		"users":    []string{user.Id},
+	})
+	require.NoError(t, err)
+
+	sys := systems.NewTestSystemForRecords(hub.GetSystemManager(), systemRecord)
+	_, err = sys.CreateRecords(&system.CombinedData{
+		Stats:   system.Stats{},
+		Info:    system.Info{},
+		Details: &system.Details{Hostname: "remote-hostname"},
+	})
+	require.NoError(t, err)
+
+	updatedRecord, err := hub.FindRecordById("systems", systemRecord.Id)
+	require.NoError(t, err)
+	assert.Equal(t, "remote-hostname", updatedRecord.GetString("name"))
+	assert.False(t, updatedRecord.GetBool("is_local"))
+}
+
+func TestSystemCreateRecordsSyncsContainerAlertHistory(t *testing.T) {
+	hub, err := tests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer hub.Cleanup()
+
+	user, err := tests.CreateUser(hub, "container-alerts@test.com", "testtesttest")
+	require.NoError(t, err)
+	_, err = tests.CreateRecord(hub, "user_settings", map[string]any{
+		"user":     user.Id,
+		"settings": `{"webhooks":[]}`,
+	})
+	require.NoError(t, err)
+
+	systemRecord, err := tests.CreateRecord(hub, "systems", map[string]any{
+		"name":  "container-alert-system",
+		"users": []string{user.Id},
+	})
+	require.NoError(t, err)
+
+	sys := systems.NewTestSystemForRecords(hub.GetSystemManager(), systemRecord)
+	_, err = sys.CreateRecords(&system.CombinedData{
+		Stats: system.Stats{},
+		Info:  system.Info{},
+		Containers: []*container.Stats{
+			{
+				Id:     "aaa111bbb222",
+				Name:   "redis",
+				Image:  "redis:7",
+				Status: "Exited (0) 1 minute ago",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	history, err := hub.FindRecordsByFilter(
+		"alerts_history",
+		"name = {:name} && system = {:system}",
+		"",
+		0,
+		0,
+		map[string]any{"name": "容器：redis", "system": systemRecord.Id},
+	)
+	require.NoError(t, err)
+	require.Len(t, history, 1)
+	assert.Equal(t, float64(1), history[0].GetFloat("value"))
+	assert.Empty(t, history[0].GetString("resolved"))
+
+	_, err = sys.CreateRecords(&system.CombinedData{
+		Stats: system.Stats{},
+		Info:  system.Info{},
+		Containers: []*container.Stats{
+			{
+				Id:     "aaa111bbb222",
+				Name:   "redis",
+				Image:  "redis:7",
+				Status: "Exited (0) 2 minutes ago",
+			},
+		},
+	})
+	require.NoError(t, err)
+	history, err = hub.FindRecordsByFilter(
+		"alerts_history",
+		"name = {:name} && system = {:system}",
+		"",
+		0,
+		0,
+		map[string]any{"name": "容器：redis", "system": systemRecord.Id},
+	)
+	require.NoError(t, err)
+	require.Len(t, history, 1, "continuing abnormal state should not duplicate active history")
+
+	_, err = sys.CreateRecords(&system.CombinedData{
+		Stats: system.Stats{},
+		Info:  system.Info{},
+		Containers: []*container.Stats{
+			{
+				Id:     "aaa111bbb222",
+				Name:   "redis",
+				Image:  "redis:7",
+				Status: "Up 2 minutes",
+			},
+		},
+	})
+	require.NoError(t, err)
+	history, err = hub.FindRecordsByFilter(
+		"alerts_history",
+		"name = {:name} && system = {:system}",
+		"",
+		0,
+		0,
+		map[string]any{"name": "容器：redis", "system": systemRecord.Id},
+	)
+	require.NoError(t, err)
+	require.Len(t, history, 1)
+	assert.NotEmpty(t, history[0].Fresh().GetString("resolved"))
+}
+
+func TestSystemCreateRecordsAggregatesStackContainerAlerts(t *testing.T) {
+	hub, err := tests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer hub.Cleanup()
+
+	user, err := tests.CreateUser(hub, "stack-alerts@test.com", "testtesttest")
+	require.NoError(t, err)
+	_, err = tests.CreateRecord(hub, "user_settings", map[string]any{
+		"user":     user.Id,
+		"settings": `{"webhooks":[]}`,
+	})
+	require.NoError(t, err)
+
+	systemRecord, err := tests.CreateRecord(hub, "systems", map[string]any{
+		"name":  "stack-alert-system",
+		"users": []string{user.Id},
+	})
+	require.NoError(t, err)
+
+	sys := systems.NewTestSystemForRecords(hub.GetSystemManager(), systemRecord)
+	_, err = sys.CreateRecords(&system.CombinedData{
+		Stats: system.Stats{},
+		Info:  system.Info{},
+		Containers: []*container.Stats{
+			{
+				Id:     "111111aaaaaa",
+				Name:   "registry",
+				Image:  "registry:2",
+				Status: "Up 3 minutes",
+				Stack:  container.StackInfo{Project: "harbor", Service: "registry", Trusted: true},
+			},
+			{
+				Id:     "222222bbbbbb",
+				Name:   "harbor-log",
+				Image:  "goharbor/harbor-log:v2.14.4",
+				Status: "Exited (1) 30 seconds ago",
+				Stack:  container.StackInfo{Project: "harbor", Service: "log", Trusted: true},
+			},
+			{
+				Id:     "333333cccccc",
+				Name:   "jobservice",
+				Image:  "goharbor/harbor-jobservice:v2.14.4",
+				Status: "Up 3 minutes",
+				Health: container.DockerHealthUnhealthy,
+				Stack:  container.StackInfo{Project: "harbor", Service: "jobservice", Trusted: true},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	history, err := hub.FindRecordsByFilter(
+		"alerts_history",
+		"name = {:name} && system = {:system}",
+		"",
+		0,
+		0,
+		map[string]any{"name": "编排：harbor", "system": systemRecord.Id},
+	)
+	require.NoError(t, err)
+	require.Len(t, history, 1)
+	assert.Equal(t, float64(2), history[0].GetFloat("value"))
+
+	_, err = sys.CreateRecords(&system.CombinedData{
+		Stats: system.Stats{},
+		Info:  system.Info{},
+		Containers: []*container.Stats{
+			{
+				Id:     "111111aaaaaa",
+				Name:   "registry",
+				Image:  "registry:2",
+				Status: "Up 5 minutes",
+				Stack:  container.StackInfo{Project: "harbor", Service: "registry", Trusted: true},
+			},
+			{
+				Id:     "222222bbbbbb",
+				Name:   "harbor-log",
+				Image:  "goharbor/harbor-log:v2.14.4",
+				Status: "Up 1 minute",
+				Stack:  container.StackInfo{Project: "harbor", Service: "log", Trusted: true},
+			},
+			{
+				Id:     "333333cccccc",
+				Name:   "jobservice",
+				Image:  "goharbor/harbor-jobservice:v2.14.4",
+				Status: "Up 5 minutes",
+				Health: container.DockerHealthHealthy,
+				Stack:  container.StackInfo{Project: "harbor", Service: "jobservice", Trusted: true},
+			},
+		},
+	})
+	require.NoError(t, err)
+	resolvedHistory, err := hub.FindRecordById("alerts_history", history[0].Id)
+	require.NoError(t, err)
+	assert.NotEmpty(t, resolvedHistory.GetString("resolved"))
+}
+
 func testOld(t *testing.T, hub *tests.TestHub) {
 	user, err := tests.CreateUser(hub, "test@testy.com", "testtesttest")
 	require.NoError(t, err)
@@ -164,8 +662,6 @@ func testOld(t *testing.T, hub *tests.TestHub) {
 		// Create a test system record
 		record, err := tests.CreateRecord(hub, "systems", map[string]any{
 			"name":  "i-even-got-lost-at-coney-island",
-			"host":  "but-they-found-me",
-			"port":  "33914",
 			"users": []string{user.Id},
 		})
 		require.NoError(t, err)
@@ -205,8 +701,6 @@ func testOld(t *testing.T, hub *tests.TestHub) {
 		// Create a test system
 		record, err := tests.CreateRecord(hub, "systems", map[string]any{
 			"name":  "and-you-know",
-			"host":  "i-feel-very-bad",
-			"port":  "33914",
 			"users": []string{user.Id},
 		})
 		require.NoError(t, err)
@@ -226,8 +720,6 @@ func testOld(t *testing.T, hub *tests.TestHub) {
 		// Create a test system record
 		record, err := tests.CreateRecord(hub, "systems", map[string]any{
 			"name":  "we-used-to-sleep-on-the-beach",
-			"host":  "sleep-overnight-here",
-			"port":  "33914",
 			"users": []string{user.Id},
 		})
 		require.NoError(t, err)
@@ -257,8 +749,6 @@ func testOld(t *testing.T, hub *tests.TestHub) {
 		// Create a test system record
 		record, err := tests.CreateRecord(hub, "systems", map[string]any{
 			"name":  "things-changed-you-know",
-			"host":  "they-dont-sleep-anymore-on-the-beach",
-			"port":  "33914",
 			"users": []string{user.Id},
 		})
 		require.NoError(t, err)
@@ -305,20 +795,49 @@ func testOld(t *testing.T, hub *tests.TestHub) {
 		err := sm.RemoveSystem(nonExistentId)
 		assert.Error(t, err)
 
-		// Try to add a system with invalid host
-		system := &systems.System{
-			Host: "",
-		}
+		// Try to add a system without an id
+		system := &systems.System{}
 		err = sm.AddSystem(system)
 		assert.Error(t, err)
+	})
+
+	t.Run("WebSocketOnlySystemDoesNotRequireLegacyHostPort", func(t *testing.T) {
+		system := &systems.System{
+			Id:     "websocket-only-test",
+			Status: "pending",
+		}
+		err := sm.AddSystem(system)
+		require.NoError(t, err)
+		assert.True(t, sm.HasSystem(system.Id))
+		assert.False(t, sm.SystemHasLegacyHostPort(system.Id))
+		require.NoError(t, sm.RemoveSystem(system.Id))
+	})
+
+	t.Run("SystemsCollectionHasNoLegacyHostPortFields", func(t *testing.T) {
+		collection, err := hub.FindCachedCollectionByNameOrId("systems")
+		require.NoError(t, err)
+		assert.Nil(t, collection.Fields.GetByName("host"))
+		assert.Nil(t, collection.Fields.GetByName("port"))
+	})
+
+	t.Run("LegacyHostPortInputDoesNotPersist", func(t *testing.T) {
+		record, err := tests.CreateRecord(hub, "systems", map[string]any{
+			"name":  "legacy-transport-is-ignored",
+			"host":  "192.168.1.50",
+			"port":  "22",
+			"users": []string{user.Id},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, record)
+		assert.Empty(t, record.GetString("host"))
+		assert.Empty(t, record.GetString("port"))
+		assert.False(t, sm.SystemHasLegacyHostPort(record.Id))
 	})
 
 	t.Run("ConcurrentOperations", func(t *testing.T) {
 		// Create a test system
 		record, err := tests.CreateRecord(hub, "systems", map[string]any{
 			"name":  "jfkjahkfajs",
-			"host":  "localhost",
-			"port":  "33914",
 			"users": []string{user.Id},
 		})
 		require.NoError(t, err)
@@ -340,7 +859,7 @@ func testOld(t *testing.T, hub *tests.TestHub) {
 				case 1:
 					_ = sm.GetSystemStatusFromStore(record.Id)
 				case 2:
-					_, _ = sm.GetSystemHostPort(record.Id)
+					_ = sm.SystemHasLegacyHostPort(record.Id)
 				}
 			}(i)
 		}
@@ -357,8 +876,6 @@ func testOld(t *testing.T, hub *tests.TestHub) {
 		// Create a test system record
 		record, err := tests.CreateRecord(hub, "systems", map[string]any{
 			"name":  "lkhsdfsjf",
-			"host":  "localhost",
-			"port":  "33914",
 			"users": []string{user.Id},
 		})
 		require.NoError(t, err)
@@ -438,8 +955,6 @@ func TestHasUser(t *testing.T) {
 
 	systemRecord, err := tests.CreateRecord(hub, "systems", map[string]any{
 		"name":  "has-user-test",
-		"host":  "127.0.0.1",
-		"port":  "33914",
 		"users": []string{user1.Id},
 	})
 	require.NoError(t, err)

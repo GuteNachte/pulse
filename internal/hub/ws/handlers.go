@@ -5,9 +5,8 @@ import (
 	"errors"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/henrygd/beszel/internal/common"
 	"github.com/lxzan/gws"
-	"golang.org/x/crypto/ssh"
+	"gutenacht.site/pulse/internal/common"
 )
 
 // ResponseHandler defines interface for handling agent responses.
@@ -25,10 +24,10 @@ func (h *BaseHandler) HandleLegacy(rawData []byte) error {
 }
 
 ////////////////////////////////////////////////////////////////////////////
-// Fingerprint handling (used for WebSocket authentication)
+// Device identity handling (used for WebSocket authentication)
 ////////////////////////////////////////////////////////////////////////////
 
-// fingerprintHandler implements ResponseHandler for fingerprint requests
+// fingerprintHandler implements ResponseHandler for device identity requests.
 type fingerprintHandler struct {
 	result *common.FingerprintResponse
 }
@@ -45,20 +44,13 @@ func (h *fingerprintHandler) Handle(agentResponse common.AgentResponse) error {
 	return errors.New("no fingerprint data in response")
 }
 
-// GetFingerprint authenticates with the agent using SSH signature and returns the agent's fingerprint.
-func (ws *WsConn) GetFingerprint(ctx context.Context, token string, signer ssh.Signer, needSysInfo bool) (common.FingerprintResponse, error) {
+// GetFingerprint requests the agent's stable device identity over the already token-authenticated WebSocket.
+func (ws *WsConn) GetFingerprint(ctx context.Context, needSysInfo bool) (common.FingerprintResponse, error) {
 	if !ws.IsConnected() {
 		return common.FingerprintResponse{}, gws.ErrConnClosed
 	}
 
-	challenge := []byte(token)
-	signature, err := signer.Sign(nil, challenge)
-	if err != nil {
-		return common.FingerprintResponse{}, err
-	}
-
 	req, err := ws.requestManager.SendRequest(ctx, common.CheckFingerprint, common.FingerprintRequest{
-		Signature:   signature.Blob,
 		NeedSysInfo: needSysInfo,
 	})
 	if err != nil {

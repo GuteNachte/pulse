@@ -10,7 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/ebitengine/purego"
-	"github.com/henrygd/beszel/internal/entities/system"
+	"gutenacht.site/pulse/internal/entities/system"
 )
 
 // NVML constants and types
@@ -145,7 +145,7 @@ func (c *nvmlCollector) collect() {
 	defer c.gm.Unlock()
 
 	for i, device := range c.devices {
-		id := fmt.Sprintf("%d", i)
+		id := fmt.Sprintf("nvml%d", i)
 		bdf := c.bdfs[i]
 
 		// Update GPUDataMap
@@ -156,7 +156,7 @@ func (c *nvmlCollector) collect() {
 			}
 			name := string(nameBuf[:strings.Index(string(nameBuf[:]), "\x00")])
 			name = strings.TrimPrefix(name, "NVIDIA ")
-			c.gm.GpuDataMap[id] = &system.GPUData{Name: strings.TrimSuffix(name, " Laptop GPU")}
+			c.gm.GpuDataMap[id] = &system.GPUData{Name: strings.TrimSuffix(name, " Laptop GPU"), Type: gpuTypeDiscrete}
 		}
 		gpu := c.gm.GpuDataMap[id]
 

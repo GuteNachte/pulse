@@ -4,10 +4,13 @@ internalsite/node_modules
 
 # Go build artifacts and binaries
 build
+!build/releases
+!build/releases/agent
+!build/releases/agent/**
 dist
 *.exe
-beszel-agent
-beszel_data*
+pulse-agent
+pulse_data*
 pb_data
 data
 temp

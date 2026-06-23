@@ -3,21 +3,20 @@
 package agent
 
 import (
-	"crypto/ed25519"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/henrygd/beszel"
+	"gutenacht.site/pulse"
 
-	"github.com/henrygd/beszel/internal/common"
+	"gutenacht.site/pulse/internal/common"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/ssh"
 )
 
 // TestNewWebSocketClient tests WebSocket client creation
@@ -70,10 +69,10 @@ func TestNewWebSocketClient(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Set up environment
 			if tc.hubURL != "" {
-				t.Setenv("BESZEL_AGENT_HUB_URL", tc.hubURL)
+				t.Setenv("PULSE_AGENT_HUB_URL", tc.hubURL)
 			}
 			if tc.token != "" {
-				t.Setenv("BESZEL_AGENT_TOKEN", tc.token)
+				t.Setenv("PULSE_AGENT_TOKEN", tc.token)
 			}
 
 			client, err := newWebSocketClient(agent)
@@ -89,7 +88,11 @@ func TestNewWebSocketClient(t *testing.T) {
 				assert.NotNil(t, client)
 				assert.Equal(t, agent, client.agent)
 				assert.Equal(t, tc.token, client.token)
-				assert.Equal(t, tc.hubURL, client.hubURL.String())
+				if tc.hubURL == "http://localhost:8080" {
+					assert.Equal(t, "http://127.0.0.1:8080", client.hubURL.String())
+				} else {
+					assert.Equal(t, tc.hubURL, client.hubURL.String())
+				}
 				assert.NotEmpty(t, client.fingerprint)
 				assert.NotNil(t, client.hubRequest)
 			}
@@ -111,27 +114,27 @@ func TestWebSocketClient_GetOptions(t *testing.T) {
 			name:           "http to ws conversion",
 			inputURL:       "http://localhost:8080",
 			expectedScheme: "ws",
-			expectedPath:   "/api/beszel/agent-connect",
+			expectedPath:   "/api/pulse/agent-connect",
 		},
 		{
 			name:           "https to wss conversion",
 			inputURL:       "https://hub.example.com",
 			expectedScheme: "wss",
-			expectedPath:   "/api/beszel/agent-connect",
+			expectedPath:   "/api/pulse/agent-connect",
 		},
 		{
 			name:           "existing path preservation",
 			inputURL:       "http://localhost:8080/custom/path",
 			expectedScheme: "ws",
-			expectedPath:   "/custom/path/api/beszel/agent-connect",
+			expectedPath:   "/custom/path/api/pulse/agent-connect",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Set up environment
-			t.Setenv("BESZEL_AGENT_HUB_URL", tc.inputURL)
-			t.Setenv("BESZEL_AGENT_TOKEN", "test-token")
+			t.Setenv("PULSE_AGENT_HUB_URL", tc.inputURL)
+			t.Setenv("PULSE_AGENT_TOKEN", "test-token")
 
 			client, err := newWebSocketClient(agent)
 			require.NoError(t, err)
@@ -147,7 +150,7 @@ func TestWebSocketClient_GetOptions(t *testing.T) {
 
 			// Check headers
 			assert.Equal(t, "test-token", options.RequestHeader.Get("X-Token"))
-			assert.Equal(t, beszel.Version, options.RequestHeader.Get("X-Beszel"))
+			assert.Equal(t, pulse.Version, options.RequestHeader.Get("X-Pulse"))
 			assert.Contains(t, options.RequestHeader.Get("User-Agent"), "Mozilla/5.0")
 
 			// Test options caching
@@ -157,84 +160,24 @@ func TestWebSocketClient_GetOptions(t *testing.T) {
 	}
 }
 
-// TestWebSocketClient_VerifySignature tests signature verification
-func TestWebSocketClient_VerifySignature(t *testing.T) {
-	agent := createTestAgent(t)
+func TestWebSocketClient_AllProxyEnvironmentPriority(t *testing.T) {
+	t.Run("pulse proxy sets all proxy", func(t *testing.T) {
+		t.Setenv("ALL_PROXY", "")
+		t.Setenv("PULSE_AGENT_ALL_PROXY", "http://pulse-proxy.local:7890")
 
-	// Generate test key pairs
-	_, goodPrivKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	goodPubKey, err := ssh.NewPublicKey(goodPrivKey.Public().(ed25519.PublicKey))
-	require.NoError(t, err)
+		syncAllProxyFromAgentEnv()
 
-	_, badPrivKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	badPubKey, err := ssh.NewPublicKey(badPrivKey.Public().(ed25519.PublicKey))
-	require.NoError(t, err)
+		assert.Equal(t, "http://pulse-proxy.local:7890", os.Getenv("ALL_PROXY"))
+	})
 
-	// Set up environment
-	t.Setenv("BESZEL_AGENT_HUB_URL", "http://localhost:8080")
-	t.Setenv("BESZEL_AGENT_TOKEN", "test-token")
+	t.Run("empty pulse proxy leaves all proxy unchanged", func(t *testing.T) {
+		t.Setenv("ALL_PROXY", "")
+		t.Setenv("PULSE_AGENT_ALL_PROXY", "")
 
-	client, err := newWebSocketClient(agent)
-	require.NoError(t, err)
+		syncAllProxyFromAgentEnv()
 
-	testCases := []struct {
-		name        string
-		keys        []ssh.PublicKey
-		token       string
-		signWith    ed25519.PrivateKey
-		expectError bool
-	}{
-		{
-			name:        "valid signature with correct key",
-			keys:        []ssh.PublicKey{goodPubKey},
-			token:       "test-token",
-			signWith:    goodPrivKey,
-			expectError: false,
-		},
-		{
-			name:        "invalid signature with wrong key",
-			keys:        []ssh.PublicKey{goodPubKey},
-			token:       "test-token",
-			signWith:    badPrivKey,
-			expectError: true,
-		},
-		{
-			name:        "valid signature with multiple keys",
-			keys:        []ssh.PublicKey{badPubKey, goodPubKey},
-			token:       "test-token",
-			signWith:    goodPrivKey,
-			expectError: false,
-		},
-		{
-			name:        "no valid keys",
-			keys:        []ssh.PublicKey{badPubKey},
-			token:       "test-token",
-			signWith:    goodPrivKey,
-			expectError: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Set up agent with test keys
-			agent.keys = tc.keys
-			client.token = tc.token
-
-			// Create signature
-			signature := ed25519.Sign(tc.signWith, []byte(tc.token))
-
-			err := client.verifySignature(signature)
-
-			if tc.expectError {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "invalid signature")
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+		assert.Empty(t, os.Getenv("ALL_PROXY"))
+	})
 }
 
 // TestWebSocketClient_HandleHubRequest tests hub request routing (basic verification logic)
@@ -242,8 +185,8 @@ func TestWebSocketClient_HandleHubRequest(t *testing.T) {
 	agent := createTestAgent(t)
 
 	// Set up environment
-	t.Setenv("BESZEL_AGENT_HUB_URL", "http://localhost:8080")
-	t.Setenv("BESZEL_AGENT_TOKEN", "test-token")
+	t.Setenv("PULSE_AGENT_HUB_URL", "http://localhost:8080")
+	t.Setenv("PULSE_AGENT_TOKEN", "test-token")
 
 	client, err := newWebSocketClient(agent)
 	require.NoError(t, err)
@@ -330,8 +273,8 @@ func TestGetUserAgent(t *testing.T) {
 func TestWebSocketClient_Close(t *testing.T) {
 	agent := createTestAgent(t)
 
-	t.Setenv("BESZEL_AGENT_HUB_URL", "http://localhost:8080")
-	t.Setenv("BESZEL_AGENT_TOKEN", "test-token")
+	t.Setenv("PULSE_AGENT_HUB_URL", "http://localhost:8080")
+	t.Setenv("PULSE_AGENT_TOKEN", "test-token")
 
 	client, err := newWebSocketClient(agent)
 	require.NoError(t, err)
@@ -346,8 +289,8 @@ func TestWebSocketClient_Close(t *testing.T) {
 func TestWebSocketClient_ConnectRateLimit(t *testing.T) {
 	agent := createTestAgent(t)
 
-	t.Setenv("BESZEL_AGENT_HUB_URL", "http://localhost:8080")
-	t.Setenv("BESZEL_AGENT_TOKEN", "test-token")
+	t.Setenv("PULSE_AGENT_HUB_URL", "http://localhost:8080")
+	t.Setenv("PULSE_AGENT_TOKEN", "test-token")
 
 	client, err := newWebSocketClient(agent)
 	require.NoError(t, err)
@@ -373,10 +316,10 @@ func TestGetToken(t *testing.T) {
 		assert.Equal(t, expectedToken, token)
 	})
 
-	t.Run("token from BESZEL_AGENT_TOKEN environment variable", func(t *testing.T) {
-		// Set BESZEL_AGENT_TOKEN env var (should take precedence)
-		expectedToken := "test-token-from-beszel-env"
-		t.Setenv("BESZEL_AGENT_TOKEN", expectedToken)
+	t.Run("token from pulse agent token environment variable", func(t *testing.T) {
+		// Set the Pulse token env var (should take precedence over the generic TOKEN fallback).
+		expectedToken := "test-token-from-pulse-env"
+		t.Setenv("PULSE_AGENT_TOKEN", expectedToken)
 
 		token, err := getToken()
 		assert.NoError(t, err)
@@ -402,9 +345,9 @@ func TestGetToken(t *testing.T) {
 		assert.Equal(t, expectedToken, token)
 	})
 
-	t.Run("token from BESZEL_AGENT_TOKEN_FILE", func(t *testing.T) {
+	t.Run("token from pulse agent token file", func(t *testing.T) {
 		// Create a temporary token file
-		expectedToken := "test-token-from-beszel-file"
+		expectedToken := "test-token-from-pulse-file"
 		tokenFile, err := os.CreateTemp("", "token-test-*.txt")
 		require.NoError(t, err)
 		defer os.Remove(tokenFile.Name())
@@ -413,8 +356,8 @@ func TestGetToken(t *testing.T) {
 		require.NoError(t, err)
 		tokenFile.Close()
 
-		// Set BESZEL_AGENT_TOKEN_FILE env var (should take precedence)
-		t.Setenv("BESZEL_AGENT_TOKEN_FILE", tokenFile.Name())
+		// Set the Pulse token file env var (should take precedence over TOKEN_FILE).
+		t.Setenv("PULSE_AGENT_TOKEN_FILE", tokenFile.Name())
 
 		token, err := getToken()
 		assert.NoError(t, err)
@@ -443,9 +386,9 @@ func TestGetToken(t *testing.T) {
 	})
 
 	t.Run("error when neither TOKEN nor TOKEN_FILE is set", func(t *testing.T) {
-		t.Setenv("BESZEL_AGENT_TOKEN", "")
+		t.Setenv("PULSE_AGENT_TOKEN", "")
 		t.Setenv("TOKEN", "")
-		t.Setenv("BESZEL_AGENT_TOKEN_FILE", "")
+		t.Setenv("PULSE_AGENT_TOKEN_FILE", "")
 		t.Setenv("TOKEN_FILE", "")
 
 		token, err := getToken()
@@ -461,7 +404,7 @@ func TestGetToken(t *testing.T) {
 		token, err := getToken()
 		assert.Error(t, err)
 		assert.Equal(t, "", token)
-		assert.Contains(t, err.Error(), "no such file or directory")
+		assert.True(t, os.IsNotExist(err), "expected missing token file error")
 	})
 
 	t.Run("handles empty token file", func(t *testing.T) {
@@ -495,5 +438,16 @@ func TestGetToken(t *testing.T) {
 		token, err := getToken()
 		assert.NoError(t, err)
 		assert.Equal(t, expectedToken, token, "Whitespace should be stripped from token file content")
+	})
+
+	t.Run("token from paired data dir", func(t *testing.T) {
+		dataDir := t.TempDir()
+		expectedToken := "test-token-from-pairing"
+		require.NoError(t, os.WriteFile(filepath.Join(dataDir, "token"), []byte(expectedToken), 0o600))
+		t.Setenv("DATA_DIR", dataDir)
+
+		token, err := getToken()
+		assert.NoError(t, err)
+		assert.Equal(t, expectedToken, token)
 	})
 }

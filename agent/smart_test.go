@@ -7,10 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
-	"github.com/henrygd/beszel/internal/entities/smart"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gutenacht.site/pulse/internal/entities/smart"
 )
 
 func TestParseSmartForScsi(t *testing.T) {
@@ -42,6 +43,7 @@ func TestParseSmartForScsi(t *testing.T) {
 	assert.Equal(t, deviceData.FirmwareVersion, "C240")
 	assert.Equal(t, deviceData.DiskName, "/dev/sde")
 	assert.Equal(t, deviceData.DiskType, "scsi")
+	assert.Equal(t, "hdd", deviceData.MediaType)
 	assert.EqualValues(t, deviceData.Temperature, 34)
 	assert.Equal(t, deviceData.SmartStatus, "PASSED")
 	assert.EqualValues(t, deviceData.Capacity, 14000519643136)
@@ -80,11 +82,50 @@ func TestParseSmartForSata(t *testing.T) {
 	assert.Equal(t, "X0104A0", deviceData.FirmwareVersion)
 	assert.Equal(t, "/dev/sda", deviceData.DiskName)
 	assert.Equal(t, "sat", deviceData.DiskType)
+	assert.Equal(t, "ssd", deviceData.MediaType)
 	assert.Equal(t, uint8(31), deviceData.Temperature)
 	assert.Equal(t, "PASSED", deviceData.SmartStatus)
 	assert.Equal(t, uint64(2048408248320), deviceData.Capacity)
 	if assert.NotEmpty(t, deviceData.Attributes) {
 		assertAttrValue(t, deviceData.Attributes, "Temperature_Celsius", 31)
+	}
+}
+
+func TestParseSmartForSataMediaType(t *testing.T) {
+	tests := []struct {
+		name         string
+		rotationRate string
+		expected     string
+	}{
+		{name: "missing rotation rate", rotationRate: "", expected: ""},
+		{name: "non rotating", rotationRate: `"rotation_rate": 0,`, expected: "ssd"},
+		{name: "rotating", rotationRate: `"rotation_rate": 7200,`, expected: "hdd"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			jsonPayload := []byte(`{
+				"smartctl": {"exit_status": 0},
+				"device": {"name": "/dev/sdb", "type": "sat"},
+				"model_name": "Example Drive",
+				"serial_number": "MEDIA123",
+				"firmware_version": "1.0",
+				"user_capacity": {"bytes": 1024},
+				` + tt.rotationRate + `
+				"smart_status": {"passed": true},
+				"temperature": {"current": 25},
+				"ata_smart_attributes": {"table": []}
+			}`)
+
+			sm := &SmartManager{SmartDataMap: make(map[string]*smart.SmartData)}
+			hasData, exitStatus := sm.parseSmartForSata(jsonPayload)
+			require.True(t, hasData)
+			assert.Equal(t, 0, exitStatus)
+
+			deviceData, ok := sm.SmartDataMap["MEDIA123"]
+			require.True(t, ok, "expected smart data entry for serial MEDIA123")
+			assert.Equal(t, tt.expected, deviceData.MediaType)
+		})
 	}
 }
 
@@ -256,6 +297,7 @@ func TestParseSmartForNvme(t *testing.T) {
 	assert.Equal(t, "VC2S038E", deviceData.FirmwareVersion)
 	assert.Equal(t, "/dev/nvme0", deviceData.DiskName)
 	assert.Equal(t, "nvme", deviceData.DiskType)
+	assert.Equal(t, "nvme", deviceData.MediaType)
 	assert.Equal(t, uint8(61), deviceData.Temperature)
 	assert.Equal(t, "PASSED", deviceData.SmartStatus)
 	assert.Equal(t, uint64(512110190592), deviceData.Capacity)
@@ -469,6 +511,65 @@ func TestResolveRefreshError(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSmartCollectBackoffDelay(t *testing.T) {
+	assert.Equal(t, 15*time.Minute, smartCollectBackoffDelay(1))
+	assert.Equal(t, 30*time.Minute, smartCollectBackoffDelay(2))
+	assert.Equal(t, time.Hour, smartCollectBackoffDelay(3))
+	assert.Equal(t, 6*time.Hour, smartCollectBackoffDelay(10))
+}
+
+func TestSmartCollectBackoffSkipsRetryUntilDue(t *testing.T) {
+	device := &DeviceInfo{Name: "/dev/sda", Type: "sat"}
+	sm := &SmartManager{
+		SmartDataMap:    make(map[string]*smart.SmartData),
+		collectFailures: make(map[string]smartCollectFailure),
+	}
+	now := time.Now()
+
+	sm.collectFailures[smartCollectDeviceKey(device)] = smartCollectFailure{
+		Failures:    2,
+		NextAttempt: now.Add(time.Hour),
+		LastError:   "permission denied",
+	}
+
+	failure, blocked := sm.smartCollectBackoff(device, now)
+	require.True(t, blocked)
+	err := smartCollectBackoffError(device, failure)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "backed off")
+	assert.Contains(t, err.Error(), "permission denied")
+
+	_, blocked = sm.smartCollectBackoff(device, now.Add(2*time.Hour))
+	assert.False(t, blocked)
+}
+
+func TestRecordSmartCollectResultBackoffAndReset(t *testing.T) {
+	device := &DeviceInfo{Name: "/dev/sda", Type: "sat"}
+	sm := &SmartManager{
+		SmartDataMap: make(map[string]*smart.SmartData),
+	}
+	key := smartCollectDeviceKey(device)
+
+	sm.recordSmartCollectResult(device, errors.New("first failure"))
+	first := sm.collectFailures[key]
+	assert.Equal(t, 1, first.Failures)
+	assert.Contains(t, first.LastError, "first failure")
+
+	sm.recordSmartCollectResult(device, errors.New("second failure"))
+	second := sm.collectFailures[key]
+	assert.Equal(t, 2, second.Failures)
+	assert.Greater(t, second.NextAttempt.Sub(time.Now()), first.NextAttempt.Sub(time.Now()))
+
+	sm.recordSmartCollectResult(device, nil)
+	_, ok := sm.collectFailures[key]
+	assert.False(t, ok)
+}
+
+func TestSmartCollectDeviceKeyNormalizesNameAndType(t *testing.T) {
+	key := smartCollectDeviceKey(&DeviceInfo{Name: " /DEV/SDA ", Type: " SAT "})
+	assert.Equal(t, "/dev/sda|sat", key)
 }
 
 func TestParseScan(t *testing.T) {

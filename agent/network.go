@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/henrygd/beszel/agent/deltatracker"
-	"github.com/henrygd/beszel/agent/utils"
-	"github.com/henrygd/beszel/internal/entities/system"
 	psutilNet "github.com/shirou/gopsutil/v4/net"
+	"gutenacht.site/pulse/agent/deltatracker"
+	"gutenacht.site/pulse/agent/utils"
+	"gutenacht.site/pulse/internal/entities/system"
 )
 
 // NicConfig controls inclusion/exclusion of network interfaces via the NICS env var
@@ -83,8 +83,12 @@ func (a *Agent) updateNetworkStats(cacheTimeMs uint16, systemStats *system.Stats
 	a.ensureNetworkInterfacesMap(systemStats)
 
 	if netIO, err := psutilNet.IOCounters(true); err == nil {
+		candidates := filterNetworkInterfaces(netIO, currentNicConfig(), physicalNetworkInterfaces())
+		if len(candidates) == 0 {
+			return
+		}
 		nis, msElapsed := a.loadAndTickNetBaseline(cacheTimeMs)
-		totalBytesSent, totalBytesRecv := a.sumAndTrackPerNicDeltas(cacheTimeMs, msElapsed, netIO, systemStats)
+		totalBytesSent, totalBytesRecv := a.selectAndTrackPrimaryNicDeltas(cacheTimeMs, msElapsed, candidates, systemStats)
 		bytesSentPerSecond, bytesRecvPerSecond := a.computeBytesPerSecond(msElapsed, totalBytesSent, totalBytesRecv, nis)
 		a.applyNetworkTotals(cacheTimeMs, netIO, systemStats, nis, totalBytesSent, totalBytesRecv, bytesSentPerSecond, bytesRecvPerSecond)
 	}
@@ -94,28 +98,18 @@ func (a *Agent) initializeNetIoStats() {
 	// reset valid network interfaces
 	a.netInterfaces = make(map[string]struct{}, 0)
 
-	// parse NICS env var for whitelist / blacklist
-	nicsEnvVal, nicsEnvExists := utils.GetEnv("NICS")
-	var nicCfg *NicConfig
-	if nicsEnvExists {
-		nicCfg = newNicConfig(nicsEnvVal)
-	}
-
 	// get current network I/O stats and record valid interfaces
 	if netIO, err := psutilNet.IOCounters(true); err == nil {
-		for _, v := range netIO {
-			if skipNetworkInterface(v, nicCfg) {
-				continue
-			}
-			slog.Info("Detected network interface", "name", v.Name, "sent", v.BytesSent, "recv", v.BytesRecv)
-			// store as a valid network interface
-			a.netInterfaces[v.Name] = struct{}{}
+		candidates := filterNetworkInterfaces(netIO, currentNicConfig(), physicalNetworkInterfaces())
+		for _, candidate := range candidates {
+			a.netInterfaces[candidate.Name] = struct{}{}
 		}
 	}
 
 	// Reset per-cache-time trackers and baselines so they will reinitialize on next use
 	a.netInterfaceDeltaTrackers = make(map[uint16]*deltatracker.DeltaTracker[string, uint64])
 	a.netIoStats = make(map[uint16]system.NetIoStats)
+	a.refreshNetworkInterfaceDetails()
 }
 
 // ensureNetInterfacesInitialized re-initializes NICs if none are currently tracked
@@ -149,8 +143,8 @@ func (a *Agent) loadAndTickNetBaseline(cacheTimeMs uint16) (netIoStat system.Net
 	return netIoStat, msElapsed
 }
 
-// sumAndTrackPerNicDeltas accumulates totals and records per-NIC up/down deltas into systemStats
-func (a *Agent) sumAndTrackPerNicDeltas(cacheTimeMs uint16, msElapsed uint64, netIO []psutilNet.IOCountersStat, systemStats *system.Stats) (totalBytesSent, totalBytesRecv uint64) {
+// selectAndTrackPrimaryNicDeltas records every physical NIC into systemStats.
+func (a *Agent) selectAndTrackPrimaryNicDeltas(cacheTimeMs uint16, msElapsed uint64, netIO []psutilNet.IOCountersStat, systemStats *system.Stats) (totalBytesSent, totalBytesRecv uint64) {
 	tracker := a.netInterfaceDeltaTrackers[cacheTimeMs]
 	if tracker == nil {
 		tracker = deltatracker.NewDeltaTracker[string, uint64]()
@@ -158,17 +152,14 @@ func (a *Agent) sumAndTrackPerNicDeltas(cacheTimeMs uint16, msElapsed uint64, ne
 	}
 	tracker.Cycle()
 
+	a.netInterfaces = make(map[string]struct{}, len(netIO))
 	for _, v := range netIO {
-		if _, exists := a.netInterfaces[v.Name]; !exists {
-			continue
-		}
-		totalBytesSent += v.BytesSent
-		totalBytesRecv += v.BytesRecv
-
-		var upDelta, downDelta uint64
 		upKey, downKey := fmt.Sprintf("%sup", v.Name), fmt.Sprintf("%sdown", v.Name)
 		tracker.Set(upKey, v.BytesSent)
 		tracker.Set(downKey, v.BytesRecv)
+		a.netInterfaces[v.Name] = struct{}{}
+
+		var upDelta, downDelta uint64
 		if msElapsed > 0 {
 			if prevVal, ok := tracker.Previous(upKey); ok {
 				var deltaBytes uint64
@@ -190,6 +181,8 @@ func (a *Agent) sumAndTrackPerNicDeltas(cacheTimeMs uint16, msElapsed uint64, ne
 			}
 		}
 		systemStats.NetworkInterfaces[v.Name] = [4]uint64{upDelta, downDelta, v.BytesSent, v.BytesRecv}
+		totalBytesSent += v.BytesSent
+		totalBytesRecv += v.BytesRecv
 	}
 
 	return totalBytesSent, totalBytesRecv
@@ -198,6 +191,9 @@ func (a *Agent) sumAndTrackPerNicDeltas(cacheTimeMs uint16, msElapsed uint64, ne
 // computeBytesPerSecond calculates per-second totals from elapsed time and totals
 func (a *Agent) computeBytesPerSecond(msElapsed, totalBytesSent, totalBytesRecv uint64, nis system.NetIoStats) (bytesSentPerSecond, bytesRecvPerSecond uint64) {
 	if msElapsed > 0 {
+		if totalBytesSent < nis.BytesSent || totalBytesRecv < nis.BytesRecv {
+			return 0, 0
+		}
 		bytesSentPerSecond = (totalBytesSent - nis.BytesSent) * 1000 / msElapsed
 		bytesRecvPerSecond = (totalBytesRecv - nis.BytesRecv) * 1000 / msElapsed
 	}
@@ -234,30 +230,41 @@ func (a *Agent) applyNetworkTotals(
 	a.netIoStats[cacheTimeMs] = nis
 }
 
+func currentNicConfig() *NicConfig {
+	nicsEnvVal, nicsEnvExists := utils.GetEnv("NICS")
+	if !nicsEnvExists {
+		return nil
+	}
+	return newNicConfig(nicsEnvVal)
+}
+
+func filterNetworkInterfaces(netIO []psutilNet.IOCountersStat, nicCfg *NicConfig, physical map[string]struct{}) []psutilNet.IOCountersStat {
+	filtered := make([]psutilNet.IOCountersStat, 0, len(netIO))
+	for _, v := range netIO {
+		if skipNetworkInterface(v, nicCfg, physical) {
+			continue
+		}
+		filtered = append(filtered, v)
+	}
+	return filtered
+}
+
 // skipNetworkInterface returns true if the network interface should be ignored.
-func skipNetworkInterface(v psutilNet.IOCountersStat, nicCfg *NicConfig) bool {
-	if nicCfg != nil {
-		if !isValidNic(v.Name, nicCfg) {
+func skipNetworkInterface(v psutilNet.IOCountersStat, nicCfg *NicConfig, physical map[string]struct{}) bool {
+	if len(physical) > 0 {
+		if _, ok := physical[v.Name]; !ok {
 			return true
 		}
-		// In whitelist mode, we honor explicit inclusion without auto-filtering.
-		if !nicCfg.isBlacklist {
-			return false
-		}
-		// In blacklist mode, still apply the auto-filter below.
 	}
 
-	switch {
-	case strings.HasPrefix(v.Name, "lo"),
-		strings.HasPrefix(v.Name, "docker"),
-		strings.HasPrefix(v.Name, "br-"),
-		strings.HasPrefix(v.Name, "veth"),
-		strings.HasPrefix(v.Name, "bond"),
-		strings.HasPrefix(v.Name, "cali"),
-		v.BytesRecv == 0,
-		v.BytesSent == 0:
+	if nicCfg != nil && !isValidNic(v.Name, nicCfg) {
 		return true
-	default:
-		return false
 	}
+
+	return strings.HasPrefix(v.Name, "lo") ||
+		strings.HasPrefix(v.Name, "docker") ||
+		strings.HasPrefix(v.Name, "br-") ||
+		strings.HasPrefix(v.Name, "veth") ||
+		strings.HasPrefix(v.Name, "bond") ||
+		strings.HasPrefix(v.Name, "cali")
 }

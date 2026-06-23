@@ -1,36 +1,31 @@
 import { lazy } from "react"
 import { useIntersectionObserver } from "@/lib/use-intersection-observer"
 import { cn } from "@/lib/utils"
-
-const ContainersTable = lazy(() => import("../../containers-table/containers-table"))
-
-export function LazyContainersTable({ systemId }: { systemId: string }) {
-	const { isIntersecting, ref } = useIntersectionObserver({ rootMargin: "90px" })
-	return (
-		<div ref={ref} className={cn(isIntersecting && "contents")}>
-			{isIntersecting && <ContainersTable systemId={systemId} />}
-		</div>
-	)
-}
+import type { Os } from "@/lib/enums"
 
 const SmartTable = lazy(() => import("./smart-table"))
+const MonitoredServicesTable = lazy(() => import("@/components/monitored-services-table/monitored-services-table"))
 
-export function LazySmartTable({ systemId }: { systemId: string }) {
+export function LazySmartTable({ systemId, os }: { systemId: string; os?: Os }) {
 	const { isIntersecting, ref } = useIntersectionObserver({ rootMargin: "90px" })
 	return (
 		<div ref={ref} className={cn(isIntersecting && "contents")}>
-			{isIntersecting && <SmartTable systemId={systemId} />}
+			{isIntersecting && <SmartTable systemId={systemId} os={os} />}
 		</div>
 	)
 }
 
-const SystemdTable = lazy(() => import("../../systemd-table/systemd-table"))
-
-export function LazySystemdTable({ systemId }: { systemId: string }) {
-	const { isIntersecting, ref } = useIntersectionObserver()
+export function LazyMonitoredServicesTable({
+	systemId,
+	onlyConfigured,
+}: {
+	systemId: string
+	onlyConfigured?: boolean
+}) {
+	const { isIntersecting, ref } = useIntersectionObserver({ rootMargin: "90px" })
 	return (
 		<div ref={ref} className={cn(isIntersecting && "contents")}>
-			{isIntersecting && <SystemdTable systemId={systemId} />}
+			{isIntersecting && <MonitoredServicesTable systemId={systemId} onlyConfigured={onlyConfigured} />}
 		</div>
 	)
 }

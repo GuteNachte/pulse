@@ -3,9 +3,12 @@ package users
 
 import (
 	"log"
+	"net"
 	"net/http"
+	"net/mail"
+	"strings"
 
-	"github.com/henrygd/beszel/internal/migrations"
+	"gutenacht.site/pulse/internal/migrations"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
@@ -40,7 +43,6 @@ func (um *UserManager) InitializeUserSettings(e *core.RecordEvent) error {
 		ChartTime: "1h",
 	}
 	record.UnmarshalJSONField("settings", &settings)
-	// get user email from auth record
 	var user struct {
 		Email string `db:"email"`
 	}
@@ -57,7 +59,7 @@ func (um *UserManager) InitializeUserSettings(e *core.RecordEvent) error {
 }
 
 // Custom API endpoint to create the first user.
-// Mimics previous default behavior in PocketBase < 0.23.0 allowing user to be created through the Beszel UI.
+// Mimics previous default behavior in PocketBase < 0.23.0 allowing user to be created through the Pulse UI.
 func (um *UserManager) CreateFirstUser(e *core.RequestEvent) error {
 	// check that there are no users
 	totalUsers, err := um.app.CountRecords("users")
@@ -69,21 +71,25 @@ func (um *UserManager) CreateFirstUser(e *core.RequestEvent) error {
 	if err != nil || len(adminUsers) != 1 || adminUsers[0].GetString("email") != migrations.TempAdminEmail {
 		return e.JSON(http.StatusForbidden, map[string]string{"err": "Forbidden"})
 	}
-	// create first user using supplied email and password in request body
+	// create first user using supplied username, email and password in request body
 	data := struct {
+		Username string `json:"username"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}{}
 	if err := e.BindBody(&data); err != nil {
 		return e.JSON(http.StatusBadRequest, map[string]string{"err": err.Error()})
 	}
-	if data.Email == "" || data.Password == "" {
+	username := strings.ToLower(strings.TrimSpace(data.Username))
+	email := strings.ToLower(strings.TrimSpace(data.Email))
+	if username == "" || email == "" || data.Password == "" || !isValidEmail(email) {
 		return e.JSON(http.StatusBadRequest, map[string]string{"err": "Bad request"})
 	}
 
 	collection, _ := um.app.FindCollectionByNameOrId("users")
 	user := core.NewRecord(collection)
-	user.SetEmail(data.Email)
+	user.Set("username", username)
+	user.SetEmail(email)
 	user.SetPassword(data.Password)
 	user.Set("role", "admin")
 	user.Set("verified", true)
@@ -93,7 +99,7 @@ func (um *UserManager) CreateFirstUser(e *core.RequestEvent) error {
 	// create superuser using the email of the first user
 	collection, _ = um.app.FindCollectionByNameOrId(core.CollectionNameSuperusers)
 	adminUser := core.NewRecord(collection)
-	adminUser.SetEmail(data.Email)
+	adminUser.SetEmail(email)
 	adminUser.SetPassword(data.Password)
 	if err := um.app.Save(adminUser); err != nil {
 		return e.JSON(http.StatusInternalServerError, map[string]string{"err": err.Error()})
@@ -102,5 +108,52 @@ func (um *UserManager) CreateFirstUser(e *core.RequestEvent) error {
 	if err := um.app.Delete(adminUsers[0]); err != nil {
 		return e.JSON(http.StatusInternalServerError, map[string]string{"err": err.Error()})
 	}
+	writeFirstUserAudit(um.app, user.Id, email, firstUserAuditIP(e.Request))
 	return e.JSON(http.StatusOK, map[string]string{"msg": "User created"})
+}
+
+func writeFirstUserAudit(app core.App, userID string, email string, ip string) {
+	collection, err := app.FindCachedCollectionByNameOrId("operation_audit")
+	if err != nil {
+		return
+	}
+	record := core.NewRecord(collection)
+	record.Set("user", userID)
+	record.Set("action", "create_first_admin")
+	record.Set("target", strings.TrimSpace(email))
+	record.Set("result", "success")
+	record.Set("detail", "首个管理员已创建")
+	record.Set("ip", strings.TrimSpace(ip))
+	_ = app.SaveNoValidate(record)
+}
+
+func firstUserAuditIP(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	for _, header := range []string{"X-Real-IP", "X-Forwarded-For"} {
+		value := strings.TrimSpace(r.Header.Get(header))
+		if value == "" {
+			continue
+		}
+		if header == "X-Forwarded-For" {
+			value = strings.TrimSpace(strings.Split(value, ",")[0])
+		}
+		if value != "" {
+			return value
+		}
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return host
+	}
+	return strings.TrimSpace(r.RemoteAddr)
+}
+
+func isValidEmail(email string) bool {
+	if email == "" {
+		return false
+	}
+	parsed, err := mail.ParseAddress(email)
+	return err == nil && strings.EqualFold(parsed.Address, email)
 }

@@ -8,7 +8,7 @@ import { useIntersectionObserver } from "@/lib/use-intersection-observer"
 import { cn } from "@/lib/utils"
 import Spinner from "../../spinner"
 import { Button } from "../../ui/button"
-import { Card, CardDescription, CardHeader, CardTitle } from "../../ui/card"
+import { Card, CardHeader, CardTitle } from "../../ui/card"
 import { ChartAverage, ChartMax } from "../../ui/icons"
 import { Input } from "../../ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select"
@@ -54,7 +54,7 @@ export function FilterBar({ store = $containerFilter }: { store?: typeof $contai
 					variant="ghost"
 					size="icon"
 					aria-label="Clear"
-					className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+					className="absolute right-1 top-1/2 size-10 -translate-y-1/2 text-muted-foreground hover:text-foreground"
 					onClick={handleClear}
 				>
 					<XIcon className="h-4 w-4" />
@@ -91,6 +91,7 @@ export function ChartCard({
 	grid,
 	empty,
 	cornerEl,
+	titleSuffix,
 	legend,
 	className,
 }: {
@@ -100,6 +101,7 @@ export function ChartCard({
 	grid?: boolean
 	empty?: boolean
 	cornerEl?: JSX.Element | null
+	titleSuffix?: JSX.Element | null
 	legend?: boolean
 	className?: string
 }) {
@@ -108,18 +110,26 @@ export function ChartCard({
 	return (
 		<Card
 			className={cn(
-				"px-3 py-5 sm:py-6 sm:px-6 odd:last-of-type:col-span-full min-h-full",
+				"min-h-full border-border/70 bg-card px-3 py-4 shadow-none odd:last-of-type:col-span-full sm:px-5 sm:py-5",
 				{ "col-span-full": !grid },
 				className
 			)}
 			ref={ref}
 		>
-			<CardHeader className="gap-1.5 relative p-0 mb-3 sm:mb-4">
-				<CardTitle>{title}</CardTitle>
-				<CardDescription>{description}</CardDescription>
-				{cornerEl && <div className="grid sm:justify-end sm:absolute sm:top-0 sm:end-0 my-1 sm:my-0">{cornerEl}</div>}
+			<CardHeader className="relative mb-3 gap-1.5 p-0">
+				<div className="flex min-w-0 flex-wrap items-center gap-2">
+					<CardTitle className="min-w-0 truncate text-base tracking-[-0.01em] sm:text-[1.05rem]">{title}</CardTitle>
+					{titleSuffix}
+				</div>
+				{description && <p className="sr-only">{description}</p>}
+				{cornerEl && <div className="my-1 grid sm:absolute sm:end-0 sm:top-0 sm:my-0 sm:justify-end">{cornerEl}</div>}
 			</CardHeader>
-			<div className={cn("ps-0 -me-1 -ms-3.5 relative group", legend ? "h-54 md:h-56" : "h-48 md:h-52")}>
+			<div
+				className={cn(
+					"relative -me-1 -ms-3.5 ps-0 group rounded-md border border-border/70 bg-surface-soft pt-3",
+					legend ? "h-54 md:h-56" : "h-48 md:h-52"
+				)}
+			>
 				{
 					<Spinner
 						msg={empty ? t`Waiting for enough records to display` : undefined}

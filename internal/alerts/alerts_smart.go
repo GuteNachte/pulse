@@ -54,6 +54,7 @@ func (am *AlertManager) handleSmartDeviceAlert(e *core.RecordEvent) error {
 		if err := am.SendAlert(AlertMessageData{
 			UserID:   userID,
 			SystemID: systemID,
+			AlertID:  smartDeviceAlertID(systemID, deviceName),
 			Title:    title,
 			Message:  message,
 			Link:     am.hub.MakeLink("system", systemID),
@@ -64,6 +65,10 @@ func (am *AlertManager) handleSmartDeviceAlert(e *core.RecordEvent) error {
 	}
 
 	return e.Next()
+}
+
+func smartDeviceAlertID(systemID, deviceName string) string {
+	return "smart:" + notificationFingerprint(systemID+"\x00"+strings.TrimSpace(deviceName))
 }
 
 func shouldSendSmartDeviceAlert(oldState, newState string) bool {

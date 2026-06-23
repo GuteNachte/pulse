@@ -1,6 +1,13 @@
 # Default OS/ARCH values
 OS ?= $(shell go env GOOS)
 ARCH ?= $(shell go env GOARCH)
+# Current controlled Agent release for this fork.
+AGENT_VERSION ?= 1.0.5
+# Current Hub release for this fork.
+HUB_VERSION ?= 1.0.5
+# Build metadata injected into Hub binaries.
+BUILD_COMMIT ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)
 # Skip building the web UI if true
 SKIP_WEB ?= false
 # Controls NVML/glibc agent build tag behavior:
@@ -58,13 +65,8 @@ tidy:
 	go mod tidy
 
 build-web-ui:
-	@if command -v bun >/dev/null 2>&1; then \
-		bun install --cwd ./internal/site && \
-		bun run --cwd ./internal/site build; \
-	else \
-		npm install --prefix ./internal/site && \
-		npm run --prefix ./internal/site build; \
-	fi
+	npm ci --prefix ./internal/site
+	npm run --prefix ./internal/site build
 
 # Conditional .NET build - only for Windows
 build-dotnet-conditional:
@@ -72,10 +74,9 @@ build-dotnet-conditional:
 		echo "Building .NET executable for Windows..."; \
 		if command -v dotnet >/dev/null 2>&1; then \
 			rm -rf ./agent/lhm/bin; \
-			dotnet build -c Release ./agent/lhm/beszel_lhm.csproj; \
+			dotnet build -c Release ./agent/lhm/pulse_lhm.csproj; \
 		else \
-			echo "Error: dotnet not found. Install .NET SDK to build Windows agent."; \
-			exit 1; \
+			echo "Warning: dotnet not found. Building Windows agent without bundled LHM temperature helper."; \
 		fi; \
 	fi
 
@@ -87,30 +88,25 @@ fetch-smartctl-conditional:
 
 # Update build-agent to include conditional .NET build
 build-agent: tidy build-dotnet-conditional fetch-smartctl-conditional
-	GOOS=$(OS) GOARCH=$(ARCH) go build $(AGENT_GO_TAGS) -o ./build/beszel-agent_$(OS)_$(ARCH)$(EXE_EXT) -ldflags "-w -s" ./internal/cmd/agent
+	GOOS=$(OS) GOARCH=$(ARCH) go build $(AGENT_GO_TAGS) -o ./build/pulse-agent_$(OS)_$(ARCH)$(EXE_EXT) -ldflags "-w -s -X gutenacht.site/pulse.Version=$(AGENT_VERSION)" ./internal/cmd/agent
 
 build-hub: tidy $(if $(filter false,$(SKIP_WEB)),build-web-ui)
-	GOOS=$(OS) GOARCH=$(ARCH) go build -o ./build/beszel_$(OS)_$(ARCH)$(EXE_EXT) -ldflags "-w -s" ./internal/cmd/hub
+	GOOS=$(OS) GOARCH=$(ARCH) go build -o ./build/pulse-hub_$(OS)_$(ARCH)$(EXE_EXT) -ldflags "-w -s -X gutenacht.site/pulse.Version=$(HUB_VERSION) -X gutenacht.site/pulse.BuildCommit=$(BUILD_COMMIT) -X gutenacht.site/pulse.BuildTime=$(BUILD_TIME)" ./internal/cmd/hub
 
 build-hub-dev: tidy
 	mkdir -p ./internal/site/dist && touch ./internal/site/dist/index.html
-	GOOS=$(OS) GOARCH=$(ARCH) go build -tags development -o ./build/beszel-dev_$(OS)_$(ARCH)$(EXE_EXT) -ldflags "-w -s" ./internal/cmd/hub
+	GOOS=$(OS) GOARCH=$(ARCH) go build -tags development -o ./build/pulse-hub-dev_$(OS)_$(ARCH)$(EXE_EXT) -ldflags "-w -s -X gutenacht.site/pulse.Version=$(HUB_VERSION) -X gutenacht.site/pulse.BuildCommit=$(BUILD_COMMIT) -X gutenacht.site/pulse.BuildTime=$(BUILD_TIME)" ./internal/cmd/hub
 
 build: build-agent build-hub
 
 generate-locales:
-	@if [ ! -f ./internal/site/src/locales/en/en.ts ]; then \
+	@if [ ! -f ./internal/site/src/locales/zh-CN/zh-CN.ts ]; then \
 		echo "Generating locales..."; \
-		command -v bun >/dev/null 2>&1 && cd ./internal/site && bun install && bun run sync || cd ./internal/site && npm install && npm run sync; \
+		npm ci --prefix ./internal/site && npm run --prefix ./internal/site sync; \
 	fi
 
 dev-server: generate-locales
-	cd ./internal/site
-	@if command -v bun >/dev/null 2>&1; then \
-		cd ./internal/site && bun run dev --host 0.0.0.0; \
-	else \
-		cd ./internal/site && npm run dev --host 0.0.0.0; \
-	fi
+	npm run --prefix ./internal/site dev -- --host 0.0.0.0
 
 dev-hub: export ENV=dev
 dev-hub:
@@ -123,19 +119,19 @@ dev-hub:
 
 dev-agent:
 	@if command -v entr >/dev/null 2>&1; then \
-		find ./internal/cmd/agent/*.go ./agent/*.go | entr -r go run $(AGENT_GO_TAGS) github.com/henrygd/beszel/internal/cmd/agent; \
+		find ./internal/cmd/agent/*.go ./agent/*.go | entr -r go run $(AGENT_GO_TAGS) gutenacht.site/pulse/internal/cmd/agent; \
 	else \
-		go run $(AGENT_GO_TAGS) github.com/henrygd/beszel/internal/cmd/agent; \
+		go run $(AGENT_GO_TAGS) gutenacht.site/pulse/internal/cmd/agent; \
 	fi
 	
 build-dotnet:
 	@if command -v dotnet >/dev/null 2>&1; then \
 		rm -rf ./agent/lhm/bin; \
-		dotnet build -c Release ./agent/lhm/beszel_lhm.csproj; \
+		dotnet build -c Release ./agent/lhm/pulse_lhm.csproj; \
 	else \
 		echo "dotnet not found"; \
 	fi
 
 
-# KEY="..." make -j dev
 dev: dev-server dev-hub dev-agent
+

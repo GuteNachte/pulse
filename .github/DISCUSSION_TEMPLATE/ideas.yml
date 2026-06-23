@@ -2,18 +2,21 @@ body:
   - type: dropdown
     id: component
     attributes:
-      label: Component
-      description: Which part of Beszel is this about?
+      label: 模块
+      description: 这个想法主要涉及哪一部分？
       options:
         - Hub
         - Agent
         - Hub & Agent
+        - Web UI
+        - Deploy
       default: 0
     validations:
       required: true
+
   - type: textarea
     attributes:
-      label: Description
-      description: Please describe in detail what you want to share.
+      label: 描述
+      description: 请详细描述你的想法、使用场景和预期效果。
     validations:
       required: true

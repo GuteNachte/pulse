@@ -7,10 +7,11 @@ import type { CellContext, ColumnDef, HeaderContext } from "@tanstack/react-tabl
 import type { ClassValue } from "clsx"
 import {
 	ArrowUpDownIcon,
-	ChevronRightSquareIcon,
 	ClockArrowUp,
 	CopyIcon,
 	CpuIcon,
+	EyeIcon,
+	EyeOffIcon,
 	HardDriveIcon,
 	MemoryStickIcon,
 	MoreHorizontalIcon,
@@ -18,15 +19,17 @@ import {
 	PenBoxIcon,
 	PlayCircleIcon,
 	ServerIcon,
-	TerminalSquareIcon,
 	Trash2Icon,
 	WifiIcon,
 } from "lucide-react"
-import { memo, useMemo, useRef, useState } from "react"
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
+import { type ElementType, memo, useMemo, useRef, useState } from "react"
+import { SystemMetaTags } from "@/components/system-meta-tags"
 import { isReadOnlyUser, pb } from "@/lib/api"
-import { BatteryState, ConnectionType, connectionTypeLabels, MeterState, SystemStatus } from "@/lib/enums"
+import { BatteryState, MeterState, SystemStatus } from "@/lib/enums"
+import { getSystemMetricStateLabel, isFiniteMetric, type SystemMetricDisplayState } from "@/lib/system-metrics"
+import { getSystemIPAddressLabel } from "@/lib/system-network"
 import { $longestSystemNameLen, $userSettings } from "@/lib/stores"
+import { getPrimaryUseLabel, getSystemDisplayName, getSystemRoleDisplayLabel } from "@/lib/system-roles"
 import {
 	cn,
 	copyToClipboard,
@@ -39,7 +42,6 @@ import {
 import { batteryStateTranslations } from "@/lib/i18n"
 import type { SystemRecord } from "@/types"
 import { SystemDialog } from "../add-system"
-import AlertButton from "../alerts/alert-button"
 import { $router, Link } from "../router"
 import {
 	AlertDialog,
@@ -66,7 +68,6 @@ import {
 	GpuIcon,
 	HourglassIcon,
 	ThermometerIcon,
-	WebSocketIcon,
 	BatteryHighIcon,
 	BatteryLowIcon,
 	PlugChargingIcon,
@@ -80,15 +81,17 @@ const STATUS_COLORS = {
 	[SystemStatus.Pending]: "bg-yellow-500",
 } as const
 
+export type SystemsTableColumnDef = ColumnDef<SystemRecord> & {
+	Icon?: ElementType
+	hideSort?: boolean
+	name: () => string
+}
+
 function getMeterStateByThresholds(value: number, warn = 65, crit = 90): MeterState {
 	return value >= crit ? MeterState.Crit : value >= warn ? MeterState.Warn : MeterState.Good
 }
 
-/**
- * @param viewMode - "table" or "grid"
- * @returns - Column definitions for the systems table
- */
-export function SystemsTableColumns(viewMode: "table" | "grid"): ColumnDef<SystemRecord>[] {
+export function SystemsTableColumns(): SystemsTableColumnDef[] {
 	return [
 		{
 			// size: 200,
@@ -97,7 +100,7 @@ export function SystemsTableColumns(viewMode: "table" | "grid"): ColumnDef<Syste
 			accessorKey: "name",
 			id: "system",
 			name: () => t`System`,
-			sortingFn: (a, b) => a.original.name.localeCompare(b.original.name),
+			sortingFn: (a, b) => getSystemDisplayName(a.original).localeCompare(getSystemDisplayName(b.original)),
 			filterFn: (() => {
 				let filterInput = ""
 				let filterInputLower = ""
@@ -111,17 +114,18 @@ export function SystemsTableColumns(viewMode: "table" | "grid"): ColumnDef<Syste
 				// match filter value against name or translated status
 				return (row, _, newFilterInput) => {
 					const sys = row.original
-					if (sys.host.includes(newFilterInput) || sys.info.v?.includes(newFilterInput)) {
+					if (sys.info.v?.includes(newFilterInput)) {
 						return true
 					}
 					if (newFilterInput !== filterInput) {
 						filterInput = newFilterInput
 						filterInputLower = newFilterInput.toLowerCase()
 					}
-					let nameLower = nameCache.get(sys.name)
+					const displayName = getSystemDisplayName(sys)
+					let nameLower = nameCache.get(displayName)
 					if (nameLower === undefined) {
-						nameLower = sys.name.toLowerCase()
-						nameCache.set(sys.name, nameLower)
+						nameLower = displayName.toLowerCase()
+						nameCache.set(displayName, nameLower)
 					}
 					if (nameLower.includes(filterInputLower)) {
 						return true
@@ -134,7 +138,8 @@ export function SystemsTableColumns(viewMode: "table" | "grid"): ColumnDef<Syste
 			invertSorting: false,
 			Icon: ServerIcon,
 			cell: (info) => {
-				const { name, id } = info.row.original
+				const { id } = info.row.original
+				const name = getSystemDisplayName(info.row.original)
 				const longestName = useStore($longestSystemNameLen)
 				const linkUrl = getPagePath($router, "system", { id })
 
@@ -160,14 +165,53 @@ export function SystemsTableColumns(viewMode: "table" | "grid"): ColumnDef<Syste
 								{name}
 							</Link>
 						</span>
-						<Link href={linkUrl} className="inset-0 absolute size-full" aria-label={name}></Link>
+						<Link href={linkUrl} tabIndex={-1} aria-hidden="true" className="inset-0 absolute size-full" />
 					</>
 				)
 			},
 			header: sortableHeader,
 		},
 		{
-			accessorFn: ({ info }) => info.cpu || undefined,
+			accessorFn: ({ name, role, custom_role, primary_use, is_nas, description, info }) => {
+				return [
+					getSystemDisplayName({ name, info }),
+					getSystemRoleDisplayLabel(role, custom_role, name),
+					getPrimaryUseLabel(primary_use),
+					is_nas ? "NAS" : "",
+					getSystemIPAddressLabel({ info }),
+					description,
+				]
+					.filter(Boolean)
+					.join(" ")
+			},
+			id: "description",
+			name: () => "说明",
+			size: 120,
+			hideSort: true,
+			Icon: ServerIcon,
+			header: sortableHeader,
+			cell(info) {
+				const system = info.row.original
+				const ipLabel = getSystemIPAddressLabel(system)
+				return (
+					<div className="min-w-0">
+						<SystemMetaTags system={system} />
+						{ipLabel && (
+							<div className="mt-1 truncate text-xs text-muted-foreground" title={ipLabel}>
+								{ipLabel}
+							</div>
+						)}
+						{system.description && (
+							<div className="mt-1 truncate text-xs text-muted-foreground" title={system.description}>
+								{system.description}
+							</div>
+						)}
+					</div>
+				)
+			},
+		},
+		{
+			accessorFn: ({ info }) => info.cpu ?? undefined,
 			id: "cpu",
 			name: () => t`CPU`,
 			cell: TableCellWithMeter,
@@ -176,7 +220,7 @@ export function SystemsTableColumns(viewMode: "table" | "grid"): ColumnDef<Syste
 		},
 		{
 			// accessorKey: "info.mp",
-			accessorFn: ({ info }) => info.mp || undefined,
+			accessorFn: ({ info }) => info.mp ?? undefined,
 			id: "memory",
 			name: () => t`Memory`,
 			cell: TableCellWithMeter,
@@ -184,16 +228,15 @@ export function SystemsTableColumns(viewMode: "table" | "grid"): ColumnDef<Syste
 			header: sortableHeader,
 		},
 		{
-			accessorFn: ({ info }) => info.dp || undefined,
+			accessorFn: ({ info }) => info.dp ?? undefined,
 			id: "disk",
 			name: () => t`Disk`,
-			cell: (info: CellContext<SystemRecord, unknown>) =>
-				info.row.original.info.efs ? DiskCellWithMultiple(info) : TableCellWithMeter(info),
+			cell: TableCellWithMeter,
 			Icon: HardDriveIcon,
 			header: sortableHeader,
 		},
 		{
-			accessorFn: ({ info }) => info.g || undefined,
+			accessorFn: ({ info }) => info.g,
 			id: "gpu",
 			name: () => "GPU",
 			cell: TableCellWithMeter,
@@ -211,7 +254,13 @@ export function SystemsTableColumns(viewMode: "table" | "grid"): ColumnDef<Syste
 				const { info: sysInfo, status } = info.row.original
 				const { major, minor } = parseSemVer(sysInfo.v)
 				const { colorWarn = 65, colorCrit = 90 } = useStore($userSettings, { keys: ["colorWarn", "colorCrit"] })
+				if (status !== SystemStatus.Up) {
+					return <MutedMetricValue state={systemStatusToMetricState(status)} />
+				}
 				const loadAverages = sysInfo.la || []
+				if (loadAverages.length === 0) {
+					return <MutedMetricValue state="missing" />
+				}
 
 				const max = Math.max(...loadAverages)
 				if (max === 0 && (status === SystemStatus.Paused || (major < 1 && minor < 13))) {
@@ -222,24 +271,26 @@ export function SystemsTableColumns(viewMode: "table" | "grid"): ColumnDef<Syste
 				const threshold = getMeterStateByThresholds(normalizedLoad * 100, colorWarn, colorCrit)
 
 				return (
-					<div className="flex items-center gap-[.35em] w-full tabular-nums tracking-tight">
-						<span
-							className={cn("inline-block size-2 rounded-full me-0.5", {
-								[STATUS_COLORS[SystemStatus.Up]]: threshold === MeterState.Good,
-								[STATUS_COLORS[SystemStatus.Pending]]: threshold === MeterState.Warn,
-								[STATUS_COLORS[SystemStatus.Down]]: threshold === MeterState.Crit,
-								[STATUS_COLORS[SystemStatus.Paused]]: status !== SystemStatus.Up,
-							})}
-						/>
-						{loadAverages?.map((la, i) => (
-							<span key={i}>{decimalString(la, la >= 10 ? 1 : 2)}</span>
-						))}
-					</div>
+					<LoadAverageSparkline
+						loadAverages={loadAverages}
+						threads={sysInfo.t}
+						threshold={threshold}
+						colorWarn={colorWarn}
+						colorCrit={colorCrit}
+					/>
 				)
 			},
 		},
 		{
-			accessorFn: ({ info, status }) => (status !== SystemStatus.Up ? undefined : info.bb),
+			accessorFn: ({ info, status }) => {
+				if (status !== SystemStatus.Up) {
+					return undefined
+				}
+				if (info.bbd) {
+					return info.bbd[0] + info.bbd[1]
+				}
+				return info.bb
+			},
 			id: "net",
 			name: () => t`Net`,
 			size: 0,
@@ -247,12 +298,27 @@ export function SystemsTableColumns(viewMode: "table" | "grid"): ColumnDef<Syste
 			header: sortableHeader,
 			sortUndefined: "last",
 			cell(info) {
-				const val = info.getValue() as number | undefined
-				if (val === undefined) {
-					return null
-				}
+				const status = info.row.original.status
 				const userSettings = useStore($userSettings, { keys: ["unitNet"] })
-				const { value, unit } = formatBytes(val, true, userSettings.unitNet, false)
+				if (status !== SystemStatus.Up) {
+					return <MutedMetricValue state={systemStatusToMetricState(status)} />
+				}
+				const direction = info.row.original.info.bbd
+				if (direction) {
+					const sent = formatNetworkRate(direction[0], userSettings.unitNet)
+					const received = formatNetworkRate(direction[1], userSettings.unitNet)
+					return (
+						<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 tabular-nums text-xs leading-5 tracking-tight">
+							<span className="whitespace-nowrap text-muted-foreground">上行 {sent}</span>
+							<span className="whitespace-nowrap text-muted-foreground">下行 {received}</span>
+						</span>
+					)
+				}
+				const total = info.row.original.info.bb
+				if (total === undefined) {
+					return <MutedMetricValue state="missing" />
+				}
+				const { value, unit } = formatBytes(total, true, userSettings.unitNet, false)
 				return (
 					<span className="tabular-nums whitespace-nowrap">
 						{decimalString(value, value >= 100 ? 1 : 2)} {unit}
@@ -276,7 +342,7 @@ export function SystemsTableColumns(viewMode: "table" | "grid"): ColumnDef<Syste
 				}
 				const { value, unit } = formatTemperature(val, userSettings.unitTemp)
 				return (
-					<span className={cn("tabular-nums whitespace-nowrap", viewMode === "table" && "ps-0.5")}>
+					<span className="tabular-nums whitespace-nowrap">
 						{decimalString(value, value >= 100 ? 1 : 2)} {unit}
 					</span>
 				)
@@ -329,45 +395,6 @@ export function SystemsTableColumns(viewMode: "table" | "grid"): ColumnDef<Syste
 			},
 		},
 		{
-			accessorFn: ({ info }) => info.sv?.[0],
-			id: "services",
-			name: () => t`Services`,
-			size: 50,
-			Icon: TerminalSquareIcon,
-			header: sortableHeader,
-			hideSort: true,
-			sortingFn: (a, b) => {
-				// sort priorities: 1) failed services, 2) total services
-				const [totalCountA, numFailedA] = a.original.info.sv ?? [0, 0]
-				const [totalCountB, numFailedB] = b.original.info.sv ?? [0, 0]
-				if (numFailedA !== numFailedB) {
-					return numFailedA - numFailedB
-				}
-				return totalCountA - totalCountB
-			},
-			cell(info) {
-				const sys = info.row.original
-				const [totalCount, numFailed] = sys.info.sv ?? [0, 0]
-				if (sys.status !== SystemStatus.Up || totalCount === 0) {
-					return null
-				}
-				return (
-					<span className="tabular-nums whitespace-nowrap flex gap-1.5 items-center">
-						<span
-							className={cn("block size-2 rounded-full", {
-								[STATUS_COLORS[SystemStatus.Down]]: numFailed > 0,
-								[STATUS_COLORS[SystemStatus.Up]]: numFailed === 0,
-							})}
-						/>
-						{totalCount}{" "}
-						<span className="text-muted-foreground text-sm -ms-0.5">
-							({t`Failed`.toLowerCase()}: {numFailed})
-						</span>
-					</span>
-				)
-			},
-		},
-		{
 			accessorFn: ({ info }) => info.u || undefined,
 			id: "uptime",
 			name: () => t`Uptime`,
@@ -398,28 +425,20 @@ export function SystemsTableColumns(viewMode: "table" | "grid"): ColumnDef<Syste
 				}
 				const system = info.row.original
 				const color = {
-					"text-green-500": version === globalThis.BESZEL.HUB_VERSION,
-					"text-yellow-500": version !== globalThis.BESZEL.HUB_VERSION,
+					"text-green-500": version === globalThis.PULSE.HUB_VERSION,
+					"text-yellow-500": version !== globalThis.PULSE.HUB_VERSION,
 					"text-red-500": system.status !== SystemStatus.Up,
 				}
 				return (
 					<Link
 						href={getPagePath($router, "system", { id: system.id })}
-						className={cn(
-							"flex gap-1.5 items-center md:pe-5 tabular-nums relative z-10",
-							viewMode === "table" && "ps-0.5"
-						)}
+						className="flex gap-1.5 items-center md:pe-5 tabular-nums relative z-10"
 						tabIndex={-1}
-						title={connectionTypeLabels[system.info.ct as ConnectionType]}
+						aria-hidden="true"
+						title={getAgentStatusTitle(system, version)}
 						role="none"
 					>
-						{system.info.ct === ConnectionType.WebSocket && (
-							<WebSocketIcon className={cn("size-3 pointer-events-none", color)} />
-						)}
-						{system.info.ct === ConnectionType.SSH && (
-							<ChevronRightSquareIcon className={cn("size-3 pointer-events-none", color)} />
-						)}
-						{!system.info.ct && <IndicatorDot system={system} className={cn(color, "bg-current mx-0.5")} />}
+						<WifiIcon className={cn("size-3 pointer-events-none", color)} />
 						<span className="truncate max-w-14">{info.getValue() as string}</span>
 					</Link>
 				)
@@ -427,149 +446,177 @@ export function SystemsTableColumns(viewMode: "table" | "grid"): ColumnDef<Syste
 		},
 		{
 			id: "actions",
-			// @ts-expect-error
 			name: () => t({ message: "Actions", comment: "Table column" }),
 			size: 50,
 			cell: ({ row }) => (
 				<div className="relative z-10 flex justify-end items-center gap-1 -ms-3">
-					<AlertButton system={row.original} />
 					<ActionsButton system={row.original} />
 				</div>
 			),
 		},
-	] as ColumnDef<SystemRecord>[]
+	] as SystemsTableColumnDef[]
+}
+
+function formatNetworkRate(value: number, unitNet: typeof $userSettings.value.unitNet) {
+	const { value: convertedValue, unit } = formatBytes(value, true, unitNet, false)
+	return `${decimalString(convertedValue, convertedValue >= 100 ? 1 : 2)} ${unit}`
+}
+
+function LoadAverageSparkline({
+	loadAverages,
+	threads,
+	threshold,
+	colorWarn,
+	colorCrit,
+}: {
+	loadAverages: number[]
+	threads?: number
+	threshold: MeterState
+	colorWarn: number
+	colorCrit: number
+}) {
+	const labels = ["1m", "5m", "15m"]
+	const maxThreads = Math.max(threads ?? 1, 1)
+	const title = loadAverages
+		.map((value, index) => `${labels[index] ?? `${index + 1}`}: ${decimalString(value, value >= 10 ? 1 : 2)}`)
+		.join(" / ")
+	return (
+		<div className="flex min-w-0 items-center gap-1.5" title={`系统负载 ${title}`}>
+			<span
+				className={cn("size-1.5 shrink-0 rounded-full", {
+					[STATUS_COLORS[SystemStatus.Up]]: threshold === MeterState.Good,
+					[STATUS_COLORS[SystemStatus.Pending]]: threshold === MeterState.Warn,
+					[STATUS_COLORS[SystemStatus.Down]]: threshold === MeterState.Crit,
+				})}
+			/>
+			<div className="grid w-20 shrink-0 grid-cols-3 gap-1">
+				{loadAverages.slice(0, 3).map((value, index) => (
+					<LoadAverageSegment
+						key={labels[index] ?? index}
+						label={labels[index] ?? `${index + 1}`}
+						value={value}
+						threads={maxThreads}
+						colorWarn={colorWarn}
+						colorCrit={colorCrit}
+					/>
+				))}
+			</div>
+			<span className="shrink-0 text-[10px] leading-none text-muted-foreground tabular-nums">
+				{decimalString(loadAverages[0] ?? 0, (loadAverages[0] ?? 0) >= 10 ? 1 : 2)}
+			</span>
+		</div>
+	)
+}
+
+function LoadAverageSegment({
+	label,
+	value,
+	threads,
+	colorWarn,
+	colorCrit,
+}: {
+	label: string
+	value: number
+	threads: number
+	colorWarn: number
+	colorCrit: number
+}) {
+	const percent = Math.min(Math.max((value / threads) * 100, 0), 100)
+	const state = getMeterStateByThresholds(percent, colorWarn, colorCrit)
+	return (
+		<span
+			className="flex h-4 items-end rounded-sm bg-surface-soft px-0.5 pb-0.5 ring-1 ring-border/60"
+			title={`${label}: ${decimalString(value, value >= 10 ? 1 : 2)} / ${decimalString(percent, percent >= 10 ? 0 : 1)}%`}
+		>
+			<span
+				className={cn("block w-full rounded-[2px]", {
+					"bg-emerald-500": state === MeterState.Good,
+					"bg-amber-500": state === MeterState.Warn,
+					"bg-red-500": state === MeterState.Crit,
+				})}
+				style={{ height: `${Math.max(percent, 8)}%` }}
+			/>
+		</span>
+	)
 }
 
 function sortableHeader(context: HeaderContext<SystemRecord, unknown>) {
 	const { column } = context
-	// @ts-expect-error
-	const { Icon, hideSort, name }: { Icon: React.ElementType; name: () => string; hideSort: boolean } = column.columnDef
+	const { Icon, hideSort, name } = column.columnDef as SystemsTableColumnDef
 	const isSorted = column.getIsSorted()
 	return (
 		<Button
 			variant="ghost"
-			className={cn("h-9 px-3 flex duration-50", isSorted && "bg-accent/70 light:bg-accent text-accent-foreground/90")}
+			className={cn(
+				"min-h-10 px-2.5 flex items-center gap-2 rounded-md text-xs font-medium text-muted-foreground transition-colors duration-150 hover:bg-surface-soft hover:text-foreground",
+				isSorted && "bg-card text-foreground shadow-none ring-1 ring-border/70"
+			)}
 			onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
 		>
-			{Icon && <Icon className="me-2 size-4" />}
+			{Icon && <Icon className="size-4" />}
 			{name()}
-			{hideSort || <ArrowUpDownIcon className="ms-2 size-4" />}
+			{hideSort || <ArrowUpDownIcon className="size-3.5" />}
 		</Button>
 	)
 }
 
 function TableCellWithMeter(info: CellContext<SystemRecord, unknown>) {
 	const { colorWarn = 65, colorCrit = 90 } = useStore($userSettings, { keys: ["colorWarn", "colorCrit"] })
-	const val = Number(info.getValue()) || 0
+	const status = info.row.original.status
+	const rawValue = info.getValue()
+	if (status !== SystemStatus.Up) {
+		return <MutedMetricValue state={systemStatusToMetricState(status)} />
+	}
+	if (!isFiniteMetric(rawValue)) {
+		return <MutedMetricValue state="missing" />
+	}
+
+	const val = rawValue
 	const threshold = getMeterStateByThresholds(val, colorWarn, colorCrit)
+	const meterWidth = Math.max(0, Math.min(100, val))
 	const meterClass = cn(
-		"h-full",
+		"h-full rounded-[2px]",
 		(info.row.original.status !== SystemStatus.Up && STATUS_COLORS.paused) ||
 			(threshold === MeterState.Good && STATUS_COLORS.up) ||
 			(threshold === MeterState.Warn && STATUS_COLORS.pending) ||
 			STATUS_COLORS.down
 	)
 	return (
-		<div className="flex gap-2 items-center tabular-nums tracking-tight w-full">
-			<span className="min-w-8 shrink-0">{decimalString(val, val >= 10 ? 1 : 2)}%</span>
-			<span className="flex-1 min-w-8 grid bg-muted h-[1em] rounded-sm overflow-hidden">
-				<span className={meterClass} style={{ width: `${val}%` }}></span>
+		<div className="flex w-full min-w-0 items-center gap-2 tabular-nums tracking-tight">
+			<span className="w-10 shrink-0 text-right">{decimalString(val, val >= 10 ? 1 : 2)}%</span>
+			<span className="grid h-2.5 min-w-0 flex-1 overflow-hidden rounded-[3px] border border-border/70 bg-card shadow-none">
+				<span className={meterClass} style={{ width: `${meterWidth}%` }}></span>
 			</span>
 		</div>
 	)
 }
 
-function DiskCellWithMultiple(info: CellContext<SystemRecord, unknown>) {
-	const { colorWarn = 65, colorCrit = 90 } = useStore($userSettings, { keys: ["colorWarn", "colorCrit"] })
-	const { info: sysInfo, status, id } = info.row.original
-	const extraFs = Object.entries(sysInfo.efs ?? {})
-	const rootDiskPct = sysInfo.dp
+function MutedMetricValue({ state }: { state: SystemMetricDisplayState }) {
+	return <span className="text-xs text-muted-foreground">{getSystemMetricStateLabel(state)}</span>
+}
 
-	// sort extra disks by percentage descending
-	extraFs.sort((a, b) => b[1] - a[1])
-
-	function getIndicatorColor(pct: number) {
-		const threshold = getMeterStateByThresholds(pct, colorWarn, colorCrit)
-		return (
-			(status !== SystemStatus.Up && STATUS_COLORS.paused) ||
-			(threshold === MeterState.Good && STATUS_COLORS.up) ||
-			(threshold === MeterState.Warn && STATUS_COLORS.pending) ||
-			STATUS_COLORS.down
-		)
+function systemStatusToMetricState(status: SystemRecord["status"]): SystemMetricDisplayState {
+	if (status === SystemStatus.Paused) {
+		return "paused"
 	}
-
-	function getMeterClass(pct: number) {
-		return cn("h-full", getIndicatorColor(pct))
+	if (status === SystemStatus.Pending) {
+		return "pending"
 	}
+	return "offline"
+}
 
-	// Extra disk indicators (max 3 dots - one per state if any disk exists in range)
-	const stateColors = [STATUS_COLORS.up, STATUS_COLORS.pending, STATUS_COLORS.down]
-	const extraDiskIndicators =
-		status !== SystemStatus.Up
-			? []
-			: [...new Set(extraFs.map(([, pct]) => getMeterStateByThresholds(pct, colorWarn, colorCrit)))]
-					.sort()
-					.map((state) => stateColors[state])
-
-	return (
-		<Tooltip>
-			<TooltipTrigger asChild>
-				<Link
-					href={getPagePath($router, "system", { id })}
-					tabIndex={-1}
-					className="flex flex-col gap-0.5 w-full relative z-10"
-				>
-					<div className="flex gap-2 items-center tabular-nums tracking-tight">
-						<span className="min-w-8 shrink-0">{decimalString(rootDiskPct, rootDiskPct >= 10 ? 1 : 2)}%</span>
-						<span className="flex-1 min-w-8 flex items-center gap-0.5 px-1 justify-end bg-muted h-[1em] rounded-sm overflow-hidden relative">
-							{/* Root disk */}
-							<span
-								className={cn("absolute inset-0", getMeterClass(rootDiskPct))}
-								style={{ width: `${rootDiskPct}%` }}
-							></span>
-							{/* Extra disk indicators */}
-							{extraDiskIndicators.map((color) => (
-								<span
-									key={color}
-									className={cn("size-1.5 rounded-full shrink-0 outline-[0.5px] outline-muted", color)}
-								/>
-							))}
-						</span>
-					</div>
-				</Link>
-			</TooltipTrigger>
-			<TooltipContent side="right" className="max-w-xs pb-2">
-				<div className="grid gap-1">
-					<div className="grid gap-0.5">
-						<div className="text-[0.65rem] text-muted-foreground uppercase tracking-wide tabular-nums">
-							<Trans context="Root disk label">Root</Trans>
-						</div>
-						<div className="flex gap-2 items-center tabular-nums text-xs">
-							<span className="min-w-7">{decimalString(rootDiskPct, rootDiskPct >= 10 ? 1 : 2)}%</span>
-							<span className="flex-1 min-w-12 grid bg-muted h-2.5 rounded-sm overflow-hidden">
-								<span className={getMeterClass(rootDiskPct)} style={{ width: `${rootDiskPct}%` }}></span>
-							</span>
-						</div>
-					</div>
-					{extraFs.map(([name, pct]) => {
-						return (
-							<div key={name} className="grid gap-0.5">
-								<div className="text-[0.65rem] max-w-40 text-muted-foreground uppercase tracking-wide truncate">
-									{name}
-								</div>
-								<div className="flex gap-2 items-center tabular-nums text-xs">
-									<span className="min-w-7">{decimalString(pct, pct >= 10 ? 1 : 2)}%</span>
-									<span className="flex-1 min-w-12 grid bg-muted h-2.5 rounded-sm overflow-hidden">
-										<span className={getMeterClass(pct)} style={{ width: `${pct}%` }}></span>
-									</span>
-								</div>
-							</div>
-						)
-					})}
-				</div>
-			</TooltipContent>
-		</Tooltip>
-	)
+function getAgentStatusTitle(system: SystemRecord, version: string) {
+	const base = version ? `Agent 版本 ${version}` : "Agent 版本未知"
+	if (system.status === SystemStatus.Up) {
+		return `${base}，在线`
+	}
+	if (system.status === SystemStatus.Paused) {
+		return `${base}，已暂停监控`
+	}
+	if (system.status === SystemStatus.Pending) {
+		return `${base}，等待 Agent 上线`
+	}
+	return `${base}，离线`
 }
 
 export function IndicatorDot({ system, className }: { system: SystemRecord; className?: ClassValue }) {
@@ -585,9 +632,22 @@ export function IndicatorDot({ system, className }: { system: SystemRecord; clas
 export const ActionsButton = memo(({ system }: { system: SystemRecord }) => {
 	const [deleteOpen, setDeleteOpen] = useState(false)
 	const [editOpen, setEditOpen] = useState(false)
+	const [pauseOpen, setPauseOpen] = useState(false)
+	const [hideFromHomeOpen, setHideFromHomeOpen] = useState(false)
 	const editOpened = useRef(false)
 	const { t } = useLingui()
-	const { id, status, host, name } = system
+	const { id, status } = system
+	const name = getSystemDisplayName(system)
+	const uninstall = getAgentUninstallInstructions(system)
+	const canDelete = !isReadOnlyUser() && !system.is_local
+	const nextStatus = status === SystemStatus.Paused ? SystemStatus.Pending : SystemStatus.Paused
+	const nextHideFromHome = !system.hide_from_home
+	const updateStatus = () => {
+		pb.collection("systems").update(id, { status: nextStatus })
+	}
+	const updateHomeVisibility = () => {
+		pb.collection("systems").update(id, { hide_from_home: nextHideFromHome })
+	}
 
 	return useMemo(() => {
 		return (
@@ -616,9 +676,11 @@ export const ActionsButton = memo(({ system }: { system: SystemRecord }) => {
 						<DropdownMenuItem
 							className={cn(isReadOnlyUser() && "hidden")}
 							onClick={() => {
-								pb.collection("systems").update(id, {
-									status: status === SystemStatus.Paused ? SystemStatus.Pending : SystemStatus.Paused,
-								})
+								if (system.is_local && nextStatus === SystemStatus.Paused) {
+									setPauseOpen(true)
+									return
+								}
+								updateStatus()
 							}}
 						>
 							{status === SystemStatus.Paused ? (
@@ -637,33 +699,124 @@ export const ActionsButton = memo(({ system }: { system: SystemRecord }) => {
 							<CopyIcon className="me-2.5 size-4" />
 							<Trans>Copy name</Trans>
 						</DropdownMenuItem>
-						<DropdownMenuItem onClick={() => copyToClipboard(host)}>
-							<CopyIcon className="me-2.5 size-4" />
-							<Trans>Copy host</Trans>
+						<DropdownMenuItem
+							className={cn(isReadOnlyUser() && "hidden")}
+							onClick={() => {
+								if (system.is_local && nextHideFromHome) {
+									setHideFromHomeOpen(true)
+									return
+								}
+								updateHomeVisibility()
+							}}
+						>
+							{system.hide_from_home ? (
+								<>
+									<EyeIcon className="me-2.5 size-4" />
+									首页显示
+								</>
+							) : (
+								<>
+									<EyeOffIcon className="me-2.5 size-4" />
+									首页隐藏
+								</>
+							)}
 						</DropdownMenuItem>
-						<DropdownMenuSeparator className={cn(isReadOnlyUser() && "hidden")} />
-						<DropdownMenuItem className={cn(isReadOnlyUser() && "hidden")} onSelect={() => setDeleteOpen(true)}>
-							<Trash2Icon className="me-2.5 size-4" />
-							<Trans>Delete</Trans>
-						</DropdownMenuItem>
+						{canDelete && (
+							<>
+								<DropdownMenuSeparator />
+								<DropdownMenuItem onSelect={() => setDeleteOpen(true)}>
+									<Trash2Icon className="me-2.5 size-4" />
+									<Trans>Delete</Trans>
+								</DropdownMenuItem>
+							</>
+						)}
 					</DropdownMenuContent>
 				</DropdownMenu>
-				{/* edit dialog */}
 				<Dialog open={editOpen} onOpenChange={setEditOpen}>
 					{editOpened.current && <SystemDialog system={system} setOpen={setEditOpen} />}
 				</Dialog>
-				{/* deletion dialog */}
+				<AlertDialog open={pauseOpen} onOpenChange={setPauseOpen}>
+					<AlertDialogContent className="max-w-lg">
+						<AlertDialogHeader>
+							<AlertDialogTitle>确认暂停 Hub 机器监控？</AlertDialogTitle>
+							<AlertDialogDescription>
+								{name} 带有 Hub 标签。暂停后 Hub 不会继续刷新这台机器的监控状态，相关离线 /
+								恢复判断也会停止。仅在明确需要隐藏或维护 Hub 所在机器时执行。
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>取消</AlertDialogCancel>
+							<AlertDialogAction
+								onClick={() => {
+									updateStatus()
+									setPauseOpen(false)
+								}}
+							>
+								确认暂停
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
+				<AlertDialog open={hideFromHomeOpen} onOpenChange={setHideFromHomeOpen}>
+					<AlertDialogContent className="max-w-lg">
+						<AlertDialogHeader>
+							<AlertDialogTitle>确认从首页隐藏 Hub 机器？</AlertDialogTitle>
+							<AlertDialogDescription>
+								{name} 带有 Hub
+								标签。隐藏后它不会出现在首页概览和最近机器列表，但客户端列表、详情页、告警和采集不会停止。
+								如果只是临时维护且不想继续采集，请使用暂停监控。
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>取消</AlertDialogCancel>
+							<AlertDialogAction
+								onClick={() => {
+									updateHomeVisibility()
+									setHideFromHomeOpen(false)
+								}}
+							>
+								确认隐藏
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
 				<AlertDialog open={deleteOpen} onOpenChange={(open) => setDeleteOpen(open)}>
-					<AlertDialogContent>
+					<AlertDialogContent className="max-w-2xl">
 						<AlertDialogHeader>
 							<AlertDialogTitle>
 								<Trans>Are you sure you want to delete {name}?</Trans>
 							</AlertDialogTitle>
-							<AlertDialogDescription>
-								<Trans>
-									This action cannot be undone. This will permanently delete all current records for {name} from the
-									database.
-								</Trans>
+							<AlertDialogDescription asChild>
+								<div className="grid gap-3 text-sm">
+									<p>
+										删除 Hub 记录不会自动卸载目标机器上的
+										Agent。请先在目标机器执行下面的卸载命令，确认服务或容器已清理后，再删除 Hub 端记录。
+									</p>
+									<div className="rounded-md border border-border/70 bg-surface-soft p-3">
+										<div className="mb-2 flex items-center justify-between gap-2">
+											<div>
+												<div className="font-medium text-foreground">{uninstall.title}</div>
+												<div className="text-xs text-muted-foreground">{uninstall.description}</div>
+											</div>
+											<Button
+												type="button"
+												variant="outline"
+												size="sm"
+												className="min-h-10 gap-1.5 transition-transform active:scale-[0.96]"
+												onClick={() => copyToClipboard(uninstall.command)}
+											>
+												<CopyIcon className="size-3.5" />
+												复制
+											</Button>
+										</div>
+										<pre className="max-h-44 overflow-auto whitespace-pre-wrap rounded-md border border-border/70 bg-card p-3 text-xs text-foreground">
+											{uninstall.command}
+										</pre>
+									</div>
+									<p className="text-xs text-muted-foreground">
+										卸载完成后，继续删除 {name} 的 Hub 端历史记录、Token 和配置。
+									</p>
+								</div>
 							</AlertDialogDescription>
 						</AlertDialogHeader>
 						<AlertDialogFooter>
@@ -672,7 +825,13 @@ export const ActionsButton = memo(({ system }: { system: SystemRecord }) => {
 							</AlertDialogCancel>
 							<AlertDialogAction
 								className={cn(buttonVariants({ variant: "destructive" }))}
-								onClick={() => pb.collection("systems").delete(id)}
+								onClick={() => {
+									if (!canDelete) {
+										setDeleteOpen(false)
+										return
+									}
+									pb.send(`/api/pulse/systems/${id}`, { method: "DELETE" })
+								}}
 							>
 								<Trans>Continue</Trans>
 							</AlertDialogAction>
@@ -681,5 +840,97 @@ export const ActionsButton = memo(({ system }: { system: SystemRecord }) => {
 				</AlertDialog>
 			</>
 		)
-	}, [id, status, host, name, system, t, deleteOpen, editOpen])
+	}, [
+		id,
+		status,
+		name,
+		system,
+		t,
+		deleteOpen,
+		editOpen,
+		pauseOpen,
+		hideFromHomeOpen,
+		canDelete,
+		nextStatus,
+		nextHideFromHome,
+	])
 })
+
+function getAgentUninstallInstructions(system: SystemRecord) {
+	const cap = system.info?.cap
+	const profile = cap?.agent_profile?.toLowerCase()
+	const runMode = cap?.run_mode?.toLowerCase()
+	const installMethod = cap?.install_method?.toLowerCase()
+	const platform = cap?.platform?.toLowerCase()
+	const os = system.info?.os
+	const isWindows =
+		profile === "windows-host" ||
+		runMode === "windows_service" ||
+		installMethod === "host" ||
+		platform === "windows" ||
+		os === 1
+	const isDocker = profile === "linux-container" || runMode === "docker" || installMethod === "docker"
+
+	if (isWindows) {
+		return {
+			title: "Windows 主机版 Agent",
+			description: "在目标 Windows 机器上以管理员 PowerShell 执行。",
+			command: `$ErrorActionPreference = "Continue"
+$Nssm = (Get-Command nssm -ErrorAction SilentlyContinue).Source
+if ($Nssm) {
+  & $Nssm stop pulse-agent 2>$null
+  & $Nssm remove pulse-agent confirm 2>$null
+} else {
+  Stop-Service -Name pulse-agent -Force -ErrorAction SilentlyContinue
+  sc.exe delete pulse-agent | Out-Null
+}
+Stop-Process -Name pulse-agent -Force -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force -LiteralPath (Join-Path $env:ProgramData "pulse-agent") -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force -LiteralPath (Join-Path $env:WINDIR "System32\\config\\systemprofile\\AppData\\Roaming\\pulse-agent") -ErrorAction SilentlyContinue
+if (Get-Command winget -ErrorAction SilentlyContinue) { winget uninstall --exact --id NSSM.NSSM --accept-source-agreements --silent 2>$null | Out-Null }
+if (Get-Command scoop -ErrorAction SilentlyContinue) { scoop uninstall nssm 2>$null | Out-Null }
+[pscustomobject]@{
+  ServiceExists = [bool](Get-Service -Name pulse-agent -ErrorAction SilentlyContinue)
+  AgentProcessCount = @((Get-Process -Name pulse-agent -ErrorAction SilentlyContinue)).Count
+  ProgramDataExists = Test-Path (Join-Path $env:ProgramData "pulse-agent")
+  NssmExists = [bool](Get-Command nssm -ErrorAction SilentlyContinue)
+} | Format-List`,
+		}
+	}
+
+	if (isDocker) {
+		return {
+			title: "Linux / NAS Docker Agent",
+			description: "在目标 Linux、飞牛或 NAS 机器上执行；如果用 Compose 部署，优先在 compose.yml 所在目录执行。",
+			command: `# Docker 直接删除
+docker rm -f pulse-agent
+rm -rf ./pulse_agent_data
+
+# 如果是 Docker Compose 部署，进入 compose.yml 所在目录后执行
+docker compose down
+rm -rf ./pulse_agent_data
+
+docker ps -a --filter name=pulse-agent`,
+		}
+	}
+
+	return {
+		title: "Agent 卸载方式",
+		description: "当前记录没有上报安装方式，请按实际安装类型选择对应命令。",
+		command: `# Windows 主机版，管理员 PowerShell
+$Nssm = (Get-Command nssm -ErrorAction SilentlyContinue).Source
+if ($Nssm) {
+  & $Nssm stop pulse-agent 2>$null
+  & $Nssm remove pulse-agent confirm 2>$null
+}
+Stop-Process -Name pulse-agent -Force -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force -LiteralPath (Join-Path $env:ProgramData "pulse-agent") -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force -LiteralPath (Join-Path $env:WINDIR "System32\\config\\systemprofile\\AppData\\Roaming\\pulse-agent") -ErrorAction SilentlyContinue
+if (Get-Command winget -ErrorAction SilentlyContinue) { winget uninstall --exact --id NSSM.NSSM --accept-source-agreements --silent 2>$null | Out-Null }
+if (Get-Command scoop -ErrorAction SilentlyContinue) { scoop uninstall nssm 2>$null | Out-Null }
+
+# Linux / NAS Docker 版
+docker rm -f pulse-agent
+rm -rf ./pulse_agent_data`,
+	}
+}

@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/henrygd/beszel/internal/common"
-	"github.com/henrygd/beszel/internal/entities/smart"
+	"gutenacht.site/pulse/internal/common"
+	"gutenacht.site/pulse/internal/entities/smart"
 
 	"log/slog"
 )
@@ -19,7 +20,7 @@ type HandlerContext struct {
 	Request     *common.HubRequest[cbor.RawMessage]
 	RequestID   *uint32
 	HubVerified bool
-	// SendResponse abstracts how a handler sends responses (WS or SSH)
+	// SendResponse sends handler responses over the active WebSocket channel.
 	SendResponse func(data any, requestID *uint32) error
 }
 
@@ -29,7 +30,7 @@ type RequestHandler interface {
 	Handle(hctx *HandlerContext) error
 }
 
-// Responder sends handler responses back to the hub (over WS or SSH)
+// Responder sends handler responses back to the hub.
 type Responder interface {
 	SendResponse(data any, requestID *uint32) error
 }
@@ -50,7 +51,9 @@ func NewHandlerRegistry() *HandlerRegistry {
 	registry.Register(common.GetContainerLogs, &GetContainerLogsHandler{})
 	registry.Register(common.GetContainerInfo, &GetContainerInfoHandler{})
 	registry.Register(common.GetSmartData, &GetSmartDataHandler{})
-	registry.Register(common.GetSystemdInfo, &GetSystemdInfoHandler{})
+	registry.Register(common.RunOperation, &RunOperationHandler{})
+	registry.Register(common.SearchServices, &SearchServicesHandler{})
+	registry.Register(common.SearchSoftware, &SearchSoftwareHandler{})
 
 	return registry
 }
@@ -171,35 +174,122 @@ func (h *GetSmartDataHandler) Handle(hctx *HandlerContext) error {
 	}
 	if err := hctx.Agent.smartManager.Refresh(false); err != nil {
 		slog.Debug("smart refresh failed", "err", err)
+		return err
 	}
 	data := hctx.Agent.smartManager.GetCurrentData()
 	return hctx.SendResponse(data, hctx.RequestID)
 }
 
-////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////
+// RunOperationHandler handles constrained operation requests from the hub.
+type RunOperationHandler struct{}
 
-// GetSystemdInfoHandler handles detailed systemd service info requests
-type GetSystemdInfoHandler struct{}
+type SearchServicesHandler struct{}
 
-func (h *GetSystemdInfoHandler) Handle(hctx *HandlerContext) error {
-	if hctx.Agent.systemdManager == nil {
-		return errors.ErrUnsupported
+type SearchSoftwareHandler struct{}
+
+func (h *SearchServicesHandler) Handle(hctx *HandlerContext) error {
+	if hctx.Agent.serviceManager == nil {
+		return hctx.SendResponse(common.ServiceSearchResult{}, hctx.RequestID)
 	}
-
-	var req common.SystemdInfoRequest
+	var req common.ServiceSearchRequest
 	if err := cbor.Unmarshal(hctx.Request.Data, &req); err != nil {
 		return err
 	}
-	if req.ServiceName == "" {
-		return errors.New("service name is required")
-	}
+	return hctx.SendResponse(common.ServiceSearchResult{
+		Services: hctx.Agent.serviceManager.searchServices(req.Query, req.Limit),
+	}, hctx.RequestID)
+}
 
-	details, err := hctx.Agent.systemdManager.getServiceDetails(req.ServiceName)
-	if err != nil {
+func (h *SearchSoftwareHandler) Handle(hctx *HandlerContext) error {
+	if hctx.Agent.softwareManager == nil {
+		return hctx.SendResponse(common.SoftwareSearchResult{}, hctx.RequestID)
+	}
+	var req common.ServiceSearchRequest
+	if err := cbor.Unmarshal(hctx.Request.Data, &req); err != nil {
+		return err
+	}
+	return hctx.SendResponse(common.SoftwareSearchResult{
+		Software: hctx.Agent.softwareManager.searchSoftware(req.Query, req.Limit),
+	}, hctx.RequestID)
+}
+
+////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+
+func (h *RunOperationHandler) Handle(hctx *HandlerContext) error {
+	var req common.OperationRequest
+	if err := cbor.Unmarshal(hctx.Request.Data, &req); err != nil {
 		return err
 	}
 
-	return hctx.SendResponse(details, hctx.RequestID)
+	switch req.Action {
+	case "refresh_services":
+		refreshed := 0
+		if hctx.Agent.serviceManager != nil {
+			refreshed += len(hctx.Agent.serviceManager.getServiceStats(nil))
+		}
+		return hctx.SendResponse(common.OperationResult{
+			Status:  "succeeded",
+			Message: fmt.Sprintf("refreshed %d services", refreshed),
+		}, hctx.RequestID)
+	case "start_monitored_service", "stop_monitored_service", "restart_monitored_service":
+		if hctx.Agent.serviceManager == nil {
+			return hctx.SendResponse(common.OperationResult{
+				Status:  "unsupported",
+				Message: "service manager is not available on this agent",
+			}, hctx.RequestID)
+		}
+		if req.Target == "" {
+			return hctx.SendResponse(common.OperationResult{
+				Status:  "failed",
+				Message: "service name is required",
+			}, hctx.RequestID)
+		}
+		if err := hctx.Agent.serviceManager.controlService(req.Action, req.Target); err != nil {
+			return hctx.SendResponse(common.OperationResult{
+				Status:  "failed",
+				Message: err.Error(),
+			}, hctx.RequestID)
+		}
+		return hctx.SendResponse(common.OperationResult{
+			Status:  "succeeded",
+			Message: fmt.Sprintf("service %s operation completed", req.Target),
+		}, hctx.RequestID)
+	case "start_container", "stop_container", "restart_container", "update_container_image":
+		if hctx.Agent.dockerManager == nil {
+			return hctx.SendResponse(common.OperationResult{
+				Status:  "unsupported",
+				Message: "Docker / Podman socket is not available on this agent",
+			}, hctx.RequestID)
+		}
+		if req.Target == "" {
+			return hctx.SendResponse(common.OperationResult{
+				Status:  "failed",
+				Message: "container id is required",
+			}, hctx.RequestID)
+		}
+		timeout := dockerControlTimeout
+		if req.Action == "update_container_image" {
+			timeout = 5 * time.Minute
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		if err := hctx.Agent.dockerManager.controlContainer(ctx, req.Action, req.Target); err != nil {
+			return hctx.SendResponse(common.OperationResult{
+				Status:  "failed",
+				Message: err.Error(),
+			}, hctx.RequestID)
+		}
+		return hctx.SendResponse(common.OperationResult{
+			Status:  "succeeded",
+			Message: fmt.Sprintf("container %s operation completed", req.Target),
+		}, hctx.RequestID)
+	case "update_agent":
+		return hctx.SendResponse(hctx.Agent.controlAgentUpdate(req.Params), hctx.RequestID)
+	default:
+		return hctx.SendResponse(common.OperationResult{
+			Status:  "denied",
+			Message: "operation is not allowed",
+		}, hctx.RequestID)
+	}
 }

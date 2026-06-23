@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/henrygd/beszel/agent/deltatracker"
-	"github.com/henrygd/beszel/internal/entities/system"
 	psutilNet "github.com/shirou/gopsutil/v4/net"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gutenacht.site/pulse/agent/deltatracker"
+	"gutenacht.site/pulse/internal/entities/system"
 )
 
 func TestIsValidNic(t *testing.T) {
@@ -275,13 +275,13 @@ func TestSkipNetworkInterface(t *testing.T) {
 		{"veth prefix", psutilNet.IOCountersStat{Name: "veth0abc", BytesSent: 100, BytesRecv: 100}, nil, true},
 		{"bond prefix", psutilNet.IOCountersStat{Name: "bond0", BytesSent: 100, BytesRecv: 100}, nil, true},
 		{"cali prefix", psutilNet.IOCountersStat{Name: "cali1234", BytesSent: 100, BytesRecv: 100}, nil, true},
-		{"zero BytesRecv", psutilNet.IOCountersStat{Name: "eth0", BytesSent: 100, BytesRecv: 0}, nil, true},
-		{"zero BytesSent", psutilNet.IOCountersStat{Name: "eth0", BytesSent: 0, BytesRecv: 100}, nil, true},
-		{"both zero", psutilNet.IOCountersStat{Name: "eth0", BytesSent: 0, BytesRecv: 0}, nil, true},
+		{"zero BytesRecv", psutilNet.IOCountersStat{Name: "eth0", BytesSent: 100, BytesRecv: 0}, nil, false},
+		{"zero BytesSent", psutilNet.IOCountersStat{Name: "eth0", BytesSent: 0, BytesRecv: 100}, nil, false},
+		{"both zero", psutilNet.IOCountersStat{Name: "eth0", BytesSent: 0, BytesRecv: 0}, nil, false},
 		{"normal eth0", psutilNet.IOCountersStat{Name: "eth0", BytesSent: 100, BytesRecv: 200}, nil, false},
 		{"normal wlan0", psutilNet.IOCountersStat{Name: "wlan0", BytesSent: 1, BytesRecv: 1}, nil, false},
-		{"whitelist overrides skip (docker)", psutilNet.IOCountersStat{Name: "docker0", BytesSent: 100, BytesRecv: 100}, newNicConfig("docker0"), false},
-		{"whitelist overrides skip (lo)", psutilNet.IOCountersStat{Name: "lo", BytesSent: 100, BytesRecv: 100}, newNicConfig("lo"), false},
+		{"whitelist does not override skip (docker)", psutilNet.IOCountersStat{Name: "docker0", BytesSent: 100, BytesRecv: 100}, newNicConfig("docker0"), true},
+		{"whitelist does not override skip (lo)", psutilNet.IOCountersStat{Name: "lo", BytesSent: 100, BytesRecv: 100}, newNicConfig("lo"), true},
 		{"whitelist exclusion", psutilNet.IOCountersStat{Name: "eth1", BytesSent: 100, BytesRecv: 100}, newNicConfig("eth0"), true},
 		{"blacklist skip lo", psutilNet.IOCountersStat{Name: "lo", BytesSent: 100, BytesRecv: 100}, newNicConfig("-eth0"), true},
 		{"blacklist explicit eth0", psutilNet.IOCountersStat{Name: "eth0", BytesSent: 100, BytesRecv: 100}, newNicConfig("-eth0"), true},
@@ -289,7 +289,7 @@ func TestSkipNetworkInterface(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expectSkip, skipNetworkInterface(tt.nic, tt.nicCfg))
+			assert.Equal(t, tt.expectSkip, skipNetworkInterface(tt.nic, tt.nicCfg, nil))
 		})
 	}
 }
@@ -306,6 +306,31 @@ func TestEnsureNetworkInterfacesMap(t *testing.T) {
 	// Idempotent
 	a.ensureNetworkInterfacesMap(&stats)
 	assert.NotNil(t, stats.NetworkInterfaces)
+}
+
+func TestRefreshNetworkInterfaceDetailsMarksDirtyWhenDetailsChange(t *testing.T) {
+	previous := detectNetworkInterfaceDetailsFunc
+	defer func() { detectNetworkInterfaceDetailsFunc = previous }()
+
+	detectNetworkInterfaceDetailsFunc = func(valid map[string]struct{}) []system.NetworkInterfaceDetails {
+		if _, ok := valid["eth0"]; !ok {
+			return nil
+		}
+		return []system.NetworkInterfaceDetails{
+			makeNetworkInterfaceDetails("eth0", "Ethernet", "00:11:22:33:44:55", 1_000_000_000, "up", "dhcp", []string{"192.168.1.10"}, nil, []string{"192.168.1.1"}, []string{"192.168.1.1"}),
+		}
+	}
+
+	a := &Agent{netInterfaces: map[string]struct{}{"eth0": {}}}
+	a.refreshNetworkInterfaceDetails()
+
+	require.Len(t, a.systemDetails.NetworkInterfaces, 1)
+	assert.Equal(t, "eth0", a.systemDetails.NetworkInterfaces[0].Name)
+	assert.True(t, a.detailsDirty)
+
+	a.detailsDirty = false
+	a.refreshNetworkInterfaceDetails()
+	assert.False(t, a.detailsDirty, "unchanged interface details should not force another details sync")
 }
 
 func TestLoadAndTickNetBaseline(t *testing.T) {
@@ -342,7 +367,7 @@ func TestComputeBytesPerSecond(t *testing.T) {
 	assert.Equal(t, uint64(20000), bytesDown)
 }
 
-func TestSumAndTrackPerNicDeltas(t *testing.T) {
+func TestSelectAndTrackPrimaryNicDeltas(t *testing.T) {
 	a := &Agent{
 		netInterfaces:             map[string]struct{}{"eth0": {}, "wlan0": {}},
 		netInterfaceDeltaTrackers: make(map[uint16]*deltatracker.DeltaTracker[string, uint64]),
@@ -353,7 +378,7 @@ func TestSumAndTrackPerNicDeltas(t *testing.T) {
 	net1 := []psutilNet.IOCountersStat{{Name: "eth0", BytesSent: 1000, BytesRecv: 2000}}
 	stats1 := &system.Stats{}
 	a.ensureNetworkInterfacesMap(stats1)
-	tx1, rx1 := a.sumAndTrackPerNicDeltas(cache, 0, net1, stats1)
+	tx1, rx1 := a.selectAndTrackPrimaryNicDeltas(cache, 0, net1, stats1)
 	assert.Equal(t, uint64(1000), tx1)
 	assert.Equal(t, uint64(2000), rx1)
 
@@ -361,7 +386,7 @@ func TestSumAndTrackPerNicDeltas(t *testing.T) {
 	net2 := []psutilNet.IOCountersStat{{Name: "eth0", BytesSent: 4000, BytesRecv: 9000}}
 	stats := &system.Stats{}
 	a.ensureNetworkInterfacesMap(stats)
-	tx2, rx2 := a.sumAndTrackPerNicDeltas(cache, 1000, net2, stats)
+	tx2, rx2 := a.selectAndTrackPrimaryNicDeltas(cache, 1000, net2, stats)
 	assert.Equal(t, uint64(4000), tx2)
 	assert.Equal(t, uint64(9000), rx2)
 	// Up/Down deltas per second should be (4000-1000)/1s = 3000 and (9000-2000)/1s = 7000
@@ -371,7 +396,59 @@ func TestSumAndTrackPerNicDeltas(t *testing.T) {
 	assert.Equal(t, uint64(7000), ni[1])
 }
 
-func TestSumAndTrackPerNicDeltasHandlesCounterReset(t *testing.T) {
+func TestSelectAndTrackPrimaryNicDeltasIncludesAllPhysicalInterfaces(t *testing.T) {
+	a := &Agent{
+		netInterfaces:             map[string]struct{}{"VirtualNet": {}, "以太网": {}},
+		netInterfaceDeltaTrackers: make(map[uint16]*deltatracker.DeltaTracker[string, uint64]),
+	}
+
+	cache := uint16(43)
+	initial := []psutilNet.IOCountersStat{
+		{Name: "VirtualNet", BytesSent: 2_000_000, BytesRecv: 50_000_000},
+		{Name: "以太网", BytesSent: 4_500_000_000, BytesRecv: 160_000_000_000},
+	}
+	stats := &system.Stats{}
+	a.ensureNetworkInterfacesMap(stats)
+	tx, rx := a.selectAndTrackPrimaryNicDeltas(cache, 0, initial, stats)
+
+	assert.Equal(t, uint64(4_502_000_000), tx)
+	assert.Equal(t, uint64(160_050_000_000), rx)
+	assert.Contains(t, stats.NetworkInterfaces, "以太网")
+	assert.Contains(t, stats.NetworkInterfaces, "VirtualNet")
+	assert.Equal(t, map[string]struct{}{"VirtualNet": {}, "以太网": {}}, a.netInterfaces)
+}
+
+func TestSelectAndTrackPrimaryNicDeltasUsesCurrentRateAfterBaseline(t *testing.T) {
+	a := &Agent{
+		netInterfaces:             map[string]struct{}{"eth0": {}, "wlan0": {}},
+		netInterfaceDeltaTrackers: make(map[uint16]*deltatracker.DeltaTracker[string, uint64]),
+	}
+
+	cache := uint16(44)
+	initial := []psutilNet.IOCountersStat{
+		{Name: "eth0", BytesSent: 1_000_000, BytesRecv: 1_000_000_000},
+		{Name: "wlan0", BytesSent: 100_000, BytesRecv: 100_000},
+	}
+	statsInitial := &system.Stats{}
+	a.ensureNetworkInterfacesMap(statsInitial)
+	_, _ = a.selectAndTrackPrimaryNicDeltas(cache, 0, initial, statsInitial)
+
+	current := []psutilNet.IOCountersStat{
+		{Name: "eth0", BytesSent: 1_000_100, BytesRecv: 1_000_000_100},
+		{Name: "wlan0", BytesSent: 110_000, BytesRecv: 120_000},
+	}
+	stats := &system.Stats{}
+	a.ensureNetworkInterfacesMap(stats)
+	tx, rx := a.selectAndTrackPrimaryNicDeltas(cache, 1000, current, stats)
+
+	assert.Equal(t, uint64(1_110_100), tx)
+	assert.Equal(t, uint64(1_000_120_100), rx)
+	assert.Equal(t, [4]uint64{100, 100, 1_000_100, 1_000_000_100}, stats.NetworkInterfaces["eth0"])
+	assert.Contains(t, stats.NetworkInterfaces, "wlan0")
+	assert.Equal(t, [4]uint64{10_000, 20_000, 110_000, 120_000}, stats.NetworkInterfaces["wlan0"])
+}
+
+func TestSelectAndTrackPrimaryNicDeltasHandlesCounterReset(t *testing.T) {
 	a := &Agent{
 		netInterfaces:             map[string]struct{}{"eth0": {}},
 		netInterfaceDeltaTrackers: make(map[uint16]*deltatracker.DeltaTracker[string, uint64]),
@@ -383,13 +460,13 @@ func TestSumAndTrackPerNicDeltasHandlesCounterReset(t *testing.T) {
 	initial := []psutilNet.IOCountersStat{{Name: "eth0", BytesSent: 4_000, BytesRecv: 6_000}}
 	statsInitial := &system.Stats{}
 	a.ensureNetworkInterfacesMap(statsInitial)
-	_, _ = a.sumAndTrackPerNicDeltas(cache, 0, initial, statsInitial)
+	_, _ = a.selectAndTrackPrimaryNicDeltas(cache, 0, initial, statsInitial)
 
 	// Second interval increments counters normally so previous snapshot gets populated
 	increment := []psutilNet.IOCountersStat{{Name: "eth0", BytesSent: 9_000, BytesRecv: 11_000}}
 	statsIncrement := &system.Stats{}
 	a.ensureNetworkInterfacesMap(statsIncrement)
-	_, _ = a.sumAndTrackPerNicDeltas(cache, 1_000, increment, statsIncrement)
+	_, _ = a.selectAndTrackPrimaryNicDeltas(cache, 1_000, increment, statsIncrement)
 
 	niIncrement, ok := statsIncrement.NetworkInterfaces["eth0"]
 	require.True(t, ok)
@@ -400,7 +477,7 @@ func TestSumAndTrackPerNicDeltasHandlesCounterReset(t *testing.T) {
 	reset := []psutilNet.IOCountersStat{{Name: "eth0", BytesSent: 1_200, BytesRecv: 1_500}}
 	statsReset := &system.Stats{}
 	a.ensureNetworkInterfacesMap(statsReset)
-	_, _ = a.sumAndTrackPerNicDeltas(cache, 1_000, reset, statsReset)
+	_, _ = a.selectAndTrackPrimaryNicDeltas(cache, 1_000, reset, statsReset)
 
 	niReset, ok := statsReset.NetworkInterfaces["eth0"]
 	require.True(t, ok)
@@ -409,6 +486,17 @@ func TestSumAndTrackPerNicDeltasHandlesCounterReset(t *testing.T) {
 }
 
 func TestApplyNetworkTotals(t *testing.T) {
+	previous := detectNetworkInterfaceDetailsFunc
+	defer func() { detectNetworkInterfaceDetailsFunc = previous }()
+	detectNetworkInterfaceDetailsFunc = func(valid map[string]struct{}) []system.NetworkInterfaceDetails {
+		if _, ok := valid["eth0"]; !ok {
+			return nil
+		}
+		return []system.NetworkInterfaceDetails{
+			makeNetworkInterfaceDetails("eth0", "Ethernet", "00:11:22:33:44:55", 1_000_000_000, "up", "dhcp", []string{"192.168.1.10"}, nil, []string{"192.168.1.1"}, []string{"192.168.1.1"}),
+		}
+	}
+
 	tests := []struct {
 		name                  string
 		bytesSentPerSecond    uint64

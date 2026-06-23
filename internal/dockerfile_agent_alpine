@@ -23,9 +23,12 @@ COPY --from=builder /agent /agent
 # AMD GPU name lookup (used by agent on Linux when /usr/share/libdrm/amdgpu.ids is read)
 COPY --from=builder /app/agent/test-data/amdgpu.ids /usr/share/libdrm/amdgpu.ids
 
-RUN apk add --no-cache smartmontools
+RUN apk add --no-cache dmidecode pciutils smartmontools
 
 # Ensure data persistence across container recreations
-VOLUME ["/var/lib/beszel-agent"]
+VOLUME ["/var/lib/pulse-agent"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD ["/agent", "health"]
 
 ENTRYPOINT ["/agent"]

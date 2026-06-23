@@ -1,20 +1,25 @@
 /** biome-ignore-all lint/suspicious/noAssignInExpressions: it's fine :) */
 import type { PreinitializedMapStore } from "nanostores"
-import { pb, verifyAuth } from "@/lib/api"
+import { isPocketBaseAutoCancel, pb } from "@/lib/api"
 import {
 	$allSystemsById,
 	$allSystemsByName,
 	$downSystems,
 	$longestSystemNameLen,
 	$pausedSystems,
+	$systemsLoadFailed,
+	$systemsLoaded,
 	$upSystems,
 } from "@/lib/stores"
 import { getVisualStringWidth, updateFavicon } from "@/lib/utils"
 import type { SystemRecord } from "@/types"
 import { SystemStatus } from "./enums"
+import { getSystemDisplayName } from "./system-roles"
 
 const COLLECTION = pb.collection<SystemRecord>("systems")
-const FIELDS_DEFAULT = "id,name,host,port,info,status"
+const REALTIME_FIELDS = "id,status,pairing_confirmed,is_local,updated"
+const SUMMARY_REFRESH_DEBOUNCE_MS = 750
+const SUMMARY_REFRESH_MIN_INTERVAL_MS = 5_000
 
 /** Maximum system name length for display purposes */
 const MAX_SYSTEM_NAME_LENGTH = 22
@@ -22,6 +27,13 @@ const MAX_SYSTEM_NAME_LENGTH = 22
 let initialized = false
 // biome-ignore lint/suspicious/noConfusingVoidType: typescript rocks
 let unsub: (() => void) | undefined | void
+let refreshTimer: ReturnType<typeof setTimeout> | undefined
+let refreshInFlight: Promise<void> | undefined
+let lastRefreshAt = 0
+
+type SystemsSummaryResponse = {
+	items?: SystemRecord[]
+}
 
 /** Initialize the systems manager and set up listeners */
 export function init() {
@@ -79,7 +91,7 @@ function onSystemsChanged(_: Record<string, SystemRecord>, changedSystem: System
 
 	// Update longest system name length
 	const longestName = $longestSystemNameLen.get()
-	const nameLen = Math.min(MAX_SYSTEM_NAME_LENGTH, getVisualStringWidth(changedSystem?.name || ""))
+	const nameLen = Math.min(MAX_SYSTEM_NAME_LENGTH, getVisualStringWidth(getSystemDisplayName(changedSystem, "")))
 	if (nameLen > longestName) {
 		$longestSystemNameLen.set(nameLen)
 	}
@@ -88,46 +100,59 @@ function onSystemsChanged(_: Record<string, SystemRecord>, changedSystem: System
 }
 
 /** Fetch systems from collection */
-async function fetchSystems(): Promise<SystemRecord[]> {
+async function fetchSystems(): Promise<SystemRecord[] | undefined> {
 	try {
-		return await COLLECTION.getFullList({ sort: "+name", fields: FIELDS_DEFAULT })
+		const response = await pb.send<SystemsSummaryResponse>("/api/pulse/systems/summary", {
+			method: "GET",
+			requestKey: null,
+		})
+		return response.items ?? []
 	} catch (error) {
-		console.error("Failed to fetch systems:", error)
-		return []
+		if (!isPocketBaseAutoCancel(error)) {
+			console.error("Failed to fetch system summaries:", error)
+		}
 	}
 }
 
-/** Makes sure the system has valid info object and throws if not */
-function validateSystemInfo(system: SystemRecord) {
-	if (!("cpu" in system.info)) {
-		throw new Error(`${system.name} has no CPU info`)
+/** Normalizes partially populated system records so route-level loading does not blank the page. */
+function normalizeSystem(system: SystemRecord): SystemRecord {
+	system.info = {
+		h: "",
+		v: "",
+		...(system.info ?? {}),
 	}
+	return system
+}
+
+function isSystemInventoryVisible(system: SystemRecord): boolean {
+	return system.pairing_confirmed !== false
 }
 
 /** Add system to both name and ID stores */
 export function add(system: SystemRecord) {
-	try {
-		validateSystemInfo(system)
-		$allSystemsByName.setKey(system.name, system)
-		$allSystemsById.setKey(system.id, system)
-	} catch (error) {
-		console.error(error)
+	const normalizedSystem = normalizeSystem(system)
+	if (!isSystemInventoryVisible(normalizedSystem)) {
+		remove(normalizedSystem)
+		return
 	}
+	$allSystemsByName.setKey(normalizedSystem.name, normalizedSystem)
+	$allSystemsById.setKey(normalizedSystem.id, normalizedSystem)
 }
 
 /** Update system in stores */
 export function update(system: SystemRecord) {
-	try {
-		validateSystemInfo(system)
-		// if name changed, make sure old name is removed from the name store
-		const oldName = $allSystemsById.get()[system.id]?.name
-		if (oldName !== system.name) {
-			$allSystemsByName.setKey(oldName, undefined as unknown as SystemRecord)
-		}
-		add(system)
-	} catch (error) {
-		console.error(error)
+	const normalizedSystem = normalizeSystem(system)
+	if (!isSystemInventoryVisible(normalizedSystem)) {
+		const oldSystem = $allSystemsById.get()[normalizedSystem.id]
+		remove(oldSystem ?? normalizedSystem)
+		return
 	}
+	// if name changed, make sure old name is removed from the name store
+	const oldName = $allSystemsById.get()[normalizedSystem.id]?.name
+	if (oldName && oldName !== normalizedSystem.name) {
+		$allSystemsByName.setKey(oldName, undefined as unknown as SystemRecord)
+	}
+	add(normalizedSystem)
 }
 
 /** Remove system from stores */
@@ -145,18 +170,73 @@ function removeFromStore(system: SystemRecord, store: PreinitializedMapStore<Rec
 	store.setKey(key, undefined as unknown as SystemRecord)
 }
 
+function replaceStores(records: SystemRecord[]) {
+	const byId: Record<string, SystemRecord> = {}
+	const byName: Record<string, SystemRecord> = {}
+	const up: Record<string, SystemRecord> = {}
+	const down: Record<string, SystemRecord> = {}
+	const paused: Record<string, SystemRecord> = {}
+	let longestNameLen = 8
+
+	for (const record of records) {
+		const system = normalizeSystem(record)
+		if (!isSystemInventoryVisible(system)) {
+			continue
+		}
+		byId[system.id] = system
+		byName[system.name] = system
+		if (system.status === SystemStatus.Up) {
+			up[system.id] = system
+		} else if (system.status === SystemStatus.Down) {
+			down[system.id] = system
+		} else if (system.status === SystemStatus.Paused) {
+			paused[system.id] = system
+		}
+		longestNameLen = Math.max(
+			longestNameLen,
+			Math.min(MAX_SYSTEM_NAME_LENGTH, getVisualStringWidth(getSystemDisplayName(system, "")))
+		)
+	}
+
+	$allSystemsByName.set(byName)
+	$allSystemsById.set(byId)
+	$upSystems.set(up)
+	$downSystems.set(down)
+	$pausedSystems.set(paused)
+	$longestSystemNameLen.set(longestNameLen)
+	updateFavicon(Object.keys(down).length)
+}
+
+function scheduleRefresh(delay = SUMMARY_REFRESH_DEBOUNCE_MS) {
+	if (refreshTimer) {
+		clearTimeout(refreshTimer)
+	}
+	const elapsed = Date.now() - lastRefreshAt
+	const wait = Math.max(delay, SUMMARY_REFRESH_MIN_INTERVAL_MS - elapsed)
+	refreshTimer = setTimeout(() => {
+		refreshTimer = undefined
+		refresh().catch((error) => console.error("Failed to refresh system summaries:", error))
+	}, wait)
+}
+
 /** Action functions for subscription */
 const actionFns: Record<string, (system: SystemRecord) => void> = {
-	create: add,
-	update: update,
-	delete: remove,
+	create: () => scheduleRefresh(),
+	update: () => scheduleRefresh(),
+	delete: (system) => {
+		const existing = $allSystemsById.get()[system.id]
+		if (existing) {
+			remove(existing)
+		}
+		scheduleRefresh(250)
+	},
 }
 
 /** Subscribe to real-time system updates from the collection */
 export async function subscribe() {
 	try {
 		unsub = await COLLECTION.subscribe("*", ({ action, record }) => actionFns[action]?.(record), {
-			fields: FIELDS_DEFAULT,
+			fields: REALTIME_FIELDS,
 		})
 	} catch (error) {
 		console.error("Failed to subscribe to systems collection:", error)
@@ -164,21 +244,40 @@ export async function subscribe() {
 }
 
 /** Refresh all systems with latest data from the hub */
-export async function refresh() {
+export function refresh() {
+	if (refreshInFlight) {
+		return refreshInFlight
+	}
+	refreshInFlight = refreshInner().finally(() => {
+		refreshInFlight = undefined
+		lastRefreshAt = Date.now()
+	})
+	return refreshInFlight
+}
+
+async function refreshInner() {
 	try {
 		const records = await fetchSystems()
-		if (!records.length) {
-			// No systems found, verify authentication
-			verifyAuth()
+		if (!records) {
+			$systemsLoadFailed.set(true)
+			$systemsLoaded.set(true)
 			return
 		}
-		for (const record of records) {
-			add(record)
-		}
+		replaceStores(records)
+		$systemsLoadFailed.set(false)
+		$systemsLoaded.set(true)
 	} catch (error) {
+		$systemsLoadFailed.set(true)
+		$systemsLoaded.set(true)
 		console.error("Failed to refresh systems:", error)
 	}
 }
 
 /** Unsubscribe from real-time system updates */
-export const unsubscribe = () => (unsub = unsub?.())
+export const unsubscribe = () => {
+	if (refreshTimer) {
+		clearTimeout(refreshTimer)
+		refreshTimer = undefined
+	}
+	unsub = unsub?.()
+}

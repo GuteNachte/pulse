@@ -13,9 +13,10 @@ import (
 	"strings"
 )
 
-// GetEnv retrieves an environment variable with a "BESZEL_AGENT_" prefix, or falls back to the unprefixed key.
+// GetEnv retrieves an environment variable with a "PULSE_AGENT_" prefix,
+// then falls back to the unprefixed key.
 func GetEnv(key string) (value string, exists bool) {
-	if value, exists = os.LookupEnv("BESZEL_AGENT_" + key); exists {
+	if value, exists = os.LookupEnv("PULSE_AGENT_" + key); exists {
 		return value, exists
 	}
 	return os.LookupEnv(key)

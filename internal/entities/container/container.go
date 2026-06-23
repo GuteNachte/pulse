@@ -20,6 +20,7 @@ type ApiInfo struct {
 		IP         string
 		// Type        string
 	}
+	Labels map[string]string
 	// ImageID string
 	// Command string
 	// Created int64
@@ -49,6 +50,11 @@ type HostInfo struct {
 	KernelVersion   string `json:"KernelVersion"`
 	NCPU            int    `json:"NCPU"`
 	MemTotal        uint64 `json:"MemTotal"`
+}
+
+type RuntimeVersion struct {
+	Name    string
+	Version string
 }
 
 func (s *ApiStats) CalculateCpuPercentLinux(prevCpuContainer uint64, prevCpuSystem uint64) float64 {
@@ -150,9 +156,19 @@ type Stats struct {
 	Id     string       `json:"-" cbor:"7,keyasint"`
 	Image  string       `json:"-" cbor:"8,keyasint"`
 	Ports  string       `json:"-" cbor:"10,keyasint"`
+	Stack  StackInfo    `json:"-" cbor:"11,keyasint"`
 	// PrevCpu     [2]uint64    `json:"-"`
 	CpuSystem    uint64       `json:"-"`
 	CpuContainer uint64       `json:"-"`
 	PrevNet      prevNetStats `json:"-"`
 	PrevReadTime time.Time    `json:"-"`
+}
+
+type StackInfo struct {
+	Project    string `json:"project,omitempty" cbor:"0,keyasint,omitempty"`
+	Service    string `json:"service,omitempty" cbor:"1,keyasint,omitempty"`
+	Number     string `json:"number,omitempty" cbor:"2,keyasint,omitempty"`
+	Config     string `json:"config,omitempty" cbor:"3,keyasint,omitempty"`
+	WorkingDir string `json:"working_dir,omitempty" cbor:"4,keyasint,omitempty"`
+	Trusted    bool   `json:"trusted,omitempty" cbor:"5,keyasint,omitempty"`
 }

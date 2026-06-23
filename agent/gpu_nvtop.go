@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/henrygd/beszel/agent/utils"
-	"github.com/henrygd/beszel/internal/entities/system"
+	"gutenacht.site/pulse/agent/utils"
+	"gutenacht.site/pulse/internal/entities/system"
 )
 
 type nvtopSnapshot struct {
@@ -72,10 +72,13 @@ func (gm *GPUManager) updateNvtopSnapshots(snapshots []nvtopSnapshot) bool {
 		}
 
 		if _, ok := gm.GpuDataMap[id]; !ok {
-			gm.GpuDataMap[id] = &system.GPUData{Name: sample.DeviceName}
+			gm.GpuDataMap[id] = &system.GPUData{Name: sample.DeviceName, Type: classifyGpuType(sample.DeviceName)}
 		}
 		gpu := gm.GpuDataMap[id]
 		gpu.Name = sample.DeviceName
+		if gpu.Type == "" {
+			gpu.Type = classifyGpuType(sample.DeviceName)
+		}
 
 		if sample.Temp != nil {
 			gpu.Temperature = parseNvtopNumber(*sample.Temp)

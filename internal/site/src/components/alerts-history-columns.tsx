@@ -1,10 +1,24 @@
-import { t } from "@lingui/core/macro"
 import { Trans } from "@lingui/react/macro"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { alertInfo } from "@/lib/alerts"
-import { cn, formatDuration, formatShortDate, toFixedFloat } from "@/lib/utils"
+import {
+	alertCreatedLabel,
+	alertDisplayName,
+	alertDurationLabel,
+	alertIsAcknowledged,
+	alertIsSilenced,
+	alertResolvedLabel,
+	alertSeverity,
+	alertSeverityLabel,
+	alertSilencedUntilLabel,
+	alertSourceLabel,
+	alertStateLabel,
+	alertSystemName,
+	alertValueLabel,
+} from "@/lib/alert-display"
+import { cn } from "@/lib/utils"
 import type { AlertsHistoryRecord } from "@/types"
 
 export const alertsHistoryColumns: ColumnDef<AlertsHistoryRecord>[] = [
@@ -16,22 +30,27 @@ export const alertsHistoryColumns: ColumnDef<AlertsHistoryRecord>[] = [
 				<Trans>System</Trans>
 			</Button>
 		),
-		cell: ({ row }) => (
-			<div className="ps-2 max-w-60 truncate">{row.original.expand?.system?.name || row.original.system}</div>
-		),
-		filterFn: (row, _, filterValue) => {
-			const display = row.original.expand?.system?.name || row.original.system || ""
-			return display.toLowerCase().includes(filterValue.toLowerCase())
-		},
+		cell: ({ row }) => <div className="max-w-60 truncate ps-2">{alertSystemName(row.original)}</div>,
+		filterFn: (row, _, filterValue) => alertSystemName(row.original).toLowerCase().includes(filterValue.toLowerCase()),
 	},
 	{
-		// accessorKey: "name",
+		id: "source",
+		accessorFn: (record) => alertSourceLabel(record),
+		enableSorting: true,
+		header: ({ column }) => (
+			<Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+				来源
+			</Button>
+		),
+		cell: ({ row }) => (
+			<Badge variant="secondary" className="pointer-events-none">
+				{alertSourceLabel(row.original)}
+			</Badge>
+		),
+	},
+	{
 		id: "name",
-		accessorFn: (record) => {
-			const name = record.name
-			const info = alertInfo[name]
-			return info?.name().replace("cpu", "CPU") || name
-		},
+		accessorFn: (record) => alertDisplayName(record),
 		header: ({ column }) => (
 			<Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
 				<Trans>Name</Trans>
@@ -39,11 +58,10 @@ export const alertsHistoryColumns: ColumnDef<AlertsHistoryRecord>[] = [
 		),
 		cell: ({ getValue, row }) => {
 			const name = getValue() as string
-			const info = alertInfo[row.original.name]
-			const Icon = info?.icon
+			const Icon = alertInfo[row.original.name]?.icon
 
 			return (
-				<span className="flex items-center gap-2 ps-1 min-w-40">
+				<span className="flex min-w-40 items-center gap-2 ps-1">
 					{Icon && <Icon className="size-3.5" />}
 					{name}
 				</span>
@@ -58,20 +76,25 @@ export const alertsHistoryColumns: ColumnDef<AlertsHistoryRecord>[] = [
 				<Trans>Value</Trans>
 			</Button>
 		),
-		cell({ row, getValue }) {
-			const name = row.original.name
-			if (name === "Status") {
-				return <span className="ps-2">{t`Down`}</span>
-			}
-			const value = getValue() as number
-			const unit = alertInfo[name]?.unit
-			return (
-				<span className="tabular-nums ps-2.5">
-					{toFixedFloat(value, value < 10 ? 2 : 1)}
-					{unit}
-				</span>
-			)
-		},
+		cell: ({ row }) => <span className="ps-2 tabular-nums">{alertValueLabel(row.original)}</span>,
+	},
+	{
+		id: "severity",
+		accessorFn: (record) => alertSeverity(record),
+		enableSorting: true,
+		header: ({ column }) => (
+			<Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+				级别
+			</Button>
+		),
+		cell: ({ row }) => (
+			<Badge
+				variant={alertSeverity(row.original) === "critical" ? "danger" : "warning"}
+				className="pointer-events-none"
+			>
+				{alertSeverityLabel(row.original)}
+			</Badge>
+		),
 	},
 	{
 		accessorKey: "state",
@@ -83,25 +106,23 @@ export const alertsHistoryColumns: ColumnDef<AlertsHistoryRecord>[] = [
 			</Button>
 		),
 		cell: ({ row }) => {
-			const resolved = row.original.resolved
+			const resolved = Boolean(row.original.resolved)
+			const silenced = alertIsSilenced(row.original)
+			const acknowledged = alertIsAcknowledged(row.original)
 			return (
 				<Badge
-					className={cn(
-						"capitalize pointer-events-none",
-						resolved
-							? "bg-green-100 text-green-800 border-green-200 dark:opacity-80"
-							: "bg-yellow-100 text-yellow-800 border-yellow-200"
-					)}
+					variant={resolved ? "success" : silenced ? "secondary" : acknowledged ? "outline" : "danger"}
+					className={cn("pointer-events-none", resolved && "opacity-85")}
+					title={silenced ? `静默至 ${alertSilencedUntilLabel(row.original)}` : undefined}
 				>
-					{/* {resolved ? <CircleCheckIcon className="size-3 me-0.5" /> : <CircleAlertIcon className="size-3 me-0.5" />} */}
-					{resolved ? <Trans>Resolved</Trans> : <Trans>Active</Trans>}
+					{alertStateLabel(row.original)}
 				</Badge>
 			)
 		},
 	},
 	{
 		accessorKey: "created",
-		accessorFn: (record) => formatShortDate(record.created),
+		accessorFn: (record) => alertCreatedLabel(record),
 		enableSorting: true,
 		invertSorting: true,
 		header: ({ column }) => (
@@ -124,17 +145,12 @@ export const alertsHistoryColumns: ColumnDef<AlertsHistoryRecord>[] = [
 				<Trans>Resolved</Trans>
 			</Button>
 		),
-		cell: ({ row, getValue }) => {
-			const resolved = getValue() as string | null
-			if (!resolved) {
-				return null
-			}
-			return (
+		cell: ({ row }) =>
+			row.original.resolved ? (
 				<span className="ps-1 tabular-nums tracking-tight" title={`${row.original.resolved} UTC`}>
-					{formatShortDate(resolved)}
+					{alertResolvedLabel(row.original)}
 				</span>
-			)
-		},
+			) : null,
 	},
 	{
 		accessorKey: "duration",
@@ -157,11 +173,8 @@ export const alertsHistoryColumns: ColumnDef<AlertsHistoryRecord>[] = [
 			</Button>
 		),
 		cell: ({ row }) => {
-			const duration = formatDuration(row.original.created, row.original.resolved)
-			if (!duration) {
-				return null
-			}
-			return <span className="ps-2">{duration}</span>
+			const duration = alertDurationLabel(row.original)
+			return duration === "进行中" ? null : <span className="ps-2">{duration}</span>
 		},
 	},
 ]

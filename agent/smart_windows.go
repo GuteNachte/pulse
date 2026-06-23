@@ -21,7 +21,7 @@ var (
 
 func ensureEmbeddedSmartctl() (string, error) {
 	smartctlOnce.Do(func() {
-		destDir := filepath.Join(os.TempDir(), "beszel", "smartmontools")
+		destDir := filepath.Join(os.TempDir(), "pulse", "smartmontools")
 		if err := os.MkdirAll(destDir, 0o755); err != nil {
 			smartctlErr = fmt.Errorf("failed to create smartctl directory: %w", err)
 			return

@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/henrygd/beszel/internal/tests"
+	"gutenacht.site/pulse/internal/tests"
 
-	"github.com/henrygd/beszel/internal/hub/config"
+	"gutenacht.site/pulse/internal/hub/config"
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/stretchr/testify/assert"
@@ -24,8 +24,6 @@ type testConfig struct {
 
 type testSystemConfig struct {
 	Name  string   `yaml:"name"`
-	Host  string   `yaml:"host"`
-	Port  uint16   `yaml:"port,omitempty"`
 	Users []string `yaml:"users"`
 	Token string   `yaml:"token,omitempty"`
 }
@@ -86,8 +84,6 @@ func TestConfigSyncWithTokens(t *testing.T) {
 			},
 			configYAML: `systems:
   - name: "new-server"
-    host: "new.example.com"
-    port: 45876
     users:
       - "admin@example.com"
     token: "explicit-token-123"`,
@@ -100,8 +96,6 @@ func TestConfigSyncWithTokens(t *testing.T) {
 				// Create existing system and fingerprint
 				system, err := tests.CreateRecord(testHub.App, "systems", map[string]any{
 					"name":  "preserve-server",
-					"host":  "preserve.example.com",
-					"port":  45876,
 					"users": []string{user.Id},
 				})
 				require.NoError(t, err)
@@ -113,8 +107,6 @@ func TestConfigSyncWithTokens(t *testing.T) {
 			},
 			configYAML: `systems:
   - name: "preserve-server"
-    host: "preserve.example.com"
-    port: 45876
     users:
       - "admin@example.com"`,
 			expectToken: "preserve-token-999",
@@ -187,6 +179,47 @@ func TestConfigSyncWithTokens(t *testing.T) {
 	}
 }
 
+func TestConfigSyncIgnoresLegacyHostPortForWebSocketAgents(t *testing.T) {
+	testHub, err := tests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer testHub.Cleanup()
+
+	user, err := tests.CreateUser(testHub.App, "admin@example.com", "testtesttest")
+	require.NoError(t, err)
+
+	existingSystem, err := tests.CreateRecord(testHub.App, "systems", map[string]any{
+		"name":  "websocket-agent",
+		"users": []string{user.Id},
+	})
+	require.NoError(t, err)
+
+	existingFingerprint, err := createConfigTestFingerprint(testHub.App, existingSystem.Id, "existing-token", "existing-fingerprint")
+	require.NoError(t, err)
+
+	configYAML := `systems:
+  - name: "websocket-agent"
+    host: "different-old.example.com"
+    port: 2222
+    users:
+      - "admin@example.com"`
+
+	configPath := filepath.Join(testHub.DataDir(), "config.yml")
+	require.NoError(t, os.WriteFile(configPath, []byte(configYAML), 0644))
+
+	err = config.SyncSystems(&core.ServeEvent{App: testHub.App})
+	require.NoError(t, err)
+
+	systems, err := testHub.FindRecordsByFilter("systems", "name = {:name}", "", -1, 0, map[string]any{"name": "websocket-agent"})
+	require.NoError(t, err)
+	require.Len(t, systems, 1)
+	assert.Equal(t, existingSystem.Id, systems[0].Id, "legacy host/port must not create a duplicate WebSocket agent")
+
+	updatedFingerprint, err := testHub.FindRecordById("fingerprints", existingFingerprint.Id)
+	require.NoError(t, err)
+	assert.Equal(t, "existing-token", updatedFingerprint.GetString("token"))
+	assert.Equal(t, "existing-fingerprint", updatedFingerprint.GetString("fingerprint"))
+}
+
 // TestConfigMigrationScenario tests the specific migration scenario mentioned in the discussion
 func TestConfigMigrationScenario(t *testing.T) {
 	testHub, err := tests.NewTestHub(t.TempDir())
@@ -200,8 +233,6 @@ func TestConfigMigrationScenario(t *testing.T) {
 	// Simulate migration scenario: system exists with token from migration
 	existingSystem, err := tests.CreateRecord(testHub.App, "systems", map[string]any{
 		"name":  "migrated-server",
-		"host":  "migrated.example.com",
-		"port":  45876,
 		"users": []string{user.Id},
 	})
 	require.NoError(t, err)
@@ -213,8 +244,6 @@ func TestConfigMigrationScenario(t *testing.T) {
 	// User exports config BEFORE this update (so no token field in YAML)
 	oldConfigYAML := `systems:
   - name: "migrated-server"
-    host: "migrated.example.com"
-    port: 45876
     users:
       - "admin@example.com"`
 
@@ -242,5 +271,57 @@ func TestConfigMigrationScenario(t *testing.T) {
 	updatedSystem, err := testHub.FindRecordById("systems", existingSystem.Id)
 	require.NoError(t, err)
 	assert.Equal(t, "migrated-server", updatedSystem.GetString("name"))
-	assert.Equal(t, "migrated.example.com", updatedSystem.GetString("host"))
+}
+
+func TestConfigSyncAcceptsWebSocketOnlyConfig(t *testing.T) {
+	testHub, err := tests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer testHub.Cleanup()
+
+	_, err = tests.CreateUser(testHub.App, "admin@example.com", "testtesttest")
+	require.NoError(t, err)
+
+	configYAML := `systems:
+  - name: "export-agent"
+    users:
+      - "admin@example.com"
+    token: "export-token"`
+	configPath := filepath.Join(testHub.DataDir(), "config.yml")
+	require.NoError(t, os.WriteFile(configPath, []byte(configYAML), 0644))
+	require.NoError(t, config.SyncSystems(&core.ServeEvent{App: testHub.App}))
+
+	systems, err := testHub.FindRecordsByFilter("systems", "name = {:name}", "", -1, 0, map[string]any{"name": "export-agent"})
+	require.NoError(t, err)
+	require.Len(t, systems, 1)
+	updatedSystem := systems[0]
+
+	fingerprints, err := testHub.FindRecordsByFilter("fingerprints", "system = {:system}", "", -1, 0, map[string]any{"system": updatedSystem.Id})
+	require.NoError(t, err)
+	require.Len(t, fingerprints, 1)
+	assert.Equal(t, "export-token", fingerprints[0].GetString("token"))
+}
+
+func TestConfigExportDoesNotExposeLegacyHostPort(t *testing.T) {
+	testHub, err := tests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer testHub.Cleanup()
+
+	user, err := tests.CreateUser(testHub.App, "admin@example.com", "testtesttest")
+	require.NoError(t, err)
+
+	systemRecord, err := tests.CreateRecord(testHub.App, "systems", map[string]any{
+		"name":  "export-no-host-port",
+		"users": []string{user.Id},
+	})
+	require.NoError(t, err)
+	_, err = createConfigTestFingerprint(testHub.App, systemRecord.Id, "export-token", "device-identity")
+	require.NoError(t, err)
+
+	configText, err := config.GenerateYAML(testHub.App)
+	require.NoError(t, err)
+
+	assert.NotContains(t, configText, "host:")
+	assert.NotContains(t, configText, "port:")
+	assert.Contains(t, configText, "token: export-token")
+	assert.Contains(t, configText, "Agent connections do not use host/port.")
 }

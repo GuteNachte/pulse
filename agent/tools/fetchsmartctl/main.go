@@ -19,14 +19,14 @@ import (
 // This is used to embed smartctl.exe in the Windows build.
 
 func main() {
-	url := flag.String("url", "", "URL to download smartctl.exe from (required)")
+	url := flag.String("url", "", "URL to download smartctl.exe from. Falls back to PULSE_SMARTCTL_URL.")
 	out := flag.String("out", "", "Destination path for smartctl.exe (required)")
 	sha := flag.String("sha", "", "Optional SHA1/SHA256 checksum for integrity validation")
 	force := flag.Bool("force", false, "Force re-download even if destination exists")
 	flag.Parse()
 
-	if *url == "" || *out == "" {
-		fatalf("-url and -out are required")
+	if *out == "" {
+		fatalf("-out is required")
 	}
 
 	if !*force {
@@ -36,7 +36,15 @@ func main() {
 		}
 	}
 
-	if err := downloadFile(*url, *out, *sha); err != nil {
+	downloadURL := strings.TrimSpace(*url)
+	if downloadURL == "" {
+		downloadURL = strings.TrimSpace(os.Getenv("PULSE_SMARTCTL_URL"))
+	}
+	if downloadURL == "" {
+		fatalf("-url or PULSE_SMARTCTL_URL is required when smartctl.exe is not already present")
+	}
+
+	if err := downloadFile(downloadURL, *out, *sha); err != nil {
 		fatalf("download failed: %v", err)
 	}
 }
@@ -53,7 +61,7 @@ func downloadFile(url, dest, shaHex string) error {
 	if err != nil {
 		return fmt.Errorf("new request: %w", err)
 	}
-	req.Header.Set("User-Agent", "beszel-fetchsmartctl/1.0")
+	req.Header.Set("User-Agent", "pulse-fetchsmartctl/1.0")
 
 	resp, err := client.Do(req)
 	if err != nil {

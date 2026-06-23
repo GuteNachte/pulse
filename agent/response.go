@@ -1,11 +1,13 @@
 package agent
 
 import (
+	"strings"
+	"unicode/utf8"
+
 	"github.com/fxamacker/cbor/v2"
-	"github.com/henrygd/beszel/internal/common"
-	"github.com/henrygd/beszel/internal/entities/smart"
-	"github.com/henrygd/beszel/internal/entities/system"
-	"github.com/henrygd/beszel/internal/entities/systemd"
+	"gutenacht.site/pulse/internal/common"
+	"gutenacht.site/pulse/internal/entities/smart"
+	"gutenacht.site/pulse/internal/entities/system"
 )
 
 // newAgentResponse creates an AgentResponse using legacy typed fields.
@@ -15,17 +17,27 @@ func newAgentResponse(data any, requestID *uint32) common.AgentResponse {
 	switch v := data.(type) {
 	case *system.CombinedData:
 		response.SystemData = v
+		response.Data, _ = cbor.Marshal(v)
 	case *common.FingerprintResponse:
 		response.Fingerprint = v
 	case string:
 		response.String = &v
 	case map[string]smart.SmartData:
 		response.SmartData = v
-	case systemd.ServiceDetails:
-		response.ServiceInfo = v
+	case common.OperationResult:
+		v.Message = sanitizeResponseText(v.Message)
+		response.Data, _ = cbor.Marshal(v)
 	default:
 		// For unknown types, use the generic Data field
 		response.Data, _ = cbor.Marshal(data)
 	}
 	return response
+}
+
+func sanitizeResponseText(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" || utf8.ValidString(text) {
+		return text
+	}
+	return strings.TrimSpace(strings.ToValidUTF8(text, ""))
 }

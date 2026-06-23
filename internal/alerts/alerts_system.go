@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/henrygd/beszel/internal/entities/system"
+	"gutenacht.site/pulse/internal/entities/system"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
@@ -347,10 +347,12 @@ func (am *AlertManager) sendSystemAlert(alert SystemAlertData) {
 	am.SendAlert(AlertMessageData{
 		UserID:   alert.alertData.UserID,
 		SystemID: alert.systemRecord.Id,
+		AlertID:  alert.alertData.Id,
 		Title:    subject,
 		Message:  body,
 		Link:     am.hub.MakeLink("system", alert.systemRecord.Id),
 		LinkText: "View " + systemName,
+		Resolved: !alert.triggered,
 	})
 }
 

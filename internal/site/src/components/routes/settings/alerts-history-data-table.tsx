@@ -1,11 +1,8 @@
 import { t } from "@lingui/core/macro"
 import { Trans } from "@lingui/react/macro"
 import {
-	type ColumnFiltersState,
 	flexRender,
 	getCoreRowModel,
-	getFilteredRowModel,
-	getPaginationRowModel,
 	getSortedRowModel,
 	type PaginationState,
 	type SortingState,
@@ -13,14 +10,15 @@ import {
 	type VisibilityState,
 } from "@tanstack/react-table"
 import {
+	BellIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
-	ChevronsLeftIcon,
-	ChevronsRightIcon,
 	DownloadIcon,
+	RefreshCwIcon,
+	SearchIcon,
 	Trash2Icon,
 } from "lucide-react"
-import { memo, useEffect, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useState } from "react"
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -44,71 +42,128 @@ import { pb } from "@/lib/api"
 import { cn, formatDuration, formatShortDate, useBrowserStorage } from "@/lib/utils"
 import type { AlertsHistoryRecord } from "@/types"
 import { alertsHistoryColumns } from "../../alerts-history-columns"
+import { SettingsEmptyState, SettingsTableEmptyRow } from "./settings-empty-state"
+
+type AlertHistoryListResponse = {
+	items: AlertsHistoryRecord[]
+	page: number
+	perPage: number
+	hasMore: boolean
+}
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
 const SectionIntro = memo(() => {
 	return (
-		<div>
-			<h3 className="text-xl font-medium mb-2">
-				<Trans>Alert History</Trans>
-			</h3>
-			<p className="text-sm text-muted-foreground leading-relaxed">
-				<Trans>View your 200 most recent alerts.</Trans>
-			</p>
+		<div className="rounded-lg border border-border/70 bg-card p-4 shadow-none">
+			<div className="flex min-w-0 gap-3">
+				<div className="grid size-9 shrink-0 place-items-center rounded-md border border-border/70 bg-surface-soft text-muted-foreground">
+					<BellIcon className="size-4" />
+				</div>
+				<div className="min-w-0">
+					<div className="text-xs font-medium text-muted-foreground">告警记录</div>
+					<h3 className="mt-1 text-lg font-semibold tracking-tight">
+						<Trans>Alert History</Trans>
+					</h3>
+					<p className="mt-1 text-pretty text-sm leading-relaxed text-muted-foreground">
+						按服务端分页查看告警历史，避免历史记录变多后拖慢浏览器。
+					</p>
+				</div>
+			</div>
 		</div>
 	)
 })
 
-export default function AlertsHistoryDataTable() {
+export default function AlertsHistoryDataTable({ hideIntro = false }: { hideIntro?: boolean }) {
+	const initialFilters = useMemo(() => getInitialAlertHistoryFilters(), [])
 	const [data, setData] = useState<AlertsHistoryRecord[]>([])
 	const [sorting, setSorting] = useState<SortingState>([])
-	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 	const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
 	const [rowSelection, setRowSelection] = useState({})
-	const [globalFilter, setGlobalFilter] = useState("")
+	const [search, setSearch] = useState(initialFilters.search)
+	const [stateFilter, setStateFilter] = useState(initialFilters.state)
+	const [sourceFilter, setSourceFilter] = useState(initialFilters.source)
+	const [loading, setLoading] = useState(false)
+	const [hasMore, setHasMore] = useState(false)
 	const { toast } = useToast()
 	const [deleteOpen, setDeleteDialogOpen] = useState(false)
-	
-	// Store pagination preference in local storage
-	const [pagination, setPagination] = useBrowserStorage<PaginationState>("ah-pagination", {
+
+	const [pagination, setPagination] = useBrowserStorage<PaginationState>("ah-pagination-server", {
 		pageIndex: 0,
-		pageSize: 10,
+		pageSize: 25,
 	})
+	const pageSize = Math.min(Math.max(Number(pagination.pageSize) || 25, 1), 100)
+	const currentPage = Math.max(Number(pagination.pageIndex) || 0, 0)
+
+	const query = useMemo(() => {
+		const params = new URLSearchParams({
+			page: String(currentPage + 1),
+			perPage: String(pageSize),
+		})
+		const keyword = search.trim()
+		if (keyword) params.set("search", keyword)
+		if (stateFilter !== "all") params.set("state", stateFilter)
+		if (sourceFilter !== "all") params.set("source", sourceFilter)
+		return params.toString()
+	}, [currentPage, pageSize, search, sourceFilter, stateFilter])
+
+	const loadRecords = useCallback(async () => {
+		setLoading(true)
+		try {
+			const response = await pb.send<AlertHistoryListResponse>(`/api/pulse/alerts-history?${query}`, {
+				requestKey: null,
+			})
+			setData(response.items)
+			setHasMore(Boolean(response.hasMore))
+		} catch (error) {
+			console.error(error)
+			toast({
+				variant: "destructive",
+				title: "加载告警历史失败",
+				description: "请确认 Hub 后端可用，并检查当前账号是否有权限查看告警记录。",
+			})
+		} finally {
+			setLoading(false)
+		}
+	}, [query, toast])
 
 	useEffect(() => {
 		let unsubscribe: (() => void) | undefined
-		const pbOptions = {
-			expand: "system",
-			fields: "id,name,value,state,created,resolved,expand.system.name",
-		}
-		// Initial load
-		pb.collection<AlertsHistoryRecord>("alerts_history")
-			.getList(0, 200, {
-				...pbOptions,
-				sort: "-created",
-			})
-			.then(({ items }) => setData(items))
-
-		// Subscribe to changes
+		let refreshTimer: ReturnType<typeof setTimeout> | undefined
+		loadRecords()
 		;(async () => {
-			unsubscribe = await pb.collection("alerts_history").subscribe(
-				"*",
-				(e) => {
-					if (e.action === "create") {
-						setData((current) => [e.record as AlertsHistoryRecord, ...current])
-					}
-					if (e.action === "update") {
-						setData((current) => current.map((r) => (r.id === e.record.id ? (e.record as AlertsHistoryRecord) : r)))
-					}
-					if (e.action === "delete") {
-						setData((current) => current.filter((r) => r.id !== e.record.id))
-					}
-				},
-				pbOptions
-			)
+			unsubscribe = await pb.collection("alerts_history").subscribe("*", () => {
+				if (refreshTimer) clearTimeout(refreshTimer)
+				refreshTimer = setTimeout(loadRecords, 250)
+			})
 		})()
-		// Unsubscribe on unmount
-		return () => unsubscribe?.()
-	}, [])
+		return () => {
+			unsubscribe?.()
+			if (refreshTimer) clearTimeout(refreshTimer)
+		}
+	}, [loadRecords])
+
+	useEffect(() => {
+		setRowSelection({})
+	}, [data])
+
+	const resetToFirstPage = useCallback(() => {
+		setPagination({ pageIndex: 0, pageSize })
+	}, [pageSize, setPagination])
+
+	const setPageSize = useCallback(
+		(nextPageSize: number) => {
+			setPagination({ pageIndex: 0, pageSize: Math.min(nextPageSize, 100) })
+		},
+		[setPagination]
+	)
+
+	const setPageIndex = useCallback(
+		(nextPageIndex: number) => {
+			setPagination({ pageIndex: Math.max(0, nextPageIndex), pageSize })
+		},
+		[pageSize, setPagination]
+	)
 
 	const table = useReactTable({
 		data,
@@ -136,40 +191,31 @@ export default function AlertsHistoryDataTable() {
 			...alertsHistoryColumns,
 		],
 		getCoreRowModel: getCoreRowModel(),
-		getPaginationRowModel: getPaginationRowModel(),
 		getSortedRowModel: getSortedRowModel(),
-		getFilteredRowModel: getFilteredRowModel(),
+		getRowId: (row) => row.id,
+		manualPagination: true,
+		pageCount: hasMore ? currentPage + 2 : Math.max(1, currentPage + 1),
 		onSortingChange: setSorting,
-		onColumnFiltersChange: setColumnFilters,
 		onColumnVisibilityChange: setColumnVisibility,
 		onRowSelectionChange: setRowSelection,
 		onPaginationChange: setPagination,
 		state: {
 			sorting,
-			columnFilters,
 			columnVisibility,
 			rowSelection,
-			globalFilter,
-			pagination,
-		},
-		onGlobalFilterChange: setGlobalFilter,
-		globalFilterFn: (row, _columnId, filterValue) => {
-			const system = row.original.expand?.system?.name ?? ""
-			const name = row.getValue("name") ?? ""
-			const created = row.getValue("created") ?? ""
-			const search = String(filterValue).toLowerCase()
-			return (
-				system.toLowerCase().includes(search) ||
-				(name as string).toLowerCase().includes(search) ||
-				(created as string).toLowerCase().includes(search)
-			)
+			pagination: { pageIndex: currentPage, pageSize },
 		},
 	})
 
-	// Bulk delete handler
+	const selectedRows = table.getSelectedRowModel().rows
+	const hasRows = data.length > 0
+	const pageStart = hasRows ? currentPage * pageSize + 1 : 0
+	const pageEnd = currentPage * pageSize + data.length
+	const toolbarSummary = hasRows ? `第 ${pageStart} - ${pageEnd} 条` : loading ? "加载中" : "暂无记录"
+
 	const handleBulkDelete = async () => {
 		setDeleteDialogOpen(false)
-		const selectedIds = table.getSelectedRowModel().rows.map((row) => row.original.id)
+		const selectedIds = selectedRows.map((row) => row.original.id)
 		try {
 			let batch = pb.createBatch()
 			let inBatch = 0
@@ -184,23 +230,22 @@ export default function AlertsHistoryDataTable() {
 			}
 			inBatch && (await batch.send())
 			table.resetRowSelection()
-		} catch (e) {
+			await loadRecords()
+		} catch {
 			toast({
 				variant: "destructive",
 				title: t`Error`,
-				description: `Failed to delete records.`,
+				description: "删除告警记录失败。",
 			})
 		}
 	}
 
-	// Export to CSV handler
 	const handleExportCSV = () => {
-		const selectedRows = table.getSelectedRowModel().rows
 		if (!selectedRows.length) return
 		const cells: Record<string, (record: AlertsHistoryRecord) => string> = {
 			system: (record) => record.expand?.system?.name || record.system,
 			name: (record) => alertInfo[record.name]?.name() || record.name,
-			value: (record) => record.value + (alertInfo[record.name]?.unit ?? ""),
+			value: (record) => `${record.value ?? record.val ?? ""}${alertInfo[record.name]?.unit ?? ""}`,
 			state: (record) => (record.resolved ? t`Resolved` : t`Active`),
 			created: (record) => formatShortDate(record.created),
 			resolved: (record) => (record.resolved ? formatShortDate(record.resolved) : ""),
@@ -208,14 +253,14 @@ export default function AlertsHistoryDataTable() {
 		}
 		const csvRows = [Object.keys(cells).join(",")]
 		for (const row of selectedRows) {
-			const r = row.original
+			const record = row.original
 			csvRows.push(
 				Object.values(cells)
-					.map((val) => val(r))
+					.map((value) => csvCell(value(record)))
 					.join(",")
 			)
 		}
-		const blob = new Blob([csvRows.join("\n")], { type: "text/csv" })
+		const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8" })
 		const url = URL.createObjectURL(blob)
 		const a = document.createElement("a")
 		a.href = url
@@ -225,64 +270,123 @@ export default function AlertsHistoryDataTable() {
 	}
 
 	return (
-		<div className="@container w-full">
-			<div className="@3xl:flex items-end mb-4 gap-4">
-				<SectionIntro />
-				<div className="flex items-center gap-2 ms-auto mt-3 @3xl:mt-0">
-					{table.getFilteredSelectedRowModel().rows.length > 0 && (
-						<div className="fixed bottom-0 left-0 w-full p-4 grid grid-cols-2 items-center gap-4 z-50 backdrop-blur-md shrink-0 @lg:static @lg:p-0 @lg:w-auto @lg:gap-3">
-							<AlertDialog open={deleteOpen} onOpenChange={(open) => setDeleteDialogOpen(open)}>
-								<AlertDialogTrigger asChild>
-									<Button variant="destructive" className="h-9 shrink-0">
-										<Trash2Icon className="size-4 shrink-0" />
-										<span className="ms-1">
-											<Trans>Delete</Trans>
-										</span>
-									</Button>
-								</AlertDialogTrigger>
-								<AlertDialogContent>
-									<AlertDialogHeader>
-										<AlertDialogTitle>
-											<Trans>Are you sure?</Trans>
-										</AlertDialogTitle>
-										<AlertDialogDescription>
-											<Trans>This will permanently delete all selected records from the database.</Trans>
-										</AlertDialogDescription>
-									</AlertDialogHeader>
-									<AlertDialogFooter>
-										<AlertDialogCancel>
-											<Trans>Cancel</Trans>
-										</AlertDialogCancel>
-										<AlertDialogAction
-											className={cn(buttonVariants({ variant: "destructive" }))}
-											onClick={handleBulkDelete}
-										>
-											<Trans>Continue</Trans>
-										</AlertDialogAction>
-									</AlertDialogFooter>
-								</AlertDialogContent>
-							</AlertDialog>
-							<Button variant="outline" className="h-10" onClick={handleExportCSV}>
-								<DownloadIcon className="size-4" />
-								<span className="ms-1">
-									<Trans>Export</Trans>
-								</span>
-							</Button>
-						</div>
-					)}
-					<Input
-						placeholder={t`Filter...`}
-						value={globalFilter}
-						onChange={(e) => setGlobalFilter(e.target.value)}
-						className="px-4 w-full max-w-full @3xl:w-64"
-					/>
+		<div className="@container w-full min-w-0 rounded-lg border border-border/70 bg-surface-soft p-3 shadow-none sm:p-4">
+			<div className="mb-3 grid gap-3 @3xl:grid-cols-[minmax(0,1fr)_auto] @3xl:items-end">
+				{!hideIntro && <SectionIntro />}
+				<div className="grid w-full gap-2 rounded-lg border border-border/70 bg-card p-3 shadow-none @3xl:w-auto @3xl:grid-cols-[260px_150px_150px_auto]">
+					<div className="relative min-w-0">
+						<SearchIcon className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
+						<Input
+							placeholder="搜索机器、告警名或告警 ID"
+							value={search}
+							onChange={(event) => {
+								setSearch(event.target.value)
+								resetToFirstPage()
+							}}
+							className="h-10 w-full pl-9"
+						/>
+					</div>
+					<Select
+						value={stateFilter}
+						onValueChange={(value) => {
+							setStateFilter(value)
+							resetToFirstPage()
+						}}
+					>
+						<SelectTrigger className="h-10">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">全部状态</SelectItem>
+							<SelectItem value="current">未恢复</SelectItem>
+							<SelectItem value="recovered">已恢复</SelectItem>
+						</SelectContent>
+					</Select>
+					<Select
+						value={sourceFilter}
+						onValueChange={(value) => {
+							setSourceFilter(value)
+							resetToFirstPage()
+						}}
+					>
+						<SelectTrigger className="h-10">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">全部来源</SelectItem>
+							<SelectItem value="machine">机器</SelectItem>
+							<SelectItem value="website">网站</SelectItem>
+							<SelectItem value="container">容器</SelectItem>
+							<SelectItem value="compose">编排</SelectItem>
+							<SelectItem value="service">服务</SelectItem>
+							<SelectItem value="software">软件</SelectItem>
+							<SelectItem value="hardware">硬件</SelectItem>
+							<SelectItem value="resource">资源</SelectItem>
+						</SelectContent>
+					</Select>
+					<Button variant="outline" className="h-10" onClick={loadRecords} disabled={loading}>
+						<RefreshCwIcon className={cn("size-4", loading && "animate-spin")} />
+						刷新
+					</Button>
 				</div>
 			</div>
-			<div className="rounded-md border overflow-x-auto whitespace-nowrap">
+			{selectedRows.length > 0 && (
+				<div className="fixed bottom-0 left-0 z-50 grid w-full shrink-0 grid-cols-2 items-center gap-4 border-t border-border/70 bg-card p-4 shadow-none @lg:static @lg:mb-3 @lg:w-auto @lg:grid-cols-[auto_auto] @lg:justify-start @lg:border-0 @lg:bg-transparent @lg:p-0">
+					<AlertDialog open={deleteOpen} onOpenChange={(open) => setDeleteDialogOpen(open)}>
+						<AlertDialogTrigger asChild>
+							<Button variant="destructive" className="h-10 shrink-0">
+								<Trash2Icon className="size-4 shrink-0" />
+								<span className="ms-1">
+									<Trans>Delete</Trans>
+								</span>
+							</Button>
+						</AlertDialogTrigger>
+						<AlertDialogContent>
+							<AlertDialogHeader>
+								<AlertDialogTitle>
+									<Trans>Are you sure?</Trans>
+								</AlertDialogTitle>
+								<AlertDialogDescription>
+									将永久删除当前页已选中的 {selectedRows.length} 条告警历史记录。
+								</AlertDialogDescription>
+							</AlertDialogHeader>
+							<AlertDialogFooter>
+								<AlertDialogCancel>
+									<Trans>Cancel</Trans>
+								</AlertDialogCancel>
+								<AlertDialogAction
+									className={cn(buttonVariants({ variant: "destructive" }))}
+									onClick={handleBulkDelete}
+								>
+									<Trans>Continue</Trans>
+								</AlertDialogAction>
+							</AlertDialogFooter>
+						</AlertDialogContent>
+					</AlertDialog>
+					<Button variant="outline" className="h-10" onClick={handleExportCSV}>
+						<DownloadIcon className="size-4" />
+						<span className="ms-1">
+							<Trans>Export</Trans>
+						</span>
+					</Button>
+				</div>
+			)}
+			<div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-card px-3 py-2 text-sm shadow-none">
+				<div className="text-muted-foreground">
+					当前页 <span className="font-medium text-foreground tabular-nums">{data.length}</span> 条
+					{selectedRows.length > 0 && (
+						<span>
+							，已选 <span className="font-medium text-foreground tabular-nums">{selectedRows.length}</span> 条
+						</span>
+					)}
+				</div>
+				<div className="font-medium text-muted-foreground tabular-nums">{toolbarSummary}</div>
+			</div>
+			<div className="overflow-x-auto whitespace-nowrap rounded-lg border border-border/70 bg-card shadow-none">
 				<Table>
 					<TableHeader>
 						{table.getHeaderGroups().map((headerGroup) => (
-							<tr key={headerGroup.id} className="border-border/50">
+							<tr key={headerGroup.id} className="border-border/70 bg-surface-soft hover:bg-surface-soft">
 								{headerGroup.headers.map((header) => (
 									<TableHead className="px-2" key={header.id}>
 										{header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
@@ -303,93 +407,114 @@ export default function AlertsHistoryDataTable() {
 								</TableRow>
 							))
 						) : (
-							<TableRow>
-								<TableCell colSpan={table.getAllColumns().length} className="h-24 text-center">
-									<Trans>No results.</Trans>
-								</TableCell>
-							</TableRow>
+							<SettingsTableEmptyRow
+								colSpan={table.getAllColumns().length}
+								loading={loading}
+								loadingText="正在读取告警历史"
+								emptyText="暂无告警历史"
+							/>
 						)}
 					</TableBody>
 				</Table>
 			</div>
-			<div className="flex items-center justify-between ps-1 tabular-nums">
-				<div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
-					<Trans>
-						{table.getFilteredSelectedRowModel().rows.length} of {table.getFilteredRowModel().rows.length} row(s)
-						selected.
-					</Trans>
+			<div className="flex items-center justify-between rounded-lg border border-border/70 bg-card px-3 tabular-nums shadow-none">
+				<div className="hidden flex-1 text-sm text-muted-foreground lg:flex">
+					当前页已选 {selectedRows.length} 条，本页 {data.length} 条
 				</div>
-				<div className="flex w-full items-center gap-8 lg:w-fit my-3">
-					<div className="hidden items-center gap-2 lg:flex">
-						<Label htmlFor="rows-per-page" className="text-sm font-medium">
-							<Trans>Rows per page</Trans>
-						</Label>
-						<Select
-							value={`${table.getState().pagination.pageSize}`}
-							onValueChange={(value) => {
-								table.setPageSize(Number(value));
-							}}
-						>
-							<SelectTrigger className="w-18" id="rows-per-page">
-								<SelectValue placeholder={table.getState().pagination.pageSize} />
-							</SelectTrigger>
-							<SelectContent side="top">
-								{[10, 20, 50, 100, 200].map((pageSize) => (
-									<SelectItem key={pageSize} value={`${pageSize}`}>
-										{pageSize}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
+				{hasRows || currentPage > 0 ? (
+					<div className="my-3 flex w-full items-center gap-3 sm:gap-6 lg:w-fit lg:gap-8">
+						<div className="hidden items-center gap-2 lg:flex">
+							<Label htmlFor="rows-per-page" className="text-sm font-medium">
+								<Trans>Rows per page</Trans>
+							</Label>
+							<Select value={`${pageSize}`} onValueChange={(value) => setPageSize(Number(value))}>
+								<SelectTrigger className="w-18" id="rows-per-page">
+									<SelectValue placeholder={pageSize} />
+								</SelectTrigger>
+								<SelectContent side="top">
+									{PAGE_SIZE_OPTIONS.map((item) => (
+										<SelectItem key={item} value={`${item}`}>
+											{item}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="flex min-w-48 items-center justify-center text-sm font-medium">
+							{hasRows ? (
+								<span>
+									第 {pageStart} - {pageEnd} 条{hasMore ? "，后面还有更多" : ""}
+								</span>
+							) : (
+								<span>第 {currentPage + 1} 页暂无记录</span>
+							)}
+						</div>
+						<div className="ms-auto flex items-center gap-2 lg:ms-0">
+							<Button
+								variant="outline"
+								className="size-10"
+								size="icon"
+								onClick={() => setPageIndex(currentPage - 1)}
+								disabled={currentPage === 0 || loading}
+							>
+								<span className="sr-only">Go to previous page</span>
+								<ChevronLeftIcon className="size-5" />
+							</Button>
+							<span className="min-w-16 text-center text-sm tabular-nums">第 {currentPage + 1} 页</span>
+							<Button
+								variant="outline"
+								className="size-10"
+								size="icon"
+								onClick={() => setPageIndex(currentPage + 1)}
+								disabled={!hasMore || loading}
+							>
+								<span className="sr-only">Go to next page</span>
+								<ChevronRightIcon className="size-5" />
+							</Button>
+						</div>
 					</div>
-					<div className="flex w-fit items-center justify-center text-sm font-medium">
-						<Trans>
-							Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-						</Trans>
-					</div>
-					<div className="ms-auto flex items-center gap-2 lg:ms-0">
-						<Button
-							variant="outline"
-							className="hidden size-9 p-0 lg:flex"
-							onClick={() => table.setPageIndex(0)}
-							disabled={!table.getCanPreviousPage()}
-						>
-							<span className="sr-only">Go to first page</span>
-							<ChevronsLeftIcon className="size-5" />
-						</Button>
-						<Button
-							variant="outline"
-							className="size-9"
-							size="icon"
-							onClick={() => table.previousPage()}
-							disabled={!table.getCanPreviousPage()}
-						>
-							<span className="sr-only">Go to previous page</span>
-							<ChevronLeftIcon className="size-5" />
-						</Button>
-						<Button
-							variant="outline"
-							className="size-9"
-							size="icon"
-							onClick={() => table.nextPage()}
-							disabled={!table.getCanNextPage()}
-						>
-							<span className="sr-only">Go to next page</span>
-							<ChevronRightIcon className="size-5" />
-						</Button>
-						<Button
-							variant="outline"
-							className="hidden size-9 lg:flex"
-							size="icon"
-							onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-							disabled={!table.getCanNextPage()}
-						>
-							<span className="sr-only">Go to last page</span>
-							<ChevronsRightIcon className="size-5" />
-						</Button>
-					</div>
-				</div>
+				) : (
+					<SettingsEmptyState
+						loading={loading}
+						loadingText="正在读取告警历史"
+						emptyText="暂无可分页的告警记录"
+						className="my-3 min-h-20"
+					/>
+				)}
 			</div>
 		</div>
 	)
+}
+
+function getInitialAlertHistoryFilters() {
+	if (typeof window === "undefined") {
+		return { search: "", state: "all", source: "all" }
+	}
+	const params = new URLSearchParams(window.location.search)
+	const state = params.get("state") || "all"
+	const source = params.get("source") || "all"
+	return {
+		search: params.get("search") || "",
+		state: ["all", "current", "recovered"].includes(state) ? state : "all",
+		source: [
+			"all",
+			"machine",
+			"website",
+			"container",
+			"compose",
+			"service",
+			"software",
+			"hardware",
+			"resource",
+		].includes(source)
+			? source
+			: "all",
+	}
+}
+
+function csvCell(value: string) {
+	if (!/[",\n\r]/.test(value)) {
+		return value
+	}
+	return `"${value.replaceAll('"', '""')}"`
 }

@@ -8,11 +8,10 @@ import (
 	"path/filepath"
 
 	"github.com/google/uuid"
-	"github.com/henrygd/beszel/internal/entities/system"
+	"gutenacht.site/pulse/internal/entities/system"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
-	"github.com/spf13/cast"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,8 +21,6 @@ type config struct {
 
 type systemConfig struct {
 	Name  string   `yaml:"name"`
-	Host  string   `yaml:"host"`
-	Port  uint16   `yaml:"port,omitempty"`
 	Token string   `yaml:"token,omitempty"`
 	Users []string `yaml:"users"`
 }
@@ -66,9 +63,6 @@ func SyncSystems(e *core.ServeEvent) error {
 	// add default settings for systems if not defined in config
 	for i := range config.Systems {
 		system := &config.Systems[i]
-		if system.Port == 0 {
-			system.Port = 45876
-		}
 		if len(users) > 0 && len(system.Users) == 0 {
 			// default to first user if none are defined
 			system.Users = []string{firstUser.Id}
@@ -95,18 +89,17 @@ func SyncSystems(e *core.ServeEvent) error {
 	// Create a map of existing systems
 	existingSystemsMap := make(map[string]*core.Record)
 	for _, system := range existingSystems {
-		key := system.GetString("name") + system.GetString("host") + system.GetString("port")
+		key := system.GetString("name")
 		existingSystemsMap[key] = system
 	}
 
 	// Process systems from config
 	for _, sysConfig := range config.Systems {
-		key := sysConfig.Name + sysConfig.Host + cast.ToString(sysConfig.Port)
+		key := sysConfig.Name
 		if existingSystem, ok := existingSystemsMap[key]; ok {
 			// Update existing system
 			existingSystem.Set("name", sysConfig.Name)
 			existingSystem.Set("users", sysConfig.Users)
-			existingSystem.Set("port", sysConfig.Port)
 			if err := h.Save(existingSystem); err != nil {
 				return err
 			}
@@ -127,9 +120,8 @@ func SyncSystems(e *core.ServeEvent) error {
 			}
 			newSystem := core.NewRecord(systemsCollection)
 			newSystem.Set("name", sysConfig.Name)
-			newSystem.Set("host", sysConfig.Host)
-			newSystem.Set("port", sysConfig.Port)
 			newSystem.Set("users", sysConfig.Users)
+			newSystem.Set("pairing_confirmed", true)
 			newSystem.Set("info", system.Info{})
 			newSystem.Set("status", "pending")
 			if err := h.Save(newSystem); err != nil {
@@ -162,6 +154,10 @@ func SyncSystems(e *core.ServeEvent) error {
 
 // Generates content for the config.yml file as a YAML string
 func generateYAML(h core.App) (string, error) {
+	return GenerateYAML(h)
+}
+
+func GenerateYAML(h core.App) (string, error) {
 	// Fetch all systems from the database
 	systems, err := h.FindRecordsByFilter("systems", "id != ''", "name", -1, 0)
 	if err != nil {
@@ -213,8 +209,6 @@ func generateYAML(h core.App) (string, error) {
 
 		sysConfig := systemConfig{
 			Name:  system.GetString("name"),
-			Host:  system.GetString("host"),
-			Port:  cast.ToUint16(system.Get("port")),
 			Users: userEmails,
 			Token: systemTokenMap[system.Id],
 		}
@@ -228,7 +222,7 @@ func generateYAML(h core.App) (string, error) {
 	}
 
 	// Add a header to the YAML
-	yamlData = append([]byte("# Values for port, users, and token are optional.\n# Defaults are port 45876, the first created user, and a generated UUID token.\n\n"), yamlData...)
+	yamlData = append([]byte("# WebSocket-only agent config. Values for users and token are optional.\n# Defaults are the first created user and a generated UUID token.\n# Agent connections do not use host/port.\n\n"), yamlData...)
 
 	return string(yamlData), nil
 }
@@ -279,7 +273,7 @@ func createFingerprintRecord(app core.App, systemID, token string) error {
 
 // Returns the current config.yml file as a JSON object
 func GetYamlConfig(e *core.RequestEvent) error {
-	configContent, err := generateYAML(e.App)
+	configContent, err := GenerateYAML(e.App)
 	if err != nil {
 		return err
 	}

@@ -5,22 +5,23 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-	"inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-pointer",
+	"inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-md text-sm font-semibold ring-offset-background transition-[background-color,border-color,color,transform,opacity] duration-150 ease-out focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/80 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-pointer active:scale-[0.96]",
 	{
 		variants: {
 			variant: {
-				default: "bg-primary text-primary-foreground hover:bg-primary/90",
-				destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-				outline: "border bg-background hover:bg-accent/70 dark:hover:bg-accent/50 hover:text-accent-foreground",
-				secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-				ghost: "hover:bg-accent/70 hover:text-accent-foreground",
+				default: "bg-primary text-primary-foreground shadow-none hover:bg-primary/90",
+				destructive: "bg-destructive text-destructive-foreground shadow-none hover:bg-destructive/90",
+				outline:
+					"border border-border bg-card text-foreground shadow-none hover:border-border hover:bg-surface-soft hover:text-foreground",
+				secondary: "bg-surface-soft text-foreground shadow-none hover:bg-surface-card",
+				ghost: "text-foreground hover:bg-surface-soft hover:text-foreground",
 				link: "text-primary underline-offset-4 hover:underline",
 			},
 			size: {
 				default: "h-10 px-4 py-2",
-				sm: "h-9 rounded-md px-3",
+				sm: "h-10 rounded-md px-3 text-xs",
 				lg: "h-11 rounded-md px-8",
-				icon: "h-10 w-10",
+				icon: "size-10",
 			},
 		},
 		defaultVariants: {
@@ -39,7 +40,14 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 	({ className, variant, size, asChild = false, ...props }, ref) => {
 		const Comp = asChild ? Slot : "button"
-		return <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
+		return (
+			<Comp
+				className={cn(buttonVariants({ variant, size, className }))}
+				ref={ref}
+				{...(!asChild ? { type: "button" } : {})}
+				{...props}
+			/>
+		)
 	}
 )
 Button.displayName = "Button"

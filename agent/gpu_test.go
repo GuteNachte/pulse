@@ -6,16 +6,24 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/henrygd/beszel/agent/utils"
-	"github.com/henrygd/beszel/internal/entities/system"
+	"gutenacht.site/pulse/agent/utils"
+	"gutenacht.site/pulse/internal/entities/system"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func skipPosixCommandStubTestOnWindows(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("uses POSIX command stubs that are not executable on Windows")
+	}
+}
 
 func TestParseNvidiaData(t *testing.T) {
 	tests := []struct {
@@ -157,6 +165,7 @@ func TestParseAmdData(t *testing.T) {
 			wantData: map[string]system.GPUData{
 				"34756": {
 					Name:        "Rembrandt [Radeon 680M]",
+					Type:        gpuTypeIntegrated,
 					Temperature: 47.0,
 					MemoryUsed:  482263040.0 / (1024 * 1024),
 					MemoryTotal: 536870912.0 / (1024 * 1024),
@@ -194,6 +203,7 @@ func TestParseAmdData(t *testing.T) {
 			wantData: map[string]system.GPUData{
 				"34756": {
 					Name:        "Rembrandt [Radeon 680M]",
+					Type:        gpuTypeIntegrated,
 					Temperature: 47.0,
 					MemoryUsed:  482263040.0 / (1024 * 1024),
 					MemoryTotal: 536870912.0 / (1024 * 1024),
@@ -203,6 +213,7 @@ func TestParseAmdData(t *testing.T) {
 				},
 				"38294": {
 					Name:        "Navi 31 [Radeon RX 7900 XT]",
+					Type:        gpuTypeDiscrete,
 					Temperature: 49.0,
 					MemoryUsed:  794341376.0 / (1024 * 1024),
 					MemoryTotal: 25753026560.0 / (1024 * 1024),
@@ -238,6 +249,7 @@ func TestParseAmdData(t *testing.T) {
 					got := gm.GpuDataMap[id]
 					require.NotNil(t, got)
 					assert.Equal(t, want.Name, got.Name)
+					assert.Equal(t, want.Type, got.Type)
 					assert.InDelta(t, want.Temperature, got.Temperature, 0.01)
 					assert.InDelta(t, want.MemoryUsed, got.MemoryUsed, 0.01)
 					assert.InDelta(t, want.MemoryTotal, got.MemoryTotal, 0.01)
@@ -1082,31 +1094,26 @@ func TestCalculateGPUAverage(t *testing.T) {
 }
 
 func TestGPUCapabilitiesAndLegacyPriority(t *testing.T) {
+	skipPosixCommandStubTestOnWindows(t)
 	// Save original PATH
 	hasAmdSysfs := (&GPUManager{}).hasAmdSysfs()
 
 	tests := []struct {
-		name           string
-		setupCommands  func(string) error
-		wantNvidiaSmi  bool
-		wantRocmSmi    bool
-		wantTegrastats bool
-		wantNvtop      bool
-		wantErr        bool
+		name          string
+		setupCommands func(string) error
+		wantIntel     bool
+		wantAmdSysfs  bool
+		wantErr       bool
 	}{
 		{
 			name: "nvidia-smi not available",
 			setupCommands: func(_ string) error {
 				return nil
 			},
-			wantNvidiaSmi:  false,
-			wantRocmSmi:    false,
-			wantTegrastats: false,
-			wantNvtop:      false,
-			wantErr:        true,
+			wantErr: true,
 		},
 		{
-			name: "nvidia-smi available",
+			name: "nvidia-smi ignored",
 			setupCommands: func(tempDir string) error {
 				path := filepath.Join(tempDir, "nvidia-smi")
 				script := `#!/bin/sh
@@ -1116,14 +1123,10 @@ echo "test"`
 				}
 				return nil
 			},
-			wantNvidiaSmi:  true,
-			wantTegrastats: false,
-			wantRocmSmi:    false,
-			wantNvtop:      false,
-			wantErr:        false,
+			wantErr: true,
 		},
 		{
-			name: "rocm-smi available",
+			name: "rocm-smi ignored",
 			setupCommands: func(tempDir string) error {
 				path := filepath.Join(tempDir, "rocm-smi")
 				script := `#!/bin/sh
@@ -1133,14 +1136,10 @@ echo "test"`
 				}
 				return nil
 			},
-			wantNvidiaSmi:  false,
-			wantRocmSmi:    true,
-			wantTegrastats: false,
-			wantNvtop:      false,
-			wantErr:        false,
+			wantErr: true,
 		},
 		{
-			name: "tegrastats available",
+			name: "tegrastats ignored",
 			setupCommands: func(tempDir string) error {
 				path := filepath.Join(tempDir, "tegrastats")
 				script := `#!/bin/sh
@@ -1150,14 +1149,10 @@ echo "test"`
 				}
 				return nil
 			},
-			wantNvidiaSmi:  false,
-			wantRocmSmi:    false,
-			wantTegrastats: true,
-			wantNvtop:      false,
-			wantErr:        false,
+			wantErr: true,
 		},
 		{
-			name: "nvtop available",
+			name: "nvtop ignored",
 			setupCommands: func(tempDir string) error {
 				path := filepath.Join(tempDir, "nvtop")
 				script := `#!/bin/sh
@@ -1167,11 +1162,21 @@ echo "[]"`
 				}
 				return nil
 			},
-			wantNvidiaSmi:  false,
-			wantRocmSmi:    false,
-			wantTegrastats: false,
-			wantNvtop:      true,
-			wantErr:        false,
+			wantErr: true,
+		},
+		{
+			name: "intel_gpu_top available",
+			setupCommands: func(tempDir string) error {
+				path := filepath.Join(tempDir, "intel_gpu_top")
+				script := `#!/bin/sh
+echo "test"`
+				if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+					return err
+				}
+				return nil
+			},
+			wantIntel: true,
+			wantErr:   false,
 		},
 		{
 			name: "no gpu tools available",
@@ -1206,12 +1211,10 @@ echo "[]"`
 				}
 				return false
 			}
-			gotNvidiaSmi := hasPriority(collectorSourceNvidiaSMI)
-			gotRocmSmi := hasPriority(collectorSourceRocmSMI)
-			gotTegrastats := caps.hasTegrastats
-			gotNvtop := caps.hasNvtop
+			gotIntel := hasPriority(collectorSourceIntelGpuTop)
+			gotAmdSysfs := hasPriority(collectorSourceAmdSysfs)
 
-			t.Logf("nvidiaSmi: %v, rocmSmi: %v, tegrastats: %v", gotNvidiaSmi, gotRocmSmi, gotTegrastats)
+			t.Logf("intelGpuTop: %v, amdSysfs: %v", gotIntel, gotAmdSysfs)
 
 			wantErr := tt.wantErr
 			if hasAmdSysfs && (tt.name == "nvidia-smi not available" || tt.name == "no gpu tools available") {
@@ -1223,15 +1226,14 @@ echo "[]"`
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.wantNvidiaSmi, gotNvidiaSmi)
-			assert.Equal(t, tt.wantRocmSmi, gotRocmSmi)
-			assert.Equal(t, tt.wantTegrastats, gotTegrastats)
-			assert.Equal(t, tt.wantNvtop, gotNvtop)
+			assert.Equal(t, tt.wantIntel, gotIntel)
+			assert.Equal(t, tt.wantAmdSysfs, gotAmdSysfs)
 		})
 	}
 }
 
 func TestCollectorStartHelpers(t *testing.T) {
+	skipPosixCommandStubTestOnWindows(t)
 	// Set up temp dir with the commands
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
@@ -1364,9 +1366,10 @@ echo '[{"device_name":"NVIDIA Test GPU","temp":"52C","power_draw":"31W","gpu_uti
 }
 
 func TestNewGPUManagerPriorityNvtopFallback(t *testing.T) {
+	skipPosixCommandStubTestOnWindows(t)
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
-	t.Setenv("BESZEL_AGENT_GPU_COLLECTOR", "nvtop,nvidia-smi")
+	t.Setenv("PULSE_AGENT_GPU_COLLECTOR", "nvtop,nvidia-smi")
 
 	nvtopPath := filepath.Join(dir, "nvtop")
 	nvtopScript := `#!/bin/sh
@@ -1379,20 +1382,16 @@ echo "0, NVIDIA Priority GPU, 45, 512, 2048, 12, 25"`
 	require.NoError(t, os.WriteFile(nvidiaPath, []byte(nvidiaScript), 0755))
 
 	gm, err := NewGPUManager()
-	require.NoError(t, err)
-	require.NotNil(t, gm)
-
-	time.Sleep(150 * time.Millisecond)
-	gpu, ok := gm.GpuDataMap["0"]
-	require.True(t, ok)
-	assert.Equal(t, "Priority GPU", gpu.Name)
-	assert.Equal(t, 45.0, gpu.Temperature)
+	require.Nil(t, gm)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no configured integrated GPU collectors are available")
 }
 
 func TestNewGPUManagerPriorityMixedCollectors(t *testing.T) {
+	skipPosixCommandStubTestOnWindows(t)
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
-	t.Setenv("BESZEL_AGENT_GPU_COLLECTOR", "intel_gpu_top,rocm-smi")
+	t.Setenv("PULSE_AGENT_GPU_COLLECTOR", "intel_gpu_top,rocm-smi")
 
 	intelPath := filepath.Join(dir, "intel_gpu_top")
 	intelScript := `#!/bin/sh
@@ -1403,12 +1402,6 @@ echo "189  187      412  67  1.80  2.45   1950    823   8.50    2   1    15.00  
 `
 	require.NoError(t, os.WriteFile(intelPath, []byte(intelScript), 0755))
 
-	rocmPath := filepath.Join(dir, "rocm-smi")
-	rocmScript := `#!/bin/sh
-echo '{"card0": {"Temperature (Sensor edge) (C)": "49.0", "Current Socket Graphics Package Power (W)": "28.159", "GPU use (%)": "0", "VRAM Total Memory (B)": "536870912", "VRAM Total Used Memory (B)": "445550592", "Card Series": "Rembrandt [Radeon 680M]", "GUID": "34756"}}'
-`
-	require.NoError(t, os.WriteFile(rocmPath, []byte(rocmScript), 0755))
-
 	gm, err := NewGPUManager()
 	require.NoError(t, err)
 	require.NotNil(t, gm)
@@ -1417,13 +1410,14 @@ echo '{"card0": {"Temperature (Sensor edge) (C)": "49.0", "Current Socket Graphi
 	_, intelOk := gm.GpuDataMap["i0"]
 	_, amdOk := gm.GpuDataMap["34756"]
 	assert.True(t, intelOk)
-	assert.True(t, amdOk)
+	assert.False(t, amdOk)
 }
 
 func TestNewGPUManagerPriorityNvmlFallbackToNvidiaSmi(t *testing.T) {
+	skipPosixCommandStubTestOnWindows(t)
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
-	t.Setenv("BESZEL_AGENT_GPU_COLLECTOR", "nvml,nvidia-smi")
+	t.Setenv("PULSE_AGENT_GPU_COLLECTOR", "nvml,nvidia-smi")
 
 	nvidiaPath := filepath.Join(dir, "nvidia-smi")
 	nvidiaScript := `#!/bin/sh
@@ -1431,13 +1425,9 @@ echo "0, NVIDIA Fallback GPU, 41, 256, 1024, 8, 14"`
 	require.NoError(t, os.WriteFile(nvidiaPath, []byte(nvidiaScript), 0755))
 
 	gm, err := NewGPUManager()
-	require.NoError(t, err)
-	require.NotNil(t, gm)
-
-	time.Sleep(150 * time.Millisecond)
-	gpu, ok := gm.GpuDataMap["0"]
-	require.True(t, ok)
-	assert.Equal(t, "Fallback GPU", gpu.Name)
+	require.Nil(t, gm)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no configured integrated GPU collectors are available")
 }
 
 func TestNewGPUManagerConfiguredCollectorsMustStart(t *testing.T) {
@@ -1445,19 +1435,19 @@ func TestNewGPUManagerConfiguredCollectorsMustStart(t *testing.T) {
 	t.Setenv("PATH", dir)
 
 	t.Run("configured valid collector unavailable", func(t *testing.T) {
-		t.Setenv("BESZEL_AGENT_GPU_COLLECTOR", "nvidia-smi")
+		t.Setenv("PULSE_AGENT_GPU_COLLECTOR", "nvidia-smi")
 		gm, err := NewGPUManager()
 		require.Nil(t, gm)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "no configured GPU collectors are available")
+		assert.Contains(t, err.Error(), "no configured integrated GPU collectors are available")
 	})
 
 	t.Run("configured collector list has only unknown entries", func(t *testing.T) {
-		t.Setenv("BESZEL_AGENT_GPU_COLLECTOR", "bad,unknown")
+		t.Setenv("PULSE_AGENT_GPU_COLLECTOR", "bad,unknown")
 		gm, err := NewGPUManager()
 		require.Nil(t, gm)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "no configured GPU collectors are available")
+		assert.Contains(t, err.Error(), "no configured integrated GPU collectors are available")
 	})
 }
 
@@ -1471,19 +1461,19 @@ func TestCollectorDefinitionsNvmlDoesNotRequireNvidiaSmi(t *testing.T) {
 func TestNewGPUManagerConfiguredNvmlBypassesCapabilityGate(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
-	t.Setenv("BESZEL_AGENT_GPU_COLLECTOR", "nvml")
+	t.Setenv("PULSE_AGENT_GPU_COLLECTOR", "nvml")
 
 	gm, err := NewGPUManager()
 	require.Nil(t, gm)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no configured GPU collectors are available")
+	assert.Contains(t, err.Error(), "no configured integrated GPU collectors are available")
 	assert.NotContains(t, err.Error(), noGPUFoundMsg)
 }
 
 func TestNewGPUManagerJetsonIgnoresCollectorConfig(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
-	t.Setenv("BESZEL_AGENT_GPU_COLLECTOR", "nvidia-smi")
+	t.Setenv("PULSE_AGENT_GPU_COLLECTOR", "nvidia-smi")
 
 	tegraPath := filepath.Join(dir, "tegrastats")
 	tegraScript := `#!/bin/sh
@@ -1491,13 +1481,9 @@ echo "11-14-2024 22:54:33 RAM 1024/4096MB GR3D_FREQ 80% tj@70C VDD_GPU_SOC 1000m
 	require.NoError(t, os.WriteFile(tegraPath, []byte(tegraScript), 0755))
 
 	gm, err := NewGPUManager()
-	require.NoError(t, err)
-	require.NotNil(t, gm)
-
-	time.Sleep(100 * time.Millisecond)
-	gpu, ok := gm.GpuDataMap["0"]
-	require.True(t, ok)
-	assert.Equal(t, "GPU", gpu.Name)
+	require.Nil(t, gm)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no configured integrated GPU collectors are available")
 }
 
 // TestAccumulationTableDriven tests the accumulation behavior for all three GPU types
@@ -1687,7 +1673,7 @@ func TestIntelUpdateFromStats(t *testing.T) {
 
 	gpu := gm.GpuDataMap["i0"]
 	require.NotNil(t, gpu)
-	assert.Equal(t, "GPU", gpu.Name)
+	assert.Equal(t, "Intel GPU", gpu.Name)
 	assert.EqualValues(t, 10.5, gpu.Power)
 	assert.EqualValues(t, 20.0, gpu.Engines["Render/3D"])
 	assert.EqualValues(t, 5.0, gpu.Engines["Video"])
@@ -1716,7 +1702,296 @@ func TestIntelUpdateFromStats(t *testing.T) {
 	assert.Equal(t, float64(2), gpu.Count)
 }
 
+func TestIntelGpuNameByDeviceID(t *testing.T) {
+	tests := []struct {
+		deviceID string
+		want     string
+	}{
+		{deviceID: "0x9a49", want: "Intel Iris Xe Graphics"},
+		{deviceID: "46a6", want: "Intel Iris Xe Graphics"},
+		{deviceID: "0xa780", want: "Intel UHD Graphics 770"},
+		{deviceID: "0x3e92", want: "Intel UHD Graphics 630"},
+		{deviceID: "bad", want: "Intel GPU"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.deviceID, func(t *testing.T) {
+			assert.Equal(t, tt.want, intelGpuNameByDeviceID(tt.deviceID))
+		})
+	}
+}
+
+func TestParseWindowsGPUCounterData(t *testing.T) {
+	input := []byte(`{
+		"CounterSamples": [
+			{
+				"Path": "\\\\UM-690\\gpu engine(pid_100_luid_0x00000000_0x0000a111_phys_0_engtype_3D)\\utilization percentage",
+				"InstanceName": "pid_100_luid_0x00000000_0x0000a111_phys_0_engtype_3D",
+				"CookedValue": 42.5
+			},
+			{
+				"Path": "\\\\UM-690\\gpu engine(pid_120_luid_0x00000000_0x0000a111_phys_0_engtype_3D)\\utilization percentage",
+				"InstanceName": "pid_120_luid_0x00000000_0x0000a111_phys_0_engtype_3D",
+				"CookedValue": 70.0
+			},
+			{
+				"Path": "\\\\UM-690\\gpu engine(pid_130_luid_0x00000000_0x0000a111_phys_0_engtype_VideoDecode)\\utilization percentage",
+				"InstanceName": "pid_130_luid_0x00000000_0x0000a111_phys_0_engtype_VideoDecode",
+				"CookedValue": 8.25
+			},
+			{
+				"Path": "\\\\UM-690\\gpu engine(pid_200_luid_0x00000000_0x0000b222_phys_1_engtype_Copy)\\utilization percentage",
+				"InstanceName": "pid_200_luid_0x00000000_0x0000b222_phys_1_engtype_Copy",
+				"CookedValue": 12.0
+			}
+		]
+	}`)
+
+	samples, ok := parseWindowsGPUCounterDataWithNames(input, map[string]string{
+		"0": "AMD Radeon 680M",
+		"1": "NVIDIA RTX Test",
+	})
+	require.True(t, ok)
+	require.Len(t, samples, 2)
+
+	assert.Equal(t, "AMD Radeon 680M", samples["w0"].name)
+	assert.Equal(t, map[string]float64{
+		"3D":           100.0,
+		"Video Decode": 8.25,
+	}, samples["w0"].engines)
+	assert.Equal(t, 100.0, samples["w0"].usage)
+
+	assert.Equal(t, "NVIDIA RTX Test", samples["w1"].name)
+	assert.Equal(t, 12.0, samples["w1"].engines["Copy"])
+	assert.Equal(t, 12.0, samples["w1"].usage)
+}
+
+func TestParseWindowsGPUCounterDataUsesOriginalVideoControllerIndex(t *testing.T) {
+	names := parseWindowsVideoControllerNames([]byte(`[
+		{"Name":"NVIDIA GeForce RTX 4060 Laptop GPU","AdapterRAM":8589934592,"PNPDeviceID":"PCI\\VEN_10DE"},
+		{"Name":"AMD Radeon 680M Graphics","AdapterRAM":536870912,"PNPDeviceID":"PCI\\VEN_1002"}
+	]`))
+
+	input := []byte(`{
+		"CounterSamples": [
+			{
+				"InstanceName": "pid_100_luid_0x00000000_0x0000a111_phys_0_engtype_3D",
+				"CookedValue": 80.0
+			},
+			{
+				"InstanceName": "pid_120_luid_0x00000000_0x0000b222_phys_1_engtype_3D",
+				"CookedValue": 12.5
+			}
+		]
+	}`)
+
+	samples, ok := parseWindowsGPUCounterDataWithNames(input, names)
+
+	require.True(t, ok)
+	require.Len(t, samples, 2)
+	assert.Equal(t, "NVIDIA GeForce RTX 4060 Laptop GPU", samples["w0"].name)
+	assert.Equal(t, 80.0, samples["w0"].usage)
+	assert.Equal(t, "AMD Radeon 680M", samples["w1"].name)
+	assert.Equal(t, 12.5, samples["w1"].usage)
+}
+
+func TestParseWindowsGPUCounterDataSkipsUnknownController(t *testing.T) {
+	input := []byte(`{"CounterSamples":[{"InstanceName":"pid_100_luid_0x0_0x1_phys_0_engtype_3D","CookedValue":12.5}]}`)
+
+	samples, ok := parseWindowsGPUCounterData(input)
+
+	require.False(t, ok)
+	assert.Empty(t, samples)
+}
+
+func TestParseWindowsVideoControllerNames(t *testing.T) {
+	input := []byte(`[
+		{"Name":"GameViewer Virtual Display Adapter","AdapterRAM":0,"PNPDeviceID":"ROOT\\DISPLAY\\0000"},
+		{"Name":"AMD Radeon 680M Graphics","AdapterRAM":1073741824,"PNPDeviceID":"PCI\\VEN_1002"},
+		{"Name":"Microsoft Remote Display Adapter","AdapterRAM":0,"PNPDeviceID":"SWD\\REMOTEDISPLAYENUM\\RDPIDD"}
+	]`)
+
+	names := parseWindowsVideoControllerNames(input)
+
+	require.Equal(t, map[string]string{
+		"0": "AMD Radeon 680M",
+	}, names)
+}
+
+func TestParseWindowsVideoControllerNamesKeepsPhysicalGpuIndex(t *testing.T) {
+	input := []byte(`[
+		{"Name":"GameViewer Virtual Display Adapter","AdapterRAM":0,"PNPDeviceID":"ROOT\\DISPLAY\\0000"},
+		{"Name":"NVIDIA GeForce RTX 4060 Laptop GPU","AdapterRAM":8589934592,"PNPDeviceID":"PCI\\VEN_10DE"},
+		{"Name":"AMD Radeon 680M Graphics","AdapterRAM":536870912,"PNPDeviceID":"PCI\\VEN_1002"}
+	]`)
+
+	names := parseWindowsVideoControllerNames(input)
+
+	require.Equal(t, map[string]string{
+		"0": "NVIDIA GeForce RTX 4060 Laptop GPU",
+		"1": "AMD Radeon 680M",
+	}, names)
+}
+
+func TestParseWindowsVideoControllerNamesDetectsGenericAmdIntegratedGPU(t *testing.T) {
+	input := []byte(`[
+		{"Name":"GameViewer Virtual Display Adapter","AdapterRAM":0,"PNPDeviceID":"ROOT\\DISPLAY\\0000"},
+		{"Name":"AMD Radeon(TM) Graphics","AdapterRAM":4293918720,"PNPDeviceID":"PCI\\VEN_1002&DEV_1681&SUBSYS_16811002&REV_C7\\4&31F4EC98&0&0041"},
+		{"Name":"Microsoft Remote Display Adapter","AdapterRAM":0,"PNPDeviceID":"SWD\\REMOTEDISPLAYENUM\\RDPIDD"}
+	]`)
+
+	names := parseWindowsVideoControllerNames(input)
+
+	require.Equal(t, map[string]string{
+		"0": "AMD Radeon 680M",
+	}, names)
+}
+
+func TestParseWindowsGPUCounterDataWithGenericAmdIntegratedGPU(t *testing.T) {
+	names := parseWindowsVideoControllerNames([]byte(`[
+		{"Name":"GameViewer Virtual Display Adapter","AdapterRAM":0,"PNPDeviceID":"ROOT\\DISPLAY\\0000"},
+		{"Name":"AMD Radeon(TM) Graphics","AdapterRAM":4293918720,"PNPDeviceID":"PCI\\VEN_1002&DEV_1681&SUBSYS_16811002&REV_C7\\4&31F4EC98&0&0041"},
+		{"Name":"Microsoft Remote Display Adapter","AdapterRAM":0,"PNPDeviceID":"SWD\\REMOTEDISPLAYENUM\\RDPIDD"}
+	]`))
+	input := []byte(`[
+		{"InstanceName":"pid_10144_luid_0x00000000_0x0000b474_phys_0_eng_0_engtype_3d","CookedValue":1.25},
+		{"InstanceName":"pid_10144_luid_0x00000000_0x0000b474_phys_0_eng_1_engtype_copy","CookedValue":0.25}
+	]`)
+
+	samples, ok := parseWindowsGPUCounterDataWithNames(input, names)
+
+	require.True(t, ok)
+	require.Len(t, samples, 1)
+	assert.Equal(t, "AMD Radeon 680M", samples["w0"].name)
+	assert.Equal(t, 1.25, samples["w0"].engines["3D"])
+	assert.Equal(t, 0.25, samples["w0"].engines["Copy"])
+}
+
+func TestParseWindowsGPUMemoryCounterData(t *testing.T) {
+	names := parseWindowsVideoControllerNames([]byte(`[{"Name":"AMD Radeon(TM) Graphics","AdapterRAM":4293918720,"PNPDeviceID":"PCI\\VEN_1002&DEV_1681"}]`))
+	totals := parseWindowsVideoControllerMemoryTotals([]byte(`[{"Name":"AMD Radeon(TM) Graphics","AdapterRAM":4293918720,"PNPDeviceID":"PCI\\VEN_1002&DEV_1681"}]`))
+	input := []byte(`[
+		{"Path":"\\\\um-690\\gpu adapter memory(luid_0x00000000_0x0000b474_phys_0)\\shared usage","InstanceName":"luid_0x00000000_0x0000b474_phys_0","CookedValue":230957056},
+		{"Path":"\\\\um-690\\gpu adapter memory(luid_0x00000000_0x0000b474_phys_0)\\dedicated usage","InstanceName":"luid_0x00000000_0x0000b474_phys_0","CookedValue":715419648},
+		{"Path":"\\\\um-690\\gpu adapter memory(luid_0x00000000_0x0000b474_phys_0)\\total committed","InstanceName":"luid_0x00000000_0x0000b474_phys_0","CookedValue":1022771200}
+	]`)
+
+	memorySamples := parseWindowsGPUMemoryCounterData(input, names, totals)
+
+	require.Contains(t, memorySamples, "w0")
+	assert.EqualValues(t, 1022771200, memorySamples["w0"].totalCommitted)
+	assert.EqualValues(t, 4293918720, memorySamples["w0"].total)
+}
+
+func TestMergeWindowsGPUMemorySamples(t *testing.T) {
+	samples := map[string]windowsGPUSample{
+		"w0": {name: "AMD Radeon 680M", engines: map[string]float64{"3D": 9.5}, usage: 9.5},
+	}
+	memorySamples := map[string]windowsGPUMemorySample{
+		"w0": {totalCommitted: 1022771200, total: 4293918720},
+	}
+
+	mergeWindowsGPUMemorySamples(samples, memorySamples)
+
+	assert.InDelta(t, utils.BytesToMegabytes(1022771200), samples["w0"].memoryUsed, 0.01)
+	assert.InDelta(t, utils.BytesToMegabytes(4293918720), samples["w0"].memoryTotal, 0.01)
+}
+
+func TestUpdateWindowsGPUFromSamplesSkipsNVMLDuplicate(t *testing.T) {
+	gm := &GPUManager{
+		GpuDataMap: map[string]*system.GPUData{
+			"nvml0": {
+				Name:        "GeForce RTX 4080",
+				Type:        gpuTypeDiscrete,
+				Usage:       64,
+				Power:       120,
+				MemoryUsed:  2048,
+				MemoryTotal: 15992,
+				Count:       2,
+			},
+		},
+	}
+
+	gm.updateWindowsGPUFromSamples(map[string]windowsGPUSample{
+		"w0": {
+			name:        "NVIDIA GeForce RTX 4080",
+			gpuType:     gpuTypeDiscrete,
+			usage:       12.5,
+			engines:     map[string]float64{"3D": 12.5},
+			memoryUsed:  2200,
+			memoryTotal: 4095,
+		},
+	})
+
+	require.NotContains(t, gm.GpuDataMap, "w0")
+	gpu := gm.GpuDataMap["nvml0"]
+	require.NotNil(t, gpu)
+	assert.EqualValues(t, 2, gpu.Count)
+	assert.EqualValues(t, 64, gpu.Usage)
+	assert.EqualValues(t, 120, gpu.Power)
+	assert.EqualValues(t, 15992, gpu.MemoryTotal)
+	assert.Nil(t, gpu.Engines)
+}
+
+func TestUpdateWindowsGPUFromSamplesSkipsSamePhysicalDetailedCollector(t *testing.T) {
+	gm := &GPUManager{
+		GpuDataMap: map[string]*system.GPUData{
+			"nvml0": {
+				Name:        "GeForce RTX 4080",
+				Type:        gpuTypeDiscrete,
+				MemoryTotal: 15992,
+				Count:       1,
+			},
+		},
+	}
+
+	gm.updateWindowsGPUFromSamples(map[string]windowsGPUSample{
+		"w0": {
+			name:        "NVIDIA Display Adapter",
+			gpuType:     gpuTypeDiscrete,
+			usage:       8,
+			engines:     map[string]float64{"3D": 8},
+			memoryTotal: 4095,
+		},
+	})
+
+	require.NotContains(t, gm.GpuDataMap, "w0")
+	assert.EqualValues(t, 1, gm.GpuDataMap["nvml0"].Count)
+	assert.EqualValues(t, 15992, gm.GpuDataMap["nvml0"].MemoryTotal)
+}
+
+func TestUpdateWindowsGPUFromSamplesKeepsDistinctIntegratedGPU(t *testing.T) {
+	gm := &GPUManager{
+		GpuDataMap: map[string]*system.GPUData{
+			"nvml0": {Name: "GeForce RTX 4080", Type: gpuTypeDiscrete},
+		},
+	}
+
+	gm.updateWindowsGPUFromSamples(map[string]windowsGPUSample{
+		"w1": {
+			name:        "AMD Radeon 680M",
+			gpuType:     gpuTypeIntegrated,
+			usage:       9.5,
+			engines:     map[string]float64{"3D": 9.5},
+			memoryUsed:  512,
+			memoryTotal: 4096,
+		},
+	})
+
+	require.Contains(t, gm.GpuDataMap, "w1")
+	assert.Equal(t, "AMD Radeon 680M", gm.GpuDataMap["w1"].Name)
+	assert.Equal(t, gpuTypeIntegrated, gm.GpuDataMap["w1"].Type)
+	assert.EqualValues(t, 1, gm.GpuDataMap["w1"].Count)
+}
+
+func TestParseWindowsGPUCounterDataReturnsFalseForEmptyPayload(t *testing.T) {
+	samples, ok := parseWindowsGPUCounterData([]byte(`{"CounterSamples":[]}`))
+	assert.False(t, ok)
+	assert.Empty(t, samples)
+}
+
 func TestIntelCollectorStreaming(t *testing.T) {
+	skipPosixCommandStubTestOnWindows(t)
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
 
@@ -1972,6 +2247,7 @@ func TestParseIntelData(t *testing.T) {
 }
 
 func TestIntelCollectorDeviceEnv(t *testing.T) {
+	skipPosixCommandStubTestOnWindows(t)
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
 
@@ -1992,7 +2268,7 @@ echo "189  187      412  67  1.80  2.45   1950    823   8.50    2   1    15.00  
 	}
 
 	// Set device selector via prefixed env var
-	t.Setenv("BESZEL_AGENT_INTEL_GPU_DEVICE", "sriov")
+	t.Setenv("PULSE_AGENT_INTEL_GPU_DEVICE", "sriov")
 
 	gm := &GPUManager{GpuDataMap: make(map[string]*system.GPUData)}
 	if err := gm.collectIntelStats(); err != nil {

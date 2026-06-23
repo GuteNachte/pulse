@@ -7,10 +7,10 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/henrygd/beszel/internal/entities/container"
-	"github.com/henrygd/beszel/internal/entities/system"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gutenacht.site/pulse/internal/entities/container"
+	"gutenacht.site/pulse/internal/entities/system"
 )
 
 func createTestCacheData() *system.CombinedData {
@@ -44,15 +44,15 @@ func TestCacheGetSet(t *testing.T) {
 	data := createTestCacheData()
 
 	// Test setting data
-	cache.Set(data, 1000) // 1 second cache
+	cache.Set(data, cacheKeyForDataOptions(1000, nil)) // 1 second cache
 
 	// Test getting fresh data
-	retrieved, isCached := cache.Get(1000)
+	retrieved, isCached := cache.Get(cacheKeyForDataOptions(1000, nil), 1000)
 	assert.True(t, isCached)
 	assert.Equal(t, data, retrieved)
 
 	// Test getting non-existent cache key
-	_, isCached = cache.Get(2000)
+	_, isCached = cache.Get(cacheKeyForDataOptions(2000, nil), 2000)
 	assert.False(t, isCached)
 }
 
@@ -102,7 +102,7 @@ func TestCacheFreshness(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				// Set data
-				cache.Set(data, tc.cacheTimeMs)
+				cache.Set(data, cacheKeyForDataOptions(tc.cacheTimeMs, nil))
 
 				// Wait for the specified duration
 				if tc.sleepMs > 0 {
@@ -110,7 +110,7 @@ func TestCacheFreshness(t *testing.T) {
 				}
 
 				// Check freshness
-				_, isCached := cache.Get(tc.cacheTimeMs)
+				_, isCached := cache.Get(cacheKeyForDataOptions(tc.cacheTimeMs, nil), tc.cacheTimeMs)
 				assert.Equal(t, tc.expectFresh, isCached)
 			})
 		})
@@ -133,32 +133,38 @@ func TestCacheMultipleIntervals(t *testing.T) {
 		}
 
 		// Set data for different intervals
-		cache.Set(data1, 500)  // 500ms cache
-		cache.Set(data2, 1000) // 1000ms cache
+		cache.Set(data1, cacheKeyForDataOptions(500, nil))  // 500ms cache
+		cache.Set(data2, cacheKeyForDataOptions(1000, nil)) // 1000ms cache
 
 		// Both should be fresh immediately
-		retrieved1, isCached1 := cache.Get(500)
+		retrieved1, isCached1 := cache.Get(cacheKeyForDataOptions(500, nil), 500)
 		assert.True(t, isCached1)
 		assert.Equal(t, data1, retrieved1)
 
-		retrieved2, isCached2 := cache.Get(1000)
+		retrieved2, isCached2 := cache.Get(cacheKeyForDataOptions(1000, nil), 1000)
 		assert.True(t, isCached2)
 		assert.Equal(t, data2, retrieved2)
 
 		// Wait 300ms - 500ms cache should be stale (250ms threshold), 1000ms should still be fresh (500ms threshold)
 		time.Sleep(300 * time.Millisecond)
 
-		_, isCached1 = cache.Get(500)
+		_, isCached1 = cache.Get(cacheKeyForDataOptions(500, nil), 500)
 		assert.False(t, isCached1)
 
-		_, isCached2 = cache.Get(1000)
+		_, isCached2 = cache.Get(cacheKeyForDataOptions(1000, nil), 1000)
 		assert.True(t, isCached2)
 
 		// Wait another 300ms (total 600ms) - now 1000ms cache should also be stale
 		time.Sleep(300 * time.Millisecond)
-		_, isCached2 = cache.Get(1000)
+		_, isCached2 = cache.Get(cacheKeyForDataOptions(1000, nil), 1000)
 		assert.False(t, isCached2)
 	})
+}
+
+func TestCacheKeyIncludesMonitoredServices(t *testing.T) {
+	assert.Equal(t, "60000|svc=Spooler,W32Time", cacheKeyForDataOptions(60000, []string{"W32Time", "Spooler", "Spooler", ""}))
+	assert.Equal(t, "60000|svc=", cacheKeyForDataOptions(60000, nil))
+	assert.Equal(t, "1000|svc=Spooler", cacheKeyForDataOptions(1000, []string{" Spooler "}))
 }
 
 func TestCacheOverwrite(t *testing.T) {
@@ -176,14 +182,14 @@ func TestCacheOverwrite(t *testing.T) {
 	}
 
 	// Set initial data
-	cache.Set(data1, 1000)
-	retrieved, isCached := cache.Get(1000)
+	cache.Set(data1, cacheKeyForDataOptions(1000, nil))
+	retrieved, isCached := cache.Get(cacheKeyForDataOptions(1000, nil), 1000)
 	assert.True(t, isCached)
 	assert.Equal(t, data1, retrieved)
 
 	// Overwrite with new data
-	cache.Set(data2, 1000)
-	retrieved, isCached = cache.Get(1000)
+	cache.Set(data2, cacheKeyForDataOptions(1000, nil))
+	retrieved, isCached = cache.Get(cacheKeyForDataOptions(1000, nil), 1000)
 	assert.True(t, isCached)
 	assert.Equal(t, data2, retrieved)
 	assert.NotEqual(t, data1, retrieved)
@@ -194,20 +200,20 @@ func TestCacheMiss(t *testing.T) {
 		cache := NewSystemDataCache()
 
 		// Test getting from empty cache
-		_, isCached := cache.Get(1000)
+		_, isCached := cache.Get(cacheKeyForDataOptions(1000, nil), 1000)
 		assert.False(t, isCached)
 
 		// Set data for one interval
 		data := createTestCacheData()
-		cache.Set(data, 1000)
+		cache.Set(data, cacheKeyForDataOptions(1000, nil))
 
 		// Test getting different interval
-		_, isCached = cache.Get(2000)
+		_, isCached = cache.Get(cacheKeyForDataOptions(2000, nil), 2000)
 		assert.False(t, isCached)
 
 		// Test getting after data has expired
 		time.Sleep(600 * time.Millisecond) // 600ms > 500ms (50% of 1000ms)
-		_, isCached = cache.Get(1000)
+		_, isCached = cache.Get(cacheKeyForDataOptions(1000, nil), 1000)
 		assert.False(t, isCached)
 	})
 }
@@ -217,11 +223,11 @@ func TestCacheZeroInterval(t *testing.T) {
 	data := createTestCacheData()
 
 	// Set with zero interval - should allow immediate cache
-	cache.Set(data, 0)
+	cache.Set(data, cacheKeyForDataOptions(0, nil))
 
 	// With 0 interval, 50% is 0, so it should never be considered fresh
 	// (time.Since(lastUpdate) >= 0, which is not < 0)
-	_, isCached := cache.Get(0)
+	_, isCached := cache.Get(cacheKeyForDataOptions(0, nil), 0)
 	assert.False(t, isCached)
 }
 
@@ -231,15 +237,15 @@ func TestCacheLargeInterval(t *testing.T) {
 		data := createTestCacheData()
 
 		// Test with maximum uint16 value
-		cache.Set(data, 65535) // ~65 seconds
+		cache.Set(data, cacheKeyForDataOptions(65535, nil)) // ~65 seconds
 
 		// Should be fresh immediately
-		_, isCached := cache.Get(65535)
+		_, isCached := cache.Get(cacheKeyForDataOptions(65535, nil), 65535)
 		assert.True(t, isCached)
 
 		// Should still be fresh after a short time
 		time.Sleep(100 * time.Millisecond)
-		_, isCached = cache.Get(65535)
+		_, isCached = cache.Get(cacheKeyForDataOptions(65535, nil), 65535)
 		assert.True(t, isCached)
 	})
 }

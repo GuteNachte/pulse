@@ -1,6 +1,6 @@
 // Package heartbeat sends periodic outbound pings to an external monitoring
 // endpoint (e.g. BetterStack, Uptime Kuma, Healthchecks.io) so operators can
-// monitor Beszel without exposing it to the internet.
+// monitor Pulse without exposing it to the internet.
 package heartbeat
 
 import (
@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/henrygd/beszel"
 	"github.com/pocketbase/pocketbase/core"
+	"gutenacht.site/pulse"
 )
 
 // Default values for heartbeat configuration.
@@ -33,7 +33,7 @@ type Payload struct {
 	Systems   SystemsSummary `json:"systems"`
 	Down      []SystemInfo   `json:"down_systems,omitempty"`
 	Alerts    []AlertInfo    `json:"triggered_alerts,omitempty"`
-	Version   string         `json:"beszel_version"`
+	Version   string         `json:"pulse_version"`
 }
 
 // SystemsSummary contains counts of systems by status.
@@ -49,7 +49,6 @@ type SystemsSummary struct {
 type SystemInfo struct {
 	ID   string `json:"id" db:"id"`
 	Name string `json:"name" db:"name"`
-	Host string `json:"host" db:"host"`
 }
 
 // AlertInfo describes a currently triggered alert.
@@ -135,7 +134,7 @@ func (hb *Heartbeat) Start(stop <-chan struct{}) {
 	}
 }
 
-// Send performs a single heartbeat ping. Exposed for the test-heartbeat API endpoint.
+// Send performs a single heartbeat ping.
 func (hb *Heartbeat) Send() error {
 	return hb.send()
 }
@@ -175,7 +174,7 @@ func (hb *Heartbeat) send() error {
 		return err
 	}
 
-	req.Header.Set("User-Agent", "Beszel-Heartbeat")
+	req.Header.Set("User-Agent", "Pulse-Heartbeat")
 
 	resp, err := hb.client.Do(req)
 	if err != nil {
@@ -226,7 +225,7 @@ func (hb *Heartbeat) buildPayload() (*Payload, error) {
 	// Get names of down systems.
 	var downSystems []SystemInfo
 	if summary.Down > 0 {
-		err = db.NewQuery("SELECT id, name, host FROM systems WHERE status = 'down'").All(&downSystems)
+		err = db.NewQuery("SELECT id, name FROM systems WHERE status = 'down'").All(&downSystems)
 		if err != nil {
 			return nil, fmt.Errorf("query down systems: %w", err)
 		}
@@ -282,7 +281,7 @@ func (hb *Heartbeat) buildPayload() (*Payload, error) {
 		Systems:   summary,
 		Down:      downSystems,
 		Alerts:    alerts,
-		Version:   beszel.Version,
+		Version:   pulse.Version,
 	}, nil
 }
 

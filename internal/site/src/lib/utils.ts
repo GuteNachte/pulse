@@ -23,12 +23,64 @@ export async function copyToClipboard(content: string) {
 	const duration = 1500
 	try {
 		await navigator.clipboard.writeText(content)
+		if (!(await clipboardContentMatches(content))) {
+			showManualCopyDialog(content)
+			return false
+		}
 		toast({
 			duration,
 			description: t`Copied to clipboard`,
 		})
-	} catch (_e) {
+		return true
+	} catch (_e) {}
+
+	if (copyWithLegacyCommand(content)) {
+		if (!(await clipboardContentMatches(content))) {
+			showManualCopyDialog(content)
+			return false
+		}
+		toast({
+			duration,
+			description: t`Copied to clipboard`,
+		})
+		return true
+	}
+
+	showManualCopyDialog(content)
+	return false
+}
+
+function showManualCopyDialog(content: string) {
+	$copyContent.set("")
+	queueMicrotask(() => {
 		$copyContent.set(content)
+	})
+}
+
+async function clipboardContentMatches(content: string) {
+	try {
+		const copied = await navigator.clipboard.readText()
+		return copied === content
+	} catch (_error) {
+		return false
+	}
+}
+
+function copyWithLegacyCommand(content: string) {
+	const textarea = document.createElement("textarea")
+	textarea.value = content
+	textarea.setAttribute("readonly", "")
+	textarea.style.position = "fixed"
+	textarea.style.opacity = "0"
+	textarea.style.pointerEvents = "none"
+	document.body.appendChild(textarea)
+	textarea.select()
+	try {
+		return document.execCommand("copy")
+	} catch (_error) {
+		return false
+	} finally {
+		document.body.removeChild(textarea)
 	}
 }
 
@@ -103,25 +155,28 @@ export const updateFavicon = (() => {
 		}
 		prevDownCount = downCount
 		const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 70">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="gradient" x1="0%" y1="20%" x2="100%" y2="120%">
-      <stop offset="0%" style="stop-color:#747bff"/>
-      <stop offset="100%" style="stop-color:#24eb5c"/>
+    <linearGradient id="pulse-bg" x1="96" y1="72" x2="416" y2="448" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#35c49c"/>
+      <stop offset="1" stop-color="#177e69"/>
     </linearGradient>
   </defs>
-  <path fill="url(#gradient)" d="M35 70H0V0h35q4.4 0 8.2 1.7a21.4 21.4 0 0 1 6.6 4.5q2.9 2.8 4.5 6.6Q56 16.7 56 21a15.4 15.4 0 0 1-.3 3.2 17.6 17.6 0 0 1-.2.8 19.4 19.4 0 0 1-1.5 4 17 17 0 0 1-2.4 3.4 13.5 13.5 0 0 1-2.6 2.3 12.5 12.5 0 0 1-.4.3q1.7 1 3 2.5Q53 39.1 54 41a18.3 18.3 0 0 1 1.5 4 17.4 17.4 0 0 1 .5 3 15.3 15.3 0 0 1 0 1q0 4.4-1.7 8.2a21.4 21.4 0 0 1-4.5 6.6q-2.8 2.9-6.6 4.6Q39.4 70 35 70ZM14 14v14h21a7 7 0 0 0 2.3-.3 6.6 6.6 0 0 0 .4-.2Q39 27 40 26a6.9 6.9 0 0 0 1.5-2.2q.5-1.3.5-2.8a7 7 0 0 0-.4-2.3 6.6 6.6 0 0 0-.1-.4Q40.9 17 40 16a7 7 0 0 0-2.3-1.4 6.9 6.9 0 0 0-2.5-.6 7.9 7.9 0 0 0-.2 0H14Zm0 28v14h21a7 7 0 0 0 2.3-.4 6.6 6.6 0 0 0 .4-.1Q39 54.9 40 54a7 7 0 0 0 1.5-2.2 6.9 6.9 0 0 0 .5-2.6 7.9 7.9 0 0 0 0-.2 7 7 0 0 0-.4-2.3 6.6 6.6 0 0 0-.1-.4Q40.9 45 40 44a7 7 0 0 0-2.3-1.5 6.9 6.9 0 0 0-2.5-.6 7.9 7.9 0 0 0-.2 0H14Z"/>
-  ${downCount > 0 &&
-			`
-		<circle cx="40" cy="50" r="22" fill="#f00"/>
-  	<text x="40" y="60" font-size="34" text-anchor="middle" fill="#fff" font-family="Arial" font-weight="bold">${downCount}</text>
+  <rect width="512" height="512" rx="112" fill="url(#pulse-bg)"/>
+  <path d="M112 272h72l34-88 70 184 42-120h70" fill="none" stroke="#fff" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="400" cy="248" r="20" fill="#fff"/>
+  ${
+		downCount > 0 &&
+		`
+		<circle cx="382" cy="382" r="100" fill="#ef4444"/>
+  	<text x="382" y="420" font-size="116" text-anchor="middle" fill="#fff" font-family="Arial" font-weight="bold">${downCount}</text>
 	`
-			}
+	}
 </svg>
 	`
 		const blob = new Blob([svg], { type: "image/svg+xml" })
 		const url = URL.createObjectURL(blob)
-			; (document.querySelector("link[rel='icon']") as HTMLLinkElement).href = url
+		;(document.querySelector("link[rel='icon']") as HTMLLinkElement).href = url
 	}
 })()
 
@@ -198,6 +253,21 @@ export function decimalString(num: number, digits = 2) {
 	return formatter.format(num)
 }
 
+function nonNegativeDisplayNumber(num: number) {
+	if (!Number.isFinite(num) || num < 0) {
+		return 0
+	}
+	return Object.is(num, -0) ? 0 : num
+}
+
+export function percentTickString(num: number, digits = 2) {
+	return `${toFixedFloat(nonNegativeDisplayNumber(num), digits)}%`
+}
+
+export function percentValueString(num: number, digits = 2) {
+	return `${decimalString(nonNegativeDisplayNumber(num), digits)}%`
+}
+
 /** Get value from local or session storage */
 function getStorageValue(key: string, defaultValue: unknown, storageInterface: Storage = localStorage) {
 	const saved = storageInterface?.getItem(key)
@@ -206,7 +276,7 @@ function getStorageValue(key: string, defaultValue: unknown, storageInterface: S
 
 /** Hook to sync value in local or session storage */
 export function useBrowserStorage<T>(key: string, defaultValue: T, storageInterface: Storage = localStorage) {
-	key = `besz-${key}`
+	key = `pulse-${key}`
 	const [value, setValue] = useState(() => {
 		return getStorageValue(key, defaultValue, storageInterface)
 	})
@@ -286,15 +356,7 @@ export function formatBytes(
 	}
 }
 
-export const chartMargin = { top: 12, right: 5 }
-
-/**
- * Retuns value of system host, truncating full path if socket.
- * @example
- * // Assuming system.host is "/var/run/beszel.sock"
- * const hostname = getHostDisplayValue(system) // hostname will be "beszel.sock"
- */
-export const getHostDisplayValue = (system: SystemRecord): string => system.host.slice(system.host.lastIndexOf("/") + 1)
+export const chartMargin = { top: 12, right: 8, bottom: 12, left: 0 }
 
 // export function formatUptimeString(uptimeSeconds: number): string {
 // 	if (!uptimeSeconds || isNaN(uptimeSeconds)) return ""
@@ -320,8 +382,18 @@ export const generateToken = () => {
 	}
 }
 
-/** Get the hub URL from the global BESZEL object */
-export const getHubURL = () => globalThis.BESZEL?.HUB_URL || window.location.origin
+/** Get the hub URL reachable by agents and API clients. */
+export const getHubURL = () => globalThis.PULSE?.HUB_URL || window.location.origin
+
+/** Get the hub URL reachable by agents running on other machines. */
+export const getAgentHubURL = () => globalThis.PULSE?.AGENT_HUB_URL || getHubURL()
+
+export function setAgentHubURL(url: string) {
+	if (!globalThis.PULSE || typeof globalThis.PULSE !== "object") {
+		globalThis.PULSE = {} as typeof globalThis.PULSE
+	}
+	globalThis.PULSE.AGENT_HUB_URL = url
+}
 
 /** Map of system IDs to their corresponding tokens (used to avoid fetching in add-system dialog) */
 export const tokenMap = new Map<SystemRecord["id"], FingerprintRecord["token"]>()
@@ -365,12 +437,12 @@ export function formatDuration(
 		.join(" ")
 }
 
-/** Parse semver string into major, minor, and patch numbers 
+/** Parse semver string into major, minor, and patch numbers
  * @example
  * const semVer = "1.2.3"
  * const { major, minor, patch } = parseSemVer(semVer)
  * console.log(major, minor, patch) // 1, 2, 3
-*/
+ */
 export const parseSemVer = (semVer = ""): SemVer => {
 	// if (semVer.startsWith("v")) {
 	// 	semVer = semVer.slice(1)
@@ -452,7 +524,12 @@ export function secondsToString(seconds: number, unit: "hour" | "minute" | "day"
 	const countString = count.toLocaleString()
 	switch (unit) {
 		case "minute":
-			return plural(count, { one: `${countString} minute`, few: `${countString} minutes`, many: `${countString} minutes`, other: `${countString} minutes` })
+			return plural(count, {
+				one: `${countString} minute`,
+				few: `${countString} minutes`,
+				many: `${countString} minutes`,
+				other: `${countString} minutes`,
+			})
 		case "hour":
 			return plural(count, { one: `${countString} hour`, other: `${countString} hours` })
 		case "day":

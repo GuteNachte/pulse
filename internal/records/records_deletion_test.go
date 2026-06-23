@@ -3,12 +3,14 @@
 package records_test
 
 import (
+	"bytes"
 	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
-	"github.com/henrygd/beszel/internal/records"
-	"github.com/henrygd/beszel/internal/tests"
+	"gutenacht.site/pulse/internal/records"
+	"gutenacht.site/pulse/internal/tests"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
@@ -32,8 +34,6 @@ func TestDeleteOldRecords(t *testing.T) {
 	// Create test system
 	system, err := tests.CreateRecord(hub, "systems", map[string]any{
 		"name":   "test-system",
-		"host":   "localhost",
-		"port":   "45876",
 		"status": "up",
 		"users":  []string{user.Id},
 	})
@@ -85,6 +85,11 @@ func TestDeleteOldRecords(t *testing.T) {
 	alertsCountBefore, err := hub.CountRecords("alerts_history")
 	require.NoError(t, err)
 
+	var logBuffer bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	defer slog.SetDefault(previousLogger)
+
 	// Run deletion
 	rm.DeleteOldRecords()
 
@@ -100,6 +105,11 @@ func TestDeleteOldRecords(t *testing.T) {
 	// Verify alerts history was trimmed
 	assert.Less(t, alertsCountAfter, alertsCountBefore, "Excessive alerts history should be deleted")
 	assert.Equal(t, alertsCountAfter, int64(200), "Alerts count should be equal to countToKeep (200)")
+	logOutput := logBuffer.String()
+	assert.Contains(t, logOutput, "Record cleanup deleted old records")
+	assert.Contains(t, logOutput, "deleted_total")
+	assert.Contains(t, logOutput, "system_stats")
+	assert.Contains(t, logOutput, "alerts_history")
 }
 
 // TestDeleteOldSystemStats tests the deleteOldSystemStats function
@@ -114,8 +124,6 @@ func TestDeleteOldSystemStats(t *testing.T) {
 
 	system, err := tests.CreateRecord(hub, "systems", map[string]any{
 		"name":   "test-system",
-		"host":   "localhost",
-		"port":   "45876",
 		"status": "up",
 		"users":  []string{user.Id},
 	})
@@ -209,8 +217,6 @@ func TestDeleteOldAlertsHistory(t *testing.T) {
 
 	system, err := tests.CreateRecord(hub, "systems", map[string]any{
 		"name":   "test-system",
-		"host":   "localhost",
-		"port":   "45876",
 		"status": "up",
 		"users":  []string{user1.Id, user2.Id},
 	})
@@ -313,8 +319,6 @@ func TestDeleteOldAlertsHistoryEdgeCases(t *testing.T) {
 
 		system, err := tests.CreateRecord(hub, "systems", map[string]any{
 			"name":   "test-system",
-			"host":   "localhost",
-			"port":   "45876",
 			"status": "up",
 			"users":  []string{user.Id},
 		})
@@ -350,79 +354,227 @@ func TestDeleteOldAlertsHistoryEdgeCases(t *testing.T) {
 	})
 }
 
-// TestDeleteOldSystemdServiceRecords tests systemd service cleanup via DeleteOldRecords
-func TestDeleteOldSystemdServiceRecords(t *testing.T) {
+func TestDeleteOldWebsiteMonitorChecksRetention(t *testing.T) {
 	hub, err := tests.NewTestHub(t.TempDir())
 	require.NoError(t, err)
 	defer hub.Cleanup()
 
-	rm := records.NewRecordManager(hub)
-
-	// Create test user and system
-	user, err := tests.CreateUser(hub, "test@example.com", "testtesttest")
+	user, err := tests.CreateUser(hub, "website-retention@example.com", "testtesttest")
+	require.NoError(t, err)
+	monitor, err := tests.CreateRecord(hub, "website_monitors", map[string]any{
+		"user":             user.Id,
+		"name":             "Retention Site",
+		"url":              "https://example.com",
+		"interval_seconds": 60,
+		"timeout_seconds":  5,
+		"enabled":          true,
+	})
 	require.NoError(t, err)
 
+	now := time.Now().UTC()
+	var keptIDs []string
+	var deletedIDs []string
+	for i := range 6 {
+		record, err := tests.CreateRecord(hub, "website_monitor_checks", map[string]any{
+			"user":       user.Id,
+			"monitor":    monitor.Id,
+			"target":     "external-ipv4",
+			"url":        "https://example.com",
+			"ip_version": "ipv4",
+			"status":     "up",
+		})
+		require.NoError(t, err)
+		record.SetRaw("created", now.Add(-time.Duration(i)*time.Minute).Format(types.DefaultDateLayout))
+		require.NoError(t, hub.SaveNoValidate(record))
+		if i < 3 {
+			keptIDs = append(keptIDs, record.Id)
+		} else {
+			deletedIDs = append(deletedIDs, record.Id)
+		}
+	}
+	oldRecord, err := tests.CreateRecord(hub, "website_monitor_checks", map[string]any{
+		"user":    user.Id,
+		"monitor": monitor.Id,
+		"status":  "down",
+	})
+	require.NoError(t, err)
+	oldRecord.SetRaw("created", now.Add(-31*24*time.Hour).Format(types.DefaultDateLayout))
+	require.NoError(t, hub.SaveNoValidate(oldRecord))
+	deletedIDs = append(deletedIDs, oldRecord.Id)
+
+	err = records.DeleteOldWebsiteMonitorChecks(hub, 3, 5, 30*24*time.Hour)
+	require.NoError(t, err)
+
+	count, err := hub.CountRecords("website_monitor_checks", dbx.NewExp("monitor = {:monitor}", dbx.Params{"monitor": monitor.Id}))
+	require.NoError(t, err)
+	require.Equal(t, int64(3), count)
+	for _, id := range keptIDs {
+		_, err := hub.FindRecordById("website_monitor_checks", id)
+		assert.NoError(t, err, "recent website check should be kept")
+	}
+	for _, id := range deletedIDs {
+		_, err := hub.FindRecordById("website_monitor_checks", id)
+		assert.Error(t, err, "old or excess website check should be deleted")
+	}
+}
+
+func TestDeleteOldOperationRecordsRetention(t *testing.T) {
+	hub, err := tests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer hub.Cleanup()
+
+	user, err := tests.CreateUser(hub, "operations-retention@example.com", "testtesttest")
+	require.NoError(t, err)
 	system, err := tests.CreateRecord(hub, "systems", map[string]any{
-		"name":   "test-system",
-		"host":   "localhost",
-		"port":   "45876",
+		"name":   "retention-system",
 		"status": "up",
 		"users":  []string{user.Id},
 	})
 	require.NoError(t, err)
 
 	now := time.Now().UTC()
-
-	// Create old systemd service records that should be deleted (older than 20 minutes)
-	oldRecord, err := tests.CreateRecord(hub, "systemd_services", map[string]any{
-		"system":  system.Id,
-		"name":    "nginx.service",
-		"state":   0, // Active
-		"sub":     1, // Running
-		"cpu":     5.0,
-		"cpuPeak": 10.0,
-		"memory":  1024000,
-		"memPeak": 2048000,
+	var keptActionIDs []string
+	var deletedActionIDs []string
+	for i := range 6 {
+		record, err := tests.CreateRecord(hub, "operation_actions", map[string]any{
+			"system":  system.Id,
+			"user":    user.Id,
+			"action":  "refresh_services",
+			"target":  fmt.Sprintf("action-%d", i),
+			"status":  "succeeded",
+			"stage":   "completed",
+			"result":  "ok",
+			"created": now.Add(-time.Duration(i) * time.Minute),
+		})
+		require.NoError(t, err)
+		record.SetRaw("created", now.Add(-time.Duration(i)*time.Minute).Format(types.DefaultDateLayout))
+		require.NoError(t, hub.SaveNoValidate(record))
+		if i < 3 {
+			keptActionIDs = append(keptActionIDs, record.Id)
+		} else {
+			deletedActionIDs = append(deletedActionIDs, record.Id)
+		}
+	}
+	oldAction, err := tests.CreateRecord(hub, "operation_actions", map[string]any{
+		"system": system.Id,
+		"user":   user.Id,
+		"action": "refresh_services",
+		"target": "old-action",
+		"status": "failed",
+		"stage":  "completed",
 	})
 	require.NoError(t, err)
-	// Set updated time to 25 minutes ago (should be deleted)
-	oldRecord.SetRaw("updated", now.Add(-25*time.Minute).UnixMilli())
-	err = hub.SaveNoValidate(oldRecord)
+	oldAction.SetRaw("created", now.Add(-91*24*time.Hour).Format(types.DefaultDateLayout))
+	require.NoError(t, hub.SaveNoValidate(oldAction))
+	deletedActionIDs = append(deletedActionIDs, oldAction.Id)
+
+	err = records.DeleteOldOperationActions(hub, 3, 5, 90*24*time.Hour)
 	require.NoError(t, err)
 
-	// Create recent systemd service record that should be kept (within 20 minutes)
-	recentRecord, err := tests.CreateRecord(hub, "systemd_services", map[string]any{
-		"system":  system.Id,
-		"name":    "apache.service",
-		"state":   1, // Inactive
-		"sub":     0, // Dead
-		"cpu":     2.0,
-		"cpuPeak": 3.0,
-		"memory":  512000,
-		"memPeak": 1024000,
+	actionCount, err := hub.CountRecords("operation_actions", dbx.NewExp("system = {:system}", dbx.Params{"system": system.Id}))
+	require.NoError(t, err)
+	require.Equal(t, int64(3), actionCount)
+	for _, id := range keptActionIDs {
+		_, err := hub.FindRecordById("operation_actions", id)
+		assert.NoError(t, err, "recent operation action should be kept")
+	}
+	for _, id := range deletedActionIDs {
+		_, err := hub.FindRecordById("operation_actions", id)
+		assert.Error(t, err, "old or excess operation action should be deleted")
+	}
+
+	var keptAuditIDs []string
+	var deletedAuditIDs []string
+	for i := range 6 {
+		record, err := tests.CreateRecord(hub, "operation_audit", map[string]any{
+			"user":   user.Id,
+			"system": system.Id,
+			"action": "refresh_services",
+			"target": fmt.Sprintf("audit-%d", i),
+			"result": "success",
+			"detail": "ok",
+		})
+		require.NoError(t, err)
+		record.SetRaw("created", now.Add(-time.Duration(i)*time.Minute).Format(types.DefaultDateLayout))
+		require.NoError(t, hub.SaveNoValidate(record))
+		if i < 3 {
+			keptAuditIDs = append(keptAuditIDs, record.Id)
+		} else {
+			deletedAuditIDs = append(deletedAuditIDs, record.Id)
+		}
+	}
+	oldAudit, err := tests.CreateRecord(hub, "operation_audit", map[string]any{
+		"user":   user.Id,
+		"system": system.Id,
+		"action": "refresh_services",
+		"target": "old-audit",
+		"result": "failed",
 	})
 	require.NoError(t, err)
-	// Set updated time to 10 minutes ago (should be kept)
-	recentRecord.SetRaw("updated", now.Add(-10*time.Minute).UnixMilli())
-	err = hub.SaveNoValidate(recentRecord)
+	oldAudit.SetRaw("created", now.Add(-181*24*time.Hour).Format(types.DefaultDateLayout))
+	require.NoError(t, hub.SaveNoValidate(oldAudit))
+	deletedAuditIDs = append(deletedAuditIDs, oldAudit.Id)
+
+	err = records.DeleteOldOperationAudit(hub, 3, 5, 180*24*time.Hour)
 	require.NoError(t, err)
 
-	// Count records before deletion
-	countBefore, err := hub.CountRecords("systemd_services")
+	auditCount, err := hub.CountRecords("operation_audit", dbx.NewExp("user = {:user}", dbx.Params{"user": user.Id}))
 	require.NoError(t, err)
-	assert.Equal(t, int64(2), countBefore, "Should have 2 systemd service records initially")
+	require.Equal(t, int64(3), auditCount)
+	for _, id := range keptAuditIDs {
+		_, err := hub.FindRecordById("operation_audit", id)
+		assert.NoError(t, err, "recent operation audit should be kept")
+	}
+	for _, id := range deletedAuditIDs {
+		_, err := hub.FindRecordById("operation_audit", id)
+		assert.Error(t, err, "old or excess operation audit should be deleted")
+	}
+}
 
-	// Run deletion via RecordManager
-	rm.DeleteOldRecords()
-
-	// Count records after deletion
-	countAfter, err := hub.CountRecords("systemd_services")
+func TestDeleteOldSystemLogsRetention(t *testing.T) {
+	hub, err := tests.NewTestHub(t.TempDir())
 	require.NoError(t, err)
-	assert.Equal(t, int64(1), countAfter, "Should have 1 systemd service record after deletion")
+	defer hub.Cleanup()
 
-	// Verify the correct record was kept
-	remainingRecords, err := hub.FindRecordsByFilter("systemd_services", "", "", 10, 0, nil)
+	_, err = hub.AuxDB().NewQuery("DELETE FROM _logs").Execute()
 	require.NoError(t, err)
-	assert.Len(t, remainingRecords, 1, "Should have exactly 1 record remaining")
-	assert.Equal(t, "apache.service", remainingRecords[0].Get("name"), "The recent record should be kept")
+
+	now := time.Now().UTC()
+	for i := range 6 {
+		_, err := hub.AuxDB().NewQuery(`
+			INSERT INTO _logs (id, level, message, data, created)
+			VALUES ({:id}, {:level}, {:message}, {:data}, {:created})
+		`).Bind(dbx.Params{
+			"id":      fmt.Sprintf("recentlog%06d", i),
+			"level":   4,
+			"message": fmt.Sprintf("recent log %d", i),
+			"data":    "{}",
+			"created": now.Add(-time.Duration(i) * time.Minute).Format(types.DefaultDateLayout),
+		}).Execute()
+		require.NoError(t, err)
+	}
+	_, err = hub.AuxDB().NewQuery(`
+		INSERT INTO _logs (id, level, message, data, created)
+		VALUES ({:id}, {:level}, {:message}, {:data}, {:created})
+	`).Bind(dbx.Params{
+		"id":      "oldlog000000001",
+		"level":   1,
+		"message": "old log",
+		"data":    "{}",
+		"created": now.Add(-31 * 24 * time.Hour).Format(types.DefaultDateLayout),
+	}).Execute()
+	require.NoError(t, err)
+
+	err = records.DeleteOldSystemLogs(hub, 3, 5, 30*24*time.Hour)
+	require.NoError(t, err)
+
+	var rows []struct {
+		Id string `db:"id"`
+	}
+	err = hub.AuxDB().NewQuery("SELECT id FROM _logs ORDER BY created DESC").All(&rows)
+	require.NoError(t, err)
+	require.Len(t, rows, 3)
+	assert.Equal(t, "recentlog000000", rows[0].Id)
+	assert.Equal(t, "recentlog000001", rows[1].Id)
+	assert.Equal(t, "recentlog000002", rows[2].Id)
 }

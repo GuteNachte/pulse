@@ -10,16 +10,16 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/henrygd/beszel"
-	"github.com/henrygd/beszel/agent/utils"
-	"github.com/henrygd/beszel/internal/common"
+	"gutenacht.site/pulse"
+	"gutenacht.site/pulse/agent/utils"
+	"gutenacht.site/pulse/internal/common"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/lxzan/gws"
-	"golang.org/x/crypto/ssh"
 	"golang.org/x/net/proxy"
 )
 
@@ -56,6 +56,7 @@ func newWebSocketClient(agent *Agent) (client *WebSocketClient, err error) {
 	if err != nil {
 		return nil, errors.New("invalid hub URL")
 	}
+	normalizeLocalHubURL(client.hubURL)
 	// get registration token
 	client.token, err = getToken()
 	if err != nil {
@@ -69,6 +70,21 @@ func newWebSocketClient(agent *Agent) (client *WebSocketClient, err error) {
 	return client, nil
 }
 
+func normalizeLocalHubURL(hubURL *url.URL) {
+	if hubURL == nil {
+		return
+	}
+	host := strings.ToLower(strings.TrimSpace(hubURL.Hostname()))
+	if host != "localhost" {
+		return
+	}
+	if port := hubURL.Port(); port != "" {
+		hubURL.Host = net.JoinHostPort("127.0.0.1", port)
+		return
+	}
+	hubURL.Host = "127.0.0.1"
+}
+
 // getToken returns the token for the WebSocket client.
 // It first checks the TOKEN environment variable, then the TOKEN_FILE environment variable.
 // If neither is set, it returns an error.
@@ -80,12 +96,21 @@ func getToken() (string, error) {
 	}
 	// get token from file
 	tokenFile, _ := utils.GetEnv("TOKEN_FILE")
-	if tokenFile == "" {
+	if tokenFile != "" {
+		tokenBytes, err := os.ReadFile(tokenFile)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(string(tokenBytes)), nil
+	}
+
+	dataDir, err := GetDataDir()
+	if err != nil {
 		return "", errors.New("must set TOKEN or TOKEN_FILE")
 	}
-	tokenBytes, err := os.ReadFile(tokenFile)
+	tokenBytes, err := os.ReadFile(filepath.Join(dataDir, "token"))
 	if err != nil {
-		return "", err
+		return "", errors.New("must set TOKEN or TOKEN_FILE")
 	}
 	return strings.TrimSpace(string(tokenBytes)), nil
 }
@@ -103,12 +128,9 @@ func (client *WebSocketClient) getOptions() *gws.ClientOption {
 	} else {
 		client.hubURL.Scheme = "ws"
 	}
-	client.hubURL.Path = path.Join(client.hubURL.Path, "api/beszel/agent-connect")
+	client.hubURL.Path = path.Join(client.hubURL.Path, "api/pulse/agent-connect")
 
-	// make sure BESZEL_AGENT_ALL_PROXY works (GWS only checks ALL_PROXY)
-	if val := os.Getenv("BESZEL_AGENT_ALL_PROXY"); val != "" {
-		os.Setenv("ALL_PROXY", val)
-	}
+	syncAllProxyFromAgentEnv()
 
 	client.options = &gws.ClientOption{
 		Addr:      client.hubURL.String(),
@@ -116,13 +138,19 @@ func (client *WebSocketClient) getOptions() *gws.ClientOption {
 		RequestHeader: http.Header{
 			"User-Agent": []string{getUserAgent()},
 			"X-Token":    []string{client.token},
-			"X-Beszel":   []string{beszel.Version},
+			"X-Pulse":    []string{pulse.Version},
 		},
 		NewDialer: func() (gws.Dialer, error) {
 			return proxy.FromEnvironment(), nil
 		},
 	}
 	return client.options
+}
+
+func syncAllProxyFromAgentEnv() {
+	if val := os.Getenv("PULSE_AGENT_ALL_PROXY"); val != "" {
+		os.Setenv("ALL_PROXY", val)
+	}
 }
 
 // Connect establishes a WebSocket connection to the hub.
@@ -188,14 +216,10 @@ func (client *WebSocketClient) OnPing(conn *gws.Conn, message []byte) {
 	conn.WritePong(message)
 }
 
-// handleAuthChallenge verifies the authenticity of the hub and returns the system's fingerprint.
+// handleAuthChallenge confirms the hub-side token handshake and returns the system's fingerprint.
 func (client *WebSocketClient) handleAuthChallenge(msg *common.HubRequest[cbor.RawMessage], requestID *uint32) (err error) {
 	var authRequest common.FingerprintRequest
 	if err := cbor.Unmarshal(msg.Data, &authRequest); err != nil {
-		return err
-	}
-
-	if err := client.verifySignature(authRequest.Signature); err != nil {
 		return err
 	}
 
@@ -209,25 +233,9 @@ func (client *WebSocketClient) handleAuthChallenge(msg *common.HubRequest[cbor.R
 	if authRequest.NeedSysInfo {
 		response.Name, _ = utils.GetEnv("SYSTEM_NAME")
 		response.Hostname = client.agent.systemDetails.Hostname
-		serverAddr := client.agent.connectionManager.serverOptions.Addr
-		_, response.Port, _ = net.SplitHostPort(serverAddr)
 	}
 
 	return client.sendResponse(response, requestID)
-}
-
-// verifySignature verifies the signature of the token using the public keys.
-func (client *WebSocketClient) verifySignature(signature []byte) (err error) {
-	for _, pubKey := range client.agent.keys {
-		sig := ssh.Signature{
-			Format: pubKey.Type(),
-			Blob:   signature,
-		}
-		if err = pubKey.Verify([]byte(client.token), &sig); err == nil {
-			return nil
-		}
-	}
-	return errors.New("invalid signature - check KEY value")
 }
 
 // Close closes the WebSocket connection gracefully.

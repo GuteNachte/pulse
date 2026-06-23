@@ -1,26 +1,21 @@
 import { t } from "@lingui/core/macro"
-import { Trans, useLingui } from "@lingui/react/macro"
+import { Trans } from "@lingui/react/macro"
 import { redirectPage } from "@nanostores/router"
 import {
+	AlertTriangleIcon,
 	CopyIcon,
-	ExternalLinkIcon,
-	FingerprintIcon,
 	KeyIcon,
 	MoreHorizontalIcon,
 	RotateCwIcon,
 	ServerIcon,
+	ShieldCheckIcon,
 	Trash2Icon,
+	WifiIcon,
 } from "lucide-react"
-import { memo, useEffect, useMemo, useState } from "react"
-import {
-	copyDockerCompose,
-	copyDockerRun,
-	copyLinuxCommand,
-	copyWindowsCommand,
-	type DropdownItem,
-	InstallDropdown,
-} from "@/components/install-dropdowns"
+import { memo, useCallback, useEffect, useMemo, useState } from "react"
+import { MobileAgentTokenList, type MobileAgentTokenItem } from "@/components/mobile/mobile-agent-tokens"
 import { $router } from "@/components/router"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
 	DropdownMenu,
@@ -29,343 +24,296 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { AppleIcon, DockerIcon, FreeBsdIcon, TuxIcon, WindowsIcon } from "@/components/ui/icons"
-import { Separator } from "@/components/ui/separator"
-import { Switch } from "@/components/ui/switch"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TableEmptyRow } from "@/components/ui/empty-state"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { toast } from "@/components/ui/use-toast"
 import { isReadOnlyUser, pb } from "@/lib/api"
-import { $publicKey } from "@/lib/stores"
-import { cn, copyToClipboard, generateToken, getHubURL, tokenMap } from "@/lib/utils"
-import type { FingerprintRecord } from "@/types"
+import { ConnectionType, SystemStatus } from "@/lib/enums"
+import { syncAgentHubURLFromRuntime } from "@/lib/runtime-info"
+import { copyToClipboard, getAgentHubURL, tokenMap } from "@/lib/utils"
 
-const pbFingerprintOptions = {
-	expand: "system",
-	fields: "id,fingerprint,token,system,expand.system.name",
-}
-
-function sortFingerprints(fingerprints: FingerprintRecord[]) {
-	return fingerprints.sort((a, b) => a.expand.system.name.localeCompare(b.expand.system.name))
+type AgentTokenItem = {
+	id: string
+	system: string
+	system_name: string
+	token_preview: string
+	status?: SystemStatus
+	connection_type?: ConnectionType
+	bound: boolean
 }
 
 const SettingsFingerprintsPage = memo(() => {
 	if (isReadOnlyUser()) {
 		redirectPage($router, "settings", { name: "general" })
 	}
-	const [fingerprints, setFingerprints] = useState<FingerprintRecord[]>([])
+	const [fingerprints, setFingerprints] = useState<AgentTokenItem[]>([])
+	const stats = useMemo(() => getTokenStats(fingerprints), [fingerprints])
 
-	// Get fingerprint records on mount
-	useEffect(() => {
-		pb.collection("fingerprints")
-			.getFullList<FingerprintRecord>(pbFingerprintOptions)
-			.then((prints) => {
-				setFingerprints(sortFingerprints(prints))
-			})
+	const loadFingerprints = useCallback(async () => {
+		const data = await pb.send<{ items: AgentTokenItem[] }>("/api/pulse/agent-tokens", { requestKey: null })
+		setFingerprints(data.items)
 	}, [])
 
-	// Subscribe to fingerprint updates
+	useEffect(() => {
+		loadFingerprints().catch((error) => {
+			console.error(error)
+			toast({ title: "加载 Agent Token 失败", description: "请稍后重试。", variant: "destructive" })
+		})
+	}, [loadFingerprints])
+
 	useEffect(() => {
 		let unsubscribe: (() => void) | undefined
 		;(async () => {
-			// subscribe to fingerprint updates
-			unsubscribe = await pb.collection("fingerprints").subscribe(
-				"*",
-				(res) => {
-					setFingerprints((currentFingerprints) => {
-						if (res.action === "create") {
-							return sortFingerprints([...currentFingerprints, res.record as FingerprintRecord])
-						}
-						if (res.action === "update") {
-							return currentFingerprints.map((fingerprint) => {
-								if (fingerprint.id === res.record.id) {
-									return { ...fingerprint, ...res.record } as FingerprintRecord
-								}
-								return fingerprint
-							})
-						}
-						if (res.action === "delete") {
-							return currentFingerprints.filter((fingerprint) => fingerprint.id !== res.record.id)
-						}
-						return currentFingerprints
-					})
-				},
-				pbFingerprintOptions
-			)
+			unsubscribe = await pb.collection("fingerprints").subscribe("*", () => {
+				loadFingerprints().catch((error) => {
+					console.error(error)
+				})
+			})
 		})()
-		// unsubscribe on unmount
 		return () => unsubscribe?.()
-	}, [])
-
-	// Update token map whenever fingerprints change
-	useEffect(() => {
-		for (const fingerprint of fingerprints) {
-			tokenMap.set(fingerprint.system, fingerprint.token)
-		}
-	}, [fingerprints])
+	}, [loadFingerprints])
 
 	return (
 		<>
-			<SectionIntro />
-			<Separator className="my-4" />
-			<SectionUniversalToken />
-			<Separator className="my-4" />
-			<SectionTable fingerprints={fingerprints} />
+			<SectionIntro stats={stats} />
+			<SectionTable fingerprints={fingerprints} stats={stats} onRefresh={loadFingerprints} />
 		</>
 	)
 })
 
-const SectionIntro = memo(() => {
+const SectionIntro = memo(({ stats }: { stats: TokenStats }) => {
 	return (
-		<div>
-			<h3 className="text-xl font-medium mb-2">
-				<Trans>Tokens & Fingerprints</Trans>
-			</h3>
-			<p className="text-sm text-muted-foreground leading-relaxed">
-				<Trans>Tokens and fingerprints are used to authenticate WebSocket connections to the hub.</Trans>
-			</p>
-			<p className="text-sm text-muted-foreground leading-relaxed mt-1.5">
-				<Trans>
-					Tokens allow agents to connect and register. Fingerprints are stable identifiers unique to each system, set on
-					first connection.
-				</Trans>
-			</p>
-		</div>
-	)
-})
-
-const SectionUniversalToken = memo(() => {
-	const [token, setToken] = useState("")
-	const [isLoading, setIsLoading] = useState(true)
-	const [checked, setChecked] = useState(false)
-	const [isPermanent, setIsPermanent] = useState(false)
-
-	async function updateToken(enable: number = -1, permanent: number = -1) {
-		// enable: 0 for disable, 1 for enable, -1 (unset) for get current state
-		const data = await pb.send(`/api/beszel/universal-token`, {
-			query: {
-				token,
-				enable,
-				permanent,
-			},
-		})
-		setToken(data.token)
-		setChecked(data.active)
-		setIsPermanent(!!data.permanent)
-		setIsLoading(false)
-	}
-
-	useEffect(() => {
-		updateToken()
-	}, [])
-
-	return (
-		<div>
-			<h3 className="text-lg font-medium mb-2">
-				<Trans>Universal token</Trans>
-			</h3>
-			<p className="text-sm text-muted-foreground leading-relaxed">
-				<Trans>When enabled, this token allows agents to self-register without prior system creation.</Trans>
-			</p>
-			<div className="mt-3 border rounded-md px-4 py-3 max-w-full">
-				{!isLoading && (
-					<div className="flex flex-col gap-3">
-						<div className="flex items-center gap-4 min-w-0">
-							<Switch
-								checked={checked}
-								onCheckedChange={(checked) => {
-									// Keep current permanence preference when enabling/disabling
-									updateToken(checked ? 1 : 0, isPermanent ? 1 : 0)
-								}}
-							/>
-							<div className="min-w-0 flex-1 overflow-auto">
-								<span
-									className={cn(
-										"text-sm text-primary opacity-60 transition-opacity",
-										checked ? "opacity-100" : "select-none"
-									)}
-								>
-									{token}
-								</span>
-							</div>
-							<ActionsButtonUniversalToken token={token} checked={checked} />
+		<div className="hidden md:block">
+			<div className="rounded-lg border border-border/70 bg-surface-soft p-2 shadow-none">
+				<div className="rounded-md border border-border/70 bg-card p-3 shadow-none">
+					<div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+						<div className="min-w-0">
+							<h3 className="text-lg font-semibold tracking-tight">Agent 接入 Token</h3>
+							<p className="mt-1 max-w-2xl text-pretty text-sm text-muted-foreground">
+								管理每台 Agent 的接入凭据、设备绑定和轮换动作。页面默认只显示 Token 摘要，完整 Token
+								仅在复制安装配置时按需读取。
+							</p>
 						</div>
-
-						{checked && (
-							<div className="border-t pt-3">
-								<div className="text-sm font-medium">
-									<Trans>Persistence</Trans>
-								</div>
-								<Tabs
-									value={isPermanent ? "permanent" : "ephemeral"}
-									onValueChange={(value) => updateToken(1, value === "permanent" ? 1 : 0)}
-									className="mt-2"
-								>
-									<TabsList>
-										<TabsTrigger className="xs:min-w-40" value="ephemeral">
-											<Trans>Ephemeral</Trans>
-										</TabsTrigger>
-										<TabsTrigger className="xs:min-w-40" value="permanent">
-											<Trans>Permanent</Trans>
-										</TabsTrigger>
-									</TabsList>
-									<TabsContent value="ephemeral" className="mt-3">
-										<p className="text-sm text-muted-foreground leading-relaxed">
-											<Trans>Expires after one hour or on hub restart.</Trans>
-										</p>
-									</TabsContent>
-									<TabsContent value="permanent" className="mt-3">
-										<p className="text-sm text-muted-foreground leading-relaxed">
-											<Trans>Saved in the database and does not expire until you disable it.</Trans>
-										</p>
-									</TabsContent>
-								</Tabs>
-							</div>
-						)}
+						<div className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border/70 bg-surface-soft px-3 text-xs text-muted-foreground shadow-none">
+							<ShieldCheckIcon className="size-4" />
+							<span>密钥默认脱敏</span>
+						</div>
 					</div>
-				)}
+				</div>
+				<div className="mt-2 grid gap-2 md:grid-cols-4">
+					<TokenStatCard label="Token 总数" value={`${stats.total} 个`} detail="当前可见接入凭据" />
+					<TokenStatCard label="已连接 Agent" value={`${stats.connected} 个`} detail="Agent 在线" />
+					<TokenStatCard label="已绑定设备" value={`${stats.bound} 个`} detail="已记录设备指纹" />
+					<TokenStatCard label="等待接入" value={`${stats.pending} 个`} detail="未完成 Agent 连接" />
+				</div>
 			</div>
 		</div>
 	)
 })
 
-const ActionsButtonUniversalToken = memo(({ token, checked }: { token: string; checked: boolean }) => {
-	const { t } = useLingui()
-	const publicKey = $publicKey.get()
-	const port = "45876"
+const SectionTable = memo(
+	({
+		fingerprints = [],
+		stats,
+		onRefresh,
+	}: {
+		fingerprints: AgentTokenItem[]
+		stats: TokenStats
+		onRefresh: () => Promise<void>
+	}) => {
+		const isReadOnly = isReadOnlyUser()
+		const mobileItems = useMemo<MobileAgentTokenItem[]>(
+			() =>
+				fingerprints.map((fingerprint) => {
+					const status = getBindingStatus(fingerprint)
+					return {
+						id: fingerprint.id,
+						systemName: fingerprint.system_name || fingerprint.system,
+						tokenPreview: fingerprint.token_preview,
+						statusLabel: status.label,
+						statusTone: status.mobileTone,
+						bound: fingerprint.bound,
+					}
+				}),
+			[fingerprints]
+		)
+		const fingerprintById = useMemo(
+			() => new Map(fingerprints.map((fingerprint) => [fingerprint.id, fingerprint])),
+			[fingerprints]
+		)
 
-	const dropdownItems: DropdownItem[] = [
-		{
-			text: t({ message: "Copy docker compose", context: "Button to copy docker compose file content" }),
-			onClick: () => copyDockerCompose(port, publicKey, token),
-			icons: [DockerIcon],
-		},
-		{
-			text: t({ message: "Copy docker run", context: "Button to copy docker run command" }),
-			onClick: () => copyDockerRun(port, publicKey, token),
-			icons: [DockerIcon],
-		},
-		{
-			text: t`Copy Linux command`,
-			onClick: () => copyLinuxCommand(port, publicKey, token),
-			icons: [TuxIcon],
-		},
-		{
-			text: t({ message: "Homebrew command", context: "Button to copy install command" }),
-			onClick: () => copyLinuxCommand(port, publicKey, token, true),
-			icons: [TuxIcon, AppleIcon],
-		},
-		{
-			text: t({ message: "Windows command", context: "Button to copy install command" }),
-			onClick: () => copyWindowsCommand(port, publicKey, token),
-			icons: [WindowsIcon],
-		},
-		{
-			text: t({ message: "FreeBSD command", context: "Button to copy install command" }),
-			onClick: () => copyLinuxCommand(port, publicKey, token),
-			icons: [FreeBsdIcon],
-		},
-		{
-			text: t`Manual setup instructions`,
-			url: "https://beszel.dev/guide/agent-installation#binary",
-			icons: [ExternalLinkIcon],
-		},
-	]
+		const headerCols = useMemo(
+			() => [
+				{
+					label: "设备",
+					Icon: ServerIcon,
+					w: "11em",
+				},
+				{
+					label: "接入 Token",
+					Icon: KeyIcon,
+					w: "20em",
+				},
+				{
+					label: "连接状态",
+					Icon: WifiIcon,
+					w: "14em",
+				},
+			],
+			[]
+		)
+		const getFingerprintFromMobileItem = (item: MobileAgentTokenItem) => fingerprintById.get(item.id)
+		const copyMobileYaml = async (item: MobileAgentTokenItem) => {
+			const fingerprint = getFingerprintFromMobileItem(item)
+			if (fingerprint) {
+				await copyFingerprintYaml(fingerprint)
+			}
+		}
+		const copyMobileEnv = async (item: MobileAgentTokenItem) => {
+			const fingerprint = getFingerprintFromMobileItem(item)
+			if (fingerprint) {
+				await copyFingerprintEnv(fingerprint)
+			}
+		}
+		const rotateMobileToken = (item: MobileAgentTokenItem) => {
+			const fingerprint = getFingerprintFromMobileItem(item)
+			if (fingerprint) {
+				updateFingerprint(fingerprint, "rotate", onRefresh)
+			}
+		}
+		const unbindMobileFingerprint = (item: MobileAgentTokenItem) => {
+			const fingerprint = getFingerprintFromMobileItem(item)
+			if (fingerprint) {
+				updateFingerprint(fingerprint, "unbind", onRefresh)
+			}
+		}
+
+		return (
+			<>
+				<MobileAgentTokenList
+					items={mobileItems}
+					stats={stats}
+					onCopyYaml={copyMobileYaml}
+					onCopyEnv={copyMobileEnv}
+					onRotate={rotateMobileToken}
+					onUnbind={unbindMobileFingerprint}
+				/>
+				<div className="mt-4 hidden rounded-lg border border-border/70 bg-surface-soft p-2 shadow-none md:block">
+					<div className="mb-2 flex items-start gap-2 rounded-md border border-amber-500/25 bg-card px-3 py-2 text-sm text-amber-800 shadow-none dark:text-amber-300">
+						<AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
+						<div className="min-w-0">
+							<div className="font-medium">敏感凭据</div>
+							<p className="mt-0.5 text-pretty text-xs leading-relaxed">
+								复制 YAML 或环境变量会读取完整 Token。轮换后旧 Token 立即失效，解除绑定后 Agent 需要重新完成设备绑定。
+							</p>
+						</div>
+					</div>
+					<div className="w-full overflow-auto rounded-md border border-border/70 bg-card shadow-none">
+						<Table>
+							<TableHeader className="bg-surface-soft">
+								<TableRow className="border-border/70 bg-surface-soft hover:bg-surface-soft">
+									{headerCols.map((col) => (
+										<TableHead key={col.label} style={{ minWidth: col.w }}>
+											<span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+												<col.Icon className="size-4" />
+												{col.label}
+											</span>
+										</TableHead>
+									))}
+									{!isReadOnly && (
+										<TableHead className="w-0">
+											<span className="sr-only">
+												<Trans>Actions</Trans>
+											</span>
+										</TableHead>
+									)}
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{fingerprints.length ? (
+									fingerprints.map((fingerprint) => (
+										<TableRow key={fingerprint.id} className="hover:bg-surface-soft">
+											<TableCell className="max-w-60 py-3 ps-5">
+												<div className="min-w-0">
+													<div className="truncate font-medium">{fingerprint.system_name || fingerprint.system}</div>
+													<div className="mt-1 text-xs text-muted-foreground">
+														{fingerprint.bound ? "已绑定设备指纹" : "等待设备绑定"}
+													</div>
+												</div>
+											</TableCell>
+											<TableCell className="py-3">
+												<div className="inline-flex max-w-full rounded-md bg-surface-soft px-2.5 py-1.5 font-mono text-xs text-muted-foreground shadow-none">
+													<span className="truncate">{fingerprint.token_preview}</span>
+												</div>
+											</TableCell>
+											<TableCell className="py-3">
+												<BindingStatus fingerprint={fingerprint} />
+											</TableCell>
+											{!isReadOnly && (
+												<TableCell className="px-4 py-3 xl:px-2">
+													<ActionsButtonTable fingerprint={fingerprint} onRefresh={onRefresh} />
+												</TableCell>
+											)}
+										</TableRow>
+									))
+								) : (
+									<TableEmptyRow
+										colSpan={isReadOnly ? 3 : 4}
+										loading={false}
+										loadingText="正在读取 Agent 接入 Token"
+										emptyText="暂无 Agent 接入 Token"
+									/>
+								)}
+							</TableBody>
+						</Table>
+					</div>
+				</div>
+			</>
+		)
+	}
+)
+
+function BindingStatus({ fingerprint }: { fingerprint: AgentTokenItem }) {
+	const status = getBindingStatus(fingerprint)
 	return (
-		<div className="flex items-center gap-2">
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<Button
-						variant="ghost"
-						size="icon"
-						disabled={!checked}
-						className={cn("transition-opacity", !checked && "opacity-50")}
-					>
-						<span className="sr-only">
-							<Trans>Open menu</Trans>
-						</span>
-						<MoreHorizontalIcon className="w-5" />
-					</Button>
-				</DropdownMenuTrigger>
-				<InstallDropdown items={dropdownItems} />
-			</DropdownMenu>
-		</div>
+		<Badge variant={status.badgeVariant} className="h-6 px-2.5">
+			{status.label}
+		</Badge>
 	)
-})
+}
 
-const SectionTable = memo(({ fingerprints = [] }: { fingerprints: FingerprintRecord[] }) => {
-	const { t } = useLingui()
-	const isReadOnly = isReadOnlyUser()
+function getBindingStatus(fingerprint: AgentTokenItem): {
+	label: string
+	badgeVariant: "success" | "warning" | "outline"
+	mobileTone: MobileAgentTokenItem["statusTone"]
+} {
+	const connectionType = fingerprint.connection_type
+	const status = fingerprint.status
+	if (connectionType === ConnectionType.WebSocket && status === SystemStatus.Up) {
+		return { label: "Agent 已连接", badgeVariant: "success", mobileTone: "success" }
+	}
+	if (connectionType === ConnectionType.WebSocket) {
+		return { label: "Agent 未连接", badgeVariant: "warning", mobileTone: "warning" }
+	}
+	return { label: "等待 Agent 连接", badgeVariant: "outline", mobileTone: "neutral" }
+}
 
-	const headerCols = useMemo(
-		() => [
-			{
-				label: t`System`,
-				Icon: ServerIcon,
-				w: "11em",
-			},
-			{
-				label: t`Token`,
-				Icon: KeyIcon,
-				w: "20em",
-			},
-			{
-				label: t`Fingerprint`,
-				Icon: FingerprintIcon,
-				w: "20em",
-			},
-		],
-		[t]
-	)
-	return (
-		<div className="rounded-md border overflow-hidden w-full mt-4">
-			<Table>
-				<TableHeader>
-					<tr className="border-border/50">
-						{headerCols.map((col) => (
-							<TableHead key={col.label} style={{ minWidth: col.w }}>
-								<span className="flex items-center gap-2">
-									<col.Icon className="size-4" />
-									{col.label}
-								</span>
-							</TableHead>
-						))}
-						{!isReadOnly && (
-							<TableHead className="w-0">
-								<span className="sr-only">
-									<Trans>Actions</Trans>
-								</span>
-							</TableHead>
-						)}
-					</tr>
-				</TableHeader>
-				<TableBody className="whitespace-pre">
-					{fingerprints.map((fingerprint) => (
-						<TableRow key={fingerprint.id}>
-							<TableCell className="font-medium ps-5 py-2 max-w-60 truncate">
-								{fingerprint.expand.system.name}
-							</TableCell>
-							<TableCell className="font-mono text-[0.95em] py-2">{fingerprint.token}</TableCell>
-							<TableCell className="font-mono text-[0.95em] py-2">{fingerprint.fingerprint}</TableCell>
-							{!isReadOnly && (
-								<TableCell className="py-2 px-4 xl:px-2">
-									<ActionsButtonTable fingerprint={fingerprint} />
-								</TableCell>
-							)}
-						</TableRow>
-					))}
-				</TableBody>
-			</Table>
-		</div>
-	)
-})
-
-async function updateFingerprint(fingerprint: FingerprintRecord, rotateToken = false) {
+async function updateFingerprint(
+	fingerprint: AgentTokenItem,
+	action: "rotate" | "unbind",
+	onRefresh: () => Promise<void>
+) {
 	try {
-		await pb.collection("fingerprints").update(fingerprint.id, {
-			fingerprint: "",
-			token: rotateToken ? generateToken() : fingerprint.token,
+		await pb.send(`/api/pulse/agent-tokens/${encodeURIComponent(fingerprint.id)}/${action}`, {
+			method: "POST",
+			requestKey: null,
 		})
+		tokenMap.delete(fingerprint.system)
+		toast({
+			title: action === "rotate" ? "Token 已轮换" : "设备绑定已解除",
+			description: action === "rotate" ? "旧 Token 已失效，Agent 需要使用新 Token 重新接入。" : "当前设备指纹已清空。",
+		})
+		await onRefresh()
 	} catch (error: unknown) {
 		toast({
 			title: t`Error`,
@@ -374,44 +322,100 @@ async function updateFingerprint(fingerprint: FingerprintRecord, rotateToken = f
 	}
 }
 
-const ActionsButtonTable = memo(({ fingerprint }: { fingerprint: FingerprintRecord }) => {
-	const envVar = `HUB_URL=${getHubURL()}\nTOKEN=${fingerprint.token}`
-	const copyEnv = () => copyToClipboard(envVar)
-	const copyYaml = () => copyToClipboard(envVar.replaceAll("=", ": "))
-
-	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<Button variant="ghost" size={"icon"} data-nolink>
-					<span className="sr-only">
-						<Trans>Open menu</Trans>
-					</span>
-					<MoreHorizontalIcon className="w-5" />
-				</Button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end">
-				<DropdownMenuItem onClick={copyYaml}>
-					<CopyIcon className="me-2.5 size-4" />
-					<Trans>Copy YAML</Trans>
-				</DropdownMenuItem>
-				<DropdownMenuItem onClick={copyEnv}>
-					<CopyIcon className="me-2.5 size-4" />
-					<Trans context="Environment variables">Copy env</Trans>
-				</DropdownMenuItem>
-				<DropdownMenuSeparator />
-				<DropdownMenuItem onSelect={() => updateFingerprint(fingerprint, true)}>
-					<RotateCwIcon className="me-2.5 size-4" />
-					<Trans>Rotate token</Trans>
-				</DropdownMenuItem>
-				{fingerprint.fingerprint && (
-					<DropdownMenuItem onSelect={() => updateFingerprint(fingerprint)}>
-						<Trash2Icon className="me-2.5 size-4" />
-						<Trans>Delete fingerprint</Trans>
+const ActionsButtonTable = memo(
+	({ fingerprint, onRefresh }: { fingerprint: AgentTokenItem; onRefresh: () => Promise<void> }) => {
+		return (
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<Button variant="ghost" size="icon" className="size-10 transition-transform active:scale-[0.96]" data-nolink>
+						<span className="sr-only">
+							<Trans>Open menu</Trans>
+						</span>
+						<MoreHorizontalIcon className="w-5" />
+					</Button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end">
+					<DropdownMenuItem onClick={() => copyFingerprintYaml(fingerprint)}>
+						<CopyIcon className="me-2.5 size-4" />
+						复制 YAML
 					</DropdownMenuItem>
-				)}
-			</DropdownMenuContent>
-		</DropdownMenu>
+					<DropdownMenuItem onClick={() => copyFingerprintEnv(fingerprint)}>
+						<CopyIcon className="me-2.5 size-4" />
+						复制环境变量
+					</DropdownMenuItem>
+					<DropdownMenuSeparator />
+					<DropdownMenuItem onSelect={() => updateFingerprint(fingerprint, "rotate", onRefresh)}>
+						<RotateCwIcon className="me-2.5 size-4" />
+						轮换接入 Token
+					</DropdownMenuItem>
+					{fingerprint.bound && (
+						<DropdownMenuItem onSelect={() => updateFingerprint(fingerprint, "unbind", onRefresh)}>
+							<Trash2Icon className="me-2.5 size-4" />
+							解除当前设备绑定
+						</DropdownMenuItem>
+					)}
+				</DropdownMenuContent>
+			</DropdownMenu>
+		)
+	}
+)
+
+async function getAgentTokenSecret(fingerprint: AgentTokenItem) {
+	const data = await pb.send<{ system: string; token: string }>(
+		`/api/pulse/agent-tokens/${encodeURIComponent(fingerprint.id)}/secret`,
+		{ requestKey: null }
 	)
-})
+	tokenMap.set(data.system, data.token)
+	return data.token
+}
+
+async function getFingerprintEnvVar(fingerprint: AgentTokenItem) {
+	const token = await getAgentTokenSecret(fingerprint)
+	try {
+		const info = await syncAgentHubURLFromRuntime()
+		return `HUB_URL=${info.agent_hub_url || getAgentHubURL()}\nTOKEN=${token}`
+	} catch (error) {
+		console.error(error)
+		return `HUB_URL=${getAgentHubURL()}\nTOKEN=${token}`
+	}
+}
+
+async function copyFingerprintEnv(fingerprint: AgentTokenItem) {
+	await copyToClipboard(await getFingerprintEnvVar(fingerprint))
+}
+
+async function copyFingerprintYaml(fingerprint: AgentTokenItem) {
+	await copyToClipboard((await getFingerprintEnvVar(fingerprint)).replaceAll("=", ": "))
+}
+
+type TokenStats = {
+	total: number
+	connected: number
+	bound: number
+	pending: number
+}
+
+function getTokenStats(items: AgentTokenItem[]): TokenStats {
+	const connected = items.filter(
+		(item) => item.connection_type === ConnectionType.WebSocket && item.status === SystemStatus.Up
+	).length
+	const bound = items.filter((item) => item.bound).length
+	return {
+		total: items.length,
+		connected,
+		bound,
+		pending: Math.max(0, items.length - connected),
+	}
+}
+
+function TokenStatCard({ label, value, detail }: { label: string; value: string; detail: string }) {
+	return (
+		<div className="min-w-0 rounded-md bg-card px-3 py-2.5 shadow-none">
+			<div className="text-xs text-muted-foreground">{label}</div>
+			<div className="mt-1 truncate text-lg font-semibold tracking-tight tabular-nums">{value}</div>
+			<div className="mt-1 truncate text-xs text-muted-foreground">{detail}</div>
+		</div>
+	)
+}
 
 export default SettingsFingerprintsPage

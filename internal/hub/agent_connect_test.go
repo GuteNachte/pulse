@@ -3,7 +3,6 @@
 package hub
 
 import (
-	"crypto/ed25519"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -14,15 +13,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/henrygd/beszel/agent"
-	"github.com/henrygd/beszel/internal/common"
-	"github.com/henrygd/beszel/internal/hub/ws"
+	"gutenacht.site/pulse/agent"
+	"gutenacht.site/pulse/internal/common"
+	systemEntity "gutenacht.site/pulse/internal/entities/system"
+	"gutenacht.site/pulse/internal/hub/ws"
 
 	"github.com/pocketbase/pocketbase/core"
 	pbtests "github.com/pocketbase/pocketbase/tests"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/ssh"
 )
 
 // Helper function to create a test hub without import cycle
@@ -94,19 +93,40 @@ func TestValidateAgentHeaders(t *testing.T) {
 		expectedAgent string
 	}{
 		{
-			name: "valid headers",
+			name: "valid pulse headers",
 			headers: http.Header{
-				"X-Token":  []string{"valid-token-123"},
-				"X-Beszel": []string{"0.5.0"},
+				"X-Token": []string{"valid-token-123"},
+				"X-Pulse": []string{"0.5.0"},
 			},
 			expectError:   false,
 			expectedToken: "valid-token-123",
 			expectedAgent: "0.5.0",
 		},
 		{
+			name: "valid legacy beszel headers",
+			headers: http.Header{
+				"X-Token":  []string{"valid-token-123"},
+				"X-Beszel": []string{"0.4.9"},
+			},
+			expectError:   false,
+			expectedToken: "valid-token-123",
+			expectedAgent: "0.4.9",
+		},
+		{
+			name: "pulse header takes precedence over legacy header",
+			headers: http.Header{
+				"X-Token":  []string{"valid-token-123"},
+				"X-Pulse":  []string{"0.5.1"},
+				"X-Beszel": []string{"0.4.9"},
+			},
+			expectError:   false,
+			expectedToken: "valid-token-123",
+			expectedAgent: "0.5.1",
+		},
+		{
 			name: "missing token",
 			headers: http.Header{
-				"X-Beszel": []string{"0.5.0"},
+				"X-Pulse": []string{"0.5.0"},
 			},
 			expectError: true,
 		},
@@ -120,24 +140,24 @@ func TestValidateAgentHeaders(t *testing.T) {
 		{
 			name: "empty token",
 			headers: http.Header{
-				"X-Token":  []string{""},
-				"X-Beszel": []string{"0.5.0"},
+				"X-Token": []string{""},
+				"X-Pulse": []string{"0.5.0"},
 			},
 			expectError: true,
 		},
 		{
 			name: "empty agent version",
 			headers: http.Header{
-				"X-Token":  []string{"valid-token-123"},
-				"X-Beszel": []string{""},
+				"X-Token": []string{"valid-token-123"},
+				"X-Pulse": []string{""},
 			},
 			expectError: true,
 		},
 		{
 			name: "token too long",
 			headers: http.Header{
-				"X-Token":  []string{strings.Repeat("a", 65)},
-				"X-Beszel": []string{"0.5.0"},
+				"X-Token": []string{strings.Repeat("a", 65)},
+				"X-Pulse": []string{"0.5.0"},
 			},
 			expectError: true,
 		},
@@ -176,8 +196,6 @@ func TestGetAllFingerprintRecordsByToken(t *testing.T) {
 	// Create test data
 	systemRecord, err := createTestRecord(testApp, "systems", map[string]any{
 		"name":   "test-system",
-		"host":   "localhost",
-		"port":   "45876",
 		"status": "pending",
 		"users":  []string{userRecord.Id},
 	})
@@ -193,8 +211,6 @@ func TestGetAllFingerprintRecordsByToken(t *testing.T) {
 	for i := range 3 {
 		systemRecord, _ := createTestRecord(testApp, "systems", map[string]any{
 			"name":   fmt.Sprintf("test-system-%d", i),
-			"host":   "localhost",
-			"port":   "45876",
 			"status": "pending",
 			"users":  []string{userRecord.Id},
 		})
@@ -266,8 +282,6 @@ func TestSetFingerprint(t *testing.T) {
 	// Create test system
 	systemRecord, err := createTestRecord(testApp, "systems", map[string]any{
 		"name":   "test-system",
-		"host":   "localhost",
-		"port":   "45876",
 		"status": "pending",
 		"users":  []string{userRecord.Id},
 	})
@@ -349,8 +363,6 @@ func TestCreateSystemFromAgentData(t *testing.T) {
 		fingerprint   common.FingerprintResponse
 		expectError   bool
 		expectedName  string
-		expectedHost  string
-		expectedPort  string
 		expectedUsers []string
 	}{
 		{
@@ -368,12 +380,10 @@ func TestCreateSystemFromAgentData(t *testing.T) {
 			},
 			expectError:   false,
 			expectedName:  "test-server",
-			expectedHost:  "192.168.0.1", // This will be the parsed IP from the mock request
-			expectedPort:  "8080",
 			expectedUsers: []string{userRecord.Id},
 		},
 		{
-			name: "system creation with default port",
+			name: "system creation ignores legacy port",
 			agentConnReq: agentConnectRequest{
 				hub:    hub,
 				userId: userRecord.Id,
@@ -383,12 +393,9 @@ func TestCreateSystemFromAgentData(t *testing.T) {
 			},
 			fingerprint: common.FingerprintResponse{
 				Hostname: "default-port-server",
-				Port:     "", // Empty port should default to 45876
 			},
 			expectError:   false,
 			expectedName:  "default-port-server",
-			expectedHost:  "192.168.0.1", // This will be the parsed IP from the mock request
-			expectedPort:  "45876",
 			expectedUsers: []string{userRecord.Id},
 		},
 		{
@@ -406,8 +413,23 @@ func TestCreateSystemFromAgentData(t *testing.T) {
 			},
 			expectError:   false,
 			expectedName:  "192.168.0.1", // Should fall back to host IP when hostname is empty
-			expectedHost:  "192.168.0.1", // This will be the parsed IP from the mock request
-			expectedPort:  "9090",
+			expectedUsers: []string{userRecord.Id},
+		},
+		{
+			name: "system creation stores real connection IP",
+			agentConnReq: agentConnectRequest{
+				hub:    hub,
+				userId: userRecord.Id,
+				req: &http.Request{
+					Header:     http.Header{"X-Forwarded-For": []string{"10.10.0.50, 172.18.0.1"}},
+					RemoteAddr: "172.18.0.2:45123",
+				},
+			},
+			fingerprint: common.FingerprintResponse{
+				Hostname: "proxied-server",
+			},
+			expectError:   false,
+			expectedName:  "proxied-server",
 			expectedUsers: []string{userRecord.Id},
 		},
 	}
@@ -429,8 +451,14 @@ func TestCreateSystemFromAgentData(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, tc.expectedName, systemRecord.GetString("name"))
-			assert.Equal(t, tc.expectedHost, systemRecord.GetString("host"))
-			assert.Equal(t, tc.expectedPort, systemRecord.GetString("port"))
+			collection, err := testApp.FindCachedCollectionByNameOrId("systems")
+			require.NoError(t, err)
+			assert.Nil(t, collection.Fields.GetByName("host"), "systems.host should not exist in WebSocket-only mode")
+			assert.Nil(t, collection.Fields.GetByName("port"), "systems.port should not exist in WebSocket-only mode")
+			var info systemEntity.Info
+			require.NoError(t, systemRecord.UnmarshalJSONField("info", &info))
+			assert.Equal(t, systemEntity.ConnectionTypeWebSocket, info.ConnectionType)
+			assert.Equal(t, getRealIP(tc.agentConnReq.req), info.RemoteIP)
 
 			// Verify users array
 			users := systemRecord.Get("users")
@@ -524,8 +552,6 @@ func TestAgentConnect(t *testing.T) {
 	// Create test system
 	systemRecord, err := createTestRecord(testApp, "systems", map[string]any{
 		"name":   "test-system",
-		"host":   "localhost",
-		"port":   "45876",
 		"status": "pending",
 		"users":  []string{userRecord.Id},
 	})
@@ -554,7 +580,7 @@ func TestAgentConnect(t *testing.T) {
 		{
 			name: "missing token header",
 			headers: map[string]string{
-				"X-Beszel": "0.5.0",
+				"X-Pulse": "0.5.0",
 			},
 			expectedStatus: http.StatusBadRequest,
 			description:    "Should fail due to missing token",
@@ -572,8 +598,8 @@ func TestAgentConnect(t *testing.T) {
 		{
 			name: "invalid token",
 			headers: map[string]string{
-				"X-Token":  "invalid-token",
-				"X-Beszel": "0.5.0",
+				"X-Token": "invalid-token",
+				"X-Pulse": "0.5.0",
 			},
 			expectedStatus: http.StatusUnauthorized,
 			description:    "Should fail due to invalid token",
@@ -582,8 +608,8 @@ func TestAgentConnect(t *testing.T) {
 		{
 			name: "invalid agent version",
 			headers: map[string]string{
-				"X-Token":  testToken,
-				"X-Beszel": "0.5.0.0.0",
+				"X-Token": testToken,
+				"X-Pulse": "0.5.0.0.0",
 			},
 			expectedStatus: http.StatusUnauthorized,
 			description:    "Should fail due to invalid agent version",
@@ -592,8 +618,8 @@ func TestAgentConnect(t *testing.T) {
 		{
 			name: "valid headers but websocket upgrade will fail in test",
 			headers: map[string]string{
-				"X-Token":  testToken,
-				"X-Beszel": "0.5.0",
+				"X-Token": testToken,
+				"X-Pulse": "0.5.0",
 			},
 			expectedStatus: http.StatusInternalServerError,
 			description:    "Should pass validation but fail at WebSocket upgrade due to test limitations",
@@ -601,7 +627,7 @@ func TestAgentConnect(t *testing.T) {
 		},
 		{
 			name:           "Token too long",
-			headers:        map[string]string{"X-Token": strings.Repeat("a", 65), "X-Beszel": "0.5.0"},
+			headers:        map[string]string{"X-Token": strings.Repeat("a", 65), "X-Pulse": "0.5.0"},
 			expectedStatus: http.StatusBadRequest,
 			description:    "Should reject token exceeding 64 characters",
 			errorMessage:   "",
@@ -610,7 +636,7 @@ func TestAgentConnect(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/api/beszel/agent-connect", nil)
+			req := httptest.NewRequest("GET", "/api/pulse/agent-connect", nil)
 			for key, value := range tc.headers {
 				req.Header.Set(key, value)
 			}
@@ -683,8 +709,6 @@ func TestHandleAgentConnect(t *testing.T) {
 	// Create test system
 	systemRecord, err := createTestRecord(testApp, "systems", map[string]any{
 		"name":   "test-system",
-		"host":   "localhost",
-		"port":   "45876",
 		"status": "pending",
 		"users":  []string{userRecord.Id},
 	})
@@ -714,8 +738,8 @@ func TestHandleAgentConnect(t *testing.T) {
 			name:   "GET with invalid token",
 			method: "GET",
 			headers: map[string]string{
-				"X-Token":  "invalid",
-				"X-Beszel": "0.5.0",
+				"X-Token": "invalid",
+				"X-Pulse": "0.5.0",
 			},
 			expectedStatus: http.StatusUnauthorized,
 			description:    "Should reject invalid token",
@@ -724,8 +748,8 @@ func TestHandleAgentConnect(t *testing.T) {
 			name:   "GET with valid token",
 			method: "GET",
 			headers: map[string]string{
-				"X-Token":  testToken,
-				"X-Beszel": "0.5.0",
+				"X-Token": testToken,
+				"X-Pulse": "0.5.0",
 			},
 			expectedStatus: http.StatusInternalServerError, // WebSocket upgrade fails in test
 			description:    "Should pass validation but fail at WebSocket upgrade",
@@ -734,7 +758,7 @@ func TestHandleAgentConnect(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(tc.method, "/api/beszel/agent-connect", nil)
+			req := httptest.NewRequest(tc.method, "/api/pulse/agent-connect", nil)
 			for key, value := range tc.headers {
 				req.Header.Set(key, value)
 			}
@@ -752,6 +776,46 @@ func TestHandleAgentConnect(t *testing.T) {
 	}
 }
 
+func TestHandleAgentConnectLegacyApiPrefixCompatibility(t *testing.T) {
+	hub, testApp, err := createTestHub(t)
+	require.NoError(t, err)
+	defer cleanupTestHub(hub, testApp)
+
+	userRecord, err := createTestUser(testApp)
+	require.NoError(t, err)
+
+	systemRecord, err := createTestRecord(testApp, "systems", map[string]any{
+		"name":   "legacy-system",
+		"status": "pending",
+		"users":  []string{userRecord.Id},
+	})
+	require.NoError(t, err)
+
+	testToken := "legacy-token-789"
+	_, err = createTestRecord(testApp, "fingerprints", map[string]any{
+		"system":      systemRecord.Id,
+		"token":       testToken,
+		"fingerprint": "",
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/beszel/agent-connect", nil)
+	req.Header.Set("X-Token", testToken)
+	req.Header.Set("X-Beszel", "0.5.0")
+
+	recorder := httptest.NewRecorder()
+	acr := &agentConnectRequest{
+		hub: hub,
+		req: req,
+		res: recorder,
+	}
+	err = acr.agentConnect()
+
+	assert.Equal(t, http.StatusInternalServerError, recorder.Code)
+	assert.Equal(t, "WebSocket upgrade failed", recorder.Body.String())
+	assert.NoError(t, err)
+}
+
 // TestAgentWebSocketIntegration tests WebSocket connection scenarios with an actual agent
 func TestAgentWebSocketIntegration(t *testing.T) {
 	// Create hub and test app
@@ -759,24 +823,13 @@ func TestAgentWebSocketIntegration(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanupTestHub(hub, testApp)
 
-	// Get the hub's SSH key
-	hubSigner, err := hub.GetSSHKey("")
-	require.NoError(t, err)
-	goodPubKey := hubSigner.PublicKey()
-
-	// Generate bad key pair (should be rejected)
-	_, badPrivKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	badPubKey, err := ssh.NewPublicKey(badPrivKey.Public().(ed25519.PublicKey))
-	require.NoError(t, err)
-
 	// Create test user
 	userRecord, err := createTestUser(testApp)
 	require.NoError(t, err)
 
 	// Create HTTP server with the actual API route
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/beszel/agent-connect" {
+		if r.URL.Path == "/api/pulse/agent-connect" {
 			acr := &agentConnectRequest{
 				hub: hub,
 				req: r,
@@ -795,7 +848,6 @@ func TestAgentWebSocketIntegration(t *testing.T) {
 		dbToken            string // Token in database (empty means no record created)
 		agentFingerprint   string // Fingerprint agent will send (empty means agent generates its own)
 		dbFingerprint      string // Fingerprint in database
-		agentSSHKey        ssh.PublicKey
 		expectConnection   bool
 		expectFingerprint  string // "empty", "unchanged", or "updated"
 		expectSystemStatus string
@@ -807,7 +859,6 @@ func TestAgentWebSocketIntegration(t *testing.T) {
 			dbToken:            "test-token-1",
 			agentFingerprint:   "agent-fingerprint-1",
 			dbFingerprint:      "",
-			agentSSHKey:        goodPubKey,
 			expectConnection:   true,
 			expectFingerprint:  "updated",
 			expectSystemStatus: "up",
@@ -819,7 +870,6 @@ func TestAgentWebSocketIntegration(t *testing.T) {
 			dbToken:            "test-token-2",
 			agentFingerprint:   "matching-fingerprint-123",
 			dbFingerprint:      "matching-fingerprint-123",
-			agentSSHKey:        goodPubKey,
 			expectConnection:   true,
 			expectFingerprint:  "unchanged",
 			expectSystemStatus: "up",
@@ -831,7 +881,6 @@ func TestAgentWebSocketIntegration(t *testing.T) {
 			dbToken:            "test-token-3",
 			agentFingerprint:   "different-fingerprint-456",
 			dbFingerprint:      "original-fingerprint-123",
-			agentSSHKey:        goodPubKey,
 			expectConnection:   false,
 			expectFingerprint:  "unchanged",
 			expectSystemStatus: "pending",
@@ -843,24 +892,10 @@ func TestAgentWebSocketIntegration(t *testing.T) {
 			dbToken:            "test-token-4",
 			agentFingerprint:   "matching-fingerprint-456",
 			dbFingerprint:      "matching-fingerprint-456",
-			agentSSHKey:        goodPubKey,
 			expectConnection:   false,
 			expectFingerprint:  "unchanged",
 			expectSystemStatus: "pending",
 			description:        "Connection should fail when using invalid token",
-		},
-		{
-			// This is more for the agent side, but might as well test it here
-			name:               "wrong SSH key should be rejected",
-			agentToken:         "test-token-5",
-			dbToken:            "test-token-5",
-			agentFingerprint:   "matching-fingerprint-789",
-			dbFingerprint:      "matching-fingerprint-789",
-			agentSSHKey:        badPubKey,
-			expectConnection:   false,
-			expectFingerprint:  "unchanged",
-			expectSystemStatus: "pending",
-			description:        "Connection should fail when agent uses wrong SSH key",
 		},
 	}
 
@@ -893,26 +928,28 @@ func TestAgentWebSocketIntegration(t *testing.T) {
 			require.NoError(t, err)
 			t.Logf("Pre-created fingerprint file for agent: %s", tc.agentFingerprint)
 
-			testAgent, err := agent.NewAgent(agentDataDir)
-			require.NoError(t, err)
+			testAgent := agent.NewTestAgent(agentDataDir)
 
 			// Set up environment variables for the agent
-			t.Setenv("BESZEL_AGENT_HUB_URL", ts.URL)
-			t.Setenv("BESZEL_AGENT_TOKEN", tc.agentToken)
+			t.Setenv("HUB_URL", ts.URL)
+			t.Setenv("TOKEN", tc.agentToken)
 
 			// Start agent in background
 			done := make(chan error, 1)
 			go func() {
-				serverOptions := agent.ServerOptions{
-					Network: "tcp",
-					Addr:    fmt.Sprintf("127.0.0.1:%d", portNum),
-					Keys:    []ssh.PublicKey{tc.agentSSHKey},
+				done <- testAgent.Start()
+			}()
+			defer func() {
+				require.NoError(t, testAgent.Stop())
+				select {
+				case <-done:
+				case <-time.After(2 * time.Second):
+					t.Log("Timed out waiting for test agent shutdown")
 				}
-				done <- testAgent.Start(serverOptions)
 			}()
 
 			// Wait for connection result
-			maxWait := 2 * time.Second
+			maxWait := 15 * time.Second
 			time.Sleep(40 * time.Millisecond)
 			checkInterval := 20 * time.Millisecond
 			timeout := time.After(maxWait)
@@ -996,11 +1033,6 @@ func TestMultipleSystemsWithSameUniversalToken(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanupTestHub(hub, testApp)
 
-	// Get the hub's SSH key
-	hubSigner, err := hub.GetSSHKey("")
-	require.NoError(t, err)
-	goodPubKey := hubSigner.PublicKey()
-
 	// Create test user
 	userRecord, err := createTestUser(testApp)
 	require.NoError(t, err)
@@ -1011,7 +1043,7 @@ func TestMultipleSystemsWithSameUniversalToken(t *testing.T) {
 
 	// Create HTTP server with the actual API route
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/beszel/agent-connect" {
+		if r.URL.Path == "/api/pulse/agent-connect" {
 			acr := &agentConnectRequest{
 				hub: hub,
 				req: r,
@@ -1060,11 +1092,8 @@ func TestMultipleSystemsWithSameUniversalToken(t *testing.T) {
 	}
 
 	var systemCount int
-	for i, tc := range testCases {
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create unique port for each test
-			portNum := 46000 + i
-
 			// Create and configure agent
 			agentDataDir := t.TempDir()
 
@@ -1072,12 +1101,11 @@ func TestMultipleSystemsWithSameUniversalToken(t *testing.T) {
 			err = os.WriteFile(filepath.Join(agentDataDir, "fingerprint"), []byte(tc.agentFingerprint), 0644)
 			require.NoError(t, err)
 
-			testAgent, err := agent.NewAgent(agentDataDir)
-			require.NoError(t, err)
+			testAgent := agent.NewTestAgent(agentDataDir)
 
 			// Set up environment variables for the agent
-			t.Setenv("BESZEL_AGENT_HUB_URL", ts.URL)
-			t.Setenv("BESZEL_AGENT_TOKEN", universalToken)
+			t.Setenv("HUB_URL", ts.URL)
+			t.Setenv("TOKEN", universalToken)
 
 			// Count systems before connection
 			systemsBefore, err := testApp.FindRecordsByFilter("systems", "users ~ {:userId}", "", -1, 0, map[string]any{"userId": userRecord.Id})
@@ -1087,16 +1115,11 @@ func TestMultipleSystemsWithSameUniversalToken(t *testing.T) {
 			// Start agent in background
 			done := make(chan error, 1)
 			go func() {
-				serverOptions := agent.ServerOptions{
-					Network: "tcp",
-					Addr:    fmt.Sprintf("127.0.0.1:%d", portNum),
-					Keys:    []ssh.PublicKey{goodPubKey},
-				}
-				done <- testAgent.Start(serverOptions)
+				done <- testAgent.Start()
 			}()
 
 			// Wait for connection result
-			maxWait := 2 * time.Second
+			maxWait := 15 * time.Second
 			time.Sleep(20 * time.Millisecond)
 			checkInterval := 20 * time.Millisecond
 			timeout := time.After(maxWait)
@@ -1172,12 +1195,18 @@ func TestMultipleSystemsWithSameUniversalToken(t *testing.T) {
 				assert.Equal(t, universalToken, fingerprint.GetString("token"), "Fingerprint should have the universal token")
 				assert.Equal(t, tc.agentFingerprint, fingerprint.GetString("fingerprint"), "Fingerprint should match agent's fingerprint")
 
-				// Verify system status
+				// Verify system status. A successful WebSocket handshake can precede the
+				// first metrics write, so wait for the system updater to persist "up".
 				systemId := fingerprint.GetString("system")
-				system, err := testApp.FindRecordById("systems", systemId)
-				require.NoError(t, err)
-				status := system.GetString("status")
-				assert.Equal(t, tc.expectSystemStatus, status, "System status should match expected value")
+				var status string
+				require.Eventually(t, func() bool {
+					system, err := testApp.FindRecordById("systems", systemId)
+					if err != nil {
+						return false
+					}
+					status = system.GetString("status")
+					return status == tc.expectSystemStatus
+				}, 8*time.Second, 100*time.Millisecond, "System status should match expected value")
 
 				t.Logf("%s - System ID: %s, Status: %s, New System: %v", tc.description, systemId, status, tc.expectNewSystem)
 			}
@@ -1194,11 +1223,6 @@ func TestPermanentUniversalTokenFromDB(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanupTestHub(hub, testApp)
 
-	// Get the hub's SSH key
-	hubSigner, err := hub.GetSSHKey("")
-	require.NoError(t, err)
-	goodPubKey := hubSigner.PublicKey()
-
 	// Create test user
 	userRecord, err := createTestUser(testApp)
 	require.NoError(t, err)
@@ -1213,7 +1237,7 @@ func TestPermanentUniversalTokenFromDB(t *testing.T) {
 
 	// Create HTTP server with the actual API route
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/beszel/agent-connect" {
+		if r.URL.Path == "/api/pulse/agent-connect" {
 			acr := &agentConnectRequest{
 				hub: hub,
 				req: r,
@@ -1231,26 +1255,28 @@ func TestPermanentUniversalTokenFromDB(t *testing.T) {
 	err = os.WriteFile(filepath.Join(agentDataDir, "fingerprint"), []byte("db-token-system-fingerprint"), 0644)
 	require.NoError(t, err)
 
-	testAgent, err := agent.NewAgent(agentDataDir)
-	require.NoError(t, err)
+	testAgent := agent.NewTestAgent(agentDataDir)
 
 	// Set up environment variables for the agent
-	t.Setenv("BESZEL_AGENT_HUB_URL", ts.URL)
-	t.Setenv("BESZEL_AGENT_TOKEN", universalToken)
+	t.Setenv("HUB_URL", ts.URL)
+	t.Setenv("TOKEN", universalToken)
 
 	// Start agent in background
 	done := make(chan error, 1)
 	go func() {
-		serverOptions := agent.ServerOptions{
-			Network: "tcp",
-			Addr:    "127.0.0.1:46050",
-			Keys:    []ssh.PublicKey{goodPubKey},
+		done <- testAgent.Start()
+	}()
+	defer func() {
+		require.NoError(t, testAgent.Stop())
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Log("Timed out waiting for test agent shutdown")
 		}
-		done <- testAgent.Start(serverOptions)
 	}()
 
 	// Wait for connection result
-	maxWait := 2 * time.Second
+	maxWait := 15 * time.Second
 	time.Sleep(20 * time.Millisecond)
 	checkInterval := 20 * time.Millisecond
 	timeout := time.After(maxWait)
@@ -1308,8 +1334,6 @@ func TestFindOrCreateSystemForToken(t *testing.T) {
 				// Create test system
 				systemRecord, err := createTestRecord(testApp, "systems", map[string]any{
 					"name":   "existing-system",
-					"host":   "192.168.1.100",
-					"port":   "45876",
 					"status": "pending",
 					"users":  []string{userRecord.Id},
 				})
@@ -1360,8 +1384,6 @@ func TestFindOrCreateSystemForToken(t *testing.T) {
 				// Create test system
 				systemRecord, err := createTestRecord(testApp, "systems", map[string]any{
 					"name":   "existing-system-2",
-					"host":   "192.168.1.101",
-					"port":   "45876",
 					"status": "pending",
 					"users":  []string{userRecord.Id},
 				})
@@ -1439,8 +1461,6 @@ func TestFindOrCreateSystemForToken(t *testing.T) {
 				// Create test system
 				systemRecord, err := createTestRecord(testApp, "systems", map[string]any{
 					"name":   "regular-system",
-					"host":   "192.168.1.200",
-					"port":   "45876",
 					"status": "pending",
 					"users":  []string{userRecord.Id},
 				})
@@ -1487,8 +1507,6 @@ func TestFindOrCreateSystemForToken(t *testing.T) {
 				// Create test system
 				systemRecord, err := createTestRecord(testApp, "systems", map[string]any{
 					"name":   "regular-system-2",
-					"host":   "192.168.1.250",
-					"port":   "45876",
 					"status": "pending",
 					"users":  []string{userRecord.Id},
 				})
@@ -1558,8 +1576,6 @@ func TestFindOrCreateSystemForToken(t *testing.T) {
 				// Create test systems
 				systemRecord1, err := createTestRecord(testApp, "systems", map[string]any{
 					"name":   "expired-system-1",
-					"host":   "192.168.1.500",
-					"port":   "45876",
 					"status": "pending",
 					"users":  []string{userRecord.Id},
 				})
@@ -1567,8 +1583,6 @@ func TestFindOrCreateSystemForToken(t *testing.T) {
 
 				systemRecord2, err := createTestRecord(testApp, "systems", map[string]any{
 					"name":   "expired-system-2",
-					"host":   "192.168.1.501",
-					"port":   "45876",
 					"status": "pending",
 					"users":  []string{userRecord.Id},
 				})
@@ -1629,8 +1643,6 @@ func TestFindOrCreateSystemForToken(t *testing.T) {
 				// Create test system
 				systemRecord, err := createTestRecord(testApp, "systems", map[string]any{
 					"name":   "expired-system-3",
-					"host":   "192.168.1.600",
-					"port":   "45876",
 					"status": "pending",
 					"users":  []string{userRecord.Id},
 				})
@@ -1718,8 +1730,13 @@ func TestFindOrCreateSystemForToken(t *testing.T) {
 
 				// Verify system properties
 				assert.Equal(t, tc.agentFingerprint.Hostname, system.GetString("name"), "System name should match hostname")
-				assert.Equal(t, getRealIP(acr.req), system.GetString("host"), "System host should match remote address")
-				assert.Equal(t, tc.agentFingerprint.Port, system.GetString("port"), "System port should match agent port")
+				collection, err := testApp.FindCachedCollectionByNameOrId("systems")
+				require.NoError(t, err)
+				assert.Nil(t, collection.Fields.GetByName("host"), "systems.host should not exist in WebSocket-only mode")
+				assert.Nil(t, collection.Fields.GetByName("port"), "systems.port should not exist in WebSocket-only mode")
+				var info systemEntity.Info
+				require.NoError(t, system.UnmarshalJSONField("info", &info))
+				assert.Equal(t, systemEntity.ConnectionTypeWebSocket, info.ConnectionType, "System connection type should be WebSocket")
 				assert.Equal(t, []string{acr.userId}, system.Get("users"), "System users should match")
 			}
 
@@ -1810,4 +1827,437 @@ func TestGetRealIP(t *testing.T) {
 			assert.Equal(t, tc.expectedIP, ip)
 		})
 	}
+}
+
+func TestIsLoopbackRemoteAddr(t *testing.T) {
+	tests := []struct {
+		name       string
+		remoteAddr string
+		want       bool
+	}{
+		{name: "ipv4 loopback with port", remoteAddr: "127.0.0.1:45123", want: true},
+		{name: "ipv6 loopback with port", remoteAddr: "[::1]:45123", want: true},
+		{name: "remote lan address", remoteAddr: "192.168.1.20:45123", want: false},
+		{name: "invalid remote address", remoteAddr: "localhost:45123", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isLoopbackRemoteAddr(tt.remoteAddr))
+		})
+	}
+}
+
+func TestIsLoopbackLocalAgentRequest(t *testing.T) {
+	tests := []struct {
+		name       string
+		host       string
+		remoteAddr string
+		want       bool
+	}{
+		{name: "127 host from 127 remote", host: "127.0.0.1:8090", remoteAddr: "127.0.0.1:45123", want: true},
+		{name: "localhost host from 127 remote", host: "localhost:8090", remoteAddr: "127.0.0.1:45123", want: true},
+		{name: "ipv6 host from ipv6 remote", host: "[::1]:8090", remoteAddr: "[::1]:45123", want: true},
+		{name: "lan host from loopback remote is rejected", host: "192.168.1.30:8090", remoteAddr: "127.0.0.1:45123", want: false},
+		{name: "loopback host from lan remote is rejected", host: "127.0.0.1:8090", remoteAddr: "192.168.1.20:45123", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "http://"+tt.host+"/api/pulse/agent-connect", nil)
+			req.RemoteAddr = tt.remoteAddr
+			assert.Equal(t, tt.want, isLoopbackLocalAgentRequest(req))
+		})
+	}
+}
+
+func TestLocalAgentTokenEnvironmentPriority(t *testing.T) {
+	t.Run("default pulse token", func(t *testing.T) {
+		t.Setenv("PULSE_LOCAL_AGENT_TOKEN", "")
+		t.Setenv("BESZEL_LOCAL_AGENT_TOKEN", "")
+		assert.Equal(t, "pulse-local-agent", localAgentToken())
+	})
+
+	t.Run("pulse env takes precedence", func(t *testing.T) {
+		t.Setenv("PULSE_LOCAL_AGENT_TOKEN", "pulse-token")
+		t.Setenv("BESZEL_LOCAL_AGENT_TOKEN", "legacy-token")
+		assert.Equal(t, "pulse-token", localAgentToken())
+	})
+
+	t.Run("legacy env remains compatible", func(t *testing.T) {
+		t.Setenv("PULSE_LOCAL_AGENT_TOKEN", "")
+		t.Setenv("BESZEL_LOCAL_AGENT_TOKEN", "legacy-token")
+		assert.Equal(t, "legacy-token", localAgentToken())
+	})
+}
+
+func TestRepairLocalSystemMarkersClearsRecordsWithoutCurrentLocalToken(t *testing.T) {
+	t.Setenv("PULSE_LOCAL_AGENT_TOKEN", "current-local-token")
+	t.Setenv("BESZEL_LOCAL_AGENT_TOKEN", "")
+
+	hub, testApp, err := createTestHub(t)
+	require.NoError(t, err)
+	defer cleanupTestHub(hub, testApp)
+
+	userRecord, err := createTestUser(testApp)
+	require.NoError(t, err)
+
+	currentLocalRecord, err := createTestRecord(testApp, "systems", map[string]any{
+		"name":     "hub-host",
+		"is_local": true,
+		"users":    []string{userRecord.Id},
+	})
+	require.NoError(t, err)
+	_, err = createTestRecord(testApp, "fingerprints", map[string]any{
+		"system":      currentLocalRecord.Id,
+		"token":       "current-local-token",
+		"fingerprint": "current-local-fingerprint",
+	})
+	require.NoError(t, err)
+
+	staleRemoteRecord, err := createTestRecord(testApp, "systems", map[string]any{
+		"name":     "nacht",
+		"is_local": true,
+		"users":    []string{userRecord.Id},
+	})
+	require.NoError(t, err)
+	_, err = createTestRecord(testApp, "fingerprints", map[string]any{
+		"system":      staleRemoteRecord.Id,
+		"token":       "regular-agent-token",
+		"fingerprint": "remote-fingerprint",
+	})
+	require.NoError(t, err)
+
+	unboundRecord, err := createTestRecord(testApp, "systems", map[string]any{
+		"name":     "legacy-local",
+		"is_local": true,
+		"users":    []string{userRecord.Id},
+	})
+	require.NoError(t, err)
+	unconfirmedRecord, err := createTestRecord(testApp, "systems", map[string]any{
+		"name":              "pending-pairing-local",
+		"is_local":          true,
+		"pairing_confirmed": false,
+		"users":             []string{userRecord.Id},
+	})
+	require.NoError(t, err)
+	_, err = createTestRecord(testApp, "fingerprints", map[string]any{
+		"system":      unconfirmedRecord.Id,
+		"token":       "regular-agent-token",
+		"fingerprint": "pending-pairing-fingerprint",
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, hub.repairLocalSystemMarkers())
+
+	updatedCurrentRecord, err := testApp.FindRecordById("systems", currentLocalRecord.Id)
+	require.NoError(t, err)
+	assert.True(t, updatedCurrentRecord.GetBool("is_local"))
+
+	updatedStaleRecord, err := testApp.FindRecordById("systems", staleRemoteRecord.Id)
+	require.NoError(t, err)
+	assert.False(t, updatedStaleRecord.GetBool("is_local"))
+
+	updatedUnboundRecord, err := testApp.FindRecordById("systems", unboundRecord.Id)
+	require.NoError(t, err)
+	assert.True(t, updatedUnboundRecord.GetBool("is_local"))
+
+	updatedUnconfirmedRecord, err := testApp.FindRecordById("systems", unconfirmedRecord.Id)
+	require.NoError(t, err)
+	assert.False(t, updatedUnconfirmedRecord.GetBool("is_local"))
+}
+
+func TestRepairLocalSystemMarkersKeepsDevLoopbackHubRecord(t *testing.T) {
+	t.Setenv("PULSE_LOCAL_AGENT_TOKEN", "current-local-token")
+	t.Setenv("BESZEL_LOCAL_AGENT_TOKEN", "")
+	t.Setenv("PULSE_DEV_LOCAL_AGENT_AS_HUB", "true")
+
+	hub, testApp, err := createTestHub(t)
+	require.NoError(t, err)
+	defer cleanupTestHub(hub, testApp)
+
+	userRecord, err := createTestUser(testApp)
+	require.NoError(t, err)
+
+	devLocalRecord, err := createTestRecord(testApp, "systems", map[string]any{
+		"name":              "GuteNacht",
+		"is_local":          true,
+		"pairing_confirmed": true,
+		"users":             []string{userRecord.Id},
+		"info": map[string]any{
+			"ip": "127.0.0.1",
+			"cap": map[string]any{
+				"platform":       "windows",
+				"install_method": "windows",
+				"run_mode":       "host",
+				"agent_profile":  "windows-host",
+			},
+		},
+	})
+	require.NoError(t, err)
+	_, err = createTestRecord(testApp, "fingerprints", map[string]any{
+		"system":      devLocalRecord.Id,
+		"token":       "regular-agent-token",
+		"fingerprint": "dev-loopback-fingerprint",
+	})
+	require.NoError(t, err)
+
+	remoteRecord, err := createTestRecord(testApp, "systems", map[string]any{
+		"name":     "remote-windows",
+		"is_local": true,
+		"users":    []string{userRecord.Id},
+		"info": map[string]any{
+			"ip": "192.168.1.5",
+		},
+	})
+	require.NoError(t, err)
+	_, err = createTestRecord(testApp, "fingerprints", map[string]any{
+		"system":      remoteRecord.Id,
+		"token":       "regular-agent-token",
+		"fingerprint": "remote-fingerprint",
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, hub.repairLocalSystemMarkers())
+
+	updatedDevRecord, err := testApp.FindRecordById("systems", devLocalRecord.Id)
+	require.NoError(t, err)
+	assert.True(t, updatedDevRecord.GetBool("is_local"))
+
+	updatedRemoteRecord, err := testApp.FindRecordById("systems", remoteRecord.Id)
+	require.NoError(t, err)
+	assert.False(t, updatedRemoteRecord.GetBool("is_local"))
+}
+
+func TestFindOrCreateLocalSystem(t *testing.T) {
+	hub, testApp, err := createTestHub(t)
+	require.NoError(t, err)
+	defer cleanupTestHub(hub, testApp)
+
+	userRecord, err := createTestUser(testApp)
+	require.NoError(t, err)
+
+	acr := agentConnectRequest{
+		hub:          hub,
+		req:          &http.Request{RemoteAddr: "127.0.0.1:45123"},
+		token:        defaultLocalAgentToken,
+		isLocalAgent: true,
+	}
+	fpRecord, err := acr.findOrCreateLocalSystem(common.FingerprintResponse{
+		Fingerprint: "local-fingerprint",
+		Hostname:    "hub-hostname",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, fpRecord.SystemId)
+	require.Equal(t, "local-fingerprint", fpRecord.Fingerprint)
+	require.Equal(t, defaultLocalAgentToken, fpRecord.Token)
+
+	systemRecord, err := testApp.FindRecordById("systems", fpRecord.SystemId)
+	require.NoError(t, err)
+	assert.Equal(t, "hub-hostname", systemRecord.GetString("name"))
+	assert.True(t, systemRecord.GetBool("is_local"))
+	assert.Equal(t, "physical", systemRecord.GetString("role"))
+	assert.Equal(t, "production", systemRecord.GetString("primary_use"))
+	assert.Equal(t, []string{userRecord.Id}, systemRecord.Get("users"))
+
+	secondRecord, err := acr.findOrCreateLocalSystem(common.FingerprintResponse{
+		Fingerprint: "local-fingerprint",
+		Hostname:    "hub-hostname-2",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, fpRecord.SystemId, secondRecord.SystemId)
+	assert.Equal(t, "local-fingerprint", secondRecord.Fingerprint)
+
+	localSystems, err := testApp.FindRecordsByFilter("systems", "is_local = true", "", -1, 0)
+	require.NoError(t, err)
+	assert.Len(t, localSystems, 1)
+}
+
+func TestFindOrCreateLocalSystemAdoptsExistingFingerprintSystem(t *testing.T) {
+	hub, testApp, err := createTestHub(t)
+	require.NoError(t, err)
+	defer cleanupTestHub(hub, testApp)
+
+	userRecord, err := createTestUser(testApp)
+	require.NoError(t, err)
+
+	systemRecord, err := createTestRecord(testApp, "systems", map[string]any{
+		"name":        "nacht",
+		"users":       []string{userRecord.Id},
+		"description": "内网镜像库",
+	})
+	require.NoError(t, err)
+	_, err = createTestRecord(testApp, "fingerprints", map[string]any{
+		"system":      systemRecord.Id,
+		"token":       "old-token",
+		"fingerprint": "existing-local-fingerprint",
+	})
+	require.NoError(t, err)
+
+	acr := agentConnectRequest{
+		hub:          hub,
+		req:          &http.Request{RemoteAddr: "127.0.0.1:45123"},
+		token:        defaultLocalAgentToken,
+		isLocalAgent: true,
+	}
+	fpRecord, err := acr.findOrCreateLocalSystem(common.FingerprintResponse{
+		Fingerprint: "existing-local-fingerprint",
+		Hostname:    "nacht",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, systemRecord.Id, fpRecord.SystemId)
+
+	updatedSystem, err := testApp.FindRecordById("systems", systemRecord.Id)
+	require.NoError(t, err)
+	assert.Equal(t, "nacht", updatedSystem.GetString("name"))
+	assert.True(t, updatedSystem.GetBool("is_local"))
+	assert.Equal(t, "内网镜像库", updatedSystem.GetString("description"))
+
+	localSystems, err := testApp.FindRecordsByFilter("systems", "is_local = true", "", -1, 0)
+	require.NoError(t, err)
+	assert.Len(t, localSystems, 1)
+}
+
+func TestFindOrCreateLocalSystemDoesNotReuseStaleLocalFingerprint(t *testing.T) {
+	hub, testApp, err := createTestHub(t)
+	require.NoError(t, err)
+	defer cleanupTestHub(hub, testApp)
+
+	userRecord, err := createTestUser(testApp)
+	require.NoError(t, err)
+
+	staleLocalRecord, err := createTestRecord(testApp, "systems", map[string]any{
+		"name":        "GuteNacht",
+		"is_local":    true,
+		"users":       []string{userRecord.Id},
+		"description": "自己主要用的机器",
+	})
+	require.NoError(t, err)
+	_, err = createTestRecord(testApp, "fingerprints", map[string]any{
+		"system":      staleLocalRecord.Id,
+		"token":       defaultLocalAgentToken,
+		"fingerprint": "windows-host-fingerprint",
+	})
+	require.NoError(t, err)
+
+	hubRecord, err := createTestRecord(testApp, "systems", map[string]any{
+		"name":        "nacht",
+		"users":       []string{userRecord.Id},
+		"description": "内网镜像库",
+	})
+	require.NoError(t, err)
+	_, err = createTestRecord(testApp, "fingerprints", map[string]any{
+		"system":      hubRecord.Id,
+		"token":       "old-token",
+		"fingerprint": "hub-local-fingerprint",
+	})
+	require.NoError(t, err)
+
+	acr := agentConnectRequest{
+		hub:          hub,
+		req:          &http.Request{RemoteAddr: "127.0.0.1:45123"},
+		token:        defaultLocalAgentToken,
+		isLocalAgent: true,
+	}
+	fpRecord, err := acr.findOrCreateLocalSystem(common.FingerprintResponse{
+		Fingerprint: "hub-local-fingerprint",
+		Hostname:    "nacht",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, hubRecord.Id, fpRecord.SystemId)
+
+	updatedHubRecord, err := testApp.FindRecordById("systems", hubRecord.Id)
+	require.NoError(t, err)
+	assert.True(t, updatedHubRecord.GetBool("is_local"))
+
+	updatedStaleRecord, err := testApp.FindRecordById("systems", staleLocalRecord.Id)
+	require.NoError(t, err)
+	assert.False(t, updatedStaleRecord.GetBool("is_local"))
+	assert.Equal(t, "GuteNacht", updatedStaleRecord.GetString("name"))
+}
+
+func TestFindOrCreateLocalSystemRejectsKnownWindowsHostFingerprint(t *testing.T) {
+	hub, testApp, err := createTestHub(t)
+	require.NoError(t, err)
+	defer cleanupTestHub(hub, testApp)
+
+	userRecord, err := createTestUser(testApp)
+	require.NoError(t, err)
+
+	windowsRecord, err := createTestRecord(testApp, "systems", map[string]any{
+		"name":  "GuteNacht",
+		"users": []string{userRecord.Id},
+		"info": map[string]any{
+			"cap": map[string]any{
+				"platform":       "windows",
+				"install_method": "windows",
+				"run_mode":       "host",
+				"agent_profile":  "windows-host",
+			},
+		},
+	})
+	require.NoError(t, err)
+	_, err = createTestRecord(testApp, "fingerprints", map[string]any{
+		"system":      windowsRecord.Id,
+		"token":       "windows-token",
+		"fingerprint": "windows-host-fingerprint",
+	})
+	require.NoError(t, err)
+
+	hubRecord, err := createTestRecord(testApp, "systems", map[string]any{
+		"name":     "nacht",
+		"is_local": true,
+		"users":    []string{userRecord.Id},
+	})
+	require.NoError(t, err)
+
+	acr := agentConnectRequest{
+		hub:          hub,
+		req:          &http.Request{RemoteAddr: "127.0.0.1:45123"},
+		token:        defaultLocalAgentToken,
+		isLocalAgent: true,
+	}
+	_, err = acr.findOrCreateLocalSystem(common.FingerprintResponse{
+		Fingerprint: "windows-host-fingerprint",
+		Name:        "UM-690",
+		Hostname:    "UM-690",
+	})
+	require.Error(t, err)
+
+	updatedWindowsRecord, err := testApp.FindRecordById("systems", windowsRecord.Id)
+	require.NoError(t, err)
+	assert.Equal(t, "GuteNacht", updatedWindowsRecord.GetString("name"))
+	assert.False(t, updatedWindowsRecord.GetBool("is_local"))
+
+	updatedHubRecord, err := testApp.FindRecordById("systems", hubRecord.Id)
+	require.NoError(t, err)
+	assert.Equal(t, "nacht", updatedHubRecord.GetString("name"))
+	assert.True(t, updatedHubRecord.GetBool("is_local"))
+}
+
+func TestFindOrCreateLocalSystemIgnoresLegacyLocalDisplayName(t *testing.T) {
+	hub, testApp, err := createTestHub(t)
+	require.NoError(t, err)
+	defer cleanupTestHub(hub, testApp)
+
+	_, err = createTestUser(testApp)
+	require.NoError(t, err)
+
+	acr := agentConnectRequest{
+		hub:          hub,
+		req:          &http.Request{RemoteAddr: "127.0.0.1:45123"},
+		token:        defaultLocalAgentToken,
+		isLocalAgent: true,
+	}
+	fpRecord, err := acr.findOrCreateLocalSystem(common.FingerprintResponse{
+		Fingerprint: "hub-local-fingerprint",
+		Name:        "本机",
+		Hostname:    "nacht",
+	})
+	require.NoError(t, err)
+
+	systemRecord, err := testApp.FindRecordById("systems", fpRecord.SystemId)
+	require.NoError(t, err)
+	assert.Equal(t, "nacht", systemRecord.GetString("name"))
+	assert.True(t, systemRecord.GetBool("is_local"))
 }

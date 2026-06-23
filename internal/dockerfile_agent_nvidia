@@ -37,6 +37,9 @@ RUN apt-get update && apt-get install -y \
 FROM nvidia/cuda:12.2.2-base-ubuntu22.04
 COPY --from=builder /agent /agent
 
+RUN apt-get update && apt-get install -y --no-install-recommends dmidecode pciutils \
+  && rm -rf /var/lib/apt/lists/*
+
 # AMD GPU name lookup (used by agent on hybrid laptops when /usr/share/libdrm/amdgpu.ids is read)
 COPY --from=builder /app/agent/test-data/amdgpu.ids /usr/share/libdrm/amdgpu.ids
 
@@ -44,6 +47,9 @@ COPY --from=builder /app/agent/test-data/amdgpu.ids /usr/share/libdrm/amdgpu.ids
 COPY --from=smartmontools-builder /usr/sbin/smartctl /usr/sbin/smartctl
 
 # Ensure data persistence across container recreations
-VOLUME ["/var/lib/beszel-agent"]
+VOLUME ["/var/lib/pulse-agent"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD ["/agent", "health"]
 
 ENTRYPOINT ["/agent"]

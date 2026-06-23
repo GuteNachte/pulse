@@ -2,16 +2,20 @@
 package alerts
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
-	"net/mail"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/nicholas-fedor/shoutrrr"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/tools/mailer"
+	"github.com/pocketbase/pocketbase/tools/types"
+	"gutenacht.site/pulse/internal/common"
 )
 
 type hubLike interface {
@@ -29,14 +33,15 @@ type AlertManager struct {
 type AlertMessageData struct {
 	UserID   string
 	SystemID string
+	AlertID  string
 	Title    string
 	Message  string
 	Link     string
 	LinkText string
+	Resolved bool
 }
 
 type UserNotificationSettings struct {
-	Emails   []string `json:"emails"`
 	Webhooks []string `json:"webhooks"`
 }
 
@@ -95,6 +100,10 @@ var supportsTitle = map[string]struct{}{
 	"zulip":      {},
 }
 
+var sendShoutrrr = shoutrrr.Send
+
+const defaultNotificationCooldown = 30 * time.Minute
+
 // NewAlertManager creates a new AlertManager instance.
 func NewAlertManager(app hubLike) *AlertManager {
 	am := &AlertManager{
@@ -125,78 +134,15 @@ func (am *AlertManager) bindEvents() {
 	})
 }
 
-// IsNotificationSilenced checks if a notification should be silenced based on configured quiet hours
-func (am *AlertManager) IsNotificationSilenced(userID, systemID string) bool {
-	// Query for quiet hours windows that match this user and system
-	// Include both global windows (system is null/empty) and system-specific windows
-	var filter string
-	var params dbx.Params
-
-	if systemID == "" {
-		// If no systemID provided, only check global windows
-		filter = "user={:user} AND system=''"
-		params = dbx.Params{"user": userID}
-	} else {
-		// Check both global and system-specific windows
-		filter = "user={:user} AND (system='' OR system={:system})"
-		params = dbx.Params{
-			"user":   userID,
-			"system": systemID,
-		}
-	}
-
-	quietHourWindows, err := am.hub.FindAllRecords("quiet_hours", dbx.NewExp(filter, params))
-	if err != nil || len(quietHourWindows) == 0 {
-		return false
-	}
-
-	now := time.Now().UTC()
-
-	for _, window := range quietHourWindows {
-		windowType := window.GetString("type")
-		start := window.GetDateTime("start").Time()
-		end := window.GetDateTime("end").Time()
-
-		if windowType == "daily" {
-			// For daily recurring windows, extract just the time portion and compare
-			// The start/end are stored as full datetime but we only care about HH:MM
-			startHour, startMin, _ := start.Clock()
-			endHour, endMin, _ := end.Clock()
-			nowHour, nowMin, _ := now.Clock()
-
-			// Convert to minutes since midnight for easier comparison
-			startMinutes := startHour*60 + startMin
-			endMinutes := endHour*60 + endMin
-			nowMinutes := nowHour*60 + nowMin
-
-			// Handle case where window crosses midnight
-			if endMinutes < startMinutes {
-				// Window crosses midnight (e.g., 23:00 - 01:00)
-				if nowMinutes >= startMinutes || nowMinutes < endMinutes {
-					return true
-				}
-			} else {
-				// Normal case (e.g., 09:00 - 17:00)
-				if nowMinutes >= startMinutes && nowMinutes < endMinutes {
-					return true
-				}
-			}
-		} else {
-			// One-time window: check if current time is within the date range
-			if (now.After(start) || now.Equal(start)) && now.Before(end) {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
 // SendAlert sends an alert to the user
 func (am *AlertManager) SendAlert(data AlertMessageData) error {
-	// Check if alert is silenced
-	if am.IsNotificationSilenced(data.UserID, data.SystemID) {
-		am.hub.Logger().Info("Notification silenced", "user", data.UserID, "system", data.SystemID, "title", data.Title)
+	if data.AlertID != "" && IsAlertSilenced(am.hub, data.UserID, data.SystemID, data.AlertID) {
+		am.hub.Logger().Info("Skipped silenced alert notification", "alert_id", data.AlertID, "system", data.SystemID)
+		return nil
+	}
+
+	if !data.Resolved && !am.shouldSendAlertNotification(data) {
+		am.hub.Logger().Info("Skipped alert notification during cooldown", "alert_id", data.AlertID, "system", data.SystemID)
 		return nil
 	}
 
@@ -210,41 +156,248 @@ func (am *AlertManager) SendAlert(data AlertMessageData) error {
 	}
 	// unmarshal user settings
 	userAlertSettings := UserNotificationSettings{
-		Emails:   []string{},
 		Webhooks: []string{},
 	}
 	if err := record.UnmarshalJSONField("settings", &userAlertSettings); err != nil {
 		am.hub.Logger().Error("Failed to unmarshal user settings", "err", err)
 	}
 	// send alerts via webhooks
+	var firstErr error
+	sentToChannels := 0
 	for _, webhook := range userAlertSettings.Webhooks {
+		sentToChannels++
 		if err := am.SendShoutrrrAlert(webhook, data.Title, data.Message, data.Link, data.LinkText); err != nil {
-			am.hub.Logger().Error("Failed to send shoutrrr alert", "err", err)
+			if firstErr == nil {
+				firstErr = err
+			}
+			am.hub.Logger().Error("Failed to send shoutrrr alert", "err", common.RedactSensitiveText(err.Error()))
+			if healthErr := am.recordNotificationChannelFailure(data, webhook, err, false); healthErr != nil {
+				firstErr = errors.Join(firstErr, healthErr)
+				am.hub.Logger().Error("Failed to record notification channel health", "err", healthErr)
+			}
+			if recordErr := am.recordNotificationFailure(data, webhook, err); recordErr != nil {
+				firstErr = errors.Join(firstErr, recordErr)
+				am.hub.Logger().Error("Failed to record notification failure", "err", recordErr)
+			}
+			continue
+		}
+		if err := am.recordNotificationChannelSuccess(data, webhook, false); err != nil {
+			am.hub.Logger().Error("Failed to record notification channel health", "err", err)
+		}
+		if err := am.clearNotificationFailure(data.UserID, webhook); err != nil {
+			am.hub.Logger().Error("Failed to clear notification failure", "err", err)
 		}
 	}
-	// send alerts via email
-	if len(userAlertSettings.Emails) == 0 {
+	if data.AlertID != "" && sentToChannels > 0 {
+		if err := am.recordAlertNotificationResult(data, firstErr); err != nil {
+			am.hub.Logger().Error("Failed to record alert notification state", "err", err)
+		}
+	}
+	return firstErr
+}
+
+func alertNotificationFingerprint(data AlertMessageData) string {
+	parts := []string{
+		strings.TrimSpace(data.UserID),
+		strings.TrimSpace(data.SystemID),
+		strings.TrimSpace(data.AlertID),
+	}
+	if parts[2] == "" {
+		parts[2] = strings.TrimSpace(data.Title)
+	}
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
+	return hex.EncodeToString(sum[:])
+}
+
+func (am *AlertManager) shouldSendAlertNotification(data AlertMessageData) bool {
+	if strings.TrimSpace(data.UserID) == "" || strings.TrimSpace(data.AlertID) == "" {
+		return true
+	}
+	fingerprint := alertNotificationFingerprint(data)
+	record, err := am.hub.FindFirstRecordByFilter(
+		"alert_notification_states",
+		"user={:user} && fingerprint={:fingerprint}",
+		dbx.Params{"user": data.UserID, "fingerprint": fingerprint},
+	)
+	if err != nil || record == nil {
+		return true
+	}
+	nextAllowed := record.GetDateTime("next_allowed_at")
+	if nextAllowed.IsZero() || !nextAllowed.Time().After(time.Now().UTC()) {
+		return true
+	}
+	now := time.Now().UTC()
+	record.Set("status", "suppressed")
+	record.Set("title", data.Title)
+	record.Set("last_attempt_at", now)
+	record.Set("last_suppressed_at", now)
+	record.Set("suppressed_count", record.GetInt("suppressed_count")+1)
+	if err := am.hub.SaveNoValidate(record); err != nil {
+		am.hub.Logger().Error("Failed to record suppressed alert notification", "err", err)
+	}
+	return false
+}
+
+func (am *AlertManager) recordAlertNotificationResult(data AlertMessageData, sendErr error) error {
+	if strings.TrimSpace(data.UserID) == "" || strings.TrimSpace(data.AlertID) == "" {
 		return nil
 	}
-	addresses := []mail.Address{}
-	for _, email := range userAlertSettings.Emails {
-		addresses = append(addresses, mail.Address{Address: email})
+	fingerprint := alertNotificationFingerprint(data)
+	record, err := am.hub.FindFirstRecordByFilter(
+		"alert_notification_states",
+		"user={:user} && fingerprint={:fingerprint}",
+		dbx.Params{"user": data.UserID, "fingerprint": fingerprint},
+	)
+	if err != nil {
+		collection, collectionErr := am.hub.FindCollectionByNameOrId("alert_notification_states")
+		if collectionErr != nil {
+			return collectionErr
+		}
+		record = core.NewRecord(collection)
+		record.Set("user", data.UserID)
+		record.Set("fingerprint", fingerprint)
+		record.Set("suppressed_count", 0)
 	}
-	message := mailer.Message{
-		To:      addresses,
-		Subject: data.Title,
-		Text:    data.Message + fmt.Sprintf("\n\n%s", data.Link),
-		From: mail.Address{
-			Address: am.hub.Settings().Meta.SenderAddress,
-			Name:    am.hub.Settings().Meta.SenderName,
-		},
+	now := time.Now().UTC()
+	record.Set("system", data.SystemID)
+	record.Set("alert_id", data.AlertID)
+	record.Set("title", data.Title)
+	record.Set("last_attempt_at", now)
+	if data.Resolved {
+		record.Set("status", "resolved")
+		record.Set("last_resolved_at", now)
+		record.Set("next_allowed_at", types.DateTime{})
+		record.Set("last_error", "")
+		return am.hub.SaveNoValidate(record)
 	}
-	err = am.hub.NewMailClient().Send(&message)
+	record.Set("next_allowed_at", now.Add(defaultNotificationCooldown))
+	if sendErr != nil {
+		record.Set("status", "failed")
+		record.Set("last_error", common.RedactSensitiveText(sendErr.Error()))
+	} else {
+		record.Set("status", "sent")
+		record.Set("last_error", "")
+		record.Set("last_sent_at", now)
+	}
+	return am.hub.SaveNoValidate(record)
+}
+
+func notificationFingerprint(webhook string) string {
+	sum := sha256.Sum256([]byte(webhook))
+	return hex.EncodeToString(sum[:])
+}
+
+func notificationTarget(webhook string) string {
+	parsedURL, err := url.Parse(webhook)
+	if err != nil {
+		return "Webhook"
+	}
+	if host := parsedURL.Hostname(); host != "" {
+		return parsedURL.Scheme + "://" + host
+	}
+	if parsedURL.Scheme != "" {
+		return parsedURL.Scheme
+	}
+	return "Webhook"
+}
+
+func (am *AlertManager) recordNotificationFailure(data AlertMessageData, webhook string, sendErr error) error {
+	fingerprint := notificationFingerprint(webhook)
+	record, err := am.hub.FindFirstRecordByFilter(
+		"notification_failures",
+		"user={:user} && fingerprint={:fingerprint}",
+		dbx.Params{"user": data.UserID, "fingerprint": fingerprint},
+	)
+	if err != nil {
+		collection, collectionErr := am.hub.FindCollectionByNameOrId("notification_failures")
+		if collectionErr != nil {
+			return collectionErr
+		}
+		record = core.NewRecord(collection)
+		record.Set("user", data.UserID)
+		record.Set("fingerprint", fingerprint)
+		record.Set("count", 0)
+	}
+	record.Set("system", data.SystemID)
+	record.Set("title", data.Title)
+	record.Set("target", notificationTarget(webhook))
+	record.Set("error", common.RedactSensitiveText(sendErr.Error()))
+	record.Set("count", record.GetInt("count")+1)
+	return am.hub.SaveNoValidate(record)
+}
+
+func (am *AlertManager) notificationChannelHealthRecord(userID string, webhook string) (*core.Record, error) {
+	fingerprint := notificationFingerprint(webhook)
+	record, err := am.hub.FindFirstRecordByFilter(
+		"notification_channel_health",
+		"user={:user} && fingerprint={:fingerprint}",
+		dbx.Params{"user": userID, "fingerprint": fingerprint},
+	)
+	if err == nil && record != nil {
+		return record, nil
+	}
+	collection, collectionErr := am.hub.FindCollectionByNameOrId("notification_channel_health")
+	if collectionErr != nil {
+		return nil, collectionErr
+	}
+	record = core.NewRecord(collection)
+	record.Set("user", userID)
+	record.Set("fingerprint", fingerprint)
+	record.Set("target", notificationTarget(webhook))
+	record.Set("status", "unknown")
+	record.Set("success_count", 0)
+	record.Set("failure_count", 0)
+	return record, nil
+}
+
+func (am *AlertManager) recordNotificationChannelSuccess(data AlertMessageData, webhook string, test bool) error {
+	record, err := am.notificationChannelHealthRecord(data.UserID, webhook)
 	if err != nil {
 		return err
 	}
-	am.hub.Logger().Info("Sent email alert", "to", message.To, "subj", message.Subject)
-	return nil
+	now := time.Now().UTC()
+	record.Set("target", notificationTarget(webhook))
+	record.Set("status", "healthy")
+	record.Set("last_title", data.Title)
+	record.Set("last_error", "")
+	record.Set("last_checked_at", now)
+	record.Set("last_success_at", now)
+	record.Set("success_count", record.GetInt("success_count")+1)
+	if test {
+		record.Set("last_test_at", now)
+	}
+	return am.hub.SaveNoValidate(record)
+}
+
+func (am *AlertManager) recordNotificationChannelFailure(data AlertMessageData, webhook string, sendErr error, test bool) error {
+	record, err := am.notificationChannelHealthRecord(data.UserID, webhook)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	record.Set("target", notificationTarget(webhook))
+	record.Set("status", "failed")
+	record.Set("last_title", data.Title)
+	record.Set("last_error", common.RedactSensitiveText(sendErr.Error()))
+	record.Set("last_checked_at", now)
+	record.Set("last_failure_at", now)
+	record.Set("failure_count", record.GetInt("failure_count")+1)
+	if test {
+		record.Set("last_test_at", now)
+	}
+	return am.hub.SaveNoValidate(record)
+}
+
+func (am *AlertManager) clearNotificationFailure(userID, webhook string) error {
+	record, err := am.hub.FindFirstRecordByFilter(
+		"notification_failures",
+		"user={:user} && fingerprint={:fingerprint}",
+		dbx.Params{"user": userID, "fingerprint": notificationFingerprint(webhook)},
+	)
+	if err != nil {
+		return nil
+	}
+	return am.hub.Delete(record)
 }
 
 // SendShoutrrrAlert sends an alert via a Shoutrrr URL
@@ -291,12 +444,12 @@ func (am *AlertManager) SendShoutrrrAlert(notificationUrl, title, message, link,
 	parsedURL.RawQuery = queryParams.Encode()
 	// log.Println("URL after modification:", parsedURL.String())
 
-	err = shoutrrr.Send(parsedURL.String(), message)
+	err = sendShoutrrr(parsedURL.String(), message)
 
 	if err == nil {
 		am.hub.Logger().Info("Sent shoutrrr alert", "title", title)
 	} else {
-		am.hub.Logger().Error("Error sending shoutrrr alert", "err", err)
+		am.hub.Logger().Error("Error sending shoutrrr alert", "err", common.RedactSensitiveText(err.Error()))
 		return err
 	}
 	return nil

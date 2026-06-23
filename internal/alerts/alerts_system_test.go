@@ -7,18 +7,19 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/henrygd/beszel/internal/entities/system"
-	beszelTests "github.com/henrygd/beszel/internal/tests"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gutenacht.site/pulse/internal/entities/system"
+	pulseTests "gutenacht.site/pulse/internal/tests"
 )
 
 type systemAlertValueSetter[T any] func(info *system.Info, stats *system.Stats, value T)
 
 type systemAlertTestFixture struct {
-	hub     *beszelTests.TestHub
-	alertID string
-	submit  func(*system.CombinedData) error
+	hub      *pulseTests.TestHub
+	webhooks *webhookRecorder
+	alertID  string
+	submit   func(*system.CombinedData) error
 }
 
 func createCombinedData[T any](value T, setValue systemAlertValueSetter[T]) *system.CombinedData {
@@ -30,9 +31,9 @@ func createCombinedData[T any](value T, setValue systemAlertValueSetter[T]) *sys
 func newSystemAlertTestFixture(t *testing.T, alertName string, min int, threshold float64) *systemAlertTestFixture {
 	t.Helper()
 
-	hub, user := beszelTests.GetHubWithUser(t)
+	hub, user := pulseTests.GetHubWithUser(t)
 
-	systems, err := beszelTests.CreateSystems(hub, 1, user.Id, "up")
+	systems, err := pulseTests.CreateSystems(hub, 1, user.Id, "up")
 	require.NoError(t, err)
 	systemRecord := systems[0]
 
@@ -41,12 +42,10 @@ func newSystemAlertTestFixture(t *testing.T, alertName string, min int, threshol
 	require.NotNil(t, sysManagerSystem)
 	sysManagerSystem.StopUpdater()
 
-	userSettings, err := hub.FindFirstRecordByFilter("user_settings", "user={:user}", map[string]any{"user": user.Id})
-	require.NoError(t, err)
-	userSettings.Set("settings", `{"emails":["test@example.com"],"webhooks":[]}`)
-	require.NoError(t, hub.Save(userSettings))
+	webhooks := newWebhookRecorder(t)
+	setUserWebhook(t, hub, user.Id, webhooks.URL("/system-alert"))
 
-	alertRecord, err := beszelTests.CreateRecord(hub, "alerts", map[string]any{
+	alertRecord, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
 		"name":   alertName,
 		"system": systemRecord.Id,
 		"user":   user.Id,
@@ -62,8 +61,9 @@ func newSystemAlertTestFixture(t *testing.T, alertName string, min int, threshol
 	assert.Len(t, cachedAlerts, 1, "Alert should be in cache")
 
 	return &systemAlertTestFixture{
-		hub:     hub,
-		alertID: alertRecord.Id,
+		hub:      hub,
+		webhooks: webhooks,
+		alertID:  alertRecord.Id,
 		submit: func(data *system.CombinedData) error {
 			_, err := sysManagerSystem.CreateRecords(data)
 			return err
@@ -104,13 +104,13 @@ func testOneMinuteSystemAlert[T any](t *testing.T, alertName string, threshold f
 		waitForSystemAlert(time.Second)
 
 		fixture.assertTriggered(t, true, "Alert should be triggered")
-		assert.Equal(t, 1, fixture.hub.TestMailer.TotalSend(), "An email should have been sent")
+		assert.Equal(t, 1, fixture.webhooks.Count(), "A webhook notification should have been sent")
 
 		submitValue(fixture, t, resolveValue, setValue)
 		waitForSystemAlert(time.Second)
 
 		fixture.assertTriggered(t, false, "Alert should be untriggered")
-		assert.Equal(t, 2, fixture.hub.TestMailer.TotalSend(), "A second email should have been sent for untriggering the alert")
+		assert.Equal(t, 2, fixture.webhooks.Count(), "A second webhook notification should have been sent for recovery")
 
 		waitForSystemAlert(time.Minute)
 	})
@@ -134,12 +134,12 @@ func testMultiMinuteSystemAlert[T any](t *testing.T, alertName string, threshold
 		submitValue(fixture, t, triggerValue, setValue)
 		waitForSystemAlert(time.Second)
 		fixture.assertTriggered(t, true, "Alert should be triggered")
-		assert.Equal(t, 1, fixture.hub.TestMailer.TotalSend(), "An email should have been sent")
+		assert.Equal(t, 1, fixture.webhooks.Count(), "A webhook notification should have been sent")
 
 		submitValue(fixture, t, resolveValue, setValue)
 		waitForSystemAlert(time.Second)
 		fixture.assertTriggered(t, false, "Alert should be untriggered")
-		assert.Equal(t, 2, fixture.hub.TestMailer.TotalSend(), "A second email should have been sent for untriggering the alert")
+		assert.Equal(t, 2, fixture.webhooks.Count(), "A second webhook notification should have been sent for recovery")
 	})
 }
 

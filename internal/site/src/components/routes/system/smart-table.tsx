@@ -20,40 +20,27 @@ import {
 	HardDrive,
 	BinaryIcon,
 	RotateCwIcon,
-	LoaderCircleIcon,
-	CheckCircle2Icon,
-	XCircleIcon,
 	ArrowLeftRightIcon,
 	MoreHorizontalIcon,
 	RefreshCwIcon,
+	SearchIcon,
 	ServerIcon,
 	Trash2Icon,
 	XIcon,
 } from "lucide-react"
-import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { EmptyState } from "@/components/ui/empty-state"
 import { isReadOnlyUser, pb } from "@/lib/api"
-import type { SmartDeviceRecord, SmartAttribute } from "@/types"
-import {
-	formatBytes,
-	toFixedFloat,
-	formatTemperature,
-	cn,
-	getVisualStringWidth,
-	secondsToString,
-	hourWithSeconds,
-	formatShortDate,
-} from "@/lib/utils"
+import type { Os } from "@/lib/enums"
+import type { SmartDeviceRecord } from "@/types"
+import { cn, secondsToString, hourWithSeconds, formatShortDate } from "@/lib/utils"
 import { Trans } from "@lingui/react/macro"
 import { useStore } from "@nanostores/react"
 import { $allSystemsById } from "@/lib/stores"
 import { ThermometerIcon } from "@/components/ui/icons"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Separator } from "@/components/ui/separator"
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -62,53 +49,22 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { memo, useCallback, useMemo, useEffect, useRef, useState } from "react"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-
-// Column definition for S.M.A.R.T. attributes table
-export const smartColumns: ColumnDef<SmartAttribute>[] = [
-	{
-		accessorKey: "id",
-		header: "ID",
-	},
-	{
-		accessorFn: (row) => row.n,
-		header: "Name",
-	},
-	{
-		accessorFn: (row) => row.rs || row.rv?.toString(),
-		header: "Value",
-	},
-	{
-		accessorKey: "v",
-		header: "Normalized",
-	},
-	{
-		accessorKey: "w",
-		header: "Worst",
-	},
-	{
-		accessorKey: "t",
-		header: "Threshold",
-	},
-	{
-		// accessorFn: (row) => row.wf,
-		accessorKey: "wf",
-		header: "Failing",
-	},
-]
-
-// Function to format capacity display
-function formatCapacity(bytes: number): string {
-	const { value, unit } = formatBytes(bytes)
-	return `${toFixedFloat(value, value >= 10 ? 1 : 2)} ${unit}`
-}
-
-const SMART_DEVICE_FIELDS = "id,system,name,model,state,capacity,temp,type,hours,cycles,updated"
+import { DiskSheet } from "./smart-device-sheet"
+import {
+	formatCapacity,
+	formatSmartDeviceSecondary,
+	formatSmartStatus,
+	formatSmartTemperature,
+	getReadableSmartDeviceName,
+	measureSmartDeviceWidths,
+	SMART_DEVICE_FIELDS,
+} from "./smart-format"
 
 export const createColumns = (
 	longestName: number,
 	longestModel: number,
-	longestDevice: number
+	longestDevice: number,
+	os?: Os
 ): ColumnDef<SmartDeviceRecord>[] => [
 	{
 		id: "system",
@@ -130,18 +86,25 @@ export const createColumns = (
 		},
 	},
 	{
-		accessorKey: "name",
-		sortingFn: (a, b) => a.original.name.localeCompare(b.original.name),
+		accessorFn: (record) => getReadableSmartDeviceName(record, os),
+		id: "name",
+		sortingFn: (a, b) =>
+			getReadableSmartDeviceName(a.original, os).localeCompare(getReadableSmartDeviceName(b.original, os)),
 		header: ({ column }) => <HeaderButton column={column} name={t`Device`} Icon={HardDrive} />,
-		cell: ({ getValue }) => (
-			<div
-				className="font-medium max-w-40 truncate ms-1"
-				title={getValue() as string}
-				style={{ width: `${longestDevice / 1.05}ch` }}
-			>
-				{getValue() as string}
-			</div>
-		),
+		cell: ({ row }) => {
+			const primary = getReadableSmartDeviceName(row.original, os)
+			const secondary = formatSmartDeviceSecondary(row.original)
+			return (
+				<div
+					className="ms-1 max-w-48"
+					title={[primary, secondary].filter(Boolean).join(" · ")}
+					style={{ width: `${longestDevice / 1.05}ch` }}
+				>
+					<div className="truncate font-medium">{primary}</div>
+					{secondary && <div className="truncate text-xs text-muted-foreground">{secondary}</div>}
+				</div>
+			)
+		},
 	},
 	{
 		accessorKey: "model",
@@ -172,7 +135,7 @@ export const createColumns = (
 			const status = getValue() as string
 			return (
 				<Badge className="ms-1" variant={status === "PASSED" ? "success" : status === "FAILED" ? "danger" : "warning"}>
-					{status}
+					{formatSmartStatus(status)}
 				</Badge>
 			)
 		},
@@ -196,7 +159,7 @@ export const createColumns = (
 		cell: ({ getValue }) => {
 			const hours = getValue() as number | undefined
 			if (hours == null) {
-				return <div className="text-sm text-muted-foreground ms-1">N/A</div>
+				return <div className="text-sm text-muted-foreground ms-1">无数据</div>
 			}
 			const seconds = hours * 3600
 			return (
@@ -216,7 +179,7 @@ export const createColumns = (
 		cell: ({ getValue }) => {
 			const cycles = getValue() as number | undefined
 			if (cycles == null) {
-				return <div className="text-muted-foreground ms-1">N/A</div>
+				return <div className="text-muted-foreground ms-1">无数据</div>
 			}
 			return <span className="ms-1">{cycles.toLocaleString()}</span>
 		},
@@ -228,10 +191,9 @@ export const createColumns = (
 		cell: ({ getValue }) => {
 			const temp = getValue() as number | null | undefined
 			if (!temp) {
-				return <div className="text-muted-foreground ms-1">N/A</div>
+				return <div className="text-muted-foreground ms-1">无数据</div>
 			}
-			const { value, unit } = formatTemperature(temp)
-			return <span className="ms-1">{`${value} ${unit}`}</span>
+			return <span className="ms-1">{formatSmartTemperature(temp)}</span>
 		},
 	},
 	// {
@@ -274,8 +236,8 @@ function HeaderButton({
 	return (
 		<Button
 			className={cn(
-				"h-9 px-3 flex items-center gap-2 duration-50",
-				isSorted && "bg-accent/70 light:bg-accent text-accent-foreground/90"
+				"min-h-10 px-2.5 flex items-center gap-2 rounded-md text-xs font-medium text-muted-foreground transition-colors duration-150 hover:bg-surface-soft hover:text-foreground",
+				isSorted && "bg-card text-foreground shadow-none ring-1 ring-border/70"
 			)}
 			variant="ghost"
 			onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
@@ -286,7 +248,7 @@ function HeaderButton({
 	)
 }
 
-export default function DisksTable({ systemId }: { systemId?: string }) {
+export default function DisksTable({ systemId, os }: { systemId?: string; os?: Os }) {
 	const [sorting, setSorting] = useState<SortingState>([{ id: systemId ? "name" : "system", desc: false }])
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 	const [rowSelection, setRowSelection] = useState({})
@@ -309,22 +271,13 @@ export default function DisksTable({ systemId }: { systemId?: string }) {
 
 	// Calculate the right width for the columns based on the longest strings among the displayed devices
 	const { longestName, longestModel, longestDevice } = useMemo(() => {
-		const result = { longestName: 0, longestModel: 0, longestDevice: 0 }
-		if (!smartDevices || Object.keys(allSystems).length === 0) {
-			return result
-		}
-		const seenSystems = new Set<string>()
-		for (const device of smartDevices) {
-			if (!systemId && !seenSystems.has(device.system)) {
-				seenSystems.add(device.system)
-				const name = allSystems[device.system]?.name ?? ""
-				result.longestName = Math.max(result.longestName, getVisualStringWidth(name))
-			}
-			result.longestModel = Math.max(result.longestModel, getVisualStringWidth(device.model ?? ""))
-			result.longestDevice = Math.max(result.longestDevice, getVisualStringWidth(device.name ?? ""))
-		}
-		return result
-	}, [smartDevices, systemId, allSystems])
+		return measureSmartDeviceWidths({
+			devices: smartDevices,
+			systemId,
+			systemNames: Object.fromEntries(Object.entries(allSystems).map(([id, system]) => [id, system?.name])),
+			os,
+		})
+	}, [smartDevices, systemId, allSystems, os])
 
 	const openSheet = (disk: SmartDeviceRecord) => {
 		setActiveDiskId(disk.id)
@@ -403,7 +356,7 @@ export default function DisksTable({ systemId }: { systemId?: string }) {
 		if (!disk.system) return
 		setRowActionState({ type: "refresh", id: disk.id })
 		try {
-			await pb.send("/api/beszel/smart/refresh", {
+			await pb.send("/api/pulse/smart/refresh", {
 				method: "POST",
 				query: { system: disk.system },
 			})
@@ -490,10 +443,28 @@ export default function DisksTable({ systemId }: { systemId?: string }) {
 
 	// Filter columns based on whether systemId is provided
 	const tableColumns = useMemo(() => {
-		const columns = createColumns(longestName, longestModel, longestDevice)
+		const columns = createColumns(longestName, longestModel, longestDevice, os)
 		const baseColumns = systemId ? columns.filter((col) => col.id !== "system") : columns
 		return isReadOnlyUser() ? baseColumns : [...baseColumns, actionColumn]
-	}, [systemId, actionColumn, longestName, longestModel, longestDevice])
+	}, [systemId, actionColumn, longestName, longestModel, longestDevice, os])
+
+	const tableSorting = useMemo(() => {
+		if (!systemId) {
+			return sorting
+		}
+		const next = sorting.filter((sort) => sort.id !== "system")
+		return next.length > 0 ? next : [{ id: "name", desc: false }]
+	}, [sorting, systemId])
+
+	useEffect(() => {
+		if (!systemId || !sorting.some((sort) => sort.id === "system")) {
+			return
+		}
+		setSorting((current) => {
+			const next = current.filter((sort) => sort.id !== "system")
+			return next.length > 0 ? next : [{ id: "name", desc: false }]
+		})
+	}, [sorting, systemId])
 
 	const table = useReactTable({
 		data: smartDevices || ([] as SmartDeviceRecord[]),
@@ -505,7 +476,7 @@ export default function DisksTable({ systemId }: { systemId?: string }) {
 		getFilteredRowModel: getFilteredRowModel(),
 		onRowSelectionChange: setRowSelection,
 		state: {
-			sorting,
+			sorting: tableSorting,
 			columnFilters,
 			rowSelection,
 			globalFilter,
@@ -532,23 +503,40 @@ export default function DisksTable({ systemId }: { systemId?: string }) {
 		return null
 	}
 
+	const canManageDevices = !isReadOnlyUser()
+	const summary = buildSmartSummary(smartDevices)
+
 	return (
-		<div>
-			<Card className="@container w-full px-3 py-5 sm:py-6 sm:px-6">
-				<CardHeader className="p-0 mb-3 sm:mb-4">
-					<div className="grid md:flex gap-x-5 gap-y-3 w-full items-end">
-						<div className="px-2 sm:px-1">
-							<CardTitle className="mb-2">S.M.A.R.T.</CardTitle>
-							<CardDescription className="flex">
-								<Trans>Click on a device to view more information.</Trans>
-							</CardDescription>
-						</div>
-						<div className="relative ms-auto w-full max-w-full md:w-64">
+		<div className="grid gap-3">
+			{!systemId && (
+				<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+					<SmartSummaryCard label="采集设备" value={`${summary.total} 块`} detail={`来自 ${summary.systems} 台机器`} />
+					<SmartSummaryCard
+						label="健康状态"
+						value={`正常 ${summary.passed} / 异常 ${summary.failed}`}
+						detail="按真实自检结果统计"
+					/>
+					<SmartSummaryCard label="介质类型" value={summary.mediaSummary} detail="只展示 Agent 上报类型" />
+					<SmartSummaryCard label="最近更新" value={summary.latest} detail="按设备更新时间统计" />
+				</div>
+			)}
+
+			<section className="grid gap-3 rounded-lg border border-border/70 bg-surface-soft p-3">
+				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+					<div className="min-w-0">
+						<h2 className="text-lg font-semibold tracking-tight">{systemId ? "S.M.A.R.T." : "设备列表"}</h2>
+						<p className="mt-1 text-sm text-muted-foreground">
+							点击设备查看完整属性；缺失字段显示为无数据，不用默认值替代。
+						</p>
+					</div>
+					{!systemId && (
+						<div className="relative w-full max-w-full md:w-72">
+							<SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 							<Input
 								placeholder={t`Filter...`}
 								value={globalFilter}
 								onChange={(event) => setGlobalFilter(event.target.value)}
-								className="px-4 w-full max-w-full md:w-64"
+								className="w-full bg-card pl-9 pr-10 shadow-none"
 							/>
 							{globalFilter && (
 								<Button
@@ -556,15 +544,25 @@ export default function DisksTable({ systemId }: { systemId?: string }) {
 									variant="ghost"
 									size="icon"
 									aria-label={t`Clear`}
-									className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
+									className="absolute right-1 top-1/2 size-10 -translate-y-1/2 text-muted-foreground"
 									onClick={() => setGlobalFilter("")}
 								>
 									<XIcon className="h-4 w-4" />
 								</Button>
 							)}
 						</div>
-					</div>
-				</CardHeader>
+					)}
+				</div>
+				<SmartDeviceCards
+					rows={rows}
+					data={smartDevices}
+					showSystem={!systemId}
+					canManage={canManageDevices}
+					rowActionState={rowActionState}
+					onOpen={openSheet}
+					onRefresh={handleRowRefresh}
+					onDelete={handleDeleteDevice}
+				/>
 				<SmartDevicesTable
 					table={table}
 					rows={rows}
@@ -572,8 +570,187 @@ export default function DisksTable({ systemId }: { systemId?: string }) {
 					data={smartDevices}
 					openSheet={openSheet}
 				/>
-			</Card>
+			</section>
 			<DiskSheet diskId={activeDiskId} open={sheetOpen} onOpenChange={setSheetOpen} />
+		</div>
+	)
+}
+
+function SmartSummaryCard({ label, value, detail }: { label: string; value: string; detail: string }) {
+	return (
+		<div className="rounded-lg border border-border/70 bg-card p-3 shadow-none">
+			<div className="text-xs text-muted-foreground">{label}</div>
+			<div className="mt-1 truncate text-lg font-semibold tabular-nums">{value}</div>
+			<div className="mt-1 truncate text-xs text-muted-foreground">{detail}</div>
+		</div>
+	)
+}
+
+function buildSmartSummary(devices: SmartDeviceRecord[] | undefined) {
+	const rows = devices ?? []
+	const systems = new Set(rows.map((device) => device.system).filter(Boolean)).size
+	const passed = rows.filter((device) => device.state?.toUpperCase() === "PASSED").length
+	const failed = rows.filter((device) => device.state?.toUpperCase() === "FAILED").length
+	const mediaCounts = rows.reduce(
+		(acc, device) => {
+			const label = getMediaTypeLabel(device.media_type || device.type)
+			if (label) {
+				acc[label] = (acc[label] ?? 0) + 1
+			}
+			return acc
+		},
+		{} as Record<string, number>
+	)
+	const mediaSummary = Object.entries(mediaCounts)
+		.sort(([a], [b]) => a.localeCompare(b, "zh-CN"))
+		.map(([label, count]) => `${label} ${count}`)
+		.join(" / ")
+	const latestTimestamp = rows
+		.map((device) => new Date(device.updated).getTime())
+		.filter((value) => Number.isFinite(value))
+		.sort((a, b) => b - a)[0]
+
+	return {
+		total: rows.length,
+		systems,
+		passed,
+		failed,
+		mediaSummary: mediaSummary || "未上报",
+		latest: latestTimestamp ? hourWithSeconds(new Date(latestTimestamp).toISOString()) : "无数据",
+	}
+}
+
+function getMediaTypeLabel(value?: string) {
+	const normalized = value?.trim().toLowerCase()
+	if (!normalized) return ""
+	if (normalized === "ssd") return "SSD"
+	if (normalized === "hdd") return "HDD"
+	if (normalized === "nvme") return "NVMe"
+	if (normalized.includes("solid")) return "SSD"
+	if (normalized.includes("rotation") || normalized.includes("hard")) return "HDD"
+	return value?.trim().toUpperCase() || ""
+}
+
+function SmartDeviceCards({
+	rows,
+	data,
+	showSystem,
+	canManage,
+	rowActionState,
+	onOpen,
+	onRefresh,
+	onDelete,
+}: {
+	rows: Row<SmartDeviceRecord>[]
+	data: SmartDeviceRecord[] | undefined
+	showSystem: boolean
+	canManage: boolean
+	rowActionState: { type: "refresh" | "delete"; id: string } | null
+	onOpen: (disk: SmartDeviceRecord) => void
+	onRefresh: (disk: SmartDeviceRecord) => void
+	onDelete: (disk: SmartDeviceRecord) => void
+}) {
+	const allSystems = useStore($allSystemsById)
+	if (!rows.length) {
+		return (
+			<EmptyState
+				loading={!data}
+				loadingText="正在加载设备"
+				emptyText="暂无匹配的 S.M.A.R.T. 设备"
+				className="min-h-32 bg-card md:hidden"
+			/>
+		)
+	}
+
+	return (
+		<div className="grid gap-2 md:hidden">
+			{rows.map((row) => {
+				const disk = row.original
+				const deviceName = getReadableSmartDeviceName(disk)
+				const secondary = formatSmartDeviceSecondary(disk)
+				const mediaType = getMediaTypeLabel(disk.media_type || disk.type)
+				const isRowRefreshing = rowActionState?.id === disk.id && rowActionState.type === "refresh"
+				const isRowDeleting = rowActionState?.id === disk.id && rowActionState.type === "delete"
+				return (
+					<div key={disk.id} className="grid gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-none">
+						<div className="flex min-w-0 items-start justify-between gap-3">
+							<div className="min-w-0">
+								<div className="flex min-w-0 flex-wrap items-center gap-2">
+									<div className="truncate text-sm font-semibold">{deviceName || "未知设备"}</div>
+									<Badge variant={disk.state === "PASSED" ? "success" : disk.state === "FAILED" ? "danger" : "warning"}>
+										{formatSmartStatus(disk.state)}
+									</Badge>
+								</div>
+								<div className="mt-1 truncate text-xs text-muted-foreground">
+									{secondary || disk.name || "无设备路径"}
+								</div>
+							</div>
+							{canManage && (
+								<DropdownMenu>
+									<DropdownMenuTrigger asChild>
+										<Button variant="ghost" size="icon" className="size-10 shrink-0">
+											<span className="sr-only">
+												<Trans>Open menu</Trans>
+											</span>
+											<MoreHorizontalIcon className="size-4" />
+										</Button>
+									</DropdownMenuTrigger>
+									<DropdownMenuContent align="end">
+										<DropdownMenuItem onClick={() => onRefresh(disk)} disabled={isRowRefreshing || isRowDeleting}>
+											<RefreshCwIcon className={cn("me-2.5 size-4", isRowRefreshing && "animate-spin")} />
+											<Trans>Refresh</Trans>
+										</DropdownMenuItem>
+										<DropdownMenuSeparator />
+										<DropdownMenuItem onClick={() => onDelete(disk)} disabled={isRowDeleting}>
+											<Trash2Icon className="me-2.5 size-4" />
+											<Trans>Delete</Trans>
+										</DropdownMenuItem>
+									</DropdownMenuContent>
+								</DropdownMenu>
+							)}
+						</div>
+						<div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+							{showSystem && (
+								<div className="rounded-md border border-border/70 bg-surface-soft px-3 py-2">
+									<div>机器</div>
+									<div className="mt-1 truncate font-medium text-foreground">
+										{allSystems[disk.system]?.name || "未知机器"}
+									</div>
+								</div>
+							)}
+							<div className="rounded-md border border-border/70 bg-surface-soft px-3 py-2">
+								<div>容量</div>
+								<div className="mt-1 font-medium text-foreground">
+									{disk.capacity ? formatCapacity(disk.capacity) : "无数据"}
+								</div>
+							</div>
+							<div className="rounded-md border border-border/70 bg-surface-soft px-3 py-2">
+								<div>温度</div>
+								<div className="mt-1 font-medium text-foreground">
+									{disk.temp ? formatSmartTemperature(disk.temp) : "无数据"}
+								</div>
+							</div>
+							<div className="rounded-md border border-border/70 bg-surface-soft px-3 py-2">
+								<div>介质</div>
+								<div className="mt-1 font-medium text-foreground">{mediaType || "未上报"}</div>
+							</div>
+							<div className="rounded-md border border-border/70 bg-surface-soft px-3 py-2">
+								<div>更新</div>
+								<div className="mt-1 font-medium text-foreground">{hourWithSeconds(disk.updated)}</div>
+							</div>
+						</div>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							className="justify-center transition-transform active:scale-[0.96]"
+							onClick={() => onOpen(disk)}
+						>
+							查看详情
+						</Button>
+					</div>
+				)
+			})}
 		</div>
 	)
 }
@@ -607,7 +784,7 @@ const SmartDevicesTable = memo(function SmartDevicesTable({
 	return (
 		<div
 			className={cn(
-				"h-min max-h-[calc(100dvh-17rem)] max-w-full relative overflow-auto rounded-md border",
+				"relative hidden h-min max-h-[calc(100dvh-17rem)] max-w-full overflow-auto rounded-lg border border-border/70 bg-card shadow-none md:block",
 				(!rows.length || rows.length > 2) && "min-h-50"
 			)}
 			ref={scrollRef}
@@ -622,13 +799,16 @@ const SmartDevicesTable = memo(function SmartDevicesTable({
 								return <SmartDeviceTableRow key={row.id} row={row} virtualRow={virtualRow} openSheet={openSheet} />
 							})
 						) : (
-							<TableCell colSpan={colLength} className="h-37 text-center pointer-events-none">
-								{data ? (
-									<Trans>No results.</Trans>
-								) : (
-									<LoaderCircleIcon className="animate-spin size-10 opacity-60 mx-auto" />
-								)}
-							</TableCell>
+							<TableRow>
+								<TableCell colSpan={colLength} className="pointer-events-none p-3">
+									<EmptyState
+										loading={!data}
+										loadingText="正在加载设备"
+										emptyText="暂无匹配的 S.M.A.R.T. 设备"
+										className="min-h-32 bg-surface-soft"
+									/>
+								</TableCell>
+							</TableRow>
 						)}
 					</TableBody>
 				</table>
@@ -682,168 +862,3 @@ const SmartDeviceTableRow = memo(function SmartDeviceTableRow({
 		</TableRow>
 	)
 })
-
-function DiskSheet({
-	diskId,
-	open,
-	onOpenChange,
-}: {
-	diskId: string | null
-	open: boolean
-	onOpenChange: (open: boolean) => void
-}) {
-	const [disk, setDisk] = useState<SmartDeviceRecord | null>(null)
-	const [isLoading, setIsLoading] = useState(false)
-
-	// Fetch full device record (including attributes) when sheet opens
-	useEffect(() => {
-		if (!diskId) {
-			setDisk(null)
-			return
-		}
-		// Only fetch when opening, not when closing (keeps data visible during close animation)
-		if (!open) return
-		setIsLoading(true)
-		pb.collection<SmartDeviceRecord>("smart_devices")
-			.getOne(diskId)
-			.then(setDisk)
-			.catch(() => setDisk(null))
-			.finally(() => setIsLoading(false))
-	}, [open, diskId])
-
-	const smartAttributes = disk?.attributes || []
-
-	// Find all attributes where when failed is not empty
-	const failedAttributes = smartAttributes.filter((attr) => attr.wf && attr.wf.trim() !== "")
-
-	// Filter columns to only show those that have values in at least one row
-	const visibleColumns = useMemo(() => {
-		return smartColumns.filter((column) => {
-			const accessorKey = "accessorKey" in column ? (column.accessorKey as keyof SmartAttribute | undefined) : undefined
-			if (!accessorKey) {
-				return true
-			}
-			// Check if any row has a non-empty value for this column
-			return smartAttributes.some((attr) => {
-				return attr[accessorKey] !== undefined
-			})
-		})
-	}, [smartAttributes])
-
-	const table = useReactTable({
-		data: smartAttributes,
-		columns: visibleColumns,
-		getCoreRowModel: getCoreRowModel(),
-	})
-
-	const unknown = "Unknown"
-	const deviceName = disk?.name || unknown
-	const model = disk?.model || unknown
-	const capacity = disk?.capacity ? formatCapacity(disk.capacity) : unknown
-	const serialNumber = disk?.serial
-	const firmwareVersion = disk?.firmware
-	const status = disk?.state || unknown
-
-	return (
-		<Sheet open={open} onOpenChange={onOpenChange}>
-			<SheetContent className="w-full sm:max-w-220 gap-0">
-				<SheetHeader className="mb-0 border-b">
-					<SheetTitle>
-						<Trans>S.M.A.R.T. Details</Trans> - {deviceName}
-					</SheetTitle>
-					<SheetDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
-						{model}
-						<Separator orientation="vertical" className="h-2.5 bg-muted-foreground opacity-70" />
-						{capacity}
-						{serialNumber && (
-							<>
-								<Separator orientation="vertical" className="h-2.5 bg-muted-foreground opacity-70" />
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<span>{serialNumber}</span>
-									</TooltipTrigger>
-									<TooltipContent>
-										<Trans>Serial Number</Trans>
-									</TooltipContent>
-								</Tooltip>
-							</>
-						)}
-						{firmwareVersion && (
-							<>
-								<Separator orientation="vertical" className="h-2.5 bg-muted-foreground opacity-70" />
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<span>{firmwareVersion}</span>
-									</TooltipTrigger>
-									<TooltipContent>
-										<Trans>Firmware</Trans>
-									</TooltipContent>
-								</Tooltip>
-							</>
-						)}
-					</SheetDescription>
-				</SheetHeader>
-				<div className="flex-1 overflow-hidden p-4 flex flex-col gap-4">
-					{isLoading ? (
-						<div className="flex justify-center py-8">
-							<LoaderCircleIcon className="animate-spin size-10 opacity-60" />
-						</div>
-					) : (
-						<>
-							<Alert className="pb-3 shrink-0">
-								{status === "PASSED" ? <CheckCircle2Icon className="size-4" /> : <XCircleIcon className="size-4" />}
-								<AlertTitle>
-									<Trans>S.M.A.R.T. Self-Test</Trans>: {status}
-								</AlertTitle>
-								{failedAttributes.length > 0 && (
-									<AlertDescription>
-										<Trans>Failed Attributes:</Trans> {failedAttributes.map((attr) => attr.n).join(", ")}
-									</AlertDescription>
-								)}
-							</Alert>
-							{smartAttributes.length > 0 ? (
-								<div className="rounded-md border min-h-0 flex flex-col">
-									<Table>
-										<TableHeader className="sticky top-0 z-10">
-											{table.getHeaderGroups().map((headerGroup) => (
-												<TableRow key={headerGroup.id}>
-													{headerGroup.headers.map((header) => (
-														<TableHead key={header.id}>
-															{header.isPlaceholder
-																? null
-																: flexRender(header.column.columnDef.header, header.getContext())}
-														</TableHead>
-													))}
-												</TableRow>
-											))}
-										</TableHeader>
-										<TableBody>
-											{table.getRowModel().rows.map((row) => {
-												// Check if the attribute is failed
-												const isFailedAttribute = row.original.wf && row.original.wf.trim() !== ""
-
-												return (
-													<TableRow key={row.id} className={isFailedAttribute ? "text-red-600 dark:text-red-400" : ""}>
-														{row.getVisibleCells().map((cell) => (
-															<TableCell key={cell.id}>
-																{flexRender(cell.column.columnDef.cell, cell.getContext())}
-															</TableCell>
-														))}
-													</TableRow>
-												)
-											})}
-										</TableBody>
-									</Table>
-								</div>
-							) : (
-								<div className="text-center py-8 text-muted-foreground">
-									<Trans>No S.M.A.R.T. attributes available for this device.</Trans>
-								</div>
-							)}
-						</>
-					)}
-				</div>
-			</SheetContent>
-		</Sheet>
-	)
-}

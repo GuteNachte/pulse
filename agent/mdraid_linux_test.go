@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/henrygd/beszel/internal/entities/smart"
+	"gutenacht.site/pulse/internal/entities/smart"
 )
 
 func TestMdraidMockSysfsScanAndCollect(t *testing.T) {

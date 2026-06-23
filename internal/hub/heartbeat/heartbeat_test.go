@@ -9,11 +9,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/henrygd/beszel/internal/hub/heartbeat"
-	beszeltests "github.com/henrygd/beszel/internal/tests"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gutenacht.site/pulse/internal/hub/heartbeat"
+	beszeltests "gutenacht.site/pulse/internal/tests"
 )
 
 func TestNew(t *testing.T) {
@@ -57,7 +57,7 @@ func TestSendGETDoesNotRequireAppOrDB(t *testing.T) {
 	app := newTestHub(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "Beszel-Heartbeat", r.Header.Get("User-Agent"))
+		assert.Equal(t, "Pulse-Heartbeat", r.Header.Get("User-Agent"))
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -106,8 +106,8 @@ func TestSendPOSTBuildsExpectedStatuses(t *testing.T) {
 		{
 			name: "error when at least one system is down",
 			setup: func(t *testing.T, app *beszeltests.TestHub, user *core.Record) {
-				downSystem := createTestSystem(t, app, user.Id, "db-1", "10.0.0.1", "down")
-				_ = createTestSystem(t, app, user.Id, "web-1", "10.0.0.2", "up")
+				downSystem := createTestSystem(t, app, user.Id, "db-1", "down")
+				_ = createTestSystem(t, app, user.Id, "web-1", "up")
 				createTriggeredAlert(t, app, user.Id, downSystem.Id, "CPU", 95)
 			},
 			expectStatus:   "error",
@@ -121,7 +121,7 @@ func TestSendPOSTBuildsExpectedStatuses(t *testing.T) {
 		{
 			name: "warn when only alerts are triggered",
 			setup: func(t *testing.T, app *beszeltests.TestHub, user *core.Record) {
-				system := createTestSystem(t, app, user.Id, "api-1", "10.1.0.1", "up")
+				system := createTestSystem(t, app, user.Id, "api-1", "up")
 				createTriggeredAlert(t, app, user.Id, system.Id, "CPU", 90)
 			},
 			expectStatus:   "warn",
@@ -135,9 +135,9 @@ func TestSendPOSTBuildsExpectedStatuses(t *testing.T) {
 		{
 			name: "ok when no down systems and no alerts",
 			setup: func(t *testing.T, app *beszeltests.TestHub, user *core.Record) {
-				_ = createTestSystem(t, app, user.Id, "node-1", "10.2.0.1", "up")
-				_ = createTestSystem(t, app, user.Id, "node-2", "10.2.0.2", "paused")
-				_ = createTestSystem(t, app, user.Id, "node-3", "10.2.0.3", "pending")
+				_ = createTestSystem(t, app, user.Id, "node-1", "up")
+				_ = createTestSystem(t, app, user.Id, "node-2", "paused")
+				_ = createTestSystem(t, app, user.Id, "node-3", "pending")
 			},
 			expectStatus:   "ok",
 			expectMsgPart:  "All systems operational",
@@ -191,7 +191,7 @@ func TestSendPOSTBuildsExpectedStatuses(t *testing.T) {
 
 			req := <-captured
 			assert.Equal(t, http.MethodPost, req.method)
-			assert.Equal(t, "Beszel-Heartbeat", req.userAgent)
+			assert.Equal(t, "Pulse-Heartbeat", req.userAgent)
 			assert.Equal(t, "application/json", req.contentType)
 
 			assert.Equal(t, tt.expectStatus, req.payload.Status)
@@ -222,12 +222,10 @@ func createTestUser(t *testing.T, app *beszeltests.TestHub) *core.Record {
 	return user
 }
 
-func createTestSystem(t *testing.T, app *beszeltests.TestHub, userID, name, host, status string) *core.Record {
+func createTestSystem(t *testing.T, app *beszeltests.TestHub, userID, name, status string) *core.Record {
 	t.Helper()
 	system, err := beszeltests.CreateRecord(app.App, "systems", map[string]any{
 		"name":   name,
-		"host":   host,
-		"port":   "45876",
 		"users":  []string{userID},
 		"status": status,
 	})

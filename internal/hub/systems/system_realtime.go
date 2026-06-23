@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/henrygd/beszel/internal/common"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/subscriptions"
+	"gutenacht.site/pulse/internal/common"
 )
 
 type subscriptionInfo struct {
@@ -147,7 +147,10 @@ func (sm *SystemManager) fetchRealtimeDataAndNotify() {
 			continue
 		}
 		go func() {
-			data, err := system.fetchDataFromAgent(common.DataRequestOptions{CacheTimeMs: 1000})
+			data, err := system.fetchDataFromAgent(common.DataRequestOptions{
+				CacheTimeMs:       1000,
+				MonitoredServices: system.getMonitoredServiceNames(),
+			})
 			if err != nil {
 				return
 			}

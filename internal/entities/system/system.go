@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/henrygd/beszel/internal/entities/container"
-	"github.com/henrygd/beszel/internal/entities/systemd"
+	"gutenacht.site/pulse/internal/entities/container"
+	"gutenacht.site/pulse/internal/entities/service"
 )
 
 type Stats struct {
@@ -71,6 +71,7 @@ func (s Uint8Slice) MarshalJSON() ([]byte, error) {
 
 type GPUData struct {
 	Name        string             `json:"n" cbor:"0,keyasint"`
+	Type        string             `json:"gt,omitempty" cbor:"7,keyasint,omitempty"`
 	Temperature float64            `json:"-"`
 	MemoryUsed  float64            `json:"mu,omitempty,omitzero" cbor:"1,keyasint,omitempty,omitzero"`
 	MemoryTotal float64            `json:"mt,omitempty,omitzero" cbor:"2,keyasint,omitempty,omitzero"`
@@ -122,9 +123,8 @@ const (
 type ConnectionType = uint8
 
 const (
-	ConnectionTypeNone ConnectionType = iota
-	ConnectionTypeSSH
-	ConnectionTypeWebSocket
+	ConnectionTypeNone      ConnectionType = 0
+	ConnectionTypeWebSocket ConnectionType = 2
 )
 
 // Core system data that is needed in All Systems table
@@ -149,34 +149,131 @@ type Info struct {
 	// LoadAvg5       float64 `json:"l5,omitempty" cbor:"16,keyasint,omitempty"`  // deprecated - use `la` array instead
 	// LoadAvg15      float64 `json:"l15,omitempty" cbor:"17,keyasint,omitempty"` // deprecated - use `la` array instead
 
-	BandwidthBytes uint64             `json:"bb" cbor:"18,keyasint"`
-	LoadAvg        [3]float64         `json:"la,omitempty" cbor:"19,keyasint"`
-	ConnectionType ConnectionType     `json:"ct,omitempty" cbor:"20,keyasint,omitempty,omitzero"`
-	ExtraFsPct     map[string]float64 `json:"efs,omitempty" cbor:"21,keyasint,omitempty"`
-	Services       []uint16           `json:"sv,omitempty" cbor:"22,keyasint,omitempty"` // [totalServices, numFailedServices]
-	Battery        [2]uint8           `json:"bat,omitzero" cbor:"23,keyasint,omitzero"`  // [percent, charge state]
+	BandwidthBytes            uint64             `json:"bb" cbor:"18,keyasint"`
+	LoadAvg                   [3]float64         `json:"la,omitempty" cbor:"19,keyasint"`
+	ConnectionType            ConnectionType     `json:"ct,omitempty" cbor:"20,keyasint,omitempty,omitzero"`
+	ExtraFsPct                map[string]float64 `json:"efs,omitempty" cbor:"21,keyasint,omitempty"`
+	Services                  []uint16           `json:"sv,omitempty" cbor:"22,keyasint,omitempty"`  // [totalServices, numFailedServices]
+	Battery                   [2]uint8           `json:"bat,omitzero" cbor:"23,keyasint,omitzero"`   // [percent, charge state]
+	ManagedServices           []uint16           `json:"msv,omitempty" cbor:"24,keyasint,omitempty"` // [totalServices, nonRunningServices]
+	Capabilities              *AgentCapabilities `json:"cap,omitempty" cbor:"25,keyasint,omitempty"`
+	GpuSupported              bool               `json:"gs,omitempty" cbor:"26,keyasint,omitempty"`
+	RemoteIP                  string             `json:"ip,omitempty" cbor:"27,keyasint,omitempty"`
+	BandwidthBytesByDirection [2]uint64          `json:"bbd,omitzero" cbor:"28,keyasint,omitzero"` // [sent bytes/s, recv bytes/s]
+}
+
+type AgentCapabilities struct {
+	Platform           string                      `json:"platform" cbor:"0,keyasint"`
+	Arch               string                      `json:"arch" cbor:"1,keyasint"`
+	AgentVersion       string                      `json:"agent_version" cbor:"2,keyasint"`
+	InstallMethod      string                      `json:"install_method,omitempty" cbor:"3,keyasint,omitempty"`
+	RunMode            string                      `json:"run_mode,omitempty" cbor:"4,keyasint,omitempty"`
+	AgentProfile       string                      `json:"agent_profile,omitempty" cbor:"10,keyasint,omitempty"`
+	Privilege          string                      `json:"privilege" cbor:"5,keyasint"`
+	Collection         []string                    `json:"collection" cbor:"6,keyasint"`
+	Operations         []string                    `json:"operations" cbor:"7,keyasint"`
+	UnsupportedReasons map[string]string           `json:"unsupported_reasons,omitempty" cbor:"8,keyasint,omitempty"`
+	LastUpdate         *AgentUpdateResult          `json:"last_update,omitempty" cbor:"9,keyasint,omitempty"`
+	CollectionResults  map[string]CapabilityStatus `json:"collection_results,omitempty" cbor:"11,keyasint,omitempty"`
+	Diagnostics        map[string]CapabilityStatus `json:"diagnostics,omitempty" cbor:"12,keyasint,omitempty"`
+}
+
+type AgentUpdateResult struct {
+	Status  string `json:"status" cbor:"0,keyasint"`
+	Version string `json:"version,omitempty" cbor:"1,keyasint,omitempty"`
+	Message string `json:"message,omitempty" cbor:"2,keyasint,omitempty"`
+	Time    string `json:"time,omitempty" cbor:"3,keyasint,omitempty"`
+}
+
+type CapabilityState string
+
+const (
+	CapabilityStateConfirmed   CapabilityState = "confirmed"
+	CapabilityStateUnavailable CapabilityState = "unavailable"
+	CapabilityStateUnsupported CapabilityState = "unsupported"
+	CapabilityStateUnknown     CapabilityState = "unknown"
+	CapabilityStateFailed      CapabilityState = "failed"
+	CapabilityStateStale       CapabilityState = "stale"
+)
+
+type CapabilityStatus struct {
+	State     CapabilityState `json:"state" cbor:"0,keyasint"`
+	CheckedAt string          `json:"checked_at,omitempty" cbor:"1,keyasint,omitempty"`
+	Reason    string          `json:"reason,omitempty" cbor:"2,keyasint,omitempty"`
+	Detail    string          `json:"detail,omitempty" cbor:"3,keyasint,omitempty"`
+	Count     int             `json:"count,omitempty" cbor:"4,keyasint,omitempty"`
+}
+
+type NetworkInterfaceDetails struct {
+	Name        string   `json:"name" cbor:"0,keyasint"`
+	DisplayName string   `json:"display_name,omitempty" cbor:"1,keyasint,omitempty"`
+	Mac         string   `json:"mac,omitempty" cbor:"2,keyasint,omitempty"`
+	LinkSpeed   uint64   `json:"link_speed,omitempty" cbor:"3,keyasint,omitempty"`
+	Status      string   `json:"status,omitempty" cbor:"4,keyasint,omitempty"`
+	IPMethod    string   `json:"ip_method,omitempty" cbor:"5,keyasint,omitempty"`
+	IPv4        []string `json:"ipv4,omitempty" cbor:"6,keyasint,omitempty"`
+	IPv6        []string `json:"ipv6,omitempty" cbor:"7,keyasint,omitempty"`
+	Gateways    []string `json:"gateways,omitempty" cbor:"8,keyasint,omitempty"`
+	DNSServers  []string `json:"dns_servers,omitempty" cbor:"9,keyasint,omitempty"`
+}
+
+type MemoryModuleDetails struct {
+	Locator       string `json:"locator,omitempty" cbor:"0,keyasint,omitempty"`
+	Capacity      uint64 `json:"capacity,omitempty" cbor:"1,keyasint,omitempty"`
+	MemoryType    string `json:"memory_type,omitempty" cbor:"2,keyasint,omitempty"`
+	SpeedMhz      uint64 `json:"speed_mhz,omitempty" cbor:"3,keyasint,omitempty"`
+	ConfiguredMhz uint64 `json:"configured_mhz,omitempty" cbor:"4,keyasint,omitempty"`
+	Manufacturer  string `json:"manufacturer,omitempty" cbor:"5,keyasint,omitempty"`
+	PartNumber    string `json:"part_number,omitempty" cbor:"6,keyasint,omitempty"`
+}
+
+type VirtualizationDetails struct {
+	Type            string           `json:"type,omitempty" cbor:"0,keyasint,omitempty"`
+	Role            string           `json:"role,omitempty" cbor:"1,keyasint,omitempty"`
+	Name            string           `json:"name,omitempty" cbor:"2,keyasint,omitempty"`
+	VirtualMachines []VirtualMachine `json:"virtual_machines,omitempty" cbor:"3,keyasint,omitempty"`
+}
+
+type VirtualMachine struct {
+	Id     string `json:"id,omitempty" cbor:"0,keyasint,omitempty"`
+	Name   string `json:"name" cbor:"1,keyasint"`
+	Status string `json:"status,omitempty" cbor:"2,keyasint,omitempty"`
+	Vcpu   int    `json:"vcpu,omitempty" cbor:"3,keyasint,omitempty"`
+	Memory uint64 `json:"memory,omitempty" cbor:"4,keyasint,omitempty"`
+}
+
+func (v VirtualizationDetails) HasData() bool {
+	return v.Type != "" || v.Role != "" || v.Name != "" || len(v.VirtualMachines) > 0
 }
 
 // Data that does not change during process lifetime and is not needed in All Systems table
 type Details struct {
-	Hostname      string        `cbor:"0,keyasint"`
-	Kernel        string        `cbor:"1,keyasint,omitempty"`
-	Cores         int           `cbor:"2,keyasint"`
-	Threads       int           `cbor:"3,keyasint"`
-	CpuModel      string        `cbor:"4,keyasint"`
-	Os            Os            `cbor:"5,keyasint"`
-	OsName        string        `cbor:"6,keyasint"`
-	Arch          string        `cbor:"7,keyasint"`
-	Podman        bool          `cbor:"8,keyasint,omitempty"`
-	MemoryTotal   uint64        `cbor:"9,keyasint"`
-	SmartInterval time.Duration `cbor:"10,keyasint,omitempty"`
+	Hostname                string                    `cbor:"0,keyasint"`
+	Kernel                  string                    `cbor:"1,keyasint,omitempty"`
+	Cores                   int                       `cbor:"2,keyasint"`
+	Threads                 int                       `cbor:"3,keyasint"`
+	CpuModel                string                    `cbor:"4,keyasint"`
+	CpuVendor               string                    `cbor:"17,keyasint,omitempty"`
+	CpuFrequencyMhz         float64                   `cbor:"14,keyasint,omitempty"`
+	Os                      Os                        `cbor:"5,keyasint"`
+	OsName                  string                    `cbor:"6,keyasint"`
+	Arch                    string                    `cbor:"7,keyasint"`
+	Podman                  bool                      `cbor:"8,keyasint,omitempty"`
+	MemoryTotal             uint64                    `cbor:"9,keyasint"`
+	SmartInterval           time.Duration             `cbor:"10,keyasint,omitempty"`
+	ContainerRuntimeName    string                    `cbor:"11,keyasint,omitempty"`
+	ContainerRuntimeVersion string                    `cbor:"12,keyasint,omitempty"`
+	NetworkInterfaces       []NetworkInterfaceDetails `cbor:"13,keyasint,omitempty"`
+	MemoryModules           []MemoryModuleDetails     `cbor:"15,keyasint,omitempty"`
+	Virtualization          VirtualizationDetails     `cbor:"16,keyasint,omitempty"`
 }
 
 // Final data structure to return to the hub
 type CombinedData struct {
-	Stats           Stats              `json:"stats" cbor:"0,keyasint"`
-	Info            Info               `json:"info" cbor:"1,keyasint"`
-	Containers      []*container.Stats `json:"container" cbor:"2,keyasint"`
-	SystemdServices []*systemd.Service `json:"systemd,omitempty" cbor:"3,keyasint,omitempty"`
-	Details         *Details           `cbor:"4,keyasint,omitempty"`
+	Stats      Stats              `json:"stats" cbor:"0,keyasint"`
+	Info       Info               `json:"info" cbor:"1,keyasint"`
+	Containers []*container.Stats `json:"container" cbor:"2,keyasint"`
+	Details    *Details           `cbor:"4,keyasint,omitempty"`
+	Services   []*service.Service `json:"services,omitempty" cbor:"5,keyasint,omitempty"`
+	Software   []*service.Service `json:"software,omitempty" cbor:"6,keyasint,omitempty"`
 }

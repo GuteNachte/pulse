@@ -6,20 +6,17 @@ import (
 	"os"
 	"strings"
 
-	"github.com/henrygd/beszel"
-	"github.com/henrygd/beszel/agent"
-	"github.com/henrygd/beszel/agent/health"
-	"github.com/henrygd/beszel/agent/utils"
 	"github.com/spf13/pflag"
-	"golang.org/x/crypto/ssh"
+	"gutenacht.site/pulse"
+	"gutenacht.site/pulse/agent"
+	"gutenacht.site/pulse/agent/health"
 )
 
 // cli options
 type cmdOptions struct {
-	key    string // key is the public key(s) for SSH authentication.
-	listen string // listen is the address or port to listen on.
-	hubURL string // hubURL is the URL of the Beszel hub.
+	hubURL string // hubURL is the URL of the Pulse Hub.
 	token  string // token is the token to use for authentication.
+	code   string // code is a one-time pairing code.
 }
 
 // parse parses the command line flags and populates the config struct.
@@ -45,16 +42,15 @@ func (opts *cmdOptions) parse() bool {
 	}
 
 	// pflag.CommandLine.ParseErrorsWhitelist.UnknownFlags = true
-	pflag.StringVarP(&opts.key, "key", "k", "", "Public key(s) for SSH authentication")
-	pflag.StringVarP(&opts.listen, "listen", "l", "", "Address or port to listen on")
-	pflag.StringVarP(&opts.hubURL, "url", "u", "", "URL of the Beszel hub")
+	pflag.StringVarP(&opts.hubURL, "url", "u", "", "URL of the Pulse Hub")
 	pflag.StringVarP(&opts.token, "token", "t", "", "Token to use for authentication")
-	chinaMirrors := pflag.BoolP("china-mirrors", "c", false, "Use mirror for update (gh.beszel.dev) instead of GitHub")
+	pflag.StringVar(&opts.code, "code", "", "One-time pairing code")
+	chinaMirrors := pflag.BoolP("china-mirrors", "c", false, "Use configured mirror for update instead of GitHub")
 	version := pflag.BoolP("version", "v", false, "Show version information")
 	help := pflag.BoolP("help", "h", false, "Show this help message")
 
 	// Convert old single-dash long flags to double-dash for backward compatibility
-	flagsToConvert := []string{"key", "listen", "url", "token"}
+	flagsToConvert := []string{"url", "token"}
 	for i, arg := range os.Args {
 		for _, flag := range flagsToConvert {
 			singleDash := "-" + flag
@@ -77,6 +73,7 @@ func (opts *cmdOptions) parse() bool {
 		builder.WriteString("\nCommands:\n")
 		builder.WriteString("  fingerprint  View or reset the agent fingerprint\n")
 		builder.WriteString("  health       Check if the agent is running\n")
+		builder.WriteString("  pair         Pair this agent with the hub using a one-time code\n")
 		builder.WriteString("  update       Update to the latest version\n")
 		builder.WriteString("\nFlags:\n")
 		fmt.Print(builder.String())
@@ -89,13 +86,18 @@ func (opts *cmdOptions) parse() bool {
 	// Must run after pflag.Parse()
 	switch {
 	case *version:
-		fmt.Println(beszel.AppName+"-agent", beszel.Version)
+		fmt.Println(pulse.AppName+"-agent", pulse.Version)
 		return true
 	case *help || subcommand == "help":
 		pflag.Usage()
 		return true
 	case subcommand == "update":
 		agent.Update(*chinaMirrors)
+		return true
+	case subcommand == "pair":
+		if err := opts.handlePair(); err != nil {
+			log.Fatal(err)
+		}
 		return true
 	}
 
@@ -109,33 +111,26 @@ func (opts *cmdOptions) parse() bool {
 	return false
 }
 
-// loadPublicKeys loads the public keys from the command line flag, environment variable, or key file.
-func (opts *cmdOptions) loadPublicKeys() ([]ssh.PublicKey, error) {
-	// Try command line flag first
-	if opts.key != "" {
-		return agent.ParseKeys(opts.key)
+func (opts *cmdOptions) handlePair() error {
+	if opts.hubURL == "" {
+		return fmt.Errorf("missing hub url: use --url")
 	}
-
-	// Try environment variable
-	if key, ok := utils.GetEnv("KEY"); ok && key != "" {
-		return agent.ParseKeys(key)
+	if opts.code == "" {
+		return fmt.Errorf("missing pairing code: use --code")
 	}
-
-	// Try key file
-	keyFile, ok := utils.GetEnv("KEY_FILE")
-	if !ok {
-		return nil, fmt.Errorf("no key provided: must set -key flag, KEY env var, or KEY_FILE env var. Use 'beszel-agent help' for usage")
-	}
-
-	pubKey, err := os.ReadFile(keyFile)
+	dataDir, err := agent.GetDataDir()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read key file: %w", err)
+		return err
 	}
-	return agent.ParseKeys(string(pubKey))
-}
-
-func (opts *cmdOptions) getAddress() string {
-	return agent.GetAddress(opts.listen)
+	credentials, err := agent.PairAgent(opts.hubURL, opts.code, dataDir, "")
+	if err != nil {
+		return err
+	}
+	if err := agent.SavePairingCredentials(dataDir, credentials); err != nil {
+		return err
+	}
+	fmt.Printf("Pairing complete. Agent ID: %s\nCredentials saved to: %s\n", credentials.AgentID, dataDir)
+	return nil
 }
 
 // handleFingerprint handles the "fingerprint" command with subcommands "view" and "reset".
@@ -178,23 +173,12 @@ func main() {
 		return
 	}
 
-	var serverConfig agent.ServerOptions
-	var err error
-	serverConfig.Keys, err = opts.loadPublicKeys()
-	if err != nil {
-		log.Fatal("Failed to load public keys:", err)
-	}
-
-	addr := opts.getAddress()
-	serverConfig.Addr = addr
-	serverConfig.Network = agent.GetNetwork(addr)
-
 	a, err := agent.NewAgent()
 	if err != nil {
 		log.Fatal("Failed to create agent: ", err)
 	}
 
-	if err := a.Start(serverConfig); err != nil {
+	if err := a.Start(); err != nil {
 		log.Fatal("Failed to start: ", err)
 	}
 }

@@ -2,12 +2,14 @@ import { t } from "@lingui/core/macro"
 import AreaChartDefault from "@/components/charts/area-chart"
 import { batteryStateTranslations } from "@/lib/i18n"
 import { $temperatureFilter, $userSettings } from "@/lib/stores"
-import { cn, decimalString, formatTemperature, toFixedFloat } from "@/lib/utils"
+import { cn, decimalString, formatTemperature, percentTickString, percentValueString, toFixedFloat } from "@/lib/utils"
 import type { ChartData, SystemStatsRecord } from "@/types"
+import type { Unit } from "@/lib/enums"
 import { ChartCard, FilterBar } from "../chart-card"
 import LineChartDefault from "@/components/charts/line-chart"
 import { useStore } from "@nanostores/react"
 import { useRef, useMemo, useState, useEffect } from "react"
+import { Badge } from "@/components/ui/badge"
 
 export function BatteryChart({
 	chartData,
@@ -48,8 +50,8 @@ export function BatteryChart({
 					},
 				]}
 				domain={[0, 100]}
-				tickFormatter={(val) => `${val}%`}
-				contentFormatter={({ value }) => `${value}%`}
+				tickFormatter={(val) => percentTickString(val, 0)}
+				contentFormatter={({ value }) => percentValueString(value, 0)}
 			/>
 		</ChartCard>
 	)
@@ -70,6 +72,7 @@ export function TemperatureChart({
 
 	const filter = useStore($temperatureFilter)
 	const userSettings = useStore($userSettings)
+	const latestTemperatureSummary = getLatestTemperatureSummary(chartData, userSettings.unitTemp)
 
 	const statsRef = useRef(chartData.systemStats)
 	statsRef.current = chartData.systemStats
@@ -186,6 +189,7 @@ export function TemperatureChart({
 				grid={grid}
 				title={t`Temperature`}
 				description={t`Temperatures of system sensors`}
+				titleSuffix={latestTemperatureSummary}
 				cornerEl={<FilterBar store={$temperatureFilter} />}
 				legend={legend}
 			>
@@ -206,6 +210,47 @@ export function TemperatureChart({
 					filter={filter}
 				></LineChartDefault>
 			</ChartCard>
+		</div>
+	)
+}
+
+function getLatestTemperatureSummary(chartData: ChartData, unitTemp?: Unit) {
+	let latestTemps: Record<string, number> | undefined
+	for (let i = chartData.systemStats.length - 1; i >= 0; i--) {
+		const temps = chartData.systemStats[i].stats?.t
+		if (temps && Object.keys(temps).length > 0) {
+			latestTemps = temps
+			break
+		}
+	}
+	if (!latestTemps) {
+		return null
+	}
+
+	const entries = Object.entries(latestTemps)
+		.filter(([, value]) => Number.isFinite(value))
+		.sort((a, b) => b[1] - a[1])
+	const [primary] = entries
+	if (!primary) {
+		return null
+	}
+	const [sensorName, sensorValue] = primary
+	const { value, unit } = formatTemperature(sensorValue, unitTemp)
+	const remaining = entries.length - 1
+
+	return (
+		<div className="flex min-w-0 flex-wrap items-center gap-1.5">
+			<Badge variant="outline" className="h-6 max-w-72 rounded-md px-2 text-[11px] font-medium text-muted-foreground">
+				<span className="truncate">{sensorName}</span>
+				<span className="ml-1 tabular-nums text-foreground">
+					{decimalString(value, value >= 100 ? 1 : 2)} {unit}
+				</span>
+			</Badge>
+			{remaining > 0 && (
+				<Badge variant="outline" className="h-6 rounded-md px-2 text-[11px] font-medium text-muted-foreground">
+					另 {remaining} 个
+				</Badge>
+			)}
 		</div>
 	)
 }

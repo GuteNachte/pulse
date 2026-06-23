@@ -1,5 +1,5 @@
 //go:generate -command fetchsmartctl go run ./tools/fetchsmartctl
-//go:generate fetchsmartctl -out ./smartmontools/smartctl.exe -url https://static.beszel.dev/bin/smartctl/smartctl-nc.exe -sha 3912249c3b329249aa512ce796fd1b64d7cbd8378b68ad2756b39163d9c30b47
+//go:generate fetchsmartctl -out ./smartmontools/smartctl.exe -sha 3912249c3b329249aa512ce796fd1b64d7cbd8378b68ad2756b39163d9c30b47
 
 package agent
 
@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/henrygd/beszel/agent/utils"
-	"github.com/henrygd/beszel/internal/entities/smart"
+	"gutenacht.site/pulse/agent/utils"
+	"gutenacht.site/pulse/internal/entities/smart"
 )
 
 // SmartManager manages data collection for SMART devices
@@ -27,6 +27,7 @@ type SmartManager struct {
 	sync.Mutex
 	SmartDataMap       map[string]*smart.SmartData
 	SmartDevices       []*DeviceInfo
+	collectFailures    map[string]smartCollectFailure
 	refreshMutex       sync.Mutex
 	lastScanTime       time.Time
 	smartctlPath       string
@@ -34,6 +35,12 @@ type SmartManager struct {
 	darwinNvmeOnce     sync.Once
 	darwinNvmeCapacity map[string]uint64      // serial → bytes cache, written once via darwinNvmeOnce
 	darwinNvmeProvider func() ([]byte, error) // overridable for testing
+}
+
+type smartCollectFailure struct {
+	Failures    int
+	NextAttempt time.Time
+	LastError   string
 }
 
 type scanOutput struct {
@@ -64,6 +71,11 @@ type deviceKey struct {
 }
 
 var errNoValidSmartData = fmt.Errorf("no valid SMART data found") // Error for missing data
+
+const (
+	smartCollectBackoffBase = 15 * time.Minute
+	smartCollectBackoffMax  = 6 * time.Hour
+)
 
 // Refresh updates SMART data for all known devices
 func (sm *SmartManager) Refresh(forceScan bool) error {
@@ -457,6 +469,12 @@ func (sm *SmartManager) parseSmartOutput(deviceInfo *DeviceInfo, output []byte) 
 // Uses -n standby to avoid waking up sleeping disks, but bypasses standby mode
 // for initial data collection when no cached data exists
 func (sm *SmartManager) CollectSmart(deviceInfo *DeviceInfo) error {
+	if deviceInfo == nil || deviceInfo.Name == "" {
+		return errNoValidSmartData
+	}
+	if failure, ok := sm.smartCollectBackoff(deviceInfo, time.Now()); ok {
+		return smartCollectBackoffError(deviceInfo, failure)
+	}
 	if deviceInfo != nil && sm.isExcludedDevice(deviceInfo.Name) {
 		return errNoValidSmartData
 	}
@@ -464,6 +482,7 @@ func (sm *SmartManager) CollectSmart(deviceInfo *DeviceInfo) error {
 	// mdraid health is not exposed via SMART; Linux exposes array state in sysfs.
 	if deviceInfo != nil {
 		if ok, err := sm.collectMdraidHealth(deviceInfo); ok {
+			sm.recordSmartCollectResult(deviceInfo, err)
 			return err
 		}
 	}
@@ -471,11 +490,13 @@ func (sm *SmartManager) CollectSmart(deviceInfo *DeviceInfo) error {
 	// wear / EOL indicators via sysfs. Prefer that path when available.
 	if deviceInfo != nil {
 		if ok, err := sm.collectEmmcHealth(deviceInfo); ok {
+			sm.recordSmartCollectResult(deviceInfo, err)
 			return err
 		}
 	}
 
 	if sm.smartctlPath == "" {
+		sm.recordSmartCollectResult(deviceInfo, errNoValidSmartData)
 		return errNoValidSmartData
 	}
 
@@ -496,6 +517,7 @@ func (sm *SmartManager) CollectSmart(deviceInfo *DeviceInfo) error {
 	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && exitErr.ExitCode() == 2 {
 		if hasExistingData {
 			// Device is in standby and we have cached data, keep using cache
+			sm.recordSmartCollectResult(deviceInfo, nil)
 			return nil
 		}
 		// No cached data, need to collect initial data by bypassing standby
@@ -509,7 +531,7 @@ func (sm *SmartManager) CollectSmart(deviceInfo *DeviceInfo) error {
 	hasValidData := sm.parseSmartOutput(deviceInfo, output)
 
 	// If NVMe controller path failed, try namespace path as fallback.
-	// NVMe controllers (/dev/nvme0) don't always support SMART queries. See github.com/henrygd/beszel/issues/1504
+	// NVMe controllers (/dev/nvme0) don't always support SMART queries. See gutenacht.site/pulse/issues/1504
 	if !hasValidData && err != nil && isNvmeControllerPath(deviceInfo.Name) {
 		controllerPath := deviceInfo.Name
 		namespacePath := controllerPath + "n1"
@@ -539,13 +561,84 @@ func (sm *SmartManager) CollectSmart(deviceInfo *DeviceInfo) error {
 	if !hasValidData {
 		if err != nil {
 			slog.Info("smartctl failed", "device", deviceInfo.Name, "err", err)
+			sm.recordSmartCollectResult(deviceInfo, err)
 			return err
 		}
 		slog.Info("no valid SMART data found", "device", deviceInfo.Name)
+		sm.recordSmartCollectResult(deviceInfo, errNoValidSmartData)
 		return errNoValidSmartData
 	}
 
+	sm.recordSmartCollectResult(deviceInfo, nil)
 	return nil
+}
+
+func (sm *SmartManager) smartCollectBackoff(deviceInfo *DeviceInfo, now time.Time) (smartCollectFailure, bool) {
+	if deviceInfo == nil || deviceInfo.Name == "" {
+		return smartCollectFailure{}, false
+	}
+	sm.Lock()
+	defer sm.Unlock()
+
+	failure, ok := sm.collectFailures[smartCollectDeviceKey(deviceInfo)]
+	if !ok || !now.Before(failure.NextAttempt) {
+		return smartCollectFailure{}, false
+	}
+	return failure, true
+}
+
+func (sm *SmartManager) recordSmartCollectResult(deviceInfo *DeviceInfo, err error) {
+	if deviceInfo == nil || deviceInfo.Name == "" {
+		return
+	}
+	key := smartCollectDeviceKey(deviceInfo)
+	sm.Lock()
+	defer sm.Unlock()
+
+	if err == nil {
+		delete(sm.collectFailures, key)
+		return
+	}
+	if sm.collectFailures == nil {
+		sm.collectFailures = make(map[string]smartCollectFailure)
+	}
+	previous := sm.collectFailures[key]
+	failures := previous.Failures + 1
+	sm.collectFailures[key] = smartCollectFailure{
+		Failures:    failures,
+		NextAttempt: time.Now().Add(smartCollectBackoffDelay(failures)),
+		LastError:   err.Error(),
+	}
+}
+
+func smartCollectDeviceKey(deviceInfo *DeviceInfo) string {
+	name := strings.ToLower(strings.TrimSpace(deviceInfo.Name))
+	deviceType := strings.ToLower(strings.TrimSpace(deviceInfo.Type))
+	return name + "|" + deviceType
+}
+
+func smartCollectBackoffDelay(failures int) time.Duration {
+	if failures <= 1 {
+		return smartCollectBackoffBase
+	}
+	delay := smartCollectBackoffBase
+	for i := 1; i < failures; i++ {
+		delay *= 2
+		if delay >= smartCollectBackoffMax {
+			return smartCollectBackoffMax
+		}
+	}
+	return delay
+}
+
+func smartCollectBackoffError(deviceInfo *DeviceInfo, failure smartCollectFailure) error {
+	return fmt.Errorf(
+		"SMART collection backed off for %s until %s after %d failed attempts: %s",
+		deviceInfo.Name,
+		failure.NextAttempt.UTC().Format(time.RFC3339),
+		failure.Failures,
+		failure.LastError,
+	)
 }
 
 // smartctlArgs returns the arguments for the smartctl command
@@ -557,7 +650,7 @@ func (sm *SmartManager) smartctlArgs(deviceInfo *DeviceInfo, includeStandby bool
 	if deviceInfo != nil {
 		deviceType = strings.ToLower(deviceInfo.Type)
 		parserType = strings.ToLower(deviceInfo.parserType)
-		// types sometimes misidentified in scan; see github.com/henrygd/beszel/issues/1345
+		// types sometimes misidentified in scan; see gutenacht.site/pulse/issues/1345
 		if deviceType != "" && deviceType != "scsi" && deviceType != "ata" {
 			args = append(args, "-d", deviceInfo.Type)
 		}
@@ -877,6 +970,7 @@ func (sm *SmartManager) parseSmartForSata(output []byte) (bool, int) {
 	smartData.SmartStatus = getSmartStatus(smartData.Temperature, data.SmartStatus.Passed)
 	smartData.DiskName = data.Device.Name
 	smartData.DiskType = data.Device.Type
+	smartData.MediaType = rotationRateMediaType(data.RotationRate)
 
 	// get values from ata_device_statistics if necessary
 	var ataDeviceStats smart.AtaDeviceStatistics
@@ -985,6 +1079,7 @@ func (sm *SmartManager) parseSmartForScsi(output []byte) (bool, int) {
 	smartData.SmartStatus = getSmartStatus(smartData.Temperature, data.SmartStatus.Passed)
 	smartData.DiskName = data.Device.Name
 	smartData.DiskType = data.Device.Type
+	smartData.MediaType = rotationRateMediaType(data.RotationRate)
 
 	attributes := make([]*smart.SmartAttribute, 0, 10)
 	attributes = append(attributes, &smart.SmartAttribute{Name: "PowerOnHours", RawValue: data.PowerOnTime.Hours})
@@ -1128,6 +1223,7 @@ func (sm *SmartManager) parseSmartForNvme(output []byte) (bool, int) {
 	smartData.SmartStatus = getSmartStatus(smartData.Temperature, data.SmartStatus.Passed)
 	smartData.DiskName = data.Device.Name
 	smartData.DiskType = data.Device.Type
+	smartData.MediaType = "nvme"
 
 	// nvme attributes does not follow the same format as ata attributes,
 	// so we manually map each field to SmartAttributes
@@ -1155,6 +1251,20 @@ func (sm *SmartManager) parseSmartForNvme(output []byte) (bool, int) {
 	sm.SmartDataMap[keyName] = smartData
 
 	return true, data.Smartctl.ExitStatus
+}
+
+func rotationRateMediaType(rotationRate *int) string {
+	if rotationRate == nil {
+		return ""
+	}
+	switch {
+	case *rotationRate == 0:
+		return "ssd"
+	case *rotationRate > 0:
+		return "hdd"
+	default:
+		return ""
+	}
 }
 
 // detectSmartctl checks if smartctl is installed, returns an error if not
@@ -1200,7 +1310,8 @@ func isNvmeControllerPath(path string) bool {
 // NewSmartManager creates and initializes a new SmartManager
 func NewSmartManager() (*SmartManager, error) {
 	sm := &SmartManager{
-		SmartDataMap: make(map[string]*smart.SmartData),
+		SmartDataMap:    make(map[string]*smart.SmartData),
+		collectFailures: make(map[string]smartCollectFailure),
 	}
 	sm.refreshExcludedDevices()
 	path, err := sm.detectSmartctl()

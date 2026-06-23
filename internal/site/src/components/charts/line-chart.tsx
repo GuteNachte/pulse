@@ -8,11 +8,12 @@ import {
 	ChartTooltipContent,
 	xAxis,
 } from "@/components/ui/chart"
+import { getChartRenderPointLimit, limitChartRecords } from "@/lib/chart-sampling"
+import { useIntersectionObserver } from "@/lib/use-intersection-observer"
 import { chartMargin, cn, formatShortDate } from "@/lib/utils"
 import type { ChartData, SystemStatsRecord } from "@/types"
 import { useYAxisWidth } from "./hooks"
 import type { AxisDomain } from "recharts/types/util/types"
-import { useIntersectionObserver } from "@/lib/use-intersection-observer"
 
 export type DataPoint<T = SystemStatsRecord> = {
 	label: string
@@ -66,24 +67,32 @@ export default function LineChartDefault({
 	const { yAxisWidth, updateYAxisWidth } = useYAxisWidth()
 	const { isIntersecting, ref } = useIntersectionObserver({ freeze: false })
 	const sourceData = customData ?? chartData.systemStats
-	const [displayData, setDisplayData] = useState(sourceData)
+	const sampledSourceData = useMemo(
+		() => limitChartRecords(sourceData, getChartRenderPointLimit(chartData.chartTime)),
+		[sourceData, chartData.chartTime]
+	)
+	const [displayData, setDisplayData] = useState(sampledSourceData)
 	const [displayMaxToggled, setDisplayMaxToggled] = useState(maxToggled)
 
 	// Reduce chart redraws by only updating while visible or when chart time changes
 	useEffect(() => {
-		const shouldPrimeData = sourceData.length && !displayData.length
-		const sourceChanged = sourceData !== displayData
+		const shouldPrimeData = sampledSourceData.length && !displayData.length
+		const sourceChanged = sampledSourceData !== displayData
 		const shouldUpdate = shouldPrimeData || (sourceChanged && isIntersecting)
 		if (shouldUpdate) {
-			setDisplayData(sourceData)
+			setDisplayData(sampledSourceData)
 		}
 		if (isIntersecting && maxToggled !== displayMaxToggled) {
 			setDisplayMaxToggled(maxToggled)
 		}
-	}, [displayData, displayMaxToggled, isIntersecting, maxToggled, sourceData])
+	}, [displayData, displayMaxToggled, isIntersecting, maxToggled, sampledSourceData])
 
 	// Use a stable key derived from data point identities and visual properties
 	const linesKey = dataPoints?.map((d) => `${d.label}:${d.strokeOpacity ?? ""}`).join("\0")
+	const resolvedChartMargin = useMemo(() => {
+		const baseMargin = hideYAxis ? { ...chartMargin, left: 5 } : chartMargin
+		return legend ? { ...baseMargin, bottom: Math.max(baseMargin.bottom ?? 0, 30) } : baseMargin
+	}, [hideYAxis, legend])
 
 	const Lines = useMemo(() => {
 		return dataPoints?.map((dataPoint, i) => {
@@ -114,13 +123,10 @@ export default function LineChartDefault({
 		if (displayData.length === 0) {
 			return null
 		}
-		// if (logRender) {
-		// console.log("Rendered", dataPoints?.map((d) => d.label).join(", "), new Date())
-		// }
 		return (
 			<ChartContainer
 				ref={ref}
-				className={cn("h-full w-full absolute aspect-auto bg-card opacity-0 transition-opacity", {
+				className={cn("h-full w-full absolute aspect-auto bg-transparent opacity-0 transition-opacity", {
 					"opacity-100": yAxisWidth || hideYAxis,
 					"ps-4": hideYAxis,
 				})}
@@ -129,7 +135,7 @@ export default function LineChartDefault({
 					reverseStackOrder={reverseStackOrder}
 					accessibilityLayer
 					data={displayData}
-					margin={hideYAxis ? { ...chartMargin, left: 5 } : chartMargin}
+					margin={resolvedChartMargin}
 					{...chartProps}
 				>
 					<CartesianGrid vertical={false} />
@@ -166,5 +172,5 @@ export default function LineChartDefault({
 				</LineChart>
 			</ChartContainer>
 		)
-	}, [displayData, yAxisWidth, filter, Lines])
+	}, [displayData, yAxisWidth, filter, Lines, resolvedChartMargin])
 }

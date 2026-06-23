@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -22,10 +21,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/henrygd/beszel/agent/deltatracker"
-	"github.com/henrygd/beszel/agent/utils"
-	"github.com/henrygd/beszel/internal/entities/container"
-	"github.com/henrygd/beszel/internal/entities/system"
+	"gutenacht.site/pulse/agent/deltatracker"
+	"gutenacht.site/pulse/agent/utils"
+	"gutenacht.site/pulse/internal/entities/container"
+	"gutenacht.site/pulse/internal/entities/system"
 
 	"github.com/blang/semver"
 )
@@ -34,10 +33,15 @@ import (
 // This includes CSI sequences like \x1b[...m and simple escapes like \x1b[K
 var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[@-Z\\-_]`)
 var dockerContainerIDPattern = regexp.MustCompile(`^[a-fA-F0-9]{12,64}$`)
+var dockerContainerNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$`)
 
 const (
 	// Docker API timeout in milliseconds
 	dockerTimeoutMs = 2100
+	// Docker container control timeout. Restart operations pass a shorter Docker
+	// stop timeout to avoid one slow container blocking an entire stack.
+	dockerControlTimeout            = 2 * time.Minute
+	dockerRestartStopTimeoutSeconds = 45
 	// Maximum realistic network speed (5 GB/s) to detect bad deltas
 	maxNetworkSpeedBps uint64 = 5e9
 	// Maximum conceivable memory usage of a container (100TB) to detect bad memory stats
@@ -50,11 +54,14 @@ const (
 	// Maximum total log content size (5MB) to prevent memory exhaustion
 	// This provides a reasonable limit for network transfer and browser rendering
 	maxTotalLogSize = 5 * 1024 * 1024
+	// Maximum compose config content sent with container stats.
+	maxComposeConfigBytes = 512 * 1024
 )
 
 type dockerManager struct {
 	agent                *Agent                      // Used to propagate system detail changes back to the agent
 	client               *http.Client                // Client to query Docker API
+	controlClient        *http.Client                // Client to control Docker containers with per-operation context timeouts
 	wg                   sync.WaitGroup              // WaitGroup to wait for all goroutines to finish
 	sem                  chan struct{}               // Semaphore to limit concurrent container requests
 	containerStatsMutex  sync.RWMutex                // Mutex to prevent concurrent access to containerStatsMap
@@ -64,6 +71,7 @@ type dockerManager struct {
 	goodDockerVersion    bool                        // Whether docker version is at least 25.0.0 (one-shot works correctly)
 	dockerVersionChecked bool                        // Whether a version probe has completed successfully
 	isWindows            bool                        // Whether the Docker Engine API is running on Windows
+	runtimeVersion       container.RuntimeVersion    // Docker / Podman runtime version metadata
 	buf                  *bytes.Buffer               // Buffer to store and read response bodies
 	decoder              *json.Decoder               // Reusable JSON decoder that reads from buf
 	apiStats             *container.ApiStats         // Reusable API stats object
@@ -139,7 +147,10 @@ func (dm *dockerManager) getDockerStats(cacheTimeMs uint16) ([]*container.Stats,
 		return nil, err
 	}
 
-	dm.apiContainerList = dm.apiContainerList[:0]
+	// Do not reuse decoded ApiInfo pointers here. encoding/json reuses existing
+	// map fields, so a container with empty labels can inherit labels from the
+	// previous decode cycle and be incorrectly assigned to a Compose stack.
+	dm.apiContainerList = nil
 	if err := dm.decode(resp, &dm.apiContainerList); err != nil {
 		return nil, err
 	}
@@ -508,8 +519,15 @@ func (dm *dockerManager) updateContainerStats(ctr *container.ApiInfo, cacheTimeM
 	}
 
 	stats.Id = ctr.IdShort
+	stats.Name = name
+	stats.Image = ctr.Image
 	stats.Status = statusText
 	stats.Health = health
+	stats.Stack = container.StackInfo{}
+	stats.Stack = composeStackInfoFromLabels(ctr.Labels)
+	if stats.Stack.Config != "" {
+		stats.Stack.Config = readComposeStackConfig(stats.Stack.Config, stats.Stack.WorkingDir)
+	}
 
 	if len(ctr.Ports) > 0 {
 		stats.Ports = convertContainerPortsToString(ctr)
@@ -547,7 +565,7 @@ func (dm *dockerManager) updateContainerStats(ctr *container.ApiInfo, cacheTimeM
 	// Calculate memory usage
 	usedMemory, err := calculateMemoryUsage(res, dm.isWindows)
 	if err != nil {
-		return fmt.Errorf("%s - %w - see https://github.com/henrygd/beszel/issues/144", name, err)
+		return fmt.Errorf("%s - %w - see https://gutenacht.site/pulse/issues/144", name, err)
 	}
 
 	// Store current CPU stats for next calculation
@@ -583,6 +601,216 @@ func (dm *dockerManager) updateContainerStats(ctr *container.ApiInfo, cacheTimeM
 	dm.lastCpuReadTime[cacheTimeMs][ctr.IdShort] = res.Read
 
 	return nil
+}
+
+func composeStackInfoFromLabels(labels map[string]string) container.StackInfo {
+	if len(labels) == 0 {
+		return container.StackInfo{}
+	}
+	project := strings.TrimSpace(labels["com.docker.compose.project"])
+	service := strings.TrimSpace(labels["com.docker.compose.service"])
+	if project == "" || service == "" {
+		return container.StackInfo{}
+	}
+	config := strings.TrimSpace(labels["com.docker.compose.project.config_files"])
+	if config == "" {
+		config = strings.TrimSpace(labels["com.docker.compose.config_files"])
+	}
+	return container.StackInfo{
+		Project:    project,
+		Service:    service,
+		Number:     strings.TrimSpace(labels["com.docker.compose.container-number"]),
+		Config:     config,
+		WorkingDir: strings.TrimSpace(labels["com.docker.compose.project.working_dir"]),
+		Trusted:    true,
+	}
+}
+
+func readComposeStackConfig(configFiles string, workingDir string) string {
+	paths := parseComposeConfigFiles(configFiles)
+	if len(paths) == 0 {
+		return ""
+	}
+
+	sections := make([]string, 0, len(paths))
+	for _, configPath := range paths {
+		content, resolvedPath, err := readFirstComposeConfigCandidate(configPath, workingDir)
+		if err != nil {
+			sections = append(sections, fmt.Sprintf("# %s\n# Read failed: %v", configPath, err))
+			continue
+		}
+		content = redactComposeConfigSecrets(content)
+		if len(paths) == 1 {
+			return content
+		}
+		sections = append(sections, fmt.Sprintf("# %s\n%s", resolvedPath, content))
+	}
+	return strings.Join(sections, "\n\n")
+}
+
+func parseComposeConfigFiles(configFiles string) []string {
+	parts := strings.Split(configFiles, ",")
+	paths := make([]string, 0, len(parts))
+	for _, part := range parts {
+		configPath := strings.TrimSpace(part)
+		if configPath != "" {
+			paths = append(paths, configPath)
+		}
+	}
+	return paths
+}
+
+func readFirstComposeConfigCandidate(configPath string, workingDir string) (string, string, error) {
+	var lastErr error
+	for _, candidate := range composeConfigPathCandidates(configPath, workingDir) {
+		content, err := readComposeConfigFile(candidate)
+		if err == nil {
+			return content, candidate, nil
+		}
+		lastErr = err
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no readable path candidates")
+	}
+	return "", "", lastErr
+}
+
+func composeConfigPathCandidates(configPath string, workingDir string) []string {
+	configPath = strings.TrimSpace(configPath)
+	workingDir = strings.TrimSpace(workingDir)
+	if configPath == "" {
+		return nil
+	}
+
+	candidates := make([]string, 0, 4)
+	add := func(path string) {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			return
+		}
+		for _, existing := range candidates {
+			if existing == path {
+				return
+			}
+		}
+		candidates = append(candidates, path)
+	}
+
+	if strings.HasPrefix(configPath, "/") {
+		add(configPath)
+		add("/host" + configPath)
+		return candidates
+	}
+
+	if workingDir != "" {
+		add(path.Join(workingDir, configPath))
+		if strings.HasPrefix(workingDir, "/") {
+			add(path.Join("/host", workingDir, configPath))
+		}
+	}
+	add(configPath)
+	return candidates
+}
+
+func readComposeConfigFile(configPath string) (string, error) {
+	file, err := os.Open(configPath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("path is a directory")
+	}
+	if info.Size() > maxComposeConfigBytes {
+		return "", fmt.Errorf("file is larger than %d bytes", maxComposeConfigBytes)
+	}
+
+	content, err := io.ReadAll(io.LimitReader(file, maxComposeConfigBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if len(content) > maxComposeConfigBytes {
+		return "", fmt.Errorf("file is larger than %d bytes", maxComposeConfigBytes)
+	}
+	return strings.TrimRight(string(content), "\r\n"), nil
+}
+
+func redactComposeConfigSecrets(content string) string {
+	if strings.TrimSpace(content) == "" {
+		return content
+	}
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		lines[i] = redactComposeConfigLine(line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func redactComposeConfigLine(line string) string {
+	trimmed := strings.TrimLeft(line, " \t")
+	prefixLen := len(line) - len(trimmed)
+	prefix := line[:prefixLen]
+	normalized := trimmed
+	if strings.HasPrefix(normalized, "- ") {
+		normalized = strings.TrimSpace(strings.TrimPrefix(normalized, "- "))
+	}
+	key, sep, ok := splitComposeConfigKeyValue(normalized)
+	if !ok || !isSensitiveComposeConfigKey(key) {
+		return line
+	}
+	if strings.HasPrefix(trimmed, "- ") {
+		return prefix + "- " + key + redactedComposeConfigValue(sep)
+	}
+	return prefix + key + redactedComposeConfigValue(sep)
+}
+
+func splitComposeConfigKeyValue(value string) (string, string, bool) {
+	for _, sep := range []string{":", "="} {
+		if idx := strings.Index(value, sep); idx > 0 {
+			key := strings.TrimSpace(value[:idx])
+			if key == "" || strings.ContainsAny(key, " \t{}[]") {
+				return "", "", false
+			}
+			return key, sep, true
+		}
+	}
+	return "", "", false
+}
+
+func redactedComposeConfigValue(sep string) string {
+	if sep == "=" {
+		return "=\"<redacted>\""
+	}
+	return ": \"<redacted>\""
+}
+
+func isSensitiveComposeConfigKey(key string) bool {
+	normalized := strings.ToUpper(strings.TrimSpace(key))
+	if normalized == "" {
+		return false
+	}
+	sensitiveTokens := []string{
+		"TOKEN",
+		"PASSWORD",
+		"PASSWD",
+		"SECRET",
+		"PRIVATE_KEY",
+		"ACCESS_KEY",
+		"API_KEY",
+		"AUTH",
+		"CREDENTIAL",
+	}
+	for _, token := range sensitiveTokens {
+		if strings.Contains(normalized, token) {
+			return true
+		}
+	}
+	return false
 }
 
 // Delete container stats from map using mutex
@@ -626,16 +854,7 @@ func newDockerManager(agent *Agent) *dockerManager {
 		MaxConnsPerHost:    0,
 	}
 
-	switch parsedURL.Scheme {
-	case "unix":
-		transport.DialContext = func(ctx context.Context, proto, addr string) (net.Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, "unix", parsedURL.Path)
-		}
-	case "tcp", "http", "https":
-		transport.DialContext = func(ctx context.Context, proto, addr string) (net.Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, "tcp", parsedURL.Host)
-		}
-	default:
+	if err := configureDockerTransport(transport, parsedURL); err != nil {
 		slog.Error("Invalid DOCKER_HOST", "scheme", parsedURL.Scheme)
 		os.Exit(1)
 	}
@@ -676,6 +895,9 @@ func newDockerManager(agent *Agent) *dockerManager {
 			Timeout:   timeout,
 			Transport: userAgentTransport,
 		},
+		controlClient: &http.Client{
+			Transport: userAgentTransport,
+		},
 		containerStatsMap: make(map[string]*container.Stats),
 		sem:               make(chan struct{}, 5),
 		apiContainerList:  []*container.ApiInfo{},
@@ -703,11 +925,13 @@ func newDockerManager(agent *Agent) *dockerManager {
 func (dm *dockerManager) checkDockerVersion() (bool, error) {
 	resp, err := dm.client.Get("http://localhost/version")
 	if err != nil {
+		dm.dockerVersionChecked = false
 		return false, err
 	}
 	if resp.StatusCode != http.StatusOK {
 		status := resp.Status
 		resp.Body.Close()
+		dm.dockerVersionChecked = false
 		return false, fmt.Errorf("docker version request failed: %s", status)
 	}
 
@@ -720,6 +944,17 @@ func (dm *dockerManager) checkDockerVersion() (bool, error) {
 	dm.applyDockerVersionInfo(serverHeader, &versionInfo)
 	dm.dockerVersionChecked = true
 	return true, nil
+}
+
+func (dm *dockerManager) available() bool {
+	if dm == nil {
+		return false
+	}
+	if dm.dockerVersionChecked {
+		return true
+	}
+	ok, err := dm.checkDockerVersion()
+	return err == nil && ok
 }
 
 // ensureDockerVersionChecked retries the version probe after a successful
@@ -737,13 +972,20 @@ func (dm *dockerManager) ensureDockerVersionChecked() {
 func (dm *dockerManager) applyDockerVersionInfo(serverHeader string, versionInfo *dockerVersionResponse) {
 	if detectPodmanEngine(serverHeader, versionInfo) {
 		dm.setIsPodman()
+	}
+	dm.runtimeVersion = container.RuntimeVersion{
+		Name:    runtimeNameFromVersion(serverHeader, versionInfo),
+		Version: strings.TrimSpace(versionInfo.Version),
+	}
+	dm.updateRuntimeDetails()
+	if dm.usingPodman {
 		return
 	}
 	// if version > 24, one-shot works correctly and we can limit concurrent operations
 	if dockerVersion, err := semver.Parse(versionInfo.Version); err == nil && dockerVersion.Major > 24 {
 		dm.goodDockerVersion = true
 	} else {
-		slog.Info(fmt.Sprintf("Docker %s is outdated. Upgrade if possible. See https://github.com/henrygd/beszel/issues/58", versionInfo.Version))
+		slog.Info(fmt.Sprintf("Docker %s is outdated. Upgrade if possible. See https://gutenacht.site/pulse/issues/58", versionInfo.Version))
 	}
 }
 
@@ -752,7 +994,6 @@ func (dm *dockerManager) decode(resp *http.Response, d any) error {
 	if dm.buf == nil {
 		// initialize buffer with 256kb starting size
 		dm.buf = bytes.NewBuffer(make([]byte, 0, 1024*256))
-		dm.decoder = json.NewDecoder(dm.buf)
 	}
 	defer resp.Body.Close()
 	defer dm.buf.Reset()
@@ -760,24 +1001,15 @@ func (dm *dockerManager) decode(resp *http.Response, d any) error {
 	if err != nil {
 		return err
 	}
-	return dm.decoder.Decode(d)
-}
-
-// Test docker / podman sockets and return if one exists
-func getDockerHost() string {
-	scheme := "unix://"
-	socks := []string{"/var/run/docker.sock", fmt.Sprintf("/run/user/%v/podman/podman.sock", os.Getuid())}
-	for _, sock := range socks {
-		if _, err := os.Stat(sock); err == nil {
-			return scheme + sock
-		}
-	}
-	return scheme + socks[0]
+	// json.Decoder has internal buffered state and no Reset method. Reusing it
+	// across Docker API responses can bleed decoded object fields such as
+	// Labels into the next container response, so create a fresh decoder per body.
+	return json.NewDecoder(dm.buf).Decode(d)
 }
 
 func validateContainerID(containerID string) error {
-	if !dockerContainerIDPattern.MatchString(containerID) {
-		return fmt.Errorf("invalid container id")
+	if !dockerContainerIDPattern.MatchString(containerID) && !dockerContainerNamePattern.MatchString(containerID) {
+		return fmt.Errorf("invalid container id or name")
 	}
 	return nil
 }
@@ -808,7 +1040,7 @@ func (dm *dockerManager) getContainerInfo(ctx context.Context, containerID strin
 		return nil, err
 	}
 
-	resp, err := dm.client.Do(req)
+	resp, err := dm.dockerControlClient().Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -829,6 +1061,117 @@ func (dm *dockerManager) getContainerInfo(ctx context.Context, containerID strin
 	}
 
 	return json.Marshal(containerInfo)
+}
+
+func (dm *dockerManager) controlContainer(ctx context.Context, action string, containerID string) error {
+	if action == "update_container_image" {
+		return dm.pullContainerImage(ctx, containerID)
+	}
+	var dockerAction string
+	switch action {
+	case "start_container":
+		dockerAction = "start"
+	case "stop_container":
+		dockerAction = "stop"
+	case "restart_container":
+		dockerAction = "restart"
+	default:
+		return fmt.Errorf("unsupported container operation: %s", action)
+	}
+	var query url.Values
+	if dockerAction == "restart" {
+		query = url.Values{"t": []string{strconv.Itoa(dockerRestartStopTimeoutSeconds)}}
+	}
+	endpoint, err := buildDockerContainerEndpoint(containerID, dockerAction, query)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := dm.dockerControlClient().Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusNoContent, http.StatusNotModified:
+		return nil
+	default:
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		message := strings.TrimSpace(string(body))
+		if message == "" {
+			message = resp.Status
+		}
+		return fmt.Errorf("container %s request failed: %s", dockerAction, message)
+	}
+}
+
+func (dm *dockerManager) dockerControlClient() *http.Client {
+	if dm.controlClient != nil {
+		return dm.controlClient
+	}
+	if dm.client != nil {
+		return &http.Client{
+			Transport: dm.client.Transport,
+		}
+	}
+	return http.DefaultClient
+}
+
+func (dm *dockerManager) pullContainerImage(ctx context.Context, containerID string) error {
+	info, err := dm.getContainerInfo(ctx, containerID)
+	if err != nil {
+		return err
+	}
+	var containerInfo struct {
+		Config struct {
+			Image string `json:"Image"`
+		} `json:"Config"`
+	}
+	if err := json.Unmarshal(info, &containerInfo); err != nil {
+		return err
+	}
+	image := strings.TrimSpace(containerInfo.Config.Image)
+	if image == "" {
+		return fmt.Errorf("container image is empty")
+	}
+	return dm.pullImageReference(ctx, image)
+}
+
+func (dm *dockerManager) pullImageReference(ctx context.Context, image string) error {
+	image = strings.TrimSpace(image)
+	if image == "" {
+		return fmt.Errorf("image reference is empty")
+	}
+	query := url.Values{"fromImage": []string{image}}
+	endpoint := (&url.URL{
+		Scheme:   "http",
+		Host:     "localhost",
+		Path:     "/images/create",
+		RawQuery: query.Encode(),
+	}).String()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := dm.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		message := strings.TrimSpace(string(body))
+		if message == "" {
+			message = resp.Status
+		}
+		return fmt.Errorf("image pull request failed: %s", message)
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 8*1024*1024))
+	return nil
 }
 
 // getLogs fetches the logs for a container
@@ -963,6 +1306,10 @@ func (dm *dockerManager) IsPodman() bool {
 	return dm.usingPodman
 }
 
+func (dm *dockerManager) RuntimeVersion() container.RuntimeVersion {
+	return dm.runtimeVersion
+}
+
 // setIsPodman sets the manager to Podman mode and updates system details accordingly.
 func (dm *dockerManager) setIsPodman() {
 	if dm.usingPodman {
@@ -974,10 +1321,19 @@ func (dm *dockerManager) setIsPodman() {
 	// keep system details updated - this may be detected late if server isn't ready when
 	// agent starts, so make sure we notify the hub if this happens later.
 	if dm.agent != nil {
-		dm.agent.updateSystemDetails(func(details *system.Details) {
-			details.Podman = true
-		})
+		dm.updateRuntimeDetails()
 	}
+}
+
+func (dm *dockerManager) updateRuntimeDetails() {
+	if dm.agent == nil {
+		return
+	}
+	dm.agent.updateSystemDetails(func(details *system.Details) {
+		details.Podman = dm.usingPodman
+		details.ContainerRuntimeName = dm.runtimeVersion.Name
+		details.ContainerRuntimeVersion = dm.runtimeVersion.Version
+	})
 }
 
 // detectPodmanFromHeader identifies Podman from the Docker API server header.
@@ -1004,4 +1360,11 @@ func detectPodmanEngine(serverHeader string, versionInfo *dockerVersionResponse)
 		return true
 	}
 	return detectPodmanFromVersion(versionInfo)
+}
+
+func runtimeNameFromVersion(serverHeader string, versionInfo *dockerVersionResponse) string {
+	if detectPodmanEngine(serverHeader, versionInfo) {
+		return "Podman"
+	}
+	return "Docker"
 }

@@ -5,7 +5,11 @@ package systems
 import (
 	"testing"
 
-	"github.com/henrygd/beszel/internal/entities/system"
+	"gutenacht.site/pulse/internal/entities/system"
+
+	"github.com/pocketbase/pocketbase/core"
+	pbtests "github.com/pocketbase/pocketbase/tests"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCombinedData_MigrateDeprecatedFields(t *testing.T) {
@@ -46,6 +50,23 @@ func TestCombinedData_MigrateDeprecatedFields(t *testing.T) {
 		}
 		if cd.Info.Bandwidth != 0 {
 			t.Errorf("expected Info.Bandwidth to be reset, got %f", cd.Info.Bandwidth)
+		}
+	})
+
+	t.Run("Copy Stats.Bandwidth into Info.BandwidthBytesByDirection", func(t *testing.T) {
+		cd := &system.CombinedData{
+			Stats: system.Stats{
+				Bandwidth: [2]uint64{4096, 8192},
+			},
+		}
+		migrateDeprecatedFields(cd, true)
+
+		if cd.Info.BandwidthBytesByDirection != cd.Stats.Bandwidth {
+			t.Errorf(
+				"expected BandwidthBytesByDirection %v, got %v",
+				cd.Stats.Bandwidth,
+				cd.Info.BandwidthBytesByDirection,
+			)
 		}
 	})
 
@@ -156,4 +177,96 @@ func TestCombinedData_MigrateDeprecatedFields(t *testing.T) {
 			t.Errorf("expected Info.Hostname to be reset, got '%s'", cd.Info.Hostname)
 		}
 	})
+}
+
+func TestUpdateLocalSystemMarkerFromInfoKeepsWindowsHostRemoteNonLocal(t *testing.T) {
+	record := newSystemTestRecord(t)
+	record.Set("is_local", true)
+
+	updateLocalSystemMarkerFromInfo(record, system.Info{
+		RemoteIP: "192.168.1.5",
+		Capabilities: &system.AgentCapabilities{
+			Platform:      "windows",
+			InstallMethod: "windows",
+			RunMode:       "host",
+			AgentProfile:  "windows-host",
+		},
+	})
+
+	require.False(t, record.GetBool("is_local"))
+}
+
+func TestUpdateLocalSystemMarkerFromInfoKeepsExistingDevLoopbackHubMarker(t *testing.T) {
+	t.Setenv("PULSE_DEV_LOCAL_AGENT_AS_HUB", "true")
+	record := newSystemTestRecord(t)
+	record.Set("is_local", true)
+	record.Set("primary_use", "primary")
+	record.Set("description", "自己主要用的机器")
+
+	updateLocalSystemMarkerFromInfo(record, system.Info{
+		RemoteIP: "127.0.0.1",
+		Capabilities: &system.AgentCapabilities{
+			Platform:      "windows",
+			InstallMethod: "windows",
+			RunMode:       "host",
+			AgentProfile:  "windows-host",
+		},
+	})
+
+	require.True(t, record.GetBool("is_local"))
+	require.Equal(t, "development", record.GetString("primary_use"))
+	require.Equal(t, "Hub 开发机器", record.GetString("description"))
+}
+
+func TestUpdateLocalSystemMarkerFromInfoDoesNotPromoteNewPairedDevLoopbackAgent(t *testing.T) {
+	t.Setenv("PULSE_DEV_LOCAL_AGENT_AS_HUB", "true")
+	record := newSystemTestRecord(t)
+	record.Set("is_local", false)
+	record.Set("primary_use", "primary")
+	record.Set("description", "普通配对机器")
+
+	updateLocalSystemMarkerFromInfo(record, system.Info{
+		RemoteIP: "127.0.0.1",
+		Capabilities: &system.AgentCapabilities{
+			Platform:      "windows",
+			InstallMethod: "windows",
+			RunMode:       "host",
+			AgentProfile:  "windows-host",
+		},
+	})
+
+	require.False(t, record.GetBool("is_local"))
+	require.Equal(t, "primary", record.GetString("primary_use"))
+	require.Equal(t, "普通配对机器", record.GetString("description"))
+}
+
+func TestUpdateLocalSystemMarkerFromInfoDoesNotMarkRemoteDevWindowsHostAsHub(t *testing.T) {
+	t.Setenv("PULSE_DEV_LOCAL_AGENT_AS_HUB", "true")
+	record := newSystemTestRecord(t)
+	record.Set("is_local", false)
+	record.Set("primary_use", "primary")
+
+	updateLocalSystemMarkerFromInfo(record, system.Info{
+		RemoteIP: "192.168.1.5",
+		Capabilities: &system.AgentCapabilities{
+			Platform:      "windows",
+			InstallMethod: "windows",
+			RunMode:       "host",
+			AgentProfile:  "windows-host",
+		},
+	})
+
+	require.False(t, record.GetBool("is_local"))
+	require.Equal(t, "primary", record.GetString("primary_use"))
+}
+
+func newSystemTestRecord(t *testing.T) *core.Record {
+	t.Helper()
+	app, err := pbtests.NewTestApp(t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(app.Cleanup)
+
+	collection, err := app.FindCachedCollectionByNameOrId("systems")
+	require.NoError(t, err)
+	return core.NewRecord(collection)
 }

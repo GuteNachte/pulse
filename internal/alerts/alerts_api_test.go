@@ -9,10 +9,11 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/henrygd/beszel/internal/alerts"
-	beszelTests "github.com/henrygd/beszel/internal/tests"
 	pbTests "github.com/pocketbase/pocketbase/tests"
+	"gutenacht.site/pulse/internal/alerts"
+	pulseTests "gutenacht.site/pulse/internal/tests"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
@@ -39,7 +40,7 @@ func TestIsInternalURL(t *testing.T) {
 		{name: "localhost hostname", url: "generic://localhost", internal: true},
 		{name: "localhost hostname", url: "generic+http://localhost/api/v1/postStuff", internal: true},
 		{name: "localhost hostname", url: "generic+http://127.0.0.1:8080/api/v1/postStuff", internal: true},
-		{name: "localhost hostname", url: "generic+https://beszel.dev/api/v1/postStuff", internal: false},
+		{name: "localhost hostname", url: "generic+https://pulse.test/api/v1/postStuff", internal: false},
 		{name: "public ipv4", url: "generic://8.8.8.8", internal: false},
 		{name: "token style service url", url: "discord://abc123@123456789", internal: false},
 		{name: "single label service url", url: "slack://token@team/channel", internal: false},
@@ -55,24 +56,24 @@ func TestIsInternalURL(t *testing.T) {
 }
 
 func TestUserAlertsApi(t *testing.T) {
-	hub, _ := beszelTests.NewTestHub(t.TempDir())
+	hub, _ := pulseTests.NewTestHub(t.TempDir())
 	defer hub.Cleanup()
 
 	hub.StartHub()
 
-	user1, _ := beszelTests.CreateUser(hub, "alertstest@example.com", "password")
+	user1, _ := pulseTests.CreateUser(hub, "alertstest@example.com", "password")
 	user1Token, _ := user1.NewAuthToken()
 
-	user2, _ := beszelTests.CreateUser(hub, "alertstest2@example.com", "password")
+	user2, _ := pulseTests.CreateUser(hub, "alertstest2@example.com", "password")
 	user2Token, _ := user2.NewAuthToken()
 
-	system1, _ := beszelTests.CreateRecord(hub, "systems", map[string]any{
+	system1, _ := pulseTests.CreateRecord(hub, "systems", map[string]any{
 		"name":  "system1",
 		"users": []string{user1.Id},
 		"host":  "127.0.0.1",
 	})
 
-	system2, _ := beszelTests.CreateRecord(hub, "systems", map[string]any{
+	system2, _ := pulseTests.CreateRecord(hub, "systems", map[string]any{
 		"name":  "system2",
 		"users": []string{user1.Id, user2.Id},
 		"host":  "127.0.0.2",
@@ -88,19 +89,19 @@ func TestUserAlertsApi(t *testing.T) {
 		return hub.TestApp
 	}
 
-	scenarios := []beszelTests.ApiScenario{
+	scenarios := []pulseTests.ApiScenario{
 		// {
 		// 	Name:            "GET not implemented - returns index",
 		// 	Method:          http.MethodGet,
-		// 	URL:             "/api/beszel/user-alerts",
+		// 	URL:             "/api/pulse/user-alerts",
 		// 	ExpectedStatus:  200,
-		// 	ExpectedContent: []string{"<html ", "globalThis.BESZEL"},
+		// 	ExpectedContent: []string{"<html ", "globalThis.PULSE"},
 		// 	TestAppFactory:  testAppFactory,
 		// },
 		{
 			Name:            "POST no auth",
 			Method:          http.MethodPost,
-			URL:             "/api/beszel/user-alerts",
+			URL:             "/api/pulse/user-alerts",
 			ExpectedStatus:  401,
 			ExpectedContent: []string{"requires valid"},
 			TestAppFactory:  testAppFactory,
@@ -108,7 +109,7 @@ func TestUserAlertsApi(t *testing.T) {
 		{
 			Name:   "POST no body",
 			Method: http.MethodPost,
-			URL:    "/api/beszel/user-alerts",
+			URL:    "/api/pulse/user-alerts",
 			Headers: map[string]string{
 				"Authorization": user1Token,
 			},
@@ -119,7 +120,7 @@ func TestUserAlertsApi(t *testing.T) {
 		{
 			Name:   "POST bad data",
 			Method: http.MethodPost,
-			URL:    "/api/beszel/user-alerts",
+			URL:    "/api/pulse/user-alerts",
 			Headers: map[string]string{
 				"Authorization": user1Token,
 			},
@@ -134,7 +135,7 @@ func TestUserAlertsApi(t *testing.T) {
 		{
 			Name:   "POST malformed JSON",
 			Method: http.MethodPost,
-			URL:    "/api/beszel/user-alerts",
+			URL:    "/api/pulse/user-alerts",
 			Headers: map[string]string{
 				"Authorization": user1Token,
 			},
@@ -146,7 +147,7 @@ func TestUserAlertsApi(t *testing.T) {
 		{
 			Name:   "POST valid alert data multiple systems",
 			Method: http.MethodPost,
-			URL:    "/api/beszel/user-alerts",
+			URL:    "/api/pulse/user-alerts",
 			Headers: map[string]string{
 				"Authorization": user1Token,
 			},
@@ -172,7 +173,7 @@ func TestUserAlertsApi(t *testing.T) {
 		{
 			Name:   "POST valid alert data single system",
 			Method: http.MethodPost,
-			URL:    "/api/beszel/user-alerts",
+			URL:    "/api/pulse/user-alerts",
 			Headers: map[string]string{
 				"Authorization": user1Token,
 			},
@@ -193,7 +194,7 @@ func TestUserAlertsApi(t *testing.T) {
 		{
 			Name:   "Overwrite: false, should not overwrite existing alert",
 			Method: http.MethodPost,
-			URL:    "/api/beszel/user-alerts",
+			URL:    "/api/pulse/user-alerts",
 			Headers: map[string]string{
 				"Authorization": user1Token,
 			},
@@ -208,8 +209,8 @@ func TestUserAlertsApi(t *testing.T) {
 				"overwrite": false,
 			}),
 			BeforeTestFunc: func(t testing.TB, app *pbTests.TestApp, e *core.ServeEvent) {
-				beszelTests.ClearCollection(t, app, "alerts")
-				beszelTests.CreateRecord(app, "alerts", map[string]any{
+				pulseTests.ClearCollection(t, app, "alerts")
+				pulseTests.CreateRecord(app, "alerts", map[string]any{
 					"name":   "CPU",
 					"system": system1.Id,
 					"user":   user1.Id,
@@ -227,7 +228,7 @@ func TestUserAlertsApi(t *testing.T) {
 		{
 			Name:   "Overwrite: true, should overwrite existing alert",
 			Method: http.MethodPost,
-			URL:    "/api/beszel/user-alerts",
+			URL:    "/api/pulse/user-alerts",
 			Headers: map[string]string{
 				"Authorization": user2Token,
 			},
@@ -242,8 +243,8 @@ func TestUserAlertsApi(t *testing.T) {
 				"overwrite": true,
 			}),
 			BeforeTestFunc: func(t testing.TB, app *pbTests.TestApp, e *core.ServeEvent) {
-				beszelTests.ClearCollection(t, app, "alerts")
-				beszelTests.CreateRecord(app, "alerts", map[string]any{
+				pulseTests.ClearCollection(t, app, "alerts")
+				pulseTests.CreateRecord(app, "alerts", map[string]any{
 					"name":   "CPU",
 					"system": system2.Id,
 					"user":   user2.Id,
@@ -261,7 +262,7 @@ func TestUserAlertsApi(t *testing.T) {
 		{
 			Name:            "DELETE no auth",
 			Method:          http.MethodDelete,
-			URL:             "/api/beszel/user-alerts",
+			URL:             "/api/pulse/user-alerts",
 			ExpectedStatus:  401,
 			ExpectedContent: []string{"requires valid"},
 			TestAppFactory:  testAppFactory,
@@ -270,8 +271,8 @@ func TestUserAlertsApi(t *testing.T) {
 				"systems": []string{system1.Id},
 			}),
 			BeforeTestFunc: func(t testing.TB, app *pbTests.TestApp, e *core.ServeEvent) {
-				beszelTests.ClearCollection(t, app, "alerts")
-				beszelTests.CreateRecord(app, "alerts", map[string]any{
+				pulseTests.ClearCollection(t, app, "alerts")
+				pulseTests.CreateRecord(app, "alerts", map[string]any{
 					"name":   "CPU",
 					"system": system1.Id,
 					"user":   user1.Id,
@@ -287,7 +288,7 @@ func TestUserAlertsApi(t *testing.T) {
 		{
 			Name:   "DELETE alert",
 			Method: http.MethodDelete,
-			URL:    "/api/beszel/user-alerts",
+			URL:    "/api/pulse/user-alerts",
 			Headers: map[string]string{
 				"Authorization": user1Token,
 			},
@@ -299,8 +300,8 @@ func TestUserAlertsApi(t *testing.T) {
 				"systems": []string{system1.Id},
 			}),
 			BeforeTestFunc: func(t testing.TB, app *pbTests.TestApp, e *core.ServeEvent) {
-				beszelTests.ClearCollection(t, app, "alerts")
-				beszelTests.CreateRecord(app, "alerts", map[string]any{
+				pulseTests.ClearCollection(t, app, "alerts")
+				pulseTests.CreateRecord(app, "alerts", map[string]any{
 					"name":   "CPU",
 					"system": system1.Id,
 					"user":   user1.Id,
@@ -316,7 +317,7 @@ func TestUserAlertsApi(t *testing.T) {
 		{
 			Name:   "DELETE alert multiple systems",
 			Method: http.MethodDelete,
-			URL:    "/api/beszel/user-alerts",
+			URL:    "/api/pulse/user-alerts",
 			Headers: map[string]string{
 				"Authorization": user1Token,
 			},
@@ -328,9 +329,9 @@ func TestUserAlertsApi(t *testing.T) {
 				"systems": []string{system1.Id, system2.Id},
 			}),
 			BeforeTestFunc: func(t testing.TB, app *pbTests.TestApp, e *core.ServeEvent) {
-				beszelTests.ClearCollection(t, app, "alerts")
+				pulseTests.ClearCollection(t, app, "alerts")
 				for _, systemId := range []string{system1.Id, system2.Id} {
-					_, err := beszelTests.CreateRecord(app, "alerts", map[string]any{
+					_, err := pulseTests.CreateRecord(app, "alerts", map[string]any{
 						"name":   "Memory",
 						"system": systemId,
 						"user":   user1.Id,
@@ -350,7 +351,7 @@ func TestUserAlertsApi(t *testing.T) {
 		{
 			Name:   "User 2 should not be able to delete alert of user 1",
 			Method: http.MethodDelete,
-			URL:    "/api/beszel/user-alerts",
+			URL:    "/api/pulse/user-alerts",
 			Headers: map[string]string{
 				"Authorization": user2Token,
 			},
@@ -362,9 +363,9 @@ func TestUserAlertsApi(t *testing.T) {
 				"systems": []string{system2.Id},
 			}),
 			BeforeTestFunc: func(t testing.TB, app *pbTests.TestApp, e *core.ServeEvent) {
-				beszelTests.ClearCollection(t, app, "alerts")
+				pulseTests.ClearCollection(t, app, "alerts")
 				for _, user := range []string{user1.Id, user2.Id} {
-					beszelTests.CreateRecord(app, "alerts", map[string]any{
+					pulseTests.CreateRecord(app, "alerts", map[string]any{
 						"name":   "CPU",
 						"system": system2.Id,
 						"user":   user,
@@ -392,30 +393,337 @@ func TestUserAlertsApi(t *testing.T) {
 		scenario.Test(t)
 	}
 }
-func TestSendTestNotification(t *testing.T) {
-	hub, user := beszelTests.GetHubWithUser(t)
+
+func TestGlobalAlertPoliciesApi(t *testing.T) {
+	hub, _ := pulseTests.NewTestHub(t.TempDir())
 	defer hub.Cleanup()
 
-	userToken, err := user.NewAuthToken()
+	hub.StartHub()
 
-	adminUser, err := beszelTests.CreateUserWithRole(hub, "admin@example.com", "password123", "admin")
-	assert.NoError(t, err, "Failed to create admin user")
-	adminUserToken, err := adminUser.NewAuthToken()
+	user1, _ := pulseTests.CreateUser(hub, "global-alerts@example.com", "password")
+	user1Token, _ := user1.NewAuthToken()
 
-	superuser, err := beszelTests.CreateSuperuser(hub, "superuser@example.com", "password123")
-	assert.NoError(t, err, "Failed to create superuser")
-	superuserToken, err := superuser.NewAuthToken()
-	assert.NoError(t, err, "Failed to create superuser auth token")
+	user2, _ := pulseTests.CreateUser(hub, "global-alerts-2@example.com", "password")
+
+	readonlyUser, _ := pulseTests.CreateUserWithRole(hub, "global-alerts-readonly@example.com", "password", "readonly")
+	readonlyToken, _ := readonlyUser.NewAuthToken()
+
+	system1, _ := pulseTests.CreateRecord(hub, "systems", map[string]any{
+		"name":  "policy-system-1",
+		"users": []string{user1.Id},
+	})
+	_, _ = pulseTests.CreateRecord(hub, "systems", map[string]any{
+		"name":  "policy-system-2",
+		"users": []string{user1.Id},
+	})
+	systemOther, _ := pulseTests.CreateRecord(hub, "systems", map[string]any{
+		"name":  "policy-system-other",
+		"users": []string{user2.Id},
+	})
 
 	testAppFactory := func(t testing.TB) *pbTests.TestApp {
 		return hub.TestApp
 	}
 
-	scenarios := []beszelTests.ApiScenario{
+	scenarios := []pulseTests.ApiScenario{
+		{
+			Name:            "GET policies no auth",
+			Method:          http.MethodGet,
+			URL:             "/api/pulse/alert-policies",
+			ExpectedStatus:  401,
+			ExpectedContent: []string{"requires valid"},
+			TestAppFactory:  testAppFactory,
+		},
+		{
+			Name:   "POST policy readonly blocked",
+			Method: http.MethodPost,
+			URL:    "/api/pulse/alert-policies",
+			Headers: map[string]string{
+				"Authorization": readonlyToken,
+			},
+			Body: jsonReader(map[string]any{
+				"name":  "CPU",
+				"value": 80,
+				"min":   10,
+			}),
+			ExpectedStatus:  403,
+			ExpectedContent: []string{"not allowed"},
+			TestAppFactory:  testAppFactory,
+		},
+		{
+			Name:   "POST policy creates policy and applies to user systems",
+			Method: http.MethodPost,
+			URL:    "/api/pulse/alert-policies",
+			Headers: map[string]string{
+				"Authorization": user1Token,
+			},
+			Body: jsonReader(map[string]any{
+				"name":  "CPU",
+				"value": 72,
+				"min":   8,
+			}),
+			ExpectedStatus:  200,
+			ExpectedContent: []string{"\"success\":true", "\"applied\":2"},
+			TestAppFactory:  testAppFactory,
+			AfterTestFunc: func(t testing.TB, app *pbTests.TestApp, res *http.Response) {
+				policies, _ := app.CountRecords("alert_policies", dbx.HashExp{"user": user1.Id, "name": "CPU"})
+				assert.EqualValues(t, 1, policies)
+				alerts, _ := app.CountRecords("alerts", dbx.HashExp{"user": user1.Id, "name": "CPU"})
+				assert.EqualValues(t, 2, alerts)
+				otherAlerts, _ := app.CountRecords("alerts", dbx.HashExp{"system": systemOther.Id, "name": "CPU"})
+				assert.Zero(t, otherAlerts)
+			},
+		},
+		{
+			Name:   "GET policies returns user policies only",
+			Method: http.MethodGet,
+			URL:    "/api/pulse/alert-policies",
+			Headers: map[string]string{
+				"Authorization": user1Token,
+			},
+			ExpectedStatus:     200,
+			ExpectedContent:    []string{"\"name\":\"CPU\"", "\"value\":72", "\"min\":8"},
+			NotExpectedContent: []string{user2.Id},
+			TestAppFactory:     testAppFactory,
+		},
+		{
+			Name:   "POST policy overwrites existing per-system alerts",
+			Method: http.MethodPost,
+			URL:    "/api/pulse/alert-policies",
+			Headers: map[string]string{
+				"Authorization": user1Token,
+			},
+			Body: jsonReader(map[string]any{
+				"name":  "CPU",
+				"value": 88,
+				"min":   12,
+			}),
+			ExpectedStatus:  200,
+			ExpectedContent: []string{"\"success\":true", "\"applied\":2"},
+			TestAppFactory:  testAppFactory,
+			AfterTestFunc: func(t testing.TB, app *pbTests.TestApp, res *http.Response) {
+				alert, err := app.FindFirstRecordByFilter("alerts", "system = {:system} && name = 'CPU'", dbx.Params{"system": system1.Id})
+				assert.NoError(t, err)
+				assert.EqualValues(t, 88, alert.Get("value"))
+				assert.EqualValues(t, 12, alert.Get("min"))
+			},
+		},
+		{
+			Name:   "DELETE policy removes policy and matching per-system alerts",
+			Method: http.MethodDelete,
+			URL:    "/api/pulse/alert-policies",
+			Headers: map[string]string{
+				"Authorization": user1Token,
+			},
+			Body: jsonReader(map[string]any{
+				"name": "CPU",
+			}),
+			ExpectedStatus:  200,
+			ExpectedContent: []string{"\"success\":true", "\"count\":2"},
+			TestAppFactory:  testAppFactory,
+			AfterTestFunc: func(t testing.TB, app *pbTests.TestApp, res *http.Response) {
+				policies, _ := app.CountRecords("alert_policies", dbx.HashExp{"user": user1.Id, "name": "CPU"})
+				assert.Zero(t, policies)
+				alerts, _ := app.CountRecords("alerts", dbx.HashExp{"user": user1.Id, "name": "CPU"})
+				assert.Zero(t, alerts)
+			},
+		},
+	}
+
+	for _, scenario := range scenarios {
+		scenario.Test(t)
+	}
+
+	_, err := pulseTests.CreateRecord(hub, "alert_policies", map[string]any{
+		"user":  user1.Id,
+		"name":  "Memory",
+		"value": 91,
+		"min":   7,
+	})
+	assert.NoError(t, err)
+	system3, err := pulseTests.CreateRecord(hub, "systems", map[string]any{
+		"name":  "policy-system-3",
+		"users": []string{user1.Id},
+	})
+	assert.NoError(t, err)
+	inherited, err := hub.FindFirstRecordByFilter("alerts", "system = {:system} && user = {:user} && name = 'Memory'", dbx.Params{"system": system3.Id, "user": user1.Id})
+	if assert.NoError(t, err) {
+		assert.EqualValues(t, 91, inherited.Get("value"))
+		assert.EqualValues(t, 7, inherited.Get("min"))
+	}
+
+	_, err = pulseTests.CreateRecord(hub, "alert_policies", map[string]any{
+		"user":  user2.Id,
+		"name":  "GPU",
+		"value": 66,
+		"min":   4,
+	})
+	assert.NoError(t, err)
+	_, err = pulseTests.CreateRecord(hub, "systems", map[string]any{
+		"name":  "policy-system-4",
+		"users": []string{user1.Id},
+	})
+	assert.NoError(t, err)
+	user1GpuAlerts, _ := hub.CountRecords("alerts", dbx.HashExp{"user": user1.Id, "name": "GPU"})
+	assert.Zero(t, user1GpuAlerts)
+}
+
+func TestAlertHistoryActionsApi(t *testing.T) {
+	hub, _ := pulseTests.NewTestHub(t.TempDir())
+	defer hub.Cleanup()
+
+	hub.StartHub()
+
+	user1, _ := pulseTests.CreateUser(hub, "alert-history-user1@example.com", "password")
+	user1Token, _ := user1.NewAuthToken()
+	user2, _ := pulseTests.CreateUser(hub, "alert-history-user2@example.com", "password")
+	user2Token, _ := user2.NewAuthToken()
+	readonlyUser, _ := pulseTests.CreateUserWithRole(hub, "alert-history-readonly@example.com", "password", "readonly")
+	readonlyToken, _ := readonlyUser.NewAuthToken()
+
+	system1, _ := pulseTests.CreateRecord(hub, "systems", map[string]any{
+		"name":  "alert-history-system",
+		"users": []string{user1.Id},
+	})
+	alertHistory, _ := pulseTests.CreateRecord(hub, "alerts_history", map[string]any{
+		"alert_id": "container:api",
+		"user":     user1.Id,
+		"system":   system1.Id,
+		"name":     "容器：api",
+		"value":    1,
+	})
+
+	testAppFactory := func(t testing.TB) *pbTests.TestApp {
+		return hub.TestApp
+	}
+
+	scenarios := []pulseTests.ApiScenario{
+		{
+			Name:            "acknowledge no auth",
+			Method:          http.MethodPost,
+			URL:             "/api/pulse/alerts-history/" + alertHistory.Id + "/acknowledge",
+			ExpectedStatus:  401,
+			ExpectedContent: []string{"requires valid"},
+			TestAppFactory:  testAppFactory,
+		},
+		{
+			Name:   "acknowledge readonly blocked",
+			Method: http.MethodPost,
+			URL:    "/api/pulse/alerts-history/" + alertHistory.Id + "/acknowledge",
+			Headers: map[string]string{
+				"Authorization": readonlyToken,
+			},
+			ExpectedStatus:  403,
+			ExpectedContent: []string{"not allowed"},
+			TestAppFactory:  testAppFactory,
+		},
+		{
+			Name:   "acknowledge other user not found",
+			Method: http.MethodPost,
+			URL:    "/api/pulse/alerts-history/" + alertHistory.Id + "/acknowledge",
+			Headers: map[string]string{
+				"Authorization": user2Token,
+			},
+			ExpectedStatus:  404,
+			ExpectedContent: []string{"not found"},
+			TestAppFactory:  testAppFactory,
+		},
+		{
+			Name:   "acknowledge own alert history",
+			Method: http.MethodPost,
+			URL:    "/api/pulse/alerts-history/" + alertHistory.Id + "/acknowledge",
+			Headers: map[string]string{
+				"Authorization": user1Token,
+			},
+			ExpectedStatus:  200,
+			ExpectedContent: []string{"\"success\":true", "\"acknowledged_by\":\"" + user1.Id + "\""},
+			TestAppFactory:  testAppFactory,
+			AfterTestFunc: func(t testing.TB, app *pbTests.TestApp, res *http.Response) {
+				record, err := app.FindRecordById("alerts_history", alertHistory.Id)
+				assert.NoError(t, err)
+				assert.False(t, record.GetDateTime("acknowledged_at").IsZero())
+				assert.Equal(t, user1.Id, record.GetString("acknowledged_by"))
+			},
+		},
+		{
+			Name:   "silence own alert history",
+			Method: http.MethodPost,
+			URL:    "/api/pulse/alerts-history/" + alertHistory.Id + "/silence",
+			Headers: map[string]string{
+				"Authorization": user1Token,
+			},
+			Body: jsonReader(map[string]any{
+				"duration_minutes": 240,
+				"reason":           "正在维护",
+			}),
+			ExpectedStatus:  200,
+			ExpectedContent: []string{"\"success\":true", "\"silenced_by\":\"" + user1.Id + "\"", "\"silence_reason\":\"正在维护\""},
+			TestAppFactory:  testAppFactory,
+			AfterTestFunc: func(t testing.TB, app *pbTests.TestApp, res *http.Response) {
+				record, err := app.FindRecordById("alerts_history", alertHistory.Id)
+				assert.NoError(t, err)
+				assert.True(t, record.GetDateTime("silenced_until").Time().After(time.Now().UTC()))
+				assert.Equal(t, user1.Id, record.GetString("silenced_by"))
+			},
+		},
+		{
+			Name:   "unsilence own alert history",
+			Method: http.MethodPost,
+			URL:    "/api/pulse/alerts-history/" + alertHistory.Id + "/unsilence",
+			Headers: map[string]string{
+				"Authorization": user1Token,
+			},
+			ExpectedStatus:  200,
+			ExpectedContent: []string{"\"success\":true", "\"silence_reason\":\"\""},
+			TestAppFactory:  testAppFactory,
+			AfterTestFunc: func(t testing.TB, app *pbTests.TestApp, res *http.Response) {
+				record, err := app.FindRecordById("alerts_history", alertHistory.Id)
+				assert.NoError(t, err)
+				assert.True(t, record.GetDateTime("silenced_until").IsZero())
+				assert.Empty(t, record.GetString("silenced_by"))
+			},
+		},
+	}
+
+	for _, scenario := range scenarios {
+		scenario.Test(t)
+	}
+}
+
+func TestSendTestNotification(t *testing.T) {
+	hub, user := pulseTests.GetHubWithUser(t)
+	defer hub.Cleanup()
+
+	userToken, err := user.NewAuthToken()
+
+	readonlyUser, err := pulseTests.CreateUserWithRole(hub, "readonly@example.com", "password123", "readonly")
+	assert.NoError(t, err, "Failed to create readonly user")
+	readonlyUserToken, err := readonlyUser.NewAuthToken()
+	assert.NoError(t, err, "Failed to create readonly user auth token")
+
+	adminUser, err := pulseTests.CreateUserWithRole(hub, "admin@example.com", "password123", "admin")
+	assert.NoError(t, err, "Failed to create admin user")
+	adminUserToken, err := adminUser.NewAuthToken()
+
+	superuser, err := pulseTests.CreateSuperuser(hub, "superuser@example.com", "password123")
+	assert.NoError(t, err, "Failed to create superuser")
+	superuserToken, err := superuser.NewAuthToken()
+	assert.NoError(t, err, "Failed to create superuser auth token")
+
+	restoreSender := alerts.SetShoutrrrSenderForTest(func(string, string) error {
+		return nil
+	})
+	defer restoreSender()
+
+	testAppFactory := func(t testing.TB) *pbTests.TestApp {
+		return hub.TestApp
+	}
+
+	scenarios := []pulseTests.ApiScenario{
 		{
 			Name:            "POST /test-notification - no auth should fail",
 			Method:          http.MethodPost,
-			URL:             "/api/beszel/test-notification",
+			URL:             "/api/pulse/test-notification",
 			ExpectedStatus:  401,
 			ExpectedContent: []string{"requires valid"},
 			TestAppFactory:  testAppFactory,
@@ -426,7 +734,7 @@ func TestSendTestNotification(t *testing.T) {
 		{
 			Name:           "POST /test-notification - with external auth should succeed",
 			Method:         http.MethodPost,
-			URL:            "/api/beszel/test-notification",
+			URL:            "/api/pulse/test-notification",
 			TestAppFactory: testAppFactory,
 			Headers: map[string]string{
 				"Authorization": userToken,
@@ -435,12 +743,49 @@ func TestSendTestNotification(t *testing.T) {
 				"url": "generic://8.8.8.8",
 			}),
 			ExpectedStatus:  200,
-			ExpectedContent: []string{"\"err\":"},
+			ExpectedContent: []string{"\"err\":false"},
+			AfterTestFunc: func(t testing.TB, app *pbTests.TestApp, res *http.Response) {
+				health, err := app.FindFirstRecordByFilter(
+					"notification_channel_health",
+					"user={:user} && target={:target}",
+					dbx.Params{"user": user.Id, "target": "generic://8.8.8.8"},
+				)
+				assert.NoError(t, err)
+				if assert.NotNil(t, health) {
+					assert.Equal(t, "healthy", health.GetString("status"))
+					assert.Equal(t, 1, health.GetInt("success_count"))
+					assert.False(t, health.GetDateTime("last_success_at").IsZero())
+					assert.False(t, health.GetDateTime("last_test_at").IsZero())
+				}
+				audit, err := app.FindFirstRecordByFilter(
+					"operation_audit",
+					"user={:user} && action='test_notification' && target='generic://8.8.8.8'",
+					dbx.Params{"user": user.Id},
+				)
+				assert.NoError(t, err)
+				if assert.NotNil(t, audit) {
+					assert.Equal(t, "success", audit.GetString("result"))
+				}
+			},
+		},
+		{
+			Name:           "POST /test-notification - readonly auth should fail",
+			Method:         http.MethodPost,
+			URL:            "/api/pulse/test-notification",
+			TestAppFactory: testAppFactory,
+			Headers: map[string]string{
+				"Authorization": readonlyUserToken,
+			},
+			Body: jsonReader(map[string]any{
+				"url": "generic://8.8.8.8",
+			}),
+			ExpectedStatus:  403,
+			ExpectedContent: []string{"The authorized record is not allowed to perform this action."},
 		},
 		{
 			Name:           "POST /test-notification - local url with user auth should fail",
 			Method:         http.MethodPost,
-			URL:            "/api/beszel/test-notification",
+			URL:            "/api/pulse/test-notification",
 			TestAppFactory: testAppFactory,
 			Headers: map[string]string{
 				"Authorization": userToken,
@@ -454,7 +799,7 @@ func TestSendTestNotification(t *testing.T) {
 		{
 			Name:           "POST /test-notification - internal url with user auth should fail",
 			Method:         http.MethodPost,
-			URL:            "/api/beszel/test-notification",
+			URL:            "/api/pulse/test-notification",
 			TestAppFactory: testAppFactory,
 			Headers: map[string]string{
 				"Authorization": userToken,
@@ -468,7 +813,7 @@ func TestSendTestNotification(t *testing.T) {
 		{
 			Name:           "POST /test-notification - internal url with admin auth should succeed",
 			Method:         http.MethodPost,
-			URL:            "/api/beszel/test-notification",
+			URL:            "/api/pulse/test-notification",
 			TestAppFactory: testAppFactory,
 			Headers: map[string]string{
 				"Authorization": adminUserToken,
@@ -477,12 +822,12 @@ func TestSendTestNotification(t *testing.T) {
 				"url": "generic://127.0.0.1",
 			}),
 			ExpectedStatus:  200,
-			ExpectedContent: []string{"\"err\":"},
+			ExpectedContent: []string{"\"err\":false"},
 		},
 		{
 			Name:           "POST /test-notification - internal url with superuser auth should succeed",
 			Method:         http.MethodPost,
-			URL:            "/api/beszel/test-notification",
+			URL:            "/api/pulse/test-notification",
 			TestAppFactory: testAppFactory,
 			Headers: map[string]string{
 				"Authorization": superuserToken,
@@ -491,7 +836,7 @@ func TestSendTestNotification(t *testing.T) {
 				"url": "generic://127.0.0.1",
 			}),
 			ExpectedStatus:  200,
-			ExpectedContent: []string{"\"err\":"},
+			ExpectedContent: []string{"\"err\":false"},
 		},
 	}
 

@@ -131,7 +131,7 @@ func TestReadUintFile(t *testing.T) {
 
 func TestGetEnv(t *testing.T) {
 	key := "TEST_VAR"
-	prefixedKey := "BESZEL_AGENT_" + key
+	prefixedKey := "PULSE_AGENT_" + key
 
 	t.Run("prefixed variable exists", func(t *testing.T) {
 		t.Setenv(prefixedKey, "prefixed_val")

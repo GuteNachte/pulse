@@ -1,5 +1,5 @@
 // Package transport provides a unified abstraction for hub-agent communication
-// over different transports (WebSocket, SSH).
+// over the active WebSocket connection.
 package transport
 
 import (
@@ -8,14 +8,13 @@ import (
 	"fmt"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/henrygd/beszel/internal/common"
-	"github.com/henrygd/beszel/internal/entities/smart"
-	"github.com/henrygd/beszel/internal/entities/system"
-	"github.com/henrygd/beszel/internal/entities/systemd"
+	"gutenacht.site/pulse/internal/common"
+	"gutenacht.site/pulse/internal/entities/smart"
+	"gutenacht.site/pulse/internal/entities/system"
 )
 
 // Transport defines the interface for hub-agent communication.
-// Both WebSocket and SSH transports implement this interface.
+// The current agent model uses WebSocket only.
 type Transport interface {
 	// Request sends a request to the agent and unmarshals the response into dest.
 	// The dest parameter should be a pointer to the expected response type.
@@ -97,16 +96,10 @@ func unmarshalLegacyResponse(resp common.AgentResponse, action common.WebSocketA
 		}
 		*d = resp.SmartData
 		return nil
-	case common.GetSystemdInfo:
-		d, ok := dest.(*systemd.ServiceDetails)
-		if !ok {
-			return fmt.Errorf("unexpected dest type for GetSystemdInfo: %T", dest)
-		}
-		if resp.ServiceInfo == nil {
-			return errors.New("no systemd info in response")
-		}
-		*d = resp.ServiceInfo
-		return nil
+	case common.RunOperation:
+		return errors.New("RunOperation requires an agent that supports generic responses")
+	case common.SearchServices:
+		return errors.New("SearchServices requires an agent that supports generic responses")
 	}
 	return fmt.Errorf("unsupported action: %d", action)
 }

@@ -1,6 +1,6 @@
 import { t } from "@lingui/core/macro"
 import AreaChartDefault from "@/components/charts/area-chart"
-import { decimalString, formatBytes, toFixedFloat } from "@/lib/utils"
+import { decimalString, formatBytes, percentTickString, percentValueString, toFixedFloat } from "@/lib/utils"
 import type { SystemStatsRecord } from "@/types"
 import { ChartCard, SelectAvgMax } from "../chart-card"
 import { Unit } from "@/lib/enums"
@@ -95,10 +95,10 @@ export const diskDataFns = {
 
 export function RootDiskCharts({ systemData }: { systemData: SystemData }) {
 	return (
-		<>
+		<div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
 			<DiskUsageChart systemData={systemData} />
 			<DiskIOChart systemData={systemData} />
-		</>
+		</div>
 	)
 }
 
@@ -236,8 +236,8 @@ export function DiskUtilizationChart({ systemData, extraFsName }: { systemData: 
 			<AreaChartDefault
 				chartData={chartData}
 				domain={pinnedAxisDomain()}
-				tickFormatter={(val) => `${toFixedFloat(val, 2)}%`}
-				contentFormatter={({ value }) => `${decimalString(value)}%`}
+				tickFormatter={(val) => percentTickString(val)}
+				contentFormatter={({ value }) => percentValueString(value)}
 				maxToggled={showMax}
 				chartProps={{ syncId: "io" }}
 				dataPoints={[
@@ -250,34 +250,5 @@ export function DiskUtilizationChart({ systemData, extraFsName }: { systemData: 
 				]}
 			/>
 		</ChartCard>
-	)
-}
-
-export function ExtraFsCharts({ systemData }: { systemData: SystemData }) {
-	const { systemStats } = systemData.chartData
-
-	const extraFs = systemStats?.at(-1)?.stats.efs
-
-	if (!extraFs || Object.keys(extraFs).length === 0) {
-		return null
-	}
-
-	return (
-		<div className="grid xl:grid-cols-2 gap-4">
-			{Object.keys(extraFs).map((extraFsName) => {
-				let diskSize = systemStats.at(-1)?.stats.efs?.[extraFsName].d ?? NaN
-				// round to nearest GB
-				if (diskSize >= 100) {
-					diskSize = Math.round(diskSize)
-				}
-				return (
-					<div key={extraFsName} className="contents">
-						<DiskUsageChart systemData={systemData} extraFsName={extraFsName} />
-
-						<DiskIOChart systemData={systemData} extraFsName={extraFsName} />
-					</div>
-				)
-			})}
-		</div>
 	)
 }

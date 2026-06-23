@@ -3,16 +3,24 @@ import { useStore } from "@nanostores/react"
 import { MoreHorizontalIcon } from "lucide-react"
 import { memo, useRef, useState } from "react"
 import AreaChartDefault from "@/components/charts/area-chart"
-import ChartTimeSelect from "@/components/charts/chart-time-select"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetTrigger } from "@/components/ui/sheet"
 import { DialogTitle } from "@/components/ui/dialog"
 import { $userSettings } from "@/lib/stores"
-import { decimalString, formatBytes, toFixedFloat } from "@/lib/utils"
+import { decimalString, formatBytes, percentTickString, percentValueString, toFixedFloat } from "@/lib/utils"
 import { ChartCard, SelectAvgMax } from "@/components/routes/system/chart-card"
 import type { SystemData } from "@/components/routes/system/use-system-data"
 import { diskDataFns, DiskUtilizationChart } from "./charts/disk-charts"
 import { pinnedAxisDomain } from "@/components/ui/chart"
+import {
+	buildDiskAwaitDataPoints,
+	buildDiskIoTimeDataPoints,
+	buildDiskQueueDepthDataPoints,
+	buildDiskThroughputDataPoints,
+	getDiskIoMetricAvailability,
+	getDiskIoMetricFns,
+} from "./disk-io-sheet-utils"
+import { SystemDetailSheetContent } from "./detail-sheet-layout"
 
 export default memo(function DiskIOSheet({
 	systemData,
@@ -36,49 +44,8 @@ export default memo(function DiskIOSheet({
 		hasOpened.current = true
 	}
 
-	// throughput functions, with extra fs variants if needed
-	let readFn = showMax ? diskDataFns.readMax : diskDataFns.read
-	let writeFn = showMax ? diskDataFns.writeMax : diskDataFns.write
-	if (extraFsName) {
-		readFn = showMax ? diskDataFns.extraReadMax(extraFsName) : diskDataFns.extraRead(extraFsName)
-		writeFn = showMax ? diskDataFns.extraWriteMax(extraFsName) : diskDataFns.extraWrite(extraFsName)
-	}
-
-	// read and write time functions, with extra fs variants if needed
-	let readTimeFn = showMax ? diskDataFns.readTimeMax : diskDataFns.readTime
-	let writeTimeFn = showMax ? diskDataFns.writeTimeMax : diskDataFns.writeTime
-	if (extraFsName) {
-		readTimeFn = showMax ? diskDataFns.extraReadTimeMax(extraFsName) : diskDataFns.extraReadTime(extraFsName)
-		writeTimeFn = showMax ? diskDataFns.extraWriteTimeMax(extraFsName) : diskDataFns.extraWriteTime(extraFsName)
-	}
-
-	// I/O await functions, with extra fs variants if needed
-	let rAwaitFn = showMax ? diskDataFns.rAwaitMax : diskDataFns.rAwait
-	let wAwaitFn = showMax ? diskDataFns.wAwaitMax : diskDataFns.wAwait
-	if (extraFsName) {
-		rAwaitFn = showMax ? diskDataFns.extraRAwaitMax(extraFsName) : diskDataFns.extraRAwait(extraFsName)
-		wAwaitFn = showMax ? diskDataFns.extraWAwaitMax(extraFsName) : diskDataFns.extraWAwait(extraFsName)
-	}
-
-	// weighted I/O function, with extra fs variant if needed
-	let weightedIOFn = showMax ? diskDataFns.weightedIOMax : diskDataFns.weightedIO
-	if (extraFsName) {
-		weightedIOFn = showMax ? diskDataFns.extraWeightedIOMax(extraFsName) : diskDataFns.extraWeightedIO(extraFsName)
-	}
-
-	// check for availability of I/O metrics
-	let hasUtilization = false
-	let hasAwait = false
-	let hasWeightedIO = false
-	for (const record of chartData.systemStats ?? []) {
-		const dios = record.stats?.dios
-		if ((dios?.at(2) ?? 0) > 0) hasUtilization = true
-		if ((dios?.at(3) ?? 0) > 0) hasAwait = true
-		if ((dios?.at(5) ?? 0) > 0) hasWeightedIO = true
-		if (hasUtilization && hasAwait && hasWeightedIO) {
-			break
-		}
-	}
+	const metricFns = getDiskIoMetricFns({ dataFns: diskDataFns, extraFsName, showMax })
+	const { hasUtilization, hasAwait, hasWeightedIO } = getDiskIoMetricAvailability(chartData)
 
 	const maxValSelect = isLongerChart ? <SelectAvgMax max={maxValues} /> : null
 
@@ -100,9 +67,7 @@ export default memo(function DiskIOSheet({
 				</Button>
 			</SheetTrigger>
 			{hasOpened.current && (
-				<SheetContent aria-describedby={undefined} className="overflow-auto w-200 !max-w-full p-4 sm:p-6">
-					<ChartTimeSelect className="w-[calc(100%-2em)] bg-card" agentVersion={chartData.agentVersion} />
-
+				<SystemDetailSheetContent title={title} description={description}>
 					<ChartCard
 						className="min-h-auto"
 						empty={dataEmpty}
@@ -120,24 +85,7 @@ export default memo(function DiskIOSheet({
 							domain={pinnedAxisDomain()}
 							itemSorter={(a, b) => a.order - b.order}
 							reverseStackOrder={true}
-							dataPoints={[
-								{
-									label: t`Write`,
-									dataKey: writeFn,
-									color: 3,
-									opacity: 0.4,
-									stackId: 0,
-									order: 0,
-								},
-								{
-									label: t`Read`,
-									dataKey: readFn,
-									color: 1,
-									opacity: 0.4,
-									stackId: 0,
-									order: 1,
-								},
-							]}
+							dataPoints={buildDiskThroughputDataPoints(metricFns)}
 							tickFormatter={(val) => {
 								const { value, unit } = formatBytes(val, true, userSettings.unitDisk, false)
 								return `${toFixedFloat(value, value >= 10 ? 0 : 1)} ${unit}`
@@ -165,31 +113,14 @@ export default memo(function DiskIOSheet({
 						<AreaChartDefault
 							chartData={chartData}
 							domain={pinnedAxisDomain()}
-							tickFormatter={(val) => `${toFixedFloat(val, 2)}%`}
-							contentFormatter={({ value }) => `${decimalString(value)}%`}
+							tickFormatter={(val) => percentTickString(val)}
+							contentFormatter={({ value }) => percentValueString(value)}
 							maxToggled={showMax}
 							chartProps={chartProps}
 							showTotal={true}
 							itemSorter={(a, b) => a.order - b.order}
 							reverseStackOrder={true}
-							dataPoints={[
-								{
-									label: t`Write`,
-									dataKey: writeTimeFn,
-									color: 3,
-									opacity: 0.4,
-									stackId: 0,
-									order: 0,
-								},
-								{
-									label: t`Read`,
-									dataKey: readTimeFn,
-									color: 1,
-									opacity: 0.4,
-									stackId: 0,
-									order: 1,
-								},
-							]}
+							dataPoints={buildDiskIoTimeDataPoints(metricFns)}
 						/>
 					</ChartCard>
 
@@ -209,14 +140,7 @@ export default memo(function DiskIOSheet({
 								contentFormatter={({ value }) => decimalString(value, value < 10 ? 3 : 2)}
 								maxToggled={showMax}
 								chartProps={chartProps}
-								dataPoints={[
-									{
-										label: queueDepthTranslation,
-										dataKey: weightedIOFn,
-										color: 1,
-										opacity: 0.4,
-									},
-								]}
+								dataPoints={buildDiskQueueDepthDataPoints(queueDepthTranslation, metricFns.weightedIOFn)}
 							/>
 						</ChartCard>
 					)}
@@ -241,24 +165,11 @@ export default memo(function DiskIOSheet({
 								contentFormatter={({ value }) => `${decimalString(value)} ms`}
 								maxToggled={showMax}
 								chartProps={chartProps}
-								dataPoints={[
-									{
-										label: t`Write`,
-										dataKey: wAwaitFn,
-										color: 3,
-										opacity: 0.3,
-									},
-									{
-										label: t`Read`,
-										dataKey: rAwaitFn,
-										color: 1,
-										opacity: 0.3,
-									},
-								]}
+								dataPoints={buildDiskAwaitDataPoints(metricFns)}
 							/>
 						</ChartCard>
 					)}
-				</SheetContent>
+				</SystemDetailSheetContent>
 			)}
 		</Sheet>
 	)

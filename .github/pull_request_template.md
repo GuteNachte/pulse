@@ -1,33 +1,15 @@
-## 📃 Description
+## 说明
 
-A short description of the pull request changes should go here and the sections below should list in detail all changes. You can remove the sections you don't need.
+请简要说明这次修改的目标、范围和主要变化。
 
-## 📖 Documentation
+## 变更内容
 
-Add a link to the PR for [documentation](https://github.com/henrygd/beszel-docs) changes.
+-
 
-## 🪵 Changelog
+## 验证
 
-### ➕ Added
+-
 
-- one
-- two
+## 发布说明
 
-### ✏️ Changed
-
-- one
-- two
-
-### 🔧 Fixed
-
-- one
-- two
-
-### 🗑️ Removed
-
-- one
-- two
-
-## 📷 Screenshots
-
-If this PR has any UI/UX changes it's strongly suggested you add screenshots here.
+- 已更新 `docs/release-notes-next.md`

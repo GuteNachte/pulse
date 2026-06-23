@@ -62,35 +62,9 @@ export enum ContainerHealth {
 	Unhealthy,
 }
 
-export const ContainerHealthLabels = ["None", "Starting", "Healthy", "Unhealthy"] as const
+export const ContainerHealthLabels = ["未配置", "检测中", "正常", "异常"] as const
 
 /** Connection type */
 export enum ConnectionType {
-	SSH = 1,
-	WebSocket,
+	WebSocket = 2,
 }
-
-export const connectionTypeLabels = ["", "SSH", "WebSocket"] as const
-
-/** Systemd service state */
-export enum ServiceStatus {
-	Active,
-	Inactive,
-	Failed,
-	Activating,
-	Deactivating,
-	Reloading,
-}
-
-export const ServiceStatusLabels = ["Active", "Inactive", "Failed", "Activating", "Deactivating", "Reloading"] as const
-
-/** Systemd service sub state */
-export enum ServiceSubState {
-	Dead,
-	Running,
-	Exited,
-	Failed,
-	Unknown,
-}
-
-export const ServiceSubStateLabels = ["Dead", "Running", "Exited", "Failed", "Unknown"] as const

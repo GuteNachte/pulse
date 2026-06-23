@@ -9,12 +9,12 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/henrygd/beszel"
-	"github.com/henrygd/beszel/agent/battery"
-	"github.com/henrygd/beszel/agent/utils"
-	"github.com/henrygd/beszel/agent/zfs"
-	"github.com/henrygd/beszel/internal/entities/container"
-	"github.com/henrygd/beszel/internal/entities/system"
+	"gutenacht.site/pulse"
+	"gutenacht.site/pulse/agent/battery"
+	"gutenacht.site/pulse/agent/utils"
+	"gutenacht.site/pulse/agent/zfs"
+	"gutenacht.site/pulse/internal/entities/container"
+	"gutenacht.site/pulse/internal/entities/system"
 
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/host"
@@ -24,15 +24,19 @@ import (
 
 // Sets initial / non-changing values about the host system
 func (a *Agent) refreshSystemDetails() {
-	a.systemInfo.AgentVersion = beszel.Version
+	a.systemInfo.AgentVersion = pulse.Version
 
 	// get host info from Docker if available
 	var hostInfo container.HostInfo
 
 	if a.dockerManager != nil {
 		a.systemDetails.Podman = a.dockerManager.IsPodman()
+		runtimeVersion := a.dockerManager.RuntimeVersion()
+		a.systemDetails.ContainerRuntimeName = runtimeVersion.Name
+		a.systemDetails.ContainerRuntimeVersion = runtimeVersion.Version
 		hostInfo, _ = a.dockerManager.GetHostInfo()
 	}
+	a.refreshNetworkInterfaceDetails()
 
 	a.systemDetails.Hostname, _ = os.Hostname()
 	if arch, err := host.KernelArch(); err == nil {
@@ -73,10 +77,13 @@ func (a *Agent) refreshSystemDetails() {
 			a.systemDetails.Kernel, _ = host.KernelVersion()
 		}
 	}
+	a.systemDetails.Virtualization = detectVirtualizationDetails()
 
 	// cpu model
 	if info, err := cpu.Info(); err == nil && len(info) > 0 {
 		a.systemDetails.CpuModel = info[0].ModelName
+		a.systemDetails.CpuVendor = normalizeCpuVendor(info[0].VendorID)
+		a.systemDetails.CpuFrequencyMhz = info[0].Mhz
 	}
 	// cores / threads
 	cores, _ := cpu.Counts(false)
@@ -92,18 +99,33 @@ func (a *Agent) refreshSystemDetails() {
 	a.systemDetails.Threads = threads
 
 	// total memory
-	a.systemDetails.MemoryTotal = hostInfo.MemTotal
-	if a.systemDetails.MemoryTotal == 0 {
-		if v, err := mem.VirtualMemory(); err == nil {
-			a.systemDetails.MemoryTotal = v.Total
-		}
+	if v, err := mem.VirtualMemory(); err == nil {
+		a.systemDetails.MemoryTotal = v.Total
+	} else {
+		a.systemDetails.MemoryTotal = hostInfo.MemTotal
 	}
+	a.refreshMemoryModuleDetails()
 
 	// zfs
 	if _, err := zfs.ARCSize(); err != nil {
 		slog.Debug("Not monitoring ZFS ARC", "err", err)
 	} else {
 		a.zfs = true
+	}
+}
+
+func normalizeCpuVendor(value string) string {
+	normalized := strings.TrimSpace(value)
+	if normalized == "" {
+		return ""
+	}
+	switch strings.ToLower(normalized) {
+	case "genuineintel":
+		return "Intel"
+	case "authenticamd", "amd":
+		return "AMD"
+	default:
+		return normalized
 	}
 }
 
@@ -220,9 +242,11 @@ func (a *Agent) getSystemStats(cacheTimeMs uint16) system.Stats {
 	if a.gpuManager != nil {
 		// reset high gpu percent
 		a.systemInfo.GpuPct = 0
+		a.systemInfo.GpuSupported = false
 		// get current GPU data
 		if gpuData := a.gpuManager.GetCurrentData(cacheTimeMs); len(gpuData) > 0 {
 			systemStats.GPUData = gpuData
+			a.systemInfo.GpuSupported = true
 
 			// add temperatures
 			if systemStats.Temperatures == nil {
@@ -258,6 +282,7 @@ func (a *Agent) getSystemStats(cacheTimeMs uint16) system.Stats {
 	a.systemInfo.Battery = systemStats.Battery
 	a.systemInfo.Uptime, _ = host.Uptime()
 	a.systemInfo.BandwidthBytes = systemStats.Bandwidth[0] + systemStats.Bandwidth[1]
+	a.systemInfo.BandwidthBytesByDirection = systemStats.Bandwidth
 	a.systemInfo.Threads = a.systemDetails.Threads
 
 	return systemStats
