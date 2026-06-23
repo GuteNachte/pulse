@@ -1,48 +1,87 @@
 # Pulse
 
-Pulse is a self-hosted monitoring platform for machines, containers, services, software, websites, alerts, and release-managed agents.
+Pulse 是一个面向家庭实验室和小型基础设施的自托管运维监控平台，用来统一管理机器、容器、服务、软件、网站监控、告警、操作审计和 Agent 版本发布。
 
-It is built for a private home lab / small infrastructure workflow: Hub and Agent versions are released together, Docker deployments use explicit version tags, and the local Hub machine can run its own protected Agent.
+这个项目的目标不是做一个只展示曲线的监控面板，而是把“机器接入、真实采集、异常定位、操作记录、版本发布和部署验证”放在同一个工作台里。Hub、Agent、Web 前端和 Android App 使用同一个显式版本号发布，避免线上组件版本错位。
 
-## Features
+## 核心能力
 
-- **Lightweight**: Uses a compact Hub + Agent architecture.
-- **Simple**: Uses one Compose deployment for the Hub and the local Agent.
-- **Docker stats**: Tracks CPU, memory, and network usage history for each container.
-- **Alerts**: Global alert settings and alert history for resources, containers, services, software, and websites.
-- **Website monitoring**: Website checks are attached to their owning machine.
-- **Agent management**: Windows and Linux Agent releases are managed from the Hub.
-- **Backups**: Save to and restore from local disk.
+- 机器资产管理：展示在线、离线、暂停、待接入、Hub 同机 Agent 等真实状态。
+- Agent 接入：支持 Windows 主机版、Linux / NAS / 飞牛容器版和 Unraid 安装模板。
+- 硬件采集：CPU、内存、磁盘、网络、GPU、温度、电池、S.M.A.R.T.、虚拟化信息等。
+- 容器监控：展示 Docker / Podman 容器状态、资源占用和可信 Compose 归组。
+- 服务和软件监控：面向 Windows 服务、软件进程和自定义监控目标。
+- 网站监控：支持内网 / 外网目标、IPv4 / IPv6、响应时间、检测历史和失败分类。
+- 告警与通知：统一处理资源、容器、服务、软件、网站异常和通知失败记录。
+- 操作审计：记录网站检测、容器操作、服务控制、备份、用户、Token 和 Agent 版本相关操作。
+- 备份与恢复：管理本地数据备份，并对敏感数据做明确提示。
+- 移动端支持：提供 Android App 和手机 / 平板优先的 Web 布局。
 
-## Architecture
+## 架构
 
-Pulse consists of two main components: the **Hub** and the **Agent**.
+Pulse 由两个主要组件组成：
 
-- **Hub**: A web application built on [PocketBase](https://pocketbase.io/) that provides dashboards, settings, alerts, and release management.
-- **Agent**: Runs on each monitored system and reports metrics, containers, service/software state, and host capabilities to the Hub.
+- Hub：基于 PocketBase 的 Web 管理端，负责页面、API、告警、审计、设置、备份、Agent 版本和发布管理。
+- Agent：运行在被监控机器上，负责采集系统指标、容器、服务、软件、硬件能力和网络详情，并主动连接 Hub。
 
-## Local Development
+常见部署方式是 Hub 和一台本机 Agent 同机运行，其他机器再通过安装向导接入。
+
+## 本地开发
+
+源码开发环境推荐使用项目脚本启动 Hub 和 Vite：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\run-hub-dev.ps1 -Restart
 ```
 
-Open `http://localhost:5173` for the Vite frontend and `http://localhost:8090` for the Hub API.
+启动后访问：
 
-## Supported metrics
+- Web 前端：`http://localhost:5173`
+- Hub API：`http://localhost:8090`
 
-- **CPU usage** - Host system and Docker / Podman containers.
-- **Memory usage** - Host system and containers. Includes swap and ZFS ARC.
-- **Disk usage** - Host system. Supports multiple partitions and devices.
-- **Disk I/O** - Host system. Supports multiple partitions and devices.
-- **Network usage** - Host system and containers.
-- **Load average** - Host system.
-- **Temperature** - Host system sensors.
-- **GPU usage / power draw** - Nvidia, AMD, and Intel.
-- **Battery** - Host system battery charge.
-- **Containers** - Status and metrics of all running Docker / Podman containers.
-- **S.M.A.R.T.** - Host system disk health (includes eMMC wear/EOL and Linux mdraid array health via sysfs when available).
+更多本地开发、Docker 测试和发布前验证流程见：
 
-## License
+- `docs/local-dev-runbook.md`
+- `docs/dev-startup-checklist.md`
 
-Pulse contains customized application code and also retains third-party open source license obligations. See [LICENSE](LICENSE) for the upstream MIT license notice.
+## 部署
+
+正式部署推荐使用 Linux / NAS / 飞牛上的 Docker Compose，Hub 和本机 Agent 默认使用显式镜像版本号，不使用 `latest`。
+
+部署和回滚手册见：
+
+- `docs/agent-1.0-install.md`
+- `docs/flynas-compose-checklist.md`
+- `docs/release-deployment-runbook.md`
+
+## 版本
+
+当前固定版本为 `1.0.5`。
+
+版本发布要求：
+
+- Hub、Agent、Web 前端、Android App 使用同一个显式版本号。
+- Docker 镜像、Compose 模板、安装脚本、发布脚本和 About 页记录保持一致。
+- 发布前必须通过版本一致性校验和本地验证命令。
+
+验证命令：
+
+```powershell
+npm.cmd --prefix internal/site run check -- --max-diagnostics=200
+npm.cmd --prefix internal/site run build
+go test -tags=testing -count=1 -timeout=240s ./...
+powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\check-version-consistency.ps1 -Version 1.0.5
+```
+
+## 文档
+
+- `docs/release-notes-1.0.5.md`：1.0.5 正式更新说明。
+- `docs/release-notes-next.md`：当前版本之后的开发记录入口。
+- `docs/production-readiness-checklist.md`：上线验收清单。
+- `docs/production-acceptance-evidence.md`：上线验收证据。
+- `docs/agent-capability-boundary.md`：Agent 能力边界说明。
+- `docs/pulse-roadmap.md`：后续规划。
+
+## 许可证
+
+Pulse 包含自定义应用代码，同时保留上游开源项目的许可证义务。详见 [LICENSE](LICENSE)。
