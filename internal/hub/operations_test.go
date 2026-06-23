@@ -28,7 +28,7 @@ func TestValidateOperationParams(t *testing.T) {
 			"channel":      "stable",
 			"platform":     "windows",
 			"arch":         "amd64",
-			"download_url": "https://example.test/beszel-agent.exe",
+			"download_url": "https://example.test/pulse-agent.exe",
 			"checksum":     "sha256:0123456789abcdef",
 		})
 		require.NoError(t, err)
@@ -41,7 +41,7 @@ func TestValidateOperationParams(t *testing.T) {
 			"channel":      "stable",
 			"platform":     "linux",
 			"arch":         "amd64",
-			"download_url": "registry.example.com/infra/beszel-agent:1.0.0",
+			"download_url": "registry.example.com/infra/pulse-agent:1.0.0",
 		})
 		require.NoError(t, err)
 	})
@@ -49,7 +49,7 @@ func TestValidateOperationParams(t *testing.T) {
 	t.Run("requires release id for agent update", func(t *testing.T) {
 		err := validateOperationParams("update_agent", map[string]string{
 			"version":      "0.19.0",
-			"download_url": "https://example.test/beszel-agent.exe",
+			"download_url": "https://example.test/pulse-agent.exe",
 		})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "release_id")
@@ -80,7 +80,7 @@ func TestValidateAgentUpdateRuntimeCompatibility(t *testing.T) {
 		record := newSystemRecordWithCapabilities(`{"cap":{"agent_version":"1.0.0"}}`)
 		err := validateAgentUpdateRuntimeCompatibility(record, map[string]string{
 			"platform":     "linux",
-			"download_url": "registry.example.com/infra/beszel-agent:1.0.1",
+			"download_url": "registry.example.com/infra/pulse-agent:1.0.1",
 		})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "1.0.1 or newer")
@@ -90,7 +90,7 @@ func TestValidateAgentUpdateRuntimeCompatibility(t *testing.T) {
 		record := newSystemRecordWithCapabilities(`{"cap":{"agent_version":"1.0.1"}}`)
 		err := validateAgentUpdateRuntimeCompatibility(record, map[string]string{
 			"platform":     "linux",
-			"download_url": "registry.example.com/infra/beszel-agent:1.0.2",
+			"download_url": "registry.example.com/infra/pulse-agent:1.0.2",
 		})
 		require.NoError(t, err)
 	})
@@ -99,7 +99,7 @@ func TestValidateAgentUpdateRuntimeCompatibility(t *testing.T) {
 		record := newSystemRecordWithCapabilities(`{"cap":{"agent_version":"1.0.0"}}`)
 		err := validateAgentUpdateRuntimeCompatibility(record, map[string]string{
 			"platform":     "windows",
-			"download_url": "http://example.test/beszel-agent.exe",
+			"download_url": "http://example.test/pulse-agent.exe",
 		})
 		require.NoError(t, err)
 	})
@@ -274,9 +274,7 @@ func TestContainerStatusForOperation(t *testing.T) {
 }
 
 func TestIsProtectedContainer(t *testing.T) {
-	assert.True(t, isProtectedContainer("beszel", "henrygd/beszel"))
-	assert.True(t, isProtectedContainer("beszel-agent", "custom/agent"))
-	assert.True(t, isProtectedContainer("monitor", "registry.local/ops/beszel-agent:1.0.6-test"))
+	assert.True(t, isProtectedContainer("pulse-hub", "registry.example.com/infra/pulse-hub:1.0.5"))
 	assert.True(t, isProtectedContainer("pulse-agent", "registry.example.com/infra/pulse-agent:1.0.3"))
 	assert.Empty(t, protectedContainerReason("harbor-core", "goharbor/harbor-core:v2.14.4", "harbor"))
 	assert.False(t, isProtectedContainer("postgres", "postgres:16-alpine"))
@@ -300,8 +298,8 @@ func TestFindStackOperationContainersExcludesProtectedForAllActions(t *testing.T
 	record.Id = "ctr1"
 	record.Set("system", "sys1")
 	record.Set("stack_project", "agent")
-	record.Set("name", "beszel-agent")
-	record.Set("image", "registry.example.com/infra/beszel-agent:1.0.1")
+	record.Set("name", "pulse-agent")
+	record.Set("image", "registry.example.com/infra/pulse-agent:1.0.1")
 	require.NoError(t, err)
 	require.NoError(t, app.SaveNoValidate(record))
 

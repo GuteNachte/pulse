@@ -18,21 +18,9 @@ func TestGetEnv(t *testing.T) {
 		assert.Equal(t, "plain-value", value)
 	})
 
-	t.Run("legacy prefixed fallback", func(t *testing.T) {
-		clearTestEnv(t)
-		t.Setenv("BESZEL_HUB_TEST_KEY", "legacy-value")
-		t.Setenv("TEST_KEY", "plain-value")
-
-		value, exists := GetEnv("TEST_KEY")
-
-		assert.True(t, exists)
-		assert.Equal(t, "legacy-value", value)
-	})
-
 	t.Run("pulse prefixed value wins", func(t *testing.T) {
 		clearTestEnv(t)
 		t.Setenv("PULSE_HUB_TEST_KEY", "pulse-value")
-		t.Setenv("BESZEL_HUB_TEST_KEY", "legacy-value")
 		t.Setenv("TEST_KEY", "plain-value")
 
 		value, exists := GetEnv("TEST_KEY")
@@ -46,7 +34,7 @@ func clearTestEnv(t *testing.T) {
 	t.Helper()
 
 	previous := map[string]string{}
-	for _, key := range []string{"PULSE_HUB_TEST_KEY", "BESZEL_HUB_TEST_KEY", "TEST_KEY"} {
+	for _, key := range []string{"PULSE_HUB_TEST_KEY", "TEST_KEY"} {
 		if value, ok := os.LookupEnv(key); ok {
 			previous[key] = value
 		}
@@ -54,7 +42,7 @@ func clearTestEnv(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		for _, key := range []string{"PULSE_HUB_TEST_KEY", "BESZEL_HUB_TEST_KEY", "TEST_KEY"} {
+		for _, key := range []string{"PULSE_HUB_TEST_KEY", "TEST_KEY"} {
 			if value, ok := previous[key]; ok {
 				_ = os.Setenv(key, value)
 			} else {

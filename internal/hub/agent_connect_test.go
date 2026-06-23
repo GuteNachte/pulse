@@ -103,21 +103,19 @@ func TestValidateAgentHeaders(t *testing.T) {
 			expectedAgent: "0.5.0",
 		},
 		{
-			name: "valid legacy beszel headers",
+			name: "unknown agent header is rejected",
 			headers: http.Header{
-				"X-Token":  []string{"valid-token-123"},
-				"X-Beszel": []string{"0.4.9"},
+				"X-Token": []string{"valid-token-123"},
+				"X-Other": []string{"0.4.9"},
 			},
-			expectError:   false,
-			expectedToken: "valid-token-123",
-			expectedAgent: "0.4.9",
+			expectError: true,
 		},
 		{
-			name: "pulse header takes precedence over legacy header",
+			name: "pulse header is required even with other headers",
 			headers: http.Header{
-				"X-Token":  []string{"valid-token-123"},
-				"X-Pulse":  []string{"0.5.1"},
-				"X-Beszel": []string{"0.4.9"},
+				"X-Token": []string{"valid-token-123"},
+				"X-Pulse": []string{"0.5.1"},
+				"X-Other": []string{"0.4.9"},
 			},
 			expectError:   false,
 			expectedToken: "valid-token-123",
@@ -799,9 +797,9 @@ func TestHandleAgentConnectLegacyApiPrefixCompatibility(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/beszel/agent-connect", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/pulse/agent-connect", nil)
 	req.Header.Set("X-Token", testToken)
-	req.Header.Set("X-Beszel", "0.5.0")
+	req.Header.Set("X-Pulse", "0.5.0")
 
 	recorder := httptest.NewRecorder()
 	acr := &agentConnectRequest{
@@ -1874,26 +1872,17 @@ func TestIsLoopbackLocalAgentRequest(t *testing.T) {
 func TestLocalAgentTokenEnvironmentPriority(t *testing.T) {
 	t.Run("default pulse token", func(t *testing.T) {
 		t.Setenv("PULSE_LOCAL_AGENT_TOKEN", "")
-		t.Setenv("BESZEL_LOCAL_AGENT_TOKEN", "")
 		assert.Equal(t, "pulse-local-agent", localAgentToken())
 	})
 
-	t.Run("pulse env takes precedence", func(t *testing.T) {
+	t.Run("pulse env is used", func(t *testing.T) {
 		t.Setenv("PULSE_LOCAL_AGENT_TOKEN", "pulse-token")
-		t.Setenv("BESZEL_LOCAL_AGENT_TOKEN", "legacy-token")
 		assert.Equal(t, "pulse-token", localAgentToken())
-	})
-
-	t.Run("legacy env remains compatible", func(t *testing.T) {
-		t.Setenv("PULSE_LOCAL_AGENT_TOKEN", "")
-		t.Setenv("BESZEL_LOCAL_AGENT_TOKEN", "legacy-token")
-		assert.Equal(t, "legacy-token", localAgentToken())
 	})
 }
 
 func TestRepairLocalSystemMarkersClearsRecordsWithoutCurrentLocalToken(t *testing.T) {
 	t.Setenv("PULSE_LOCAL_AGENT_TOKEN", "current-local-token")
-	t.Setenv("BESZEL_LOCAL_AGENT_TOKEN", "")
 
 	hub, testApp, err := createTestHub(t)
 	require.NoError(t, err)
@@ -1969,7 +1958,6 @@ func TestRepairLocalSystemMarkersClearsRecordsWithoutCurrentLocalToken(t *testin
 
 func TestRepairLocalSystemMarkersKeepsDevLoopbackHubRecord(t *testing.T) {
 	t.Setenv("PULSE_LOCAL_AGENT_TOKEN", "current-local-token")
-	t.Setenv("BESZEL_LOCAL_AGENT_TOKEN", "")
 	t.Setenv("PULSE_DEV_LOCAL_AGENT_AS_HUB", "true")
 
 	hub, testApp, err := createTestHub(t)

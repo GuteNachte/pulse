@@ -979,8 +979,8 @@ func TestHasUser(t *testing.T) {
 		assert.True(t, sys.HasUser(hub, user2))
 	})
 
-	t.Run("BESZEL_HUB_SHARE_ALL_SYSTEMS=true grants access to non-member", func(t *testing.T) {
-		t.Setenv("BESZEL_HUB_SHARE_ALL_SYSTEMS", "true")
+	t.Run("PULSE_HUB_SHARE_ALL_SYSTEMS=true grants access to non-member", func(t *testing.T) {
+		t.Setenv("PULSE_HUB_SHARE_ALL_SYSTEMS", "true")
 		assert.True(t, sys.HasUser(hub, user2))
 	})
 

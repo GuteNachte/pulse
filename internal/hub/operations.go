@@ -1182,8 +1182,8 @@ func isProtectedContainer(name string, image string) bool {
 func protectedContainerReason(name string, image string, stackProject string) string {
 	name = strings.ToLower(strings.TrimSpace(name))
 	image = strings.ToLower(strings.TrimSpace(image))
-	if containsPulseRuntimeContainer(name, image, "pulse-hub", "beszel") ||
-		containsPulseRuntimeContainer(name, image, "pulse-agent", "beszel-agent") {
+	if containsPulseRuntimeContainer(name, image, "pulse-hub") ||
+		containsPulseRuntimeContainer(name, image, "pulse-agent") {
 		return "Pulse related containers cannot be controlled from Pulse."
 	}
 	return ""

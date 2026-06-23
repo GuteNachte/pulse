@@ -4,12 +4,9 @@ package utils
 import "os"
 
 // GetEnv retrieves an environment variable with a "PULSE_HUB_" prefix,
-// then falls back to the legacy "BESZEL_HUB_" prefix and the unprefixed key.
+// then falls back to the unprefixed key.
 func GetEnv(key string) (value string, exists bool) {
 	if value, exists = os.LookupEnv("PULSE_HUB_" + key); exists {
-		return value, exists
-	}
-	if value, exists = os.LookupEnv("BESZEL_HUB_" + key); exists {
 		return value, exists
 	}
 	return os.LookupEnv(key)

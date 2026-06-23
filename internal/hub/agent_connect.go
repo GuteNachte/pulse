@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"os"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -152,9 +152,6 @@ func (acr *agentConnectRequest) verifyWsConn(conn *gws.Conn, fpRecords []ws.Fing
 func (acr *agentConnectRequest) validateAgentHeaders(headers http.Header) (string, string, error) {
 	token := headers.Get("X-Token")
 	agentVersion := headers.Get("X-Pulse")
-	if agentVersion == "" {
-		agentVersion = headers.Get("X-Beszel")
-	}
 
 	if agentVersion == "" || token == "" || len(token) > 64 {
 		return "", "", errors.New("")
@@ -168,9 +165,6 @@ func (acr *agentConnectRequest) isLocalAgentToken() bool {
 
 func localAgentToken() string {
 	if token := strings.TrimSpace(os.Getenv("PULSE_LOCAL_AGENT_TOKEN")); token != "" {
-		return token
-	}
-	if token := strings.TrimSpace(os.Getenv("BESZEL_LOCAL_AGENT_TOKEN")); token != "" {
 		return token
 	}
 	return defaultLocalAgentToken

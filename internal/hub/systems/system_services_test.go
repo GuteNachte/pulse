@@ -187,15 +187,15 @@ func TestCreateRecordsDoesNotRemoveImportantMonitoringForWindowsOrEmptyInfo(t *t
 			_, err = tests.CreateRecord(hub, "service_control_rules", map[string]any{
 				"system":   systemRecord.Id,
 				"platform": "windows",
-				"name":     "beszel-agent",
+				"name":     "pulse-agent",
 				"enabled":  true,
 			})
 			require.NoError(t, err)
 			_, err = tests.CreateRecord(hub, "software_monitor_rules", map[string]any{
 				"system":       systemRecord.Id,
 				"platform":     "windows",
-				"name":         "beszel-agent.exe",
-				"display_name": "Beszel Agent",
+				"name":         "pulse-agent.exe",
+				"display_name": "Pulse Agent",
 				"enabled":      true,
 			})
 			require.NoError(t, err)

@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gutenacht.site/pulse/internal/hub/heartbeat"
-	beszeltests "gutenacht.site/pulse/internal/tests"
+	pulsetests "gutenacht.site/pulse/internal/tests"
 )
 
 func TestNew(t *testing.T) {
@@ -92,7 +92,7 @@ func TestSendReturnsErrorOnHTTPFailureStatus(t *testing.T) {
 func TestSendPOSTBuildsExpectedStatuses(t *testing.T) {
 	tests := []struct {
 		name           string
-		setup          func(t *testing.T, app *beszeltests.TestHub, user *core.Record)
+		setup          func(t *testing.T, app *pulsetests.TestHub, user *core.Record)
 		expectStatus   string
 		expectMsgPart  string
 		expectDown     int
@@ -105,7 +105,7 @@ func TestSendPOSTBuildsExpectedStatuses(t *testing.T) {
 	}{
 		{
 			name: "error when at least one system is down",
-			setup: func(t *testing.T, app *beszeltests.TestHub, user *core.Record) {
+			setup: func(t *testing.T, app *pulsetests.TestHub, user *core.Record) {
 				downSystem := createTestSystem(t, app, user.Id, "db-1", "down")
 				_ = createTestSystem(t, app, user.Id, "web-1", "up")
 				createTriggeredAlert(t, app, user.Id, downSystem.Id, "CPU", 95)
@@ -120,7 +120,7 @@ func TestSendPOSTBuildsExpectedStatuses(t *testing.T) {
 		},
 		{
 			name: "warn when only alerts are triggered",
-			setup: func(t *testing.T, app *beszeltests.TestHub, user *core.Record) {
+			setup: func(t *testing.T, app *pulsetests.TestHub, user *core.Record) {
 				system := createTestSystem(t, app, user.Id, "api-1", "up")
 				createTriggeredAlert(t, app, user.Id, system.Id, "CPU", 90)
 			},
@@ -134,7 +134,7 @@ func TestSendPOSTBuildsExpectedStatuses(t *testing.T) {
 		},
 		{
 			name: "ok when no down systems and no alerts",
-			setup: func(t *testing.T, app *beszeltests.TestHub, user *core.Record) {
+			setup: func(t *testing.T, app *pulsetests.TestHub, user *core.Record) {
 				_ = createTestSystem(t, app, user.Id, "node-1", "up")
 				_ = createTestSystem(t, app, user.Id, "node-2", "paused")
 				_ = createTestSystem(t, app, user.Id, "node-3", "pending")
@@ -207,24 +207,24 @@ func TestSendPOSTBuildsExpectedStatuses(t *testing.T) {
 	}
 }
 
-func newTestHub(t *testing.T) *beszeltests.TestHub {
+func newTestHub(t *testing.T) *pulsetests.TestHub {
 	t.Helper()
-	app, err := beszeltests.NewTestHub(t.TempDir())
+	app, err := pulsetests.NewTestHub(t.TempDir())
 	require.NoError(t, err)
 	t.Cleanup(app.Cleanup)
 	return app
 }
 
-func createTestUser(t *testing.T, app *beszeltests.TestHub) *core.Record {
+func createTestUser(t *testing.T, app *pulsetests.TestHub) *core.Record {
 	t.Helper()
-	user, err := beszeltests.CreateUser(app.App, "admin@example.com", "password123")
+	user, err := pulsetests.CreateUser(app.App, "admin@example.com", "password123")
 	require.NoError(t, err)
 	return user
 }
 
-func createTestSystem(t *testing.T, app *beszeltests.TestHub, userID, name, status string) *core.Record {
+func createTestSystem(t *testing.T, app *pulsetests.TestHub, userID, name, status string) *core.Record {
 	t.Helper()
-	system, err := beszeltests.CreateRecord(app.App, "systems", map[string]any{
+	system, err := pulsetests.CreateRecord(app.App, "systems", map[string]any{
 		"name":   name,
 		"users":  []string{userID},
 		"status": status,
@@ -233,9 +233,9 @@ func createTestSystem(t *testing.T, app *beszeltests.TestHub, userID, name, stat
 	return system
 }
 
-func createTriggeredAlert(t *testing.T, app *beszeltests.TestHub, userID, systemID, name string, threshold float64) *core.Record {
+func createTriggeredAlert(t *testing.T, app *pulsetests.TestHub, userID, systemID, name string, threshold float64) *core.Record {
 	t.Helper()
-	alert, err := beszeltests.CreateRecord(app.App, "alerts", map[string]any{
+	alert, err := pulsetests.CreateRecord(app.App, "alerts", map[string]any{
 		"name":      name,
 		"system":    systemID,
 		"user":      userID,

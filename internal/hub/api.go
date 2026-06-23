@@ -946,14 +946,6 @@ func localAgentTokenReadinessCheck() readinessCheck {
 			Detail: "正在使用默认本机 Agent Token；生产环境建议设置 PULSE_LOCAL_AGENT_TOKEN，避免沿用公开默认值。",
 		}
 	}
-	if trimmedEnv("PULSE_LOCAL_AGENT_TOKEN") == "" && trimmedEnv("BESZEL_LOCAL_AGENT_TOKEN") != "" {
-		return readinessCheck{
-			ID:     "local_agent_token",
-			Title:  "Hub 同机 Agent Token",
-			Status: "warning",
-			Detail: "仍在使用旧 BESZEL_LOCAL_AGENT_TOKEN；建议迁移到 PULSE_LOCAL_AGENT_TOKEN。",
-		}
-	}
 	return readinessCheck{
 		ID:     "local_agent_token",
 		Title:  "Hub 同机 Agent Token",

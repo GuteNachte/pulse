@@ -2,6 +2,12 @@
 
 > 版本已于 2026-06-23 固定为 `1.0.5`。这里保留 `1.0.4` 之后的完整开发流水记录，作为正式发布说明和后续排查的明细来源。固定点之后的新改动不要再回填到 `1.0.5`，应进入下一版本记录。
 
+## 1.0.5 固定后开发记录
+
+### Web / Hub
+
+- Pulse 项目独立化收口：移除代码里的旧项目兼容 Header、旧环境变量前缀、旧运行时容器名保护规则和默认备份文件名前缀；测试数据、About 记录和验收文档同步改为 Pulse-only 表述，确保代码路径不再残留旧项目命名。
+
 ## Web / Hub
 
 - Agent 管理页 Linux 安装方式恢复默认全能力：通用 Linux、飞牛 / NAS 和 Unraid 现在默认同时开放宿主机根目录、DMI、/dev/mem 和 GPU 采集入口，确保复制出的安装命令默认就能正常安装和连接；工作台仍保留单项能力的手动开关。
@@ -10,7 +16,7 @@
 - Agent 管理页 Linux 安装命令修复 YAML 语法风险：配对安装的 Compose 预览改成 YAML 原生块标量，配对码通过环境变量传入并在容器内展开，避免单引号 shell 字符串把 `entrypoint` 结构拼坏；同时修正 compose 变量在预览阶段被提前展开的问题。
 
 - Agent 管理页 Windows 安装模板补齐可视化编辑：Windows 目标支持在“一行命令”和“完整 PowerShell 脚本”之间切换，并可编辑安装目录、数据目录、日志目录、重装清理旧数据、NSSM 自动安装、安装后启动服务和出站防火墙规则；页面预览、复制命令和后端 `/api/pulse/agent-install/windows.ps1` 下载脚本共用同一组选项，避免预览和真实执行脚本漂移。
-- Agent 安装模板做了一轮源头审计：补充 Windows 安装脚本接口选项回归测试，确认安装目录、数据目录、日志目录、NSSM、清理旧数据、启动服务和防火墙选项都能从复制命令传到真实下载脚本；同时清理 Unraid XML 模板里的旧项目支持链接，避免安装模板继续出现旧 Beszel 残留。
+- Agent 安装模板做了一轮源头审计：补充 Windows 安装脚本接口选项回归测试，确认安装目录、数据目录、日志目录、NSSM、清理旧数据、启动服务和防火墙选项都能从复制命令传到真实下载脚本；同时清理 Unraid XML 模板里的旧项目支持链接，避免安装模板继续出现旧项目残留。
 - Agent 管理页桌面端重构为安装工作台：不再按 Windows / Linux 两列堆叠展示，改为上方状态摘要、中间安装模板工作台、下方 Agent 更新和版本仓库分区；Linux、飞牛 / NAS 和 Unraid 模板支持在页面中切换 Docker socket、宿主机只读挂载、DMI 和 GPU 采集入口，右侧代码预览会实时增删对应 Compose / Unraid XML 配置，避免只显示静态模板。
 - Agent 管理页 Linux 安装方式拆分为通用 Linux、飞牛 / NAS 和 Unraid 三类：通用版使用 `/opt/pulse-agent/data` 专用目录，飞牛版可直接下载 `pulse-agent-flynas.yml` 并使用 `/vol1/1000/docker/pulse-agent/data`，Unraid 版改为 root 直连下载命令，命令会把 XML 写入 `/boot/config/plugins/dockerMan/templates-user`；添加机器向导的 Linux 下拉同步提供飞牛 yml 和 Unraid 模板下载入口。
 - Linux / 飞牛 / Unraid 安装模板默认恢复全能力：页面预览和下载脚本默认保留宿主机根目录、DMI、/dev/mem 和 GPU 设备映射；Linux 直接安装命令会在 `docker` 无权限时自动尝试 `sudo docker`，并在文档里继续要求飞牛用户具备 Docker 权限。

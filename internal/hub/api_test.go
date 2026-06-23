@@ -1037,8 +1037,8 @@ func TestApiRoutesAuthentication(t *testing.T) {
 				_, err := pulseTests.CreateRecord(app, "containers", map[string]any{
 					"id":      "abababababab",
 					"system":  system.Id,
-					"name":    "beszel-agent",
-					"image":   "henrygd/beszel-agent:latest",
+					"name":    "pulse-agent",
+					"image":   "registry.example.com/infra/pulse-agent:latest",
 					"status":  "Up 5 minutes",
 					"updated": int64(1),
 				})
@@ -2298,7 +2298,6 @@ func TestInfoReadinessChecksDangerousConfig(t *testing.T) {
 	t.Setenv("DISABLE_PASSWORD_AUTH", "true")
 	t.Setenv("MFA_OTP", "superusers")
 	t.Setenv("PULSE_LOCAL_AGENT_TOKEN", "")
-	t.Setenv("BESZEL_LOCAL_AGENT_TOKEN", "")
 
 	hub, _ := pulseTests.GetHubWithUser(t)
 	defer hub.Cleanup()
@@ -2729,7 +2728,7 @@ func TestTrustedHeaderMiddleware(t *testing.T) {
 		}
 	}()
 
-	t.Setenv("TRUSTED_AUTH_HEADER", "X-Beszel-Trusted")
+	t.Setenv("TRUSTED_AUTH_HEADER", "X-Pulse-Trusted")
 
 	testAppFactory := func(t testing.TB) *pbTests.TestApp {
 		hub, _ := pulseTests.NewTestHub(t.TempDir())
@@ -2752,7 +2751,7 @@ func TestTrustedHeaderMiddleware(t *testing.T) {
 			Method: http.MethodGet,
 			URL:    "/api/pulse/info",
 			Headers: map[string]string{
-				"X-Beszel-Trusted": "user@test.com",
+				"X-Pulse-Trusted": "user@test.com",
 			},
 			ExpectedStatus:  401,
 			ExpectedContent: []string{"requires valid"},
@@ -2763,7 +2762,7 @@ func TestTrustedHeaderMiddleware(t *testing.T) {
 			Method: http.MethodGet,
 			URL:    "/api/pulse/info",
 			Headers: map[string]string{
-				"X-Beszel-Trusted": "user@test.com",
+				"X-Pulse-Trusted": "user@test.com",
 			},
 			ExpectedStatus:     200,
 			ExpectedContent:    []string{"\"v\":"},

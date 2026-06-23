@@ -412,7 +412,7 @@ func normalizeBackupName(raw string) string {
 	name := strings.ToLower(strings.TrimSpace(raw))
 	name = strings.TrimSuffix(name, ".zip")
 	if name == "" {
-		name = fmt.Sprintf("beszel_backup_%s", time.Now().Format("20060102_150405"))
+		name = fmt.Sprintf("pulse_backup_%s", time.Now().Format("20060102_150405"))
 	}
 	return name + ".zip"
 }

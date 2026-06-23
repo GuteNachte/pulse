@@ -42,7 +42,7 @@ func TestResolveAgentReleaseFilePathAllowsManifest(t *testing.T) {
 func TestResolveAgentReleaseFilePathRejectsUnsafeInput(t *testing.T) {
 	dataDir := t.TempDir()
 
-	_, err := resolveAgentReleaseFilePath(dataDir, "../1.0.0", "beszel-agent_linux_amd64")
+	_, err := resolveAgentReleaseFilePath(dataDir, "../1.0.0", "pulse-agent_linux_amd64")
 	require.Error(t, err)
 
 	_, err = resolveAgentReleaseFilePath(dataDir, "1.0.0", "../secret")

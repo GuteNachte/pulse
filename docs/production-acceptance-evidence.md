@@ -933,7 +933,7 @@ Agent 接入 Token：
 About：
 - URL: http://localhost:5173/settings/about?verify-task11-current-about=1
 - 页面显示 Pulse、1.0.5-dev、Web / Hub、移动端 / Android、Agent、部署 / 发布、版本规则。
-- 页面未发现 `Beszel|beszel|BESZEL`。
+- 页面未发现旧项目品牌关键字。
 - 页面无横向溢出、未发现长 Token 直接展示。
 ```
 
