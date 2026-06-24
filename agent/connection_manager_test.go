@@ -176,6 +176,12 @@ func TestConnectionManager_ReconnectionLogic(t *testing.T) {
 	// Start from connected state, then simulate disconnect
 	cm.State = WebSocketConnected
 	cm.isConnecting = false
+	cm.wsClient = &WebSocketClient{
+		hubURL: &url.URL{
+			Host: "localhost:8080",
+		},
+		lastConnectAttempt: time.Now(),
+	}
 
 	// First disconnect should trigger reconnection logic
 	cm.handleStateChange(Disconnected)

@@ -30,7 +30,7 @@ Get-Content docs\release-notes-next.md -Raw -Encoding UTF8
 - 部署 / 镜像 / FlyNAS / Harbor：`docs\flynas-compose-checklist.md`、`docs\agent-1.0-install.md`、`docs\current-dev-inventory.md`
 - Agent 能力 / 采集 / 操作边界：`docs\agent-capability-boundary.md`、`docs\pulse-roadmap.md`
 - UI 精修 / 组件替换：先读相关页面代码，再按项目设计语言和成熟组件优先原则执行
-- Windows Agent 需要重新生成内置 `smartctl.exe` 时，先确认本地已有 `agent\smartmontools\smartctl.exe`；如果没有，需要显式提供 `PULSE_SMARTCTL_URL`，不要在代码里硬编码外部旧域名。
+- Windows Agent 默认不把 `smartctl.exe` 提交进仓库；缺少 `agent\smartmontools\smartctl.exe` 时仍可编译，并在运行时回退查找系统安装路径。需要发布“内置 smartctl”的 Windows Agent 时，先显式提供 `PULSE_SMARTCTL_URL` 运行 `go generate ./agent` 下载校验文件，再用 `embedded_smartctl` build tag 构建，不要在代码里硬编码外部旧域名。
 
 ## 3. 开发环境固定规则
 

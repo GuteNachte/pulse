@@ -37,16 +37,6 @@ func (t *DeltaTracker[K, V]) Set(id K, value V) {
 	t.current[id] = value
 }
 
-// Snapshot returns a copy of the current map.
-// func (t *DeltaTracker[K, V]) Snapshot() map[K]V {
-// 	t.RLock()
-// 	defer t.RUnlock()
-
-// 	copyMap := make(map[K]V, len(t.current))
-// 	maps.Copy(copyMap, t.current)
-// 	return copyMap
-// }
-
 // Deltas returns a map of all calculated deltas for the current interval.
 func (t *DeltaTracker[K, V]) Deltas() map[K]V {
 	t.RLock()

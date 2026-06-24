@@ -48,12 +48,12 @@
 
 - 按 Cal 风格统一全局颜色、圆角、按钮、卡片、输入框、徽章、Tabs、Select、Table、桌面导航和移动底栏。
 - 非状态类胶囊标签统一收敛为 8px 圆角对象；真实在线点、告警状态、进度条、开关滑块继续保留语义样式。
-- 全站空态、加载态、弹窗、Toast、Tooltip、Dropdown、Command、Sheet 和 Dialog 统一浅灰 surface + 白底对象层级。
+- 全站空态、加载态、弹窗、Toast、Tooltip、Dropdown、命令面板类浮层、Sheet 和 Dialog 统一浅灰 surface + 白底对象层级。
 - 图表底部安全间距修正，避免图例或时间轴贴到边框。
 
 ## 部署 / 发布
 
-正式部署仍推荐 FlyNAS / Linux / NAS 使用 Hub + 本机 Agent 同机 Compose，默认 `network_mode: host`。
+正式部署仍推荐 FlyNAS / Linux / NAS 使用 Hub + Hub 同机 Agent 的同机 Compose，默认 `network_mode: host`。
 
 ```yaml
 services:

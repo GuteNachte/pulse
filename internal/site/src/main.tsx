@@ -3,7 +3,6 @@ import { i18n } from "@lingui/core"
 import { I18nProvider } from "@lingui/react"
 import { useStore } from "@nanostores/react"
 import { DirectionProvider } from "@radix-ui/react-direction"
-// import { Suspense, lazy, useEffect, StrictMode } from "react"
 import { lazy, memo, Suspense, useEffect, useState } from "react"
 import ReactDOM from "react-dom/client"
 import { ArrowLeftIcon, HomeIcon, SearchXIcon } from "lucide-react"
@@ -274,10 +273,6 @@ const rootStore = globalThis as typeof globalThis & {
 const root = rootStore.__pulseRoot ?? ReactDOM.createRoot(appElement)
 rootStore.__pulseRoot = root
 
-root.render(
-	// strict mode in dev mounts / unmounts components twice
-	// and breaks the clipboard dialog
-	//<StrictMode>
-	<I18nApp />
-	//</StrictMode>
-)
+// StrictMode is intentionally disabled in dev because the double mount breaks
+// the clipboard dialog lifecycle.
+root.render(<I18nApp />)

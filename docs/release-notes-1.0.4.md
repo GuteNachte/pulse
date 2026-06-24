@@ -46,8 +46,8 @@
 ## Agent
 
 - Hub 同机 Agent 页面显示真实机器名，不再显示“本机”或追加括号，统一通过 `Hub` 标签标识。
-- 只有安装 Hub 的机器会随部署自动加入本机 Agent；删除保护继续由后端 `is_local` 字段控制。
-- Hub 启动时会校验 `is_local` 系统记录是否绑定当前本机 Agent token，自动清理旧 fingerprint 或普通 Agent token 导致的历史误标。
+- 只有安装 Hub 的机器会随部署自动加入 Hub 同机 Agent；删除保护继续由后端 `is_local` 字段控制。
+- Hub 启动时会校验 `is_local` 系统记录是否绑定当前 Hub 同机 Agent token，自动清理旧 fingerprint 或普通 Agent token 导致的历史误标。
 - 非 Hub 机器不会再因为历史 `is_local` 残留错误显示 `Hub` 标签。
 - NAS 标签识别补回，存储备份用途或名称 / 说明包含 NAS、FNOS、飞牛时显示 NAS 标签。
 - 单容器和 Compose 编排操作确认后显示执行中进度、当前操作说明和旋转状态，避免耗时操作看起来无响应。

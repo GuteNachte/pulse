@@ -45,7 +45,6 @@ func (opts *cmdOptions) parse() bool {
 	pflag.StringVarP(&opts.hubURL, "url", "u", "", "URL of the Pulse Hub")
 	pflag.StringVarP(&opts.token, "token", "t", "", "Token to use for authentication")
 	pflag.StringVar(&opts.code, "code", "", "One-time pairing code")
-	chinaMirrors := pflag.BoolP("china-mirrors", "c", false, "Use configured mirror for update instead of GitHub")
 	version := pflag.BoolP("version", "v", false, "Show version information")
 	help := pflag.BoolP("help", "h", false, "Show this help message")
 
@@ -92,7 +91,7 @@ func (opts *cmdOptions) parse() bool {
 		pflag.Usage()
 		return true
 	case subcommand == "update":
-		agent.Update(*chinaMirrors)
+		agent.Update()
 		return true
 	case subcommand == "pair":
 		if err := opts.handlePair(); err != nil {

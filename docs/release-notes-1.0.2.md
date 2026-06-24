@@ -48,11 +48,11 @@
 
 ## Agent
 
-- Hub 标准部署方式改为 Hub 和本机 Linux Docker Agent 一起安装，正式 Linux / 飞牛 / NAS 部署时 Hub 所在机器会一起纳入监控。
-- 同机 Agent 默认通过 `http://127.0.0.1:8090` 连接 Hub，并通过 loopback-only 本机 Token 自动注册为“本机”，不再需要先添加系统复制 Token。
-- 本机 Agent 记录新增 `is_local` 标记，Hub 会固定显示为“本机”，并阻止从自定义删除接口和 PocketBase collection 删除路径删除这条记录。
-- 修复本机 Agent 记录在后续系统详情采集时被真实 hostname 覆盖的问题；`is_local=true` 的系统记录会保持并自愈为“本机”。
-- 如果本机 Agent 指纹已经对应旧系统记录，Hub 会原地升级为本机记录，避免重复生成机器。
+- Hub 标准部署方式改为 Hub 和 Hub 同机 Linux Docker Agent 一起安装，正式 Linux / 飞牛 / NAS 部署时 Hub 所在机器会一起纳入监控。
+- 同机 Agent 默认通过 `http://127.0.0.1:8090` 连接 Hub，并通过 loopback-only Hub 同机 Token 自动注册为 Hub 机器，不再需要先添加系统复制 Token。
+- Hub 同机 Agent 记录新增 `is_local` 标记，并阻止从自定义删除接口和 PocketBase collection 删除路径删除这条记录。
+- 修复 Hub 同机 Agent 记录在后续系统详情采集时被真实 hostname 覆盖的问题；`is_local=true` 的系统记录会保持 Hub 机器身份。
+- 如果 Hub 同机 Agent 指纹已经对应旧系统记录，Hub 会原地升级为 Hub 机器记录，避免重复生成机器。
 - Agent 管理页改为 Windows 主机版和 Linux / NAS Docker 容器版左右双栏管理，每栏独立展示安装模板、支持功能、更新状态和版本仓库。
 - 移除手动登记版本入口，版本仓库改为只读展示；Agent 版本只由发布流程生成并保存。
 - Windows PowerShell 模板和 Linux / NAS Docker Compose 模板改为点击展开，默认收起。
@@ -68,9 +68,9 @@
 - 标准 Compose 默认仍使用 `network_mode: host`。
 - `/dev/dri` 和 `/dev/mem` 设备映射改为按需启用，避免没有这些设备的 NAS 默认启动失败。
 
-### Hub + 本机 Agent 标准部署
+### Hub + Hub 同机 Agent 标准部署
 
-FlyNAS / Linux / NAS 正式部署推荐使用 Hub 和本机 Agent 同机 Compose：
+FlyNAS / Linux / NAS 正式部署推荐使用 Hub 和 Hub 同机 Agent 的同机 Compose：
 
 ```yaml
 services:
@@ -137,9 +137,9 @@ Windows 主机版在设置页 Agent 管理中点击更新；如果客户端返�
 - Windows 服务控制、Agent 自更新和 GPU 采集仍应继续在真实 Windows 设备上回归观察。
 - 已完成本地前端构建：`npm.cmd --prefix internal/site run build`。
 - 已完成 Hub 系统相关测试：`go test ./internal/hub/systems -tags testing -count=1`。
-- 已完成 Hub 关键本机记录测试：`go test ./internal/hub -tags testing -run "TestFindOrCreateLocalSystem|TestDeleteSystemRejectsLocalSystem" -count=1`。
+- 已完成 Hub 机器记录保护测试：`go test ./internal/hub -tags testing -run "TestFindOrCreateLocalSystem|TestDeleteSystemRejectsLocalSystem" -count=1`。
 - 已完成 Compose 配置校验：`docker compose -f supplemental\docker\hub\docker-compose.yml config` 和 `docker compose -f supplemental\docker\same-system\docker-compose.yml config` 均通过，并确认默认镜像为 `1.0.2`。
-- 已完成 FlyNAS 真实 Linux host 网络临时验证：`1.0.2` Hub + `1.0.2` Agent 在 `/tmp/pulse-local-agent-check` 使用 `18090` 临时端口启动后，本机 Agent 自动注册为“本机”，`is_local=true`，状态为 `up`，删除接口返回“本机记录不能删除”；验证完成后已停止并清理临时容器和数据目录。
+- 已完成 FlyNAS 真实 Linux host 网络临时验证：`1.0.2` Hub + `1.0.2` Agent 在 `/tmp/pulse-local-agent-check` 使用 `18090` 临时端口启动后，Hub 同机 Agent 自动注册为 Hub 机器，`is_local=true`，状态为 `up`，删除接口会拒绝删除 Hub 机器记录；验证完成后已停止并清理临时容器和数据目录。
 - Harbor 镜像已准备：`registry.example.com/infra/pulse-hub:1.0.2`、`registry.example.com/infra/pulse-agent:1.0.2`。
-- 已完成飞牛 `192.168.1.30` 正式部署更新：正式目录 `/vol1/1000/docker/pulse` 已切换到 Hub + 本机 Agent 同机 Compose，`pulse-hub` 和 `pulse-agent` 均为 `1.0.2`，状态 healthy，`network_mode` 均为 `host`。
-- 已验证正式 Hub 健康检查返回 `200`，`/api/pulse/public-info` 返回 `v=1.0.2` 和 `agent_hub_url=http://192.168.1.30:8090`，本机 Agent 日志显示 WebSocket 已连接。
+- 已完成飞牛 `192.168.1.30` 正式部署更新：正式目录 `/vol1/1000/docker/pulse` 已切换到 Hub + Hub 同机 Agent 的同机 Compose，`pulse-hub` 和 `pulse-agent` 均为 `1.0.2`，状态 healthy，`network_mode` 均为 `host`。
+- 已验证正式 Hub 健康检查返回 `200`，`/api/pulse/public-info` 返回 `v=1.0.2` 和 `agent_hub_url=http://192.168.1.30:8090`，Hub 同机 Agent 日志显示 WebSocket 已连接。

@@ -1,7 +1,7 @@
-# Security Policy
+# 安全策略
 
-## Reporting a Vulnerability
+## 报告安全问题
 
-If you find a vulnerability in the latest version, report it privately to the project maintainer before sharing details publicly.
+如果你在当前维护版本中发现安全问题，请先私下联系项目维护者，不要直接公开可利用细节。
 
-If it's low severity (use best judgement) you may open an issue instead of an advisory.
+如果问题影响较低，也可以直接提交 issue，并尽量提供版本、部署方式、影响范围和复现条件。

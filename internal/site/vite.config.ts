@@ -41,9 +41,7 @@ export default defineConfig(({ mode }) => ({
 						return "vendor-app-runtime"
 					}
 					if (
-						/[\\/]node_modules[\\/](@radix-ui|cmdk|input-otp|class-variance-authority|clsx|tailwind-merge)[\\/]/.test(
-							id
-						)
+						/[\\/]node_modules[\\/](@radix-ui|input-otp|class-variance-authority|clsx|tailwind-merge)[\\/]/.test(id)
 					) {
 						return "vendor-ui"
 					}

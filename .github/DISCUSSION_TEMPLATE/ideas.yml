@@ -9,7 +9,7 @@ body:
         - Agent
         - Hub & Agent
         - Web UI
-        - Deploy
+        - 部署
       default: 0
     validations:
       required: true

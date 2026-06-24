@@ -1,6 +1,6 @@
-name: Feature request
+name: 功能建议
 description: 提出 Pulse 的新功能或改进建议。
-title: "[Feature]: "
+title: "[功能]: "
 labels: ["enhancement"]
 body:
   - type: checkboxes
@@ -24,7 +24,7 @@ body:
         - Agent
         - Hub & Agent
         - Web UI
-        - Deploy
+        - 部署
       default: 0
     validations:
       required: true

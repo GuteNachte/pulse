@@ -47,7 +47,6 @@
 		"capacitor-secure-storage-plugin": "^0.13.0",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
-		"cmdk": "^1.1.1",
 		"d3-time": "^3.1.0",
 		"input-otp": "^1.4.2",
 		"lucide-react": "^0.452.0",
@@ -81,8 +80,5 @@
 		"@nanostores/router": {
 			"nanostores": "^0.11.3"
 		}
-	},
-	"optionalDependencies": {
-		"@esbuild/linux-arm64": "^0.21.5"
 	}
 }

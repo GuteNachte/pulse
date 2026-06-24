@@ -57,7 +57,7 @@ network_mode: host
 
 ## 推荐 Compose 文件
 
-Hub + 本机 Agent 标准部署：
+Hub + Hub 同机 Agent 标准部署：
 
 ```text
 supplemental/docker/hub/docker-compose.yml
@@ -75,7 +75,7 @@ Agent 单独部署只用于给其他 Linux / NAS 机器接入已有 Hub：
 supplemental/docker/agent/docker-compose.yml
 ```
 
-首次部署时不用先在 Hub 页面添加 Hub 所在机器；标准 Compose 会用 loopback-only 本机 Token 自动注册本机 Agent，页面显示真实机器名并带 `Hub` 标签，且这条本机记录不能删除：
+首次部署时不用先在 Hub 页面添加 Hub 所在机器；标准 Compose 会用 loopback-only Hub 同机 Token 自动注册 Hub 同机 Agent，页面显示真实机器名并带 `Hub` 标签，且这条 Hub 机器记录不能删除：
 
 ```bash
 export PULSE_AGENT_HUB_URL="http://127.0.0.1:8090"
@@ -158,7 +158,7 @@ docker logs --tail=100 pulse-agent
 4. 页面确认：
 
 - Hub 所在机器已作为一台 Linux / NAS Docker Agent 上线。
-- Hub 与本机 Agent 显示为同一个新版本。
+- Hub 与 Hub 同机 Agent 显示为同一个新版本。
 - 设备上线。
 - Agent profile 显示 `linux-container`。
 - 容器数量正常。

@@ -86,7 +86,7 @@ Unraid 模板安装说明：
 
 ## Hub 标准部署
 
-Linux / 飞牛 / NAS 上部署 Hub 时，标准方式是 Hub 和本机 Agent 一起安装。这样 Hub 所在机器会自动进入监控范围，也能采集和控制同机容器。
+Linux / 飞牛 / NAS 上部署 Hub 时，标准方式是 Hub 和 Hub 同机 Agent 一起安装。这样 Hub 所在机器会自动进入监控范围，也能采集和控制同机容器。
 
 推荐使用：
 
@@ -94,7 +94,7 @@ Linux / 飞牛 / NAS 上部署 Hub 时，标准方式是 Hub 和本机 Agent 一
 supplemental/docker/hub/docker-compose.yml
 ```
 
-首次部署不用先在 Hub 页面添加 Hub 所在机器；标准 Compose 会用 loopback-only 本机 Token 自动注册本机 Agent，页面显示真实机器名并带 `Hub` 标签，且这条本机记录不能删除：
+首次部署不用先在 Hub 页面添加 Hub 所在机器；标准 Compose 会用 loopback-only Hub 同机 Token 自动注册 Hub 同机 Agent，页面显示真实机器名并带 `Hub` 标签，且这条 Hub 机器记录不能删除：
 
 ```bash
 export PULSE_AGENT_HUB_URL="http://127.0.0.1:8090"

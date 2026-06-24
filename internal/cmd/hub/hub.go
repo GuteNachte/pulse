@@ -51,7 +51,6 @@ func getBaseApp() *pocketbase.PocketBase {
 		Short: "Show Pulse Hub update instructions",
 		Run:   hub.Update,
 	}
-	updateCmd.Flags().Bool("china-mirrors", false, "Deprecated compatibility flag")
 	baseApp.RootCmd.AddCommand(updateCmd)
 	// add health command
 	baseApp.RootCmd.AddCommand(newHealthCmd())

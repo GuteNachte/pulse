@@ -113,14 +113,6 @@ func (sm *SmartManager) devicesSnapshot() []*DeviceInfo {
 	return devices
 }
 
-// hasSmartData reports whether any SMART data has been collected.
-// func (sm *SmartManager) hasSmartData() bool {
-// 	sm.Lock()
-// 	defer sm.Unlock()
-
-// 	return len(sm.SmartDataMap) > 0
-// }
-
 // resolveRefreshError determines the proper error to return after a refresh.
 func (sm *SmartManager) resolveRefreshError(scanErr, collectErr error) error {
 	sm.Lock()

@@ -378,8 +378,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\check-v
 powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-release-v1.ps1 -Version 1.0.5 -SkipRegistry
 ```
 
-结果：本轮重新执行通过；已在 `docs/production-readiness-checklist.md` 第 14 节和第 17 节记录通过。  
-后续：正式发布时必须重新执行不带 `-SkipRegistry` 的发布验证，并补充 Harbor / FlyNAS 运行态证据。
+结果：本轮本地固定验证命令重新执行通过；`docs/production-readiness-checklist.md` 第 17 节里的本地命令项可作为已验证证据。第 14 节只代表发布前本地版本检查和测试通过，Harbor 镜像、FlyNAS 运行态、正式备份和回滚健康检查仍保持未勾选。
+后续：正式发布时必须重新执行不带 `-SkipRegistry` 的发布验证，并补充 Harbor / FlyNAS 运行态、正式备份和回滚证据。
 
 ### 2026-06-17 Task 17 多视口 / Android 固定验收补充
 
@@ -1037,7 +1037,7 @@ MFA 开启 Hub：http://127.0.0.1:18092/?verify-mfa-enabled=1
 MFA 关闭浏览器结果：
 
 ```text
-输入 mfa-e2e@example.test / Password123! 后进入首页。
+输入 mfa-e2e@example.test / <redacted> 后进入首页。
 title = 监控大屏 / Pulse
 hasOtp = false
 hasLogin = false
@@ -1048,7 +1048,7 @@ console warn / error = []
 MFA 开启浏览器结果：
 
 ```text
-输入 mfa-e2e@example.test / Password123! 后页面停留在登录页二次验证步骤。
+输入 mfa-e2e@example.test / <redacted> 后页面停留在登录页二次验证步骤。
 页面可见文本包含：二次验证、请输入发送到账号邮箱的 6 位验证码、验证并登录、重新发送、返回登录。
 SMTP 捕获邮件数量：1
 邮件主题：OTP for Pulse
@@ -1121,7 +1121,7 @@ public-info:
 {"v":"1.0.5","agent_hub_url":"http://192.168.1.10:8090","environment":"development"}
 
 临时 Agent：
-- 使用临时数据目录，手动写入唯一 fingerprint，避免和真实本机 Agent 指纹冲突。
+- 使用临时数据目录，手动写入唯一 fingerprint，避免和真实 Hub 同机 Agent 指纹冲突。
 - Agent 启动后日志包含 WebSocket connected host=192.168.1.10:8090。
 
 页面验收：

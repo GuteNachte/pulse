@@ -23,7 +23,7 @@ body:
         - Agent
         - Hub & Agent
         - Web UI
-        - Deploy
+        - 部署
       default: 0
     validations:
       required: true
@@ -50,9 +50,9 @@ body:
       label: 安装方式
       options:
         - Docker
-        - Binary
-        - FlyNAS
-        - Other
+        - 二进制
+        - 飞牛 / NAS
+        - 其他
     validations:
       required: true
 
@@ -66,13 +66,13 @@ body:
   - type: textarea
     id: hub-logs
     attributes:
-      label: Hub Logs
+      label: Hub 日志
       description: 请提供 Hub 相关日志。
       render: json
 
   - type: textarea
     id: agent-logs
     attributes:
-      label: Agent Logs
+      label: Agent 日志
       description: 如问题涉及 Agent，请提供 Agent 日志。
       render: shell

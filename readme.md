@@ -24,7 +24,7 @@ Pulse 由两个主要组件组成：
 - Hub：基于 PocketBase 的 Web 管理端，负责页面、API、告警、审计、设置、备份、Agent 版本和发布管理。
 - Agent：运行在被监控机器上，负责采集系统指标、容器、服务、软件、硬件能力和网络详情，并主动连接 Hub。
 
-常见部署方式是 Hub 和一台本机 Agent 同机运行，其他机器再通过安装向导接入。
+常见部署方式是 Hub 和一台 Hub 同机 Agent 一起运行，其他机器再通过安装向导接入。
 
 ## 本地开发
 
@@ -46,7 +46,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\run-hub
 
 ## 部署
 
-正式部署推荐使用 Linux / NAS / 飞牛上的 Docker Compose，Hub 和本机 Agent 默认使用显式镜像版本号，不使用 `latest`。
+正式部署推荐使用 Linux / NAS / 飞牛上的 Docker Compose，Hub 和 Hub 同机 Agent 默认使用显式镜像版本号，不使用 `latest`。
 
 部署和回滚手册见：
 

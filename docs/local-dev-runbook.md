@@ -6,7 +6,7 @@
 
 - 本机浏览器测试：固定访问 `http://127.0.0.1:8090`，使用普通 bridge 网络和端口映射。
 - 本机发布前网络等价检查：临时使用 `network_mode: host`，只验证容器内部健康检查。
-- 飞牛 / Linux / NAS 正式部署：固定使用 Hub + 本机 Agent 同机 Compose，两个容器都使用 `network_mode: host`，Hub 容器内监听 `0.0.0.0:8090`。
+- 飞牛 / Linux / NAS 正式部署：固定使用 Hub + Hub 同机 Agent 的同机 Compose，两个容器都使用 `network_mode: host`，Hub 容器内监听 `0.0.0.0:8090`。
 
 本机测试不要再使用 `8091`，也不要把 Vite dev server 当成 Hub 入口。Windows Docker Desktop 的 host 网络不会稳定暴露给 Windows 浏览器，因此页面验收使用端口映射，正式网络模式用 `-HostCheck` 单独覆盖。
 
@@ -60,7 +60,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\run-hub
 
 ## 飞牛 / Linux / NAS 正式部署
 
-正式部署固定使用 Hub + 本机 Agent：
+正式部署固定使用 Hub + Hub 同机 Agent：
 
 ```yaml
 services:
@@ -113,7 +113,7 @@ docker logs --tail=100 pulse-agent
 
 - `api/health` 返回健康状态
 - `NetworkMode` 是 `host`
-- Hub 所在机器的 Agent 会通过 loopback-only 本机 Token 自动注册为 Hub 机器，页面显示真实机器名并带 `Hub` 标签，容器日志显示 WebSocket 已连接。
+- Hub 所在机器的 Agent 会通过 loopback-only Hub 同机 Token 自动注册为 Hub 机器，页面显示真实机器名并带 `Hub` 标签，容器日志显示 WebSocket 已连接。
 
 ## 发布流程
 
@@ -143,7 +143,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-
 ```
 
 7. 按 `docs\release-deployment-runbook.md` 在 FlyNAS 执行 `docker compose pull && docker compose up -d --force-recreate`。
-8. 验证飞牛 Hub、本机 Agent 上线、Agent release 下载、客户端上线和数据采集；如需回滚，同样按 `docs\release-deployment-runbook.md` 执行上一版本 tag 回滚。
+8. 验证飞牛 Hub、Hub 同机 Agent 上线、Agent release 下载、客户端上线和数据采集；如需回滚，同样按 `docs\release-deployment-runbook.md` 执行上一版本 tag 回滚。
 
 ## 避免的坑
 

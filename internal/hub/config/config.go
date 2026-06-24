@@ -152,11 +152,6 @@ func SyncSystems(e *core.ServeEvent) error {
 	return nil
 }
 
-// Generates content for the config.yml file as a YAML string
-func generateYAML(h core.App) (string, error) {
-	return GenerateYAML(h)
-}
-
 func GenerateYAML(h core.App) (string, error) {
 	// Fetch all systems from the database
 	systems, err := h.FindRecordsByFilter("systems", "id != ''", "name", -1, 0)
@@ -269,13 +264,4 @@ func createFingerprintRecord(app core.App, systemID, token string) error {
 	newFingerprint.Set("fingerprint", "") // Empty fingerprint, will be set on first connection
 
 	return app.Save(newFingerprint)
-}
-
-// Returns the current config.yml file as a JSON object
-func GetYamlConfig(e *core.RequestEvent) error {
-	configContent, err := GenerateYAML(e.App)
-	if err != nil {
-		return err
-	}
-	return e.JSON(200, map[string]string{"config": configContent})
 }
