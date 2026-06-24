@@ -250,7 +250,7 @@ export default function About() {
 				</div>
 				<div className="grid gap-3">
 					{releaseHistory.map((release, index) => (
-						<ReleaseNoteCard key={release.version} release={release} defaultOpen={index === 0} />
+						<ReleaseNoteCard key={release.version} release={release} defaultOpen={false} latest={index === 0} />
 					))}
 				</div>
 			</section>
@@ -500,34 +500,46 @@ function getNormalizedHubOrigin() {
 	return url.origin
 }
 
-function ReleaseNoteCard({ release, defaultOpen = false }: { release: ReleaseNote; defaultOpen?: boolean }) {
+function ReleaseNoteCard({
+	release,
+	defaultOpen = false,
+	latest = false,
+}: {
+	release: ReleaseNote
+	defaultOpen?: boolean
+	latest?: boolean
+}) {
 	const [open, setOpen] = useState(defaultOpen)
+	const itemCount = release.sections.reduce((total, section) => total + section.items.length, 0)
 	return (
 		<article className="overflow-hidden rounded-lg border border-border/70 bg-card">
-			<Button
-				variant="ghost"
-				className="min-h-16 w-full rounded-none px-4 py-3 text-left transition-[background-color,transform] hover:bg-surface-soft"
-				aria-expanded={open}
-				onClick={() => setOpen((value) => !value)}
-			>
-				<div className="grid w-full gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
-					<div className="min-w-0">
-						<div className="flex flex-wrap items-center gap-2">
-							<h5 className="text-sm font-semibold tracking-tight">Pulse {release.version}</h5>
-							<ReleaseMetaTag>{release.date}</ReleaseMetaTag>
-						</div>
-						<p className="mt-1 whitespace-normal text-sm font-normal text-muted-foreground">{release.title}</p>
+			<div className="grid gap-3 px-4 py-3 sm:grid-cols-[1fr_auto] sm:items-center">
+				<div className="min-w-0">
+					<div className="flex flex-wrap items-center gap-2">
+						<h5 className="text-sm font-semibold tracking-tight">Pulse {release.version}</h5>
+						<ReleaseMetaTag>{release.date}</ReleaseMetaTag>
+						{latest && <ReleaseMetaTag>最新</ReleaseMetaTag>}
 					</div>
-					<div className="flex min-w-0 items-center gap-2 sm:justify-end">
-						<div className="hidden flex-wrap gap-1.5 sm:flex sm:justify-end">
-							{release.badges.map((badge) => (
-								<ReleaseMetaTag key={badge}>{badge}</ReleaseMetaTag>
-							))}
-						</div>
-						<ChevronDownIcon className={cn("size-4 shrink-0 transition-transform", open && "rotate-180")} />
+					<p className="mt-1 text-sm font-normal text-muted-foreground">{release.title}</p>
+					<div className="mt-2 flex flex-wrap items-center gap-1.5">
+						<ReleaseMetaTag>{release.sections.length} 个分组</ReleaseMetaTag>
+						<ReleaseMetaTag>{itemCount} 条更新</ReleaseMetaTag>
+						{release.badges.map((badge) => (
+							<ReleaseMetaTag key={badge}>{badge}</ReleaseMetaTag>
+						))}
 					</div>
 				</div>
-			</Button>
+				<Button
+					variant="outline"
+					className="min-h-10 justify-center gap-2 sm:min-w-28"
+					aria-expanded={open}
+					aria-label={`${open ? "收起" : "展开"} Pulse ${release.version} 更新详情`}
+					onClick={() => setOpen((value) => !value)}
+				>
+					{open ? "收起" : "展开"}
+					<ChevronDownIcon className={cn("size-4 shrink-0 transition-transform", open && "rotate-180")} />
+				</Button>
+			</div>
 			{open && (
 				<div className="grid gap-4 border-t border-border/70 bg-surface-soft p-3 sm:p-4">
 					<MobileReleaseBadges badges={release.badges} />
