@@ -266,7 +266,7 @@ msgstr "CPU 时间细分"
 
 #: src/components/routes/system/cpu-sheet.tsx
 msgid "CPU time breakdown and per-core utilization"
-msgstr ""
+msgstr "CPU 时间细分和每核心使用率"
 
 #: src/components/routes/system/charts/cpu-charts.tsx
 #: src/components/routes/system/charts/cpu-charts.tsx
