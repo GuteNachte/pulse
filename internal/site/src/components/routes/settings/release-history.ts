@@ -11,9 +11,9 @@ export type ReleaseNote = {
 
 export const releaseHistory: ReleaseNote[] = [
 	{
-		version: "1.0.5+dev",
-		date: "2026-06-23",
-		title: "Pulse 1.0.5 固定后开发记录",
+		version: "1.0.6",
+		date: "2026-06-25",
+		title: "Pulse 1.0.6 开发记录",
 		badges: ["Web / Hub", "代码收口", "项目独立化"],
 		sections: [
 			{
