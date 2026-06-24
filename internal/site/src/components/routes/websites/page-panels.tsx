@@ -87,6 +87,7 @@ export function WebsiteMonitorListPanel({
 	const hasRows = filteredMonitors.length > 0
 	const pageStart = hasRows ? page * pageSize + 1 : 0
 	const pageEnd = page * pageSize + filteredMonitors.length
+	const showPagination = hasRows || hasMore || page > 0
 
 	return (
 		<aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-card shadow-none">
@@ -182,32 +183,34 @@ export function WebsiteMonitorListPanel({
 					/>
 				)}
 			</div>
-			<div className="flex items-center justify-between gap-3 border-t border-border/70 bg-surface-soft px-3 py-2 text-xs text-muted-foreground">
-				<div className="min-w-0 truncate">
-					{hasRows ? `第 ${pageStart} - ${pageEnd} 条${hasMore ? "，后面还有更多" : ""}` : "暂无数据"}
+			{showPagination ? (
+				<div className="flex items-center justify-between gap-3 border-t border-border/70 bg-surface-soft px-3 py-2 text-xs text-muted-foreground">
+					<div className="min-w-0 truncate">
+						{hasRows ? `第 ${pageStart} - ${pageEnd} 条${hasMore ? "，后面还有更多" : ""}` : "暂无数据"}
+					</div>
+					<div className="flex shrink-0 items-center gap-1.5">
+						<Button
+							variant="outline"
+							size="icon"
+							className="size-10"
+							disabled={loading || page <= 0}
+							onClick={() => onPageChange(Math.max(0, page - 1))}
+						>
+							<ChevronLeftIcon className="size-4" />
+						</Button>
+						<span className="min-w-12 text-center tabular-nums">第 {page + 1} 页</span>
+						<Button
+							variant="outline"
+							size="icon"
+							className="size-10"
+							disabled={loading || !hasMore}
+							onClick={() => onPageChange(page + 1)}
+						>
+							<ChevronRightIcon className="size-4" />
+						</Button>
+					</div>
 				</div>
-				<div className="flex shrink-0 items-center gap-1.5">
-					<Button
-						variant="outline"
-						size="icon"
-						className="size-10"
-						disabled={loading || page <= 0}
-						onClick={() => onPageChange(Math.max(0, page - 1))}
-					>
-						<ChevronLeftIcon className="size-4" />
-					</Button>
-					<span className="min-w-12 text-center tabular-nums">第 {page + 1} 页</span>
-					<Button
-						variant="outline"
-						size="icon"
-						className="size-10"
-						disabled={loading || !hasMore}
-						onClick={() => onPageChange(page + 1)}
-					>
-						<ChevronRightIcon className="size-4" />
-					</Button>
-				</div>
-			</div>
+			) : null}
 		</aside>
 	)
 }
@@ -278,7 +281,7 @@ function EmptyMonitorList({
 				description={description}
 				className="min-h-72"
 			>
-				{!readOnly && !hasActiveFilter ? (
+				{!readOnly && !hasActiveFilter && hasSystems ? (
 					<CreateMonitorButton
 						readOnly={readOnly}
 						hasSystems={hasSystems}
