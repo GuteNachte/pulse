@@ -19,6 +19,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "Web / Hub",
 				items: [
+					"本地源码预览修复旧 Service Worker 干扰：development Hub 会向前端注入开发构建标记，并把 /sw.js 改为开发态注销脚本；Web 在开发构建下自动注销旧 Service Worker 并清理缓存，避免浏览器继续请求旧生产 chunk 导致页面卡在“正在加载页面资源”。",
 					"网站监控空态继续收紧：没有机器、没有监控项时只保留一个“先添加机器”入口，并隐藏无意义的空分页栏；已有网站的分页、筛选和创建逻辑不变。",
 					"Pulse 项目独立化收口：移除代码里的旧项目兼容 Header、旧环境变量前缀、旧运行时容器名保护规则和默认备份文件名前缀；测试数据、About 记录和验收文档同步改为 Pulse-only 表述，确保代码路径不再残留旧项目命名。",
 					"代码收口继续清理确定无引用的前端 NAS 摘要旧模块、未被构建链路使用的 pnpm lockfile，以及 Agent 源码里已注释掉的旧 helper 片段；运行逻辑和 UI 展示不变。",

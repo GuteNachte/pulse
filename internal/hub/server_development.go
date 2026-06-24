@@ -57,6 +57,21 @@ func (h *Hub) startServer(se *core.ServeEvent) error {
 	}
 
 	se.Router.GET("/{path...}", func(e *core.RequestEvent) error {
+		if e.Request.URL.Path == "/sw.js" {
+			e.Response.Header().Set("Cache-Control", "no-store")
+			e.Response.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+			return e.String(http.StatusOK, `self.addEventListener("install", () => self.skipWaiting())
+self.addEventListener("activate", (event) => {
+	event.waitUntil(
+		Promise.all([
+			self.registration.unregister(),
+			caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key)))),
+			self.clients.matchAll({ type: "window" }).then((clients) => Promise.all(clients.map((client) => client.navigate(client.url)))),
+		])
+	)
+})
+`)
+		}
 		proxy.ServeHTTP(e.Response, e.Request)
 		return nil
 	})

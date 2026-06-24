@@ -11,6 +11,7 @@ declare global {
 		AGENT_HUB_URL: string
 		BUILD_COMMIT?: string
 		BUILD_TIME?: string
+		DEV_BUILD?: boolean
 		OAUTH_DISABLE_POPUP: boolean
 	}
 }

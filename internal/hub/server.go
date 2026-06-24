@@ -18,6 +18,7 @@ type PublicAppInfo struct {
 	AGENT_HUB_URL       string
 	BUILD_COMMIT        string `json:",omitempty"`
 	BUILD_TIME          string `json:",omitempty"`
+	DEV_BUILD           bool   `json:"DEV_BUILD,omitempty"`
 	OAUTH_DISABLE_POPUP bool   `json:"OAUTH_DISABLE_POPUP,omitempty"`
 }
 
@@ -42,6 +43,7 @@ func getPublicAppInfo(hub *Hub) PublicAppInfo {
 		AGENT_HUB_URL: getAgentHubURL(hubURL),
 		BUILD_COMMIT:  strings.TrimSpace(pulse.BuildCommit),
 		BUILD_TIME:    strings.TrimSpace(pulse.BuildTime),
+		DEV_BUILD:     isDevelopmentBuild(),
 	}
 	if val, _ := utils.GetEnv("OAUTH_DISABLE_POPUP"); val == "true" {
 		info.OAUTH_DISABLE_POPUP = true

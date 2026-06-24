@@ -236,7 +236,7 @@ function registerServiceWorker() {
 	if (!("serviceWorker" in navigator)) {
 		return
 	}
-	if (isAndroidApp()) {
+	if (globalThis.PULSE?.DEV_BUILD || isAndroidApp()) {
 		navigator.serviceWorker.getRegistrations().then((registrations) => {
 			for (const registration of registrations) {
 				registration.unregister().catch((error) => console.error("service worker unregister", error))
