@@ -6,6 +6,7 @@
 
 ### Web / Hub
 
+- 新增 PocketBase 基座审计文档：梳理 Pulse 当前如何嵌入 PocketBase、如何使用 migrations、collection rules、users / superusers、auth hooks、自定义 `/api/pulse/*`、备份、实时订阅、前端 SDK 和 Android auth store，并记录 `v0.36.8 -> v0.39.4` / JS SDK `0.26.2 -> 0.27.0` 的升级风险、验证清单和安全边界；本轮只沉淀升级策略，不直接盲升依赖。
 - 本地化资源继续收口：补齐 CPU 详情页 “CPU time breakdown and per-core utilization” 的中文翻译，前端生产构建不再提示 `zh-CN` catalog 缺失条目。
 - About 页版本记录继续收敛：版本卡默认只展示摘要、分组数和更新条数，详情改为独立展开按钮，避免首屏一次性铺开大量更新内容，同时修复折叠按钮可访问名称包含整段更新文本的问题；版本记录数据源不变。
 - 本地源码预览修复旧 Service Worker 干扰：development Hub 会向前端注入开发构建标记，并把 `/sw.js` 改为开发态注销脚本；Web 在开发构建下自动注销旧 Service Worker 并清理缓存，避免浏览器继续请求旧生产 chunk 导致页面卡在“正在加载页面资源”。
