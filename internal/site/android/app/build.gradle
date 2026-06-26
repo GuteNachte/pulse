@@ -7,8 +7,8 @@ android {
         applicationId "site.gutenacht.pulse"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode project.hasProperty('pulseVersionCode') ? project.property('pulseVersionCode').toInteger() : 10005
-        versionName project.hasProperty('pulseVersionName') ? project.property('pulseVersionName') : "1.0.5"
+        versionCode project.hasProperty('pulseVersionCode') ? project.property('pulseVersionCode').toInteger() : 10006
+        versionName project.hasProperty('pulseVersionName') ? project.property('pulseVersionName') : "1.0.6"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

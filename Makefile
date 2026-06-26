@@ -2,9 +2,9 @@
 OS ?= $(shell go env GOOS)
 ARCH ?= $(shell go env GOARCH)
 # Current controlled Agent release for this fork.
-AGENT_VERSION ?= 1.0.5
+AGENT_VERSION ?= 1.0.6
 # Current Hub release for this fork.
-HUB_VERSION ?= 1.0.5
+HUB_VERSION ?= 1.0.6
 # Build metadata injected into Hub binaries.
 BUILD_COMMIT ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)

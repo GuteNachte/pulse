@@ -12,6 +12,7 @@ import (
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/stretchr/testify/require"
+	"gutenacht.site/pulse"
 	_ "gutenacht.site/pulse/internal/migrations"
 )
 
@@ -394,6 +395,25 @@ func TestAgentReleaseHookKeepsDisabledRecordsFromEvictingEnabledTargets(t *testi
 		require.NoError(t, err)
 		require.True(t, record.GetBool("enabled"))
 	}
+}
+
+func TestLatestEnabledAgentVersionDoesNotFallBehindHubVersion(t *testing.T) {
+	hub, testApp, err := createTestHub(t)
+	require.NoError(t, err)
+	defer cleanupTestHub(hub, testApp)
+
+	collection, err := testApp.FindCachedCollectionByNameOrId("agent_releases")
+	require.NoError(t, err)
+	record := core.NewRecord(collection)
+	record.Set("version", "1.0.5")
+	record.Set("channel", "stable")
+	record.Set("platform", "windows")
+	record.Set("arch", "amd64")
+	record.Set("download_url", "registry.example.com/infra/pulse-agent:1.0.5")
+	record.Set("enabled", true)
+	require.NoError(t, testApp.Save(record))
+
+	require.Equal(t, pulse.Version, hub.latestEnabledAgentVersion())
 }
 
 func TestPruneLocalAgentReleaseFilesKeepsOnlyLatestTwoVersions(t *testing.T) {

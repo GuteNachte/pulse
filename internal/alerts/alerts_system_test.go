@@ -96,10 +96,10 @@ func waitForSystemAlert(d time.Duration) {
 func testOneMinuteSystemAlert[T any](t *testing.T, alertName string, threshold float64, setValue systemAlertValueSetter[T], triggerValue, resolveValue T) {
 	t.Helper()
 
-	synctest.Test(t, func(t *testing.T) {
-		fixture := newSystemAlertTestFixture(t, alertName, 1, threshold)
-		defer fixture.cleanup()
+	fixture := newSystemAlertTestFixture(t, alertName, 1, threshold)
+	defer fixture.cleanup()
 
+	synctest.Test(t, func(t *testing.T) {
 		submitValue(fixture, t, triggerValue, setValue)
 		waitForSystemAlert(time.Second)
 
@@ -119,10 +119,10 @@ func testOneMinuteSystemAlert[T any](t *testing.T, alertName string, threshold f
 func testMultiMinuteSystemAlert[T any](t *testing.T, alertName string, threshold float64, min int, setValue systemAlertValueSetter[T], baselineValue, triggerValue, resolveValue T) {
 	t.Helper()
 
-	synctest.Test(t, func(t *testing.T) {
-		fixture := newSystemAlertTestFixture(t, alertName, min, threshold)
-		defer fixture.cleanup()
+	fixture := newSystemAlertTestFixture(t, alertName, min, threshold)
+	defer fixture.cleanup()
 
+	synctest.Test(t, func(t *testing.T) {
 		submitValue(fixture, t, baselineValue, setValue)
 		waitForSystemAlert(time.Minute + time.Second)
 		fixture.assertTriggered(t, false, "Alert should not be triggered yet")

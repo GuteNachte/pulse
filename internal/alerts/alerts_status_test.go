@@ -15,82 +15,107 @@ import (
 	pulseTests "gutenacht.site/pulse/internal/tests"
 )
 
+func newAlertOnlyHubWithUser(t *testing.T) (*pulseTests.TestHub, *core.Record) {
+	t.Helper()
+
+	hub, err := pulseTests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+
+	user, err := pulseTests.CreateUser(hub, "test@example.com", "password")
+	require.NoError(t, err)
+
+	return hub, user
+}
+
 func TestStatusAlerts(t *testing.T) {
+	hub, user := newAlertOnlyHubWithUser(t)
+	defer hub.Cleanup()
+
+	webhooks := newWebhookRecorder(t)
+	setUserWebhook(t, hub, user.Id, webhooks.URL("/status"))
+
+	systems, err := pulseTests.CreateSystems(hub, 4, user.Id, "paused")
+	require.NoError(t, err)
+
+	am := alerts.NewTestAlertManagerWithoutWorker(hub)
+
+	var alerts []*core.Record
+	for i, system := range systems {
+		alert, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
+			"name":   "Status",
+			"system": system.Id,
+			"user":   user.Id,
+			"min":    i + 1,
+		})
+		require.NoError(t, err)
+		alerts = append(alerts, alert)
+	}
+
 	synctest.Test(t, func(t *testing.T) {
-		hub, user := pulseTests.GetHubWithUser(t)
-		defer hub.Cleanup()
-		webhooks := newWebhookRecorder(t)
-		setUserWebhook(t, hub, user.Id, webhooks.URL("/status"))
-
-		systems, err := pulseTests.CreateSystems(hub, 4, user.Id, "paused")
-		assert.NoError(t, err)
-
-		var alerts []*core.Record
-		for i, system := range systems {
-			alert, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
-				"name":   "Status",
-				"system": system.Id,
-				"user":   user.Id,
-				"min":    i + 1,
-			})
-			assert.NoError(t, err)
-			alerts = append(alerts, alert)
-		}
-
-		time.Sleep(10 * time.Millisecond)
-
 		for _, alert := range alerts {
 			assert.False(t, alert.GetBool("triggered"), "Alert should not be triggered immediately")
 		}
+
 		assert.Zero(t, webhooks.Count(), "Expected 0 messages")
+
 		for _, system := range systems {
 			assert.EqualValues(t, "paused", system.GetString("status"), "System should be paused")
 		}
+
 		for _, system := range systems {
 			system.Set("status", "up")
-			err = hub.SaveNoValidate(system)
-			assert.NoError(t, err)
+			require.NoError(t, am.HandleStatusAlerts("up", system))
 		}
 		time.Sleep(time.Second)
-		assert.EqualValues(t, 0, hub.GetPendingAlertsCount(), "should have 0 alerts in the pendingAlerts map")
+		synctest.Wait()
+		assert.EqualValues(t, 0, am.GetPendingAlertsCount(), "should have 0 alerts in the pendingAlerts map")
+
 		for _, system := range systems {
 			system.Set("status", "down")
-			err = hub.SaveNoValidate(system)
-			assert.NoError(t, err)
+			require.NoError(t, am.HandleStatusAlerts("down", system))
 		}
+
 		// after 30 seconds, should have 4 alerts in the pendingAlerts map, no triggered alerts
 		time.Sleep(time.Second * 30)
-		assert.EqualValues(t, 4, hub.GetPendingAlertsCount(), "should have 4 alerts in the pendingAlerts map")
+		synctest.Wait()
+		assert.EqualValues(t, 4, am.GetPendingAlertsCount(), "should have 4 alerts in the pendingAlerts map")
 		triggeredCount, err := hub.CountRecords("alerts", dbx.HashExp{"triggered": true})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.EqualValues(t, 0, triggeredCount, "should have 0 alert triggered")
 		assert.EqualValues(t, 0, webhooks.Count(), "should have 0 messages sent")
+
 		// after 1:30 seconds, should have 1 triggered alert and 3 pending alerts
 		time.Sleep(time.Second * 60)
-		assert.EqualValues(t, 3, hub.GetPendingAlertsCount(), "should have 3 alerts in the pendingAlerts map")
+		synctest.Wait()
+		assert.EqualValues(t, 3, am.GetPendingAlertsCount(), "should have 3 alerts in the pendingAlerts map")
 		triggeredCount, err = hub.CountRecords("alerts", dbx.HashExp{"triggered": true})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.EqualValues(t, 1, triggeredCount, "should have 1 alert triggered")
 		assert.EqualValues(t, 1, webhooks.Count(), "should have 1 messages sent")
+
 		// after 2:30 seconds, should have 2 triggered alerts and 2 pending alerts
 		time.Sleep(time.Second * 60)
-		assert.EqualValues(t, 2, hub.GetPendingAlertsCount(), "should have 2 alerts in the pendingAlerts map")
+		synctest.Wait()
+		assert.EqualValues(t, 2, am.GetPendingAlertsCount(), "should have 2 alerts in the pendingAlerts map")
 		triggeredCount, err = hub.CountRecords("alerts", dbx.HashExp{"triggered": true})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.EqualValues(t, 2, triggeredCount, "should have 2 alert triggered")
 		assert.EqualValues(t, 2, webhooks.Count(), "should have 2 messages sent")
+
 		// now we will bring the remaning systems back up
 		for _, system := range systems {
 			system.Set("status", "up")
-			err = hub.SaveNoValidate(system)
-			assert.NoError(t, err)
+			require.NoError(t, am.HandleStatusAlerts("up", system))
 		}
 		time.Sleep(time.Second)
+		synctest.Wait()
+
 		// should have 0 alerts in the pendingAlerts map and 0 alerts triggered
-		assert.EqualValues(t, 0, hub.GetPendingAlertsCount(), "should have 0 alerts in the pendingAlerts map")
+		assert.EqualValues(t, 0, am.GetPendingAlertsCount(), "should have 0 alerts in the pendingAlerts map")
 		triggeredCount, err = hub.CountRecords("alerts", dbx.HashExp{"triggered": true})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Zero(t, triggeredCount, "should have 0 alert triggered")
+
 		// 4 messages sent, 2 down alerts and 2 up alerts for first 2 systems
 		assert.EqualValues(t, 4, webhooks.Count(), "should have 4 messages sent")
 	})
@@ -209,34 +234,34 @@ func TestHandleStatusAlertsDoesNotSendRecoveryWhileDownIsOnlyPending(t *testing.
 }
 
 func TestStatusAlertTimerCancellationPreventsBoundaryDelivery(t *testing.T) {
+	hub, user := newAlertOnlyHubWithUser(t)
+	defer hub.Cleanup()
+	webhooks := newWebhookRecorder(t)
+	setUserWebhook(t, hub, user.Id, webhooks.URL("/status-timer-cancel"))
+
+	systemCollection, err := hub.FindCollectionByNameOrId("systems")
+	require.NoError(t, err)
+	system := core.NewRecord(systemCollection)
+	system.Set("name", "test-system")
+	system.Set("status", "up")
+	system.Set("host", "127.0.0.1")
+	system.Set("users", []string{user.Id})
+	require.NoError(t, hub.Save(system))
+
+	alertCollection, err := hub.FindCollectionByNameOrId("alerts")
+	require.NoError(t, err)
+	alert := core.NewRecord(alertCollection)
+	alert.Set("user", user.Id)
+	alert.Set("system", system.Id)
+	alert.Set("name", "Status")
+	alert.Set("triggered", false)
+	alert.Set("min", 1)
+	require.NoError(t, hub.Save(alert))
+
+	initialWebhookCount := webhooks.Count()
+	am := alerts.NewTestAlertManagerWithoutWorker(hub)
+
 	synctest.Test(t, func(t *testing.T) {
-		hub, user := pulseTests.GetHubWithUser(t)
-		defer hub.Cleanup()
-		webhooks := newWebhookRecorder(t)
-		setUserWebhook(t, hub, user.Id, webhooks.URL("/status-timer-cancel"))
-
-		systemCollection, err := hub.FindCollectionByNameOrId("systems")
-		require.NoError(t, err)
-		system := core.NewRecord(systemCollection)
-		system.Set("name", "test-system")
-		system.Set("status", "up")
-		system.Set("host", "127.0.0.1")
-		system.Set("users", []string{user.Id})
-		require.NoError(t, hub.Save(system))
-
-		alertCollection, err := hub.FindCollectionByNameOrId("alerts")
-		require.NoError(t, err)
-		alert := core.NewRecord(alertCollection)
-		alert.Set("user", user.Id)
-		alert.Set("system", system.Id)
-		alert.Set("name", "Status")
-		alert.Set("triggered", false)
-		alert.Set("min", 1)
-		require.NoError(t, hub.Save(alert))
-
-		initialWebhookCount := webhooks.Count()
-		am := alerts.NewTestAlertManagerWithoutWorker(hub)
-
 		require.NoError(t, am.HandleStatusAlerts("down", system))
 		assert.Equal(t, 1, am.GetPendingAlertsCount(), "down transition should register a pending alert immediately")
 		require.True(t, am.ResetPendingAlertTimer(alert.Id, 25*time.Millisecond), "test should shorten the pending alert timer")
@@ -304,47 +329,45 @@ func TestStatusAlertDownFiresAfterDelayExpires(t *testing.T) {
 }
 
 func TestStatusAlertMultipleUsersRespectDifferentMinutes(t *testing.T) {
+	hub, user1 := newAlertOnlyHubWithUser(t)
+	defer hub.Cleanup()
+	webhooks := newWebhookRecorder(t)
+	setUserWebhook(t, hub, user1.Id, webhooks.URL("/status-user1"))
+
+	user2, err := pulseTests.CreateUser(hub, "user2@example.com", "password")
+	require.NoError(t, err)
+	setUserWebhook(t, hub, user2.Id, webhooks.URL("/status-user2"))
+
+	system, err := pulseTests.CreateRecord(hub, "systems", map[string]any{
+		"name":   "shared-system",
+		"users":  []string{user1.Id, user2.Id},
+		"host":   "127.0.0.1",
+		"status": "up",
+	})
+	require.NoError(t, err)
+
+	alertUser1, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
+		"name":   "Status",
+		"system": system.Id,
+		"user":   user1.Id,
+		"min":    1,
+	})
+	require.NoError(t, err)
+	alertUser2, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
+		"name":   "Status",
+		"system": system.Id,
+		"user":   user2.Id,
+		"min":    2,
+	})
+	require.NoError(t, err)
+
+	am := alerts.NewTestAlertManagerWithoutWorker(hub)
+
 	synctest.Test(t, func(t *testing.T) {
-		hub, user1 := pulseTests.GetHubWithUser(t)
-		defer hub.Cleanup()
-		webhooks := newWebhookRecorder(t)
-		setUserWebhook(t, hub, user1.Id, webhooks.URL("/status-user1"))
-
-		user2, err := pulseTests.CreateUser(hub, "user2@example.com", "password")
-		require.NoError(t, err)
-		setUserWebhook(t, hub, user2.Id, webhooks.URL("/status-user2"))
-
-		system, err := pulseTests.CreateRecord(hub, "systems", map[string]any{
-			"name":  "shared-system",
-			"users": []string{user1.Id},
-			"host":  "127.0.0.1",
-		})
-		require.NoError(t, err)
-		system.Set("users+", user2.Id)
-		system.Set("status", "up")
-		require.NoError(t, hub.SaveNoValidate(system))
-
-		alertUser1, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
-			"name":   "Status",
-			"system": system.Id,
-			"user":   user1.Id,
-			"min":    1,
-		})
-		require.NoError(t, err)
-		alertUser2, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
-			"name":   "Status",
-			"system": system.Id,
-			"user":   user2.Id,
-			"min":    2,
-		})
-		require.NoError(t, err)
-
-		time.Sleep(10 * time.Millisecond)
-
 		system.Set("status", "down")
-		require.NoError(t, hub.SaveNoValidate(system))
+		require.NoError(t, am.HandleStatusAlerts("down", system))
 
-		assert.Equal(t, 2, hub.GetPendingAlertsCount(), "both user alerts should be pending after the system goes down")
+		assert.Equal(t, 2, am.GetPendingAlertsCount(), "both user alerts should be pending after the system goes down")
 
 		time.Sleep(59 * time.Second)
 		synctest.Wait()
@@ -355,7 +378,7 @@ func TestStatusAlertMultipleUsersRespectDifferentMinutes(t *testing.T) {
 
 		require.Equal(t, 1, webhooks.CountPath("/status-user1"), "only the first user's alert should send after one minute")
 		assert.Equal(t, 0, webhooks.CountPath("/status-user2"), "the later user's alert should still be waiting")
-		assert.Equal(t, 1, hub.GetPendingAlertsCount(), "the later user alert should still be pending")
+		assert.Equal(t, 1, am.GetPendingAlertsCount(), "the later user alert should still be pending")
 
 		time.Sleep(58 * time.Second)
 		synctest.Wait()
@@ -366,7 +389,7 @@ func TestStatusAlertMultipleUsersRespectDifferentMinutes(t *testing.T) {
 
 		require.Equal(t, 2, webhooks.Count(), "both users should eventually receive their own status alert")
 		assert.Equal(t, 1, webhooks.CountPath("/status-user2"), "the second user's alert should send after two minutes")
-		assert.Zero(t, hub.GetPendingAlertsCount(), "all pending alerts should be consumed after both timers fire")
+		assert.Zero(t, am.GetPendingAlertsCount(), "all pending alerts should be consumed after both timers fire")
 
 		alertUser1, err = hub.FindRecordById("alerts", alertUser1.Id)
 		require.NoError(t, err)
@@ -379,62 +402,60 @@ func TestStatusAlertMultipleUsersRespectDifferentMinutes(t *testing.T) {
 }
 
 func TestStatusAlertMultipleUsersRecoveryBetweenMinutesOnlyAlertsEarlierUser(t *testing.T) {
+	hub, user1 := newAlertOnlyHubWithUser(t)
+	defer hub.Cleanup()
+	webhooks := newWebhookRecorder(t)
+	setUserWebhook(t, hub, user1.Id, webhooks.URL("/status-recovery-user1"))
+
+	user2, err := pulseTests.CreateUser(hub, "user2@example.com", "password")
+	require.NoError(t, err)
+	setUserWebhook(t, hub, user2.Id, webhooks.URL("/status-recovery-user2"))
+
+	system, err := pulseTests.CreateRecord(hub, "systems", map[string]any{
+		"name":   "shared-system",
+		"users":  []string{user1.Id, user2.Id},
+		"host":   "127.0.0.1",
+		"status": "up",
+	})
+	require.NoError(t, err)
+
+	alertUser1, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
+		"name":   "Status",
+		"system": system.Id,
+		"user":   user1.Id,
+		"min":    1,
+	})
+	require.NoError(t, err)
+	alertUser2, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
+		"name":   "Status",
+		"system": system.Id,
+		"user":   user2.Id,
+		"min":    2,
+	})
+	require.NoError(t, err)
+
+	am := alerts.NewTestAlertManagerWithoutWorker(hub)
+
 	synctest.Test(t, func(t *testing.T) {
-		hub, user1 := pulseTests.GetHubWithUser(t)
-		defer hub.Cleanup()
-		webhooks := newWebhookRecorder(t)
-		setUserWebhook(t, hub, user1.Id, webhooks.URL("/status-recovery-user1"))
-
-		user2, err := pulseTests.CreateUser(hub, "user2@example.com", "password")
-		require.NoError(t, err)
-		setUserWebhook(t, hub, user2.Id, webhooks.URL("/status-recovery-user2"))
-
-		system, err := pulseTests.CreateRecord(hub, "systems", map[string]any{
-			"name":  "shared-system",
-			"users": []string{user1.Id},
-			"host":  "127.0.0.1",
-		})
-		require.NoError(t, err)
-		system.Set("users+", user2.Id)
-		system.Set("status", "up")
-		require.NoError(t, hub.SaveNoValidate(system))
-
-		alertUser1, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
-			"name":   "Status",
-			"system": system.Id,
-			"user":   user1.Id,
-			"min":    1,
-		})
-		require.NoError(t, err)
-		alertUser2, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
-			"name":   "Status",
-			"system": system.Id,
-			"user":   user2.Id,
-			"min":    2,
-		})
-		require.NoError(t, err)
-
-		time.Sleep(10 * time.Millisecond)
-
 		system.Set("status", "down")
-		require.NoError(t, hub.SaveNoValidate(system))
+		require.NoError(t, am.HandleStatusAlerts("down", system))
 
 		time.Sleep(61 * time.Second)
 		synctest.Wait()
 
 		require.Equal(t, 1, webhooks.CountPath("/status-recovery-user1"), "the first user's down alert should send before recovery")
 		assert.Equal(t, 0, webhooks.CountPath("/status-recovery-user2"), "the second user's alert should still be pending")
-		assert.Equal(t, 1, hub.GetPendingAlertsCount(), "the second user's alert should still be pending")
+		assert.Equal(t, 1, am.GetPendingAlertsCount(), "the second user's alert should still be pending")
 
 		system.Set("status", "up")
-		require.NoError(t, hub.SaveNoValidate(system))
+		require.NoError(t, am.HandleStatusAlerts("up", system))
 
 		time.Sleep(time.Second)
 		synctest.Wait()
 
 		require.Equal(t, 2, webhooks.CountPath("/status-recovery-user1"), "recovery should notify only the user whose down alert had already triggered")
 		assert.Equal(t, 0, webhooks.CountPath("/status-recovery-user2"), "user2 should not receive a recovery notification")
-		assert.Zero(t, hub.GetPendingAlertsCount(), "recovery should cancel the later user's pending alert")
+		assert.Zero(t, am.GetPendingAlertsCount(), "recovery should cancel the later user's pending alert")
 
 		time.Sleep(61 * time.Second)
 		synctest.Wait()
@@ -781,33 +802,34 @@ func TestResolveStatusAlerts(t *testing.T) {
 }
 
 func TestAlertsHistoryStatus(t *testing.T) {
+	hub, user := newAlertOnlyHubWithUser(t)
+	defer hub.Cleanup()
+	webhooks := newWebhookRecorder(t)
+	setUserWebhook(t, hub, user.Id, webhooks.URL("/status-cleared-before-send"))
+
+	// Create a system
+	systems, err := pulseTests.CreateSystems(hub, 1, user.Id, "up")
+	require.NoError(t, err)
+	system := systems[0]
+
+	// Create a status alertRecord for the system
+	alertRecord, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
+		"name":   "Status",
+		"system": system.Id,
+		"user":   user.Id,
+		"min":    1,
+	})
+	require.NoError(t, err)
+
+	am := alerts.NewTestAlertManagerWithoutWorker(hub)
+
 	synctest.Test(t, func(t *testing.T) {
-		hub, user := pulseTests.GetHubWithUser(t)
-		defer hub.Cleanup()
-		webhooks := newWebhookRecorder(t)
-		setUserWebhook(t, hub, user.Id, webhooks.URL("/status-cleared-before-send"))
-
-		// Create a system
-		systems, err := pulseTests.CreateSystems(hub, 1, user.Id, "up")
-		assert.NoError(t, err)
-		system := systems[0]
-
-		// Create a status alertRecord for the system
-		alertRecord, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
-			"name":   "Status",
-			"system": system.Id,
-			"user":   user.Id,
-			"min":    1,
-		})
-		assert.NoError(t, err)
-
 		// Verify alert is not triggered initially
 		assert.False(t, alertRecord.GetBool("triggered"), "Alert should not be triggered initially")
 
 		// Set the system to 'down' (this should trigger the alert)
 		system.Set("status", "down")
-		err = hub.Save(system)
-		assert.NoError(t, err)
+		require.NoError(t, am.HandleStatusAlerts("down", system))
 
 		time.Sleep(time.Second * 30)
 		synctest.Wait()
@@ -830,8 +852,7 @@ func TestAlertsHistoryStatus(t *testing.T) {
 
 		// Set the system back to 'up' (this should resolve the alert)
 		system.Set("status", "up")
-		err = hub.Save(system)
-		assert.NoError(t, err)
+		require.NoError(t, am.HandleStatusAlerts("up", system))
 
 		time.Sleep(time.Second)
 		synctest.Wait()
@@ -849,43 +870,43 @@ func TestAlertsHistoryStatus(t *testing.T) {
 }
 
 func TestStatusAlertClearedBeforeSend(t *testing.T) {
+	hub, user := newAlertOnlyHubWithUser(t)
+	defer hub.Cleanup()
+	webhooks := newWebhookRecorder(t)
+	setUserWebhook(t, hub, user.Id, webhooks.URL("/status-cleared-before-send"))
+
+	// Create a system
+	systems, err := pulseTests.CreateSystems(hub, 1, user.Id, "up")
+	require.NoError(t, err)
+	system := systems[0]
+
+	initialWebhookCount := webhooks.Count()
+
+	// Create a status alertRecord for the system
+	alertRecord, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
+		"name":   "Status",
+		"system": system.Id,
+		"user":   user.Id,
+		"min":    1,
+	})
+	require.NoError(t, err)
+
+	am := alerts.NewTestAlertManagerWithoutWorker(hub)
+
 	synctest.Test(t, func(t *testing.T) {
-		hub, user := pulseTests.GetHubWithUser(t)
-		defer hub.Cleanup()
-		webhooks := newWebhookRecorder(t)
-		setUserWebhook(t, hub, user.Id, webhooks.URL("/status-cleared-before-send"))
-
-		// Create a system
-		systems, err := pulseTests.CreateSystems(hub, 1, user.Id, "up")
-		assert.NoError(t, err)
-		system := systems[0]
-
-		initialWebhookCount := webhooks.Count()
-
-		// Create a status alertRecord for the system
-		alertRecord, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
-			"name":   "Status",
-			"system": system.Id,
-			"user":   user.Id,
-			"min":    1,
-		})
-		assert.NoError(t, err)
-
 		// Verify alert is not triggered initially
 		assert.False(t, alertRecord.GetBool("triggered"), "Alert should not be triggered initially")
 
 		// Set the system to 'down' (this should trigger the alert)
 		system.Set("status", "down")
-		err = hub.Save(system)
-		assert.NoError(t, err)
+		require.NoError(t, am.HandleStatusAlerts("down", system))
 
 		time.Sleep(time.Second * 30)
 		synctest.Wait()
 
 		// Set system back up to clear the pending alert before it triggers
 		system.Set("status", "up")
-		err = hub.Save(system)
-		assert.NoError(t, err)
+		require.NoError(t, am.HandleStatusAlerts("up", system))
 
 		time.Sleep(time.Minute)
 		synctest.Wait()

@@ -4,7 +4,7 @@
 	"description": "Pulse 设备、容器、网站与告警移动控制台",
 	"icons": [
 		{
-			"src": "icon.png?v=1.0.5",
+			"src": "icon.png?v=1.0.6",
 			"sizes": "512x512",
 			"type": "image/png"
 		}

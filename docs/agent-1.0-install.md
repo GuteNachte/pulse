@@ -31,7 +31,7 @@
 - 宿主机需要 Docker 或兼容运行时。
 - 如果需要监控并控制同机容器，必须读写挂载 `/var/run/docker.sock`。
 - 如果需要 Intel / AMD 核显指标，可按需映射 `/dev/dri`；不再默认依赖宿主机 `video/render` 组名。
-- 容器镜像默认从 HTTPS Harbor 拉取：`registry.example.com/infra/pulse-agent:1.0.5`。
+- 容器镜像默认从 HTTPS Harbor 拉取：`registry.example.com/infra/pulse-agent:1.0.6`。
 - Agent 必须使用专用数据目录保存配对凭据和本地状态，不再建议使用当前目录下的临时相对路径。
 
 当前安装入口拆成三类：
@@ -47,7 +47,7 @@
 ```yaml
 services:
   pulse-agent:
-    image: registry.example.com/infra/pulse-agent:1.0.5
+    image: registry.example.com/infra/pulse-agent:1.0.6
     container_name: pulse-agent
     restart: unless-stopped
     network_mode: host

@@ -15,23 +15,25 @@ import (
 )
 
 func TestAlertsHistory(t *testing.T) {
+	hub, user := newAlertOnlyHubWithUser(t)
+	defer hub.Cleanup()
+
+	// Create systems and alerts
+	systems, err := pulseTests.CreateSystems(hub, 1, user.Id, "up")
+	assert.NoError(t, err)
+	system := systems[0]
+
+	alert, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
+		"name":   "Status",
+		"system": system.Id,
+		"user":   user.Id,
+		"min":    1,
+	})
+	assert.NoError(t, err)
+
+	am := alerts.NewTestAlertManagerWithoutWorker(hub)
+
 	synctest.Test(t, func(t *testing.T) {
-		hub, user := pulseTests.GetHubWithUser(t)
-		defer hub.Cleanup()
-
-		// Create systems and alerts
-		systems, err := pulseTests.CreateSystems(hub, 1, user.Id, "up")
-		assert.NoError(t, err)
-		system := systems[0]
-
-		alert, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
-			"name":   "Status",
-			"system": system.Id,
-			"user":   user.Id,
-			"min":    1,
-		})
-		assert.NoError(t, err)
-
 		// Initially, no alert history records should exist
 		initialHistoryCount, err := hub.CountRecords("alerts_history", nil)
 		assert.NoError(t, err)
@@ -39,13 +41,13 @@ func TestAlertsHistory(t *testing.T) {
 
 		// Set system to up initially
 		system.Set("status", "up")
-		err = hub.SaveNoValidate(system)
+		err = am.HandleStatusAlerts("up", system)
 		assert.NoError(t, err)
 		time.Sleep(10 * time.Millisecond)
 
 		// Set system to down to trigger alert
 		system.Set("status", "down")
-		err = hub.SaveNoValidate(system)
+		err = am.HandleStatusAlerts("down", system)
 		assert.NoError(t, err)
 
 		// Wait for alert to trigger (after the downtime delay)
@@ -77,7 +79,7 @@ func TestAlertsHistory(t *testing.T) {
 
 		// Now resolve the alert by setting system back to up
 		system.Set("status", "up")
-		err = hub.SaveNoValidate(system)
+		err = am.HandleStatusAlerts("up", system)
 		assert.NoError(t, err)
 		time.Sleep(200 * time.Millisecond)
 
@@ -111,7 +113,7 @@ func TestAlertsHistory(t *testing.T) {
 
 		// Set system2 to down to trigger alert
 		system2.Set("status", "down")
-		err = hub.SaveNoValidate(system2)
+		err = am.HandleStatusAlerts("down", system2)
 		assert.NoError(t, err)
 
 		// Wait for alert to trigger

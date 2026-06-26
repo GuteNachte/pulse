@@ -41,6 +41,7 @@ export const navigate = (urlString: string) => {
 export function Link(props: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
 	return (
 		// biome-ignore lint/a11y/noStaticElementInteractions: Internal SPA links intentionally intercept anchor clicks for the Nanostores router.
+		// biome-ignore lint/a11y/useKeyWithClickEvents: Keyboard activation still uses the anchor's native href behavior.
 		<a
 			{...props}
 			// biome-ignore lint/a11y/useValidAnchor: The href is provided by callers and handled by the client-side router.

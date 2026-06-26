@@ -21,7 +21,7 @@ import type { PulseInfo } from "@/types"
 import { Logo } from "../logo"
 import { ModeToggle } from "../mode-toggle"
 
-export default function () {
+export default function Login() {
 	const [isFirstRun, setFirstRun] = useState(false)
 	const [hubUrl, setHubUrl] = useState("")
 	const [isCheckingHub, setIsCheckingHub] = useState(true)

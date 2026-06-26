@@ -26,7 +26,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\run-hub
 
 本机固定使用：
 
-- 镜像：`pulse-hub:1.0.5`
+- 镜像：`pulse-hub:1.0.6`
 - 容器名：`pulse-hub`
 - 数据目录：`.\pulse_data`
 - 访问地址：`http://127.0.0.1:8090`
@@ -65,7 +65,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\run-hub
 ```yaml
 services:
   pulse-hub:
-    image: registry.example.com/infra/pulse-hub:1.0.5
+    image: registry.example.com/infra/pulse-hub:1.0.6
     container_name: pulse-hub
     restart: unless-stopped
     network_mode: host
@@ -77,7 +77,7 @@ services:
       - --http=0.0.0.0:8090
 
   pulse-agent:
-    image: registry.example.com/infra/pulse-agent:1.0.5
+    image: registry.example.com/infra/pulse-agent:1.0.6
     container_name: pulse-agent
     restart: unless-stopped
     network_mode: host
@@ -124,13 +124,13 @@ docker logs --tail=100 pulse-agent
 3. 先执行版本一致性校验，确认 Web、Hub、Agent、Android App、Dockerfile、Compose 模板和发布脚本默认版本都对齐：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\check-version-consistency.ps1 -Version 1.0.5
+powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\check-version-consistency.ps1 -Version 1.0.6
 ```
 
 4. 使用同一个显式版本号同步构建 Agent 和 Hub：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\publish-release-v1.ps1 -Version 1.0.5
+powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\publish-release-v1.ps1 -Version 1.0.6
 ```
 
 这条统一发布入口会依次构建 Windows Agent、构建并推送 Linux Agent 镜像、写入 Agent release manifest、构建并推送 Hub 镜像，并同步构建 Android App。以后不要只发布 Hub、Web、Android 或 Agent 中的某一端；只要任一端有改动，Hub、Agent、Web 前端和 Android App 都使用同一个显式版本号一起发布，防止版本号和功能说明错位。
@@ -139,7 +139,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\publish
 6. 执行发布产物验证：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-release-v1.ps1 -Version 1.0.5
+powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-release-v1.ps1 -Version 1.0.6
 ```
 
 7. 按 `docs\release-deployment-runbook.md` 在 FlyNAS 执行 `docker compose pull && docker compose up -d --force-recreate`。

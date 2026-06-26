@@ -18,994 +18,994 @@ msgstr ""
 "X-Crowdin-File: /main/internal/site/src/locales/en/en.po\n"
 "X-Crowdin-File-ID: 32\n"
 
-#: src/lib/utils.ts
+#: src/lib/utils.ts:536
 msgid "{count, plural, one {{countString} day} other {{countString} days}}"
 msgstr "{count, plural, one {{countString} 天} other {{countString} 天}}"
 
-#: src/lib/utils.ts
+#: src/lib/utils.ts:534
 msgid "{count, plural, one {{countString} hour} other {{countString} hours}}"
 msgstr "{count, plural, one {{countString} 小时} other {{countString} 小时}}"
 
-#: src/lib/utils.ts
+#: src/lib/utils.ts:527
 msgid "{count, plural, one {{countString} minute} few {{countString} minutes} many {{countString} minutes} other {{countString} minutes}}"
 msgstr "{count, plural, one {{countString} 分钟} few {{countString} 分钟} many {{countString} 分钟} other {{countString} 分钟}}"
 
-#: src/lib/utils.ts
+#: src/lib/utils.ts:196
 msgid "1 hour"
 msgstr "1 小时"
 
 #. Load average
-#: src/components/routes/system/charts/load-average-chart.tsx
+#: src/components/routes/system/charts/load-average-chart.tsx:37
 msgid "1 min"
 msgstr "1 分钟"
 
-#: src/lib/utils.ts
+#: src/lib/utils.ts:187
 msgid "1 minute"
 msgstr "1 分钟"
 
-#: src/lib/utils.ts
+#: src/lib/utils.ts:219
 msgid "1 week"
 msgstr "1 周"
 
-#: src/lib/utils.ts
+#: src/lib/utils.ts:204
 msgid "12 hours"
 msgstr "12 小时"
 
 #. Load average
-#: src/components/routes/system/charts/load-average-chart.tsx
+#: src/components/routes/system/charts/load-average-chart.tsx:47
 msgid "15 min"
 msgstr "15 分钟"
 
-#: src/lib/utils.ts
+#: src/lib/utils.ts:212
 msgid "24 hours"
 msgstr "24 小时"
 
-#: src/lib/utils.ts
+#: src/lib/utils.ts:227
 msgid "30 days"
 msgstr "30 天"
 
 #. Load average
-#: src/components/routes/system/charts/load-average-chart.tsx
+#: src/components/routes/system/charts/load-average-chart.tsx:42
 msgid "5 min"
 msgstr "5 分钟"
 
 #. Table column
-#: src/components/routes/settings/tokens-fingerprints.tsx
-#: src/components/routes/system/smart-table.tsx
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/routes/settings/tokens-fingerprints.tsx:226
+#: src/components/routes/system/smart-table.tsx:388
+#: src/components/systems-table/systems-table-columns.tsx:449
 msgid "Actions"
 msgstr "操作"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx
+#: src/components/routes/settings/alerts-history-data-table.tsx:249
 msgid "Active"
 msgstr "活跃"
 
-#: src/components/active-alerts.tsx
+#: src/components/active-alerts.tsx:42
 msgid "Active Alerts"
 msgstr "启用的警报"
 
-#: src/components/add-system.tsx
-#: src/components/routes/clients.tsx
+#: src/components/add-system.tsx:328
+#: src/components/routes/clients.tsx:40
 msgid "Add system"
 msgstr "添加系统"
 
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/systems-table/systems-table-columns.tsx:416
 msgid "Agent"
 msgstr "客户端"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx
+#: src/components/routes/settings/alerts-history-data-table.tsx:66
 msgid "Alert History"
 msgstr "警报历史"
 
-#: src/components/routes/clients.tsx
+#: src/components/routes/clients.tsx:22
 msgid "All Clients"
 msgstr "所有客户端"
 
-#: src/components/routes/containers.tsx
+#: src/components/routes/containers.tsx:13
 msgid "All Containers"
 msgstr "所有容器"
 
-#: src/components/systems-table/systems-table.tsx
+#: src/components/systems-table/systems-table.tsx:139
 msgid "All Systems"
 msgstr "所有客户端"
 
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/systems-table/systems-table-columns.tsx:787
 msgid "Are you sure you want to delete {name}?"
 msgstr "您确定要删除 {name} 吗？"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx
+#: src/components/routes/settings/alerts-history-data-table.tsx:347
 msgid "Are you sure?"
 msgstr "您确定吗？"
 
-#: src/components/routes/system/chart-card.tsx
+#: src/components/routes/system/chart-card.tsx:77
 msgid "Average"
 msgstr "平均"
 
 #. placeholder {0}: alertData.unit
-#: src/components/alerts/alerts-sheet.tsx
+#: src/components/alerts/alerts-sheet.tsx:336
 msgid "Average drops below <0>{value}{0}</0>"
 msgstr "平均值降至<0>{value}{0}</0>以下"
 
 #. placeholder {0}: alertData.unit
-#: src/components/alerts/alerts-sheet.tsx
+#: src/components/alerts/alerts-sheet.tsx:344
 msgid "Average exceeds <0>{value}{0}</0>"
 msgstr "平均值超过<0>{value}{0}</0>"
 
-#: src/components/routes/system/disk-io-sheet.tsx
+#: src/components/routes/system/disk-io-sheet.tsx:132
 msgid "Average number of I/O operations waiting to be serviced"
 msgstr "等待服务的平均 I/O 操作数"
 
-#: src/components/routes/system/charts/gpu-charts.tsx
+#: src/components/routes/system/charts/gpu-charts.tsx:85
 msgid "Average power consumption of GPUs"
 msgstr "GPU 平均能耗"
 
-#: src/components/routes/system/disk-io-sheet.tsx
+#: src/components/routes/system/disk-io-sheet.tsx:153
 msgctxt "Disk I/O average operation time (iostat await)"
 msgid "Average queue to completion time per operation"
 msgstr "每次操作的平均队列到完成时间"
 
-#: src/components/routes/system/charts/cpu-charts.tsx
+#: src/components/routes/system/charts/cpu-charts.tsx:30
 msgid "Average system-wide CPU utilization"
 msgstr "系统范围内的平均 CPU 使用率"
 
 #. placeholder {0}: gpu.n
-#: src/components/routes/system/charts/gpu-charts.tsx
+#: src/components/routes/system/charts/gpu-charts.tsx:130
 msgid "Average utilization of {0}"
 msgstr "{0} 平均利用率"
 
-#: src/components/routes/system/charts/network-charts.tsx
-#: src/lib/alerts.ts
+#: src/components/routes/system/charts/network-charts.tsx:34
+#: src/lib/alerts.ts:40
 msgid "Bandwidth"
 msgstr "带宽"
 
 #. Battery label in systems table header
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/systems-table/systems-table-columns.tsx:354
 msgid "Bat"
 msgstr "电池"
 
-#: src/components/routes/system/charts/sensor-charts.tsx
-#: src/lib/alerts.ts
+#: src/components/routes/system/charts/sensor-charts.tsx:35
+#: src/lib/alerts.ts:89
 msgid "Battery"
 msgstr "电池"
 
 #. placeholder {0}: alert.value
 #. placeholder {1}: info.unit
 #. placeholder {2}: alert.min
-#: src/components/active-alerts.tsx
+#: src/components/active-alerts.tsx:65
 msgid "Below {0}{1} in last {2, plural, one {# minute} other {# minutes}}"
 msgstr "在过去的{2, plural, one {# 分钟} other {# 分钟}}中低于{0}{1}"
 
-#: src/components/routes/settings/general.tsx
-#: src/components/routes/settings/general.tsx
+#: src/components/routes/settings/general.tsx:161
+#: src/components/routes/settings/general.tsx:180
 msgid "Bits (Kbps, Mbps, Gbps)"
 msgstr "比特 (Kbps, Mbps, Gbps)"
 
-#: src/components/routes/settings/general.tsx
-#: src/components/routes/settings/general.tsx
+#: src/components/routes/settings/general.tsx:158
+#: src/components/routes/settings/general.tsx:177
 msgid "Bytes (KB/s, MB/s, GB/s)"
 msgstr "字节 (KB/s, MB/s, GB/s)"
 
-#: src/components/routes/system/charts/memory-charts.tsx
+#: src/components/routes/system/charts/memory-charts.tsx:68
 msgid "Cache / Buffers"
 msgstr "缓存/缓冲区"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/routes/settings/alerts-history-data-table.tsx:355
+#: src/components/systems-table/systems-table-columns.tsx:824
 msgid "Cancel"
 msgstr "取消"
 
-#: src/components/routes/system/smart-table.tsx
+#: src/components/routes/system/smart-table.tsx:128
 msgid "Capacity"
 msgstr "容量"
 
-#: src/components/routes/settings/general.tsx
+#: src/components/routes/settings/general.tsx:136
 msgid "Celsius (°C)"
 msgstr "摄氏度 (°C)"
 
-#: src/components/routes/system/charts/sensor-charts.tsx
+#: src/components/routes/system/charts/sensor-charts.tsx:46
 msgid "Charge"
 msgstr "充电"
 
 #. Context: Battery state
-#: src/lib/i18n.ts
+#: src/lib/i18n.ts:35
 msgid "Charging"
 msgstr "充电中"
 
-#: src/components/routes/settings/general.tsx
+#: src/components/routes/settings/general.tsx:83
 msgid "Chart options"
 msgstr "图表选项"
 
-#: src/components/routes/settings/layout.tsx
+#: src/components/routes/settings/layout.tsx:87
 msgid "Check logs for more details."
 msgstr "检查日志以获取更多详细信息。"
 
-#: src/components/routes/system/smart-table.tsx
+#: src/components/routes/system/smart-table.tsx:546
 msgid "Clear"
 msgstr "清除"
 
-#: src/components/ui/input-copy.tsx
-#: src/components/ui/input-copy.tsx
+#: src/components/ui/input-copy.tsx:28
+#: src/components/ui/input-copy.tsx:34
 msgid "Click to copy"
 msgstr "点击复制"
 
-#: src/components/login/auth-form.tsx
-#: src/components/login/auth-form.tsx
+#: src/components/login/auth-form.tsx:410
+#: src/components/login/auth-form.tsx:411
 msgid "Confirm password"
 msgstr "确认密码"
 
-#: src/components/active-alerts.tsx
+#: src/components/active-alerts.tsx:63
 msgid "Connection is down"
 msgstr "连接已断开"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/routes/settings/alerts-history-data-table.tsx:361
+#: src/components/systems-table/systems-table-columns.tsx:836
 msgid "Continue"
 msgstr "继续"
 
-#: src/lib/utils.ts
-#: src/lib/utils.ts
+#: src/lib/utils.ts:32
+#: src/lib/utils.ts:44
 msgid "Copied to clipboard"
 msgstr "已复制到剪贴板"
 
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/systems-table/systems-table-columns.tsx:700
 msgid "Copy name"
 msgstr "复制名称"
 
-#: src/components/containers-table/containers-table-columns.tsx
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/containers-table/containers-table-columns.tsx:178
+#: src/components/systems-table/systems-table-columns.tsx:216
 msgid "CPU"
 msgstr "CPU"
 
-#: src/components/routes/system/cpu-sheet.tsx
+#: src/components/routes/system/cpu-sheet.tsx:139
 msgid "CPU Cores"
 msgstr "CPU 核心"
 
-#: src/components/routes/system/cpu-sheet.tsx
+#: src/components/routes/system/cpu-sheet.tsx:115
 msgid "CPU Time Breakdown"
 msgstr "CPU 时间细分"
 
-#: src/components/routes/system/cpu-sheet.tsx
+#: src/components/routes/system/cpu-sheet.tsx:76
 msgid "CPU time breakdown and per-core utilization"
 msgstr "CPU 时间细分和每核心使用率"
 
-#: src/components/routes/system/charts/cpu-charts.tsx
-#: src/components/routes/system/charts/cpu-charts.tsx
-#: src/components/routes/system/cpu-sheet.tsx
-#: src/components/routes/system/cpu-sheet.tsx
-#: src/lib/alerts.ts
+#: src/components/routes/system/charts/cpu-charts.tsx:29
+#: src/components/routes/system/charts/cpu-charts.tsx:38
+#: src/components/routes/system/cpu-sheet.tsx:60
+#: src/components/routes/system/cpu-sheet.tsx:76
+#: src/lib/alerts.ts:22
 msgid "CPU Usage"
 msgstr "CPU 使用率"
 
-#: src/components/login/auth-form.tsx
+#: src/components/login/auth-form.tsx:440
 msgid "Create account"
 msgstr "创建账户"
 
 #. Context: date created
-#: src/components/alerts-history-columns.tsx
+#: src/components/alerts-history-columns.tsx:130
 msgid "Created"
 msgstr "创建时间"
 
-#: src/components/routes/settings/general.tsx
+#: src/components/routes/settings/general.tsx:203
 msgid "Critical (%)"
 msgstr "临界 (%)"
 
-#: src/components/routes/system/network-sheet.tsx
+#: src/components/routes/system/network-sheet.tsx:176
 msgid "Cumulative Download"
 msgstr "累计下载"
 
-#: src/components/routes/system/network-sheet.tsx
+#: src/components/routes/system/network-sheet.tsx:199
 msgid "Cumulative Upload"
 msgstr "累计上传"
 
 #. Context: Battery state
-#: src/components/routes/system/charts/sensor-charts.tsx
+#: src/components/routes/system/charts/sensor-charts.tsx:36
 msgid "Current state"
 msgstr "当前状态"
 
 #. Power Cycles
-#: src/components/routes/system/smart-table.tsx
+#: src/components/routes/system/smart-table.tsx:177
 msgid "Cycles"
 msgstr "循环次数"
 
-#: src/components/routes/settings/general.tsx
+#: src/components/routes/settings/general.tsx:86
 msgid "Default time period"
 msgstr "默认时间段"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx
-#: src/components/routes/system/smart-table.tsx
-#: src/components/routes/system/smart-table.tsx
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/routes/settings/alerts-history-data-table.tsx:340
+#: src/components/routes/system/smart-table.tsx:433
+#: src/components/routes/system/smart-table.tsx:706
+#: src/components/systems-table/systems-table-columns.tsx:729
 msgid "Delete"
 msgstr "删除"
 
-#: src/components/containers-table/containers-table.tsx
+#: src/components/containers-table/containers-table.tsx:1348
 msgid "Detail"
 msgstr "详情"
 
-#: src/components/routes/system/smart-table.tsx
+#: src/components/routes/system/smart-table.tsx:93
 msgid "Device"
 msgstr "设备"
 
 #. Context: Battery state
-#: src/lib/i18n.ts
+#: src/lib/i18n.ts:36
 msgid "Discharging"
 msgstr "放电中"
 
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/systems-table/systems-table-columns.tsx:233
 msgid "Disk"
 msgstr "磁盘"
 
-#: src/components/routes/system/charts/disk-charts.tsx
+#: src/components/routes/system/charts/disk-charts.tsx:155
 msgid "Disk I/O"
 msgstr "磁盘 I/O"
 
-#: src/components/routes/settings/general.tsx
+#: src/components/routes/settings/general.tsx:166
 msgid "Disk unit"
 msgstr "磁盘单位"
 
-#: src/components/routes/system/charts/disk-charts.tsx
-#: src/components/routes/system/charts/disk-charts.tsx
-#: src/lib/alerts.ts
+#: src/components/routes/system/charts/disk-charts.tsx:117
+#: src/components/routes/system/charts/disk-charts.tsx:135
+#: src/lib/alerts.ts:34
 msgid "Disk Usage"
 msgstr "磁盘使用"
 
-#: src/components/routes/system/charts/disk-charts.tsx
+#: src/components/routes/system/charts/disk-charts.tsx:118
 msgid "Disk usage of {extraFsName}"
 msgstr "{extraFsName}的磁盘使用"
 
-#: src/components/routes/system/charts/cpu-charts.tsx
+#: src/components/routes/system/charts/cpu-charts.tsx:68
 msgid "Docker CPU Usage"
 msgstr "Docker CPU 使用"
 
-#: src/components/routes/system/charts/memory-charts.tsx
+#: src/components/routes/system/charts/memory-charts.tsx:97
 msgid "Docker Memory Usage"
 msgstr "Docker 内存使用"
 
-#: src/components/routes/system/charts/network-charts.tsx
+#: src/components/routes/system/charts/network-charts.tsx:99
 msgid "Docker Network I/O"
 msgstr "Docker 网络 I/O"
 
 #. Context: System is down
-#: src/components/routes/system/info-bar.tsx
-#: src/components/systems-table/systems-table-columns.tsx
-#: src/lib/alerts.ts
+#: src/components/routes/system/info-bar.tsx:185
+#: src/components/systems-table/systems-table-columns.tsx:110
+#: src/lib/alerts.ts:19
 msgid "Down"
 msgstr "离线"
 
-#: src/components/routes/system/network-sheet.tsx
+#: src/components/routes/system/network-sheet.tsx:126
 msgid "Download"
 msgstr "下载"
 
-#: src/components/alerts-history-columns.tsx
+#: src/components/alerts-history-columns.tsx:172
 msgid "Duration"
 msgstr "持续时间"
 
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/systems-table/systems-table-columns.tsx:673
 msgid "Edit"
 msgstr "编辑"
 
-#: src/components/add-system.tsx
+#: src/components/add-system.tsx:328
 msgid "Edit system"
 msgstr "编辑系统"
 
-#: src/components/login/auth-form.tsx
+#: src/components/login/auth-form.tsx:366
 msgid "Email"
 msgstr "电子邮件"
 
 #. Context: Battery state
-#: src/lib/i18n.ts
+#: src/lib/i18n.ts:33
 msgid "Empty"
 msgstr "空电"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx
-#: src/components/routes/settings/notifications.tsx
-#: src/components/routes/settings/tokens-fingerprints.tsx
+#: src/components/routes/settings/alerts-history-data-table.tsx:237
+#: src/components/routes/settings/notifications.tsx:974
+#: src/components/routes/settings/tokens-fingerprints.tsx:319
 msgid "Error"
 msgstr "错误"
 
 #. placeholder {0}: alert.value
 #. placeholder {1}: info.unit
 #. placeholder {2}: alert.min
-#: src/components/active-alerts.tsx
+#: src/components/active-alerts.tsx:70
 msgid "Exceeds {0}{1} in last {2, plural, one {# minute} other {# minutes}}"
 msgstr "在过去的{2, plural, one {# 分钟} other {# 分钟}}中超过{0}{1}"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx
+#: src/components/routes/settings/alerts-history-data-table.tsx:369
 msgid "Export"
 msgstr "导出"
 
-#: src/components/routes/settings/general.tsx
+#: src/components/routes/settings/general.tsx:139
 msgid "Fahrenheit (°F)"
 msgstr "华氏度 (°F)"
 
-#: src/components/routes/system/smart-device-sheet.tsx
+#: src/components/routes/system/smart-device-sheet.tsx:151
 msgid "Failed Attributes:"
 msgstr "失败属性："
 
-#: src/components/routes/settings/layout.tsx
-#: src/components/routes/settings/notifications.tsx
+#: src/components/routes/settings/layout.tsx:86
+#: src/components/routes/settings/notifications.tsx:368
 msgid "Failed to save settings"
 msgstr "保存设置失败"
 
-#: src/components/routes/settings/notifications.tsx
+#: src/components/routes/settings/notifications.tsx:981
 msgid "Failed to send test notification"
 msgstr "发送测试通知失败"
 
-#: src/components/alerts/alerts-sheet.tsx
+#: src/components/alerts/alerts-sheet.tsx:26
 msgid "Failed to update alert"
 msgstr "更新警报失败"
 
-#: src/components/routes/system/chart-card.tsx
-#: src/components/routes/system/smart-table.tsx
+#: src/components/routes/system/chart-card.tsx:46
+#: src/components/routes/system/smart-table.tsx:536
 msgid "Filter..."
 msgstr "过滤..."
 
-#: src/components/routes/system/smart-device-sheet.tsx
+#: src/components/routes/system/smart-device-sheet.tsx:132
 msgid "Firmware"
 msgstr "固件"
 
-#: src/components/alerts/alerts-sheet.tsx
+#: src/components/alerts/alerts-sheet.tsx:391
 msgid "For <0>{min}</0> {min, plural, one {minute} other {minutes}}"
 msgstr "持续<0>{min}</0> {min, plural, one {分钟} other {分钟}}"
 
 #. Context: Battery state
-#: src/lib/i18n.ts
+#: src/lib/i18n.ts:34
 msgid "Full"
 msgstr "满电"
 
-#: src/components/routes/settings/general.tsx
+#: src/components/routes/settings/general.tsx:44
 msgid "General"
 msgstr "常规"
 
-#: src/lib/alerts.ts
+#: src/lib/alerts.ts:47
 msgid "GPU Usage"
 msgstr "GPU 使用率"
 
-#: src/components/containers-table/containers-table-columns.tsx
+#: src/components/containers-table/containers-table-columns.tsx:206
 msgid "Health"
 msgstr "健康"
 
-#: src/components/routes/system/disk-io-sheet.tsx
+#: src/components/routes/system/disk-io-sheet.tsx:152
 msgctxt "Disk I/O average operation time (iostat await)"
 msgid "I/O Await"
 msgstr "I/O 等待"
 
-#: src/components/routes/system/disk-io-sheet.tsx
+#: src/components/routes/system/disk-io-sheet.tsx:105
 msgctxt "Disk I/O total time spent on read/write"
 msgid "I/O Time"
 msgstr "I/O 时间"
 
-#: src/components/routes/system/charts/disk-charts.tsx
+#: src/components/routes/system/charts/disk-charts.tsx:228
 msgctxt "Percent of time the disk is busy with I/O"
 msgid "I/O Utilization"
 msgstr "I/O 利用率"
 
 #. Context: Battery state
-#: src/lib/i18n.ts
+#: src/lib/i18n.ts:37
 msgid "Idle"
 msgstr "闲置"
 
-#: src/components/containers-table/containers-table-columns.tsx
+#: src/components/containers-table/containers-table-columns.tsx:267
 msgctxt "Docker image"
 msgid "Image"
 msgstr "镜像"
 
-#: src/components/login/auth-form.tsx
+#: src/components/login/auth-form.tsx:570
 msgid "Invalid email address."
 msgstr "无效的电子邮件地址。"
 
-#: src/components/routes/system/charts/load-average-chart.tsx
+#: src/components/routes/system/charts/load-average-chart.tsx:24
 msgid "Load Average"
 msgstr "系统负载"
 
-#: src/lib/alerts.ts
+#: src/lib/alerts.ts:79
 msgid "Load Average 15m"
 msgstr "15 分钟内的平均负载"
 
-#: src/lib/alerts.ts
+#: src/lib/alerts.ts:59
 msgid "Load Average 1m"
 msgstr "1 分钟负载平均值"
 
-#: src/lib/alerts.ts
+#: src/lib/alerts.ts:69
 msgid "Load Average 5m"
 msgstr "5 分钟内的平均负载"
 
 #. Short label for load average
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/systems-table/systems-table-columns.tsx:249
 msgid "Load Avg"
 msgstr "负载"
 
-#: src/components/navbar.tsx
-#: src/components/navbar.tsx
+#: src/components/navbar.tsx:96
+#: src/components/navbar.tsx:161
 msgid "Log Out"
 msgstr "登出"
 
-#: src/components/login/login.tsx
+#: src/components/login/login.tsx:52
 msgid "Login"
 msgstr "登录"
 
-#: src/components/containers-table/containers-table.tsx
+#: src/components/containers-table/containers-table.tsx:1322
 msgid "Logs"
 msgstr "日志"
 
 #. Chart select field. Please try to keep this short.
-#: src/components/routes/system/chart-card.tsx
+#: src/components/routes/system/chart-card.tsx:80
 msgid "Max 1 min"
 msgstr "1分钟内最大值"
 
-#: src/components/containers-table/containers-table-columns.tsx
-#: src/components/routes/system/info-bar.tsx
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/containers-table/containers-table-columns.tsx:187
+#: src/components/routes/system/info-bar.tsx:156
+#: src/components/systems-table/systems-table-columns.tsx:225
 msgid "Memory"
 msgstr "内存"
 
-#: src/components/routes/system/charts/memory-charts.tsx
-#: src/lib/alerts.ts
+#: src/components/routes/system/charts/memory-charts.tsx:33
+#: src/lib/alerts.ts:28
 msgid "Memory Usage"
 msgstr "内存使用率"
 
 #. Device model
-#: src/components/routes/system/smart-table.tsx
+#: src/components/routes/system/smart-table.tsx:113
 msgid "Model"
 msgstr "型号"
 
-#: src/components/alerts-history-columns.tsx
-#: src/components/containers-table/containers-table-columns.tsx
+#: src/components/alerts-history-columns.tsx:56
+#: src/components/containers-table/containers-table-columns.tsx:124
 msgid "Name"
 msgstr "名称"
 
-#: src/components/containers-table/containers-table-columns.tsx
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/containers-table/containers-table-columns.tsx:196
+#: src/components/systems-table/systems-table-columns.tsx:295
 msgid "Net"
 msgstr "网络"
 
-#: src/components/routes/system/charts/network-charts.tsx
-#: src/components/routes/system/network-sheet.tsx
-#: src/components/routes/system/network-sheet.tsx
-#: src/components/routes/system/network-sheet.tsx
-#: src/components/routes/system/network-sheet.tsx
+#: src/components/routes/system/charts/network-charts.tsx:36
+#: src/components/routes/system/network-sheet.tsx:59
+#: src/components/routes/system/network-sheet.tsx:76
+#: src/components/routes/system/network-sheet.tsx:127
+#: src/components/routes/system/network-sheet.tsx:152
 msgid "Network traffic of public interfaces"
 msgstr "公共接口的网络流量"
 
 #. Context: Bytes or bits
-#: src/components/routes/settings/general.tsx
+#: src/components/routes/settings/general.tsx:145
 msgid "Network unit"
 msgstr "网络单位"
 
-#: src/components/routes/settings/tokens-fingerprints.tsx
-#: src/components/routes/system/smart-table.tsx
-#: src/components/routes/system/smart-table.tsx
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/routes/settings/tokens-fingerprints.tsx:332
+#: src/components/routes/system/smart-table.tsx:408
+#: src/components/routes/system/smart-table.tsx:693
+#: src/components/systems-table/systems-table-columns.tsx:659
 msgid "Open menu"
 msgstr "打开菜单"
 
-#: src/components/routes/system/cpu-sheet-utils.ts
+#: src/components/routes/system/cpu-sheet-utils.ts:71
 msgid "Other"
 msgstr "其他"
 
-#: src/components/login/auth-form.tsx
-#: src/components/login/auth-form.tsx
+#: src/components/login/auth-form.tsx:397
+#: src/components/login/auth-form.tsx:398
 msgid "Password"
 msgstr "密码"
 
-#: src/components/login/auth-form.tsx
+#: src/components/login/auth-form.tsx:573
 msgid "Password must be at least 8 characters."
 msgstr "密码必须至少包含 8 个字符。"
 
-#: src/components/login/auth-form.tsx
+#: src/components/login/auth-form.tsx:574
 msgid "Password must be less than 72 bytes."
 msgstr "密码必须小于 72 字节。"
 
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/systems-table/systems-table-columns.tsx:694
 msgid "Pause"
 msgstr "暂停"
 
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/systems-table/systems-table-columns.tsx:111
 msgid "Paused"
 msgstr "已暂停"
 
-#: src/components/routes/system/cpu-sheet.tsx
-#: src/components/routes/system/cpu-sheet.tsx
+#: src/components/routes/system/cpu-sheet.tsx:141
+#: src/components/routes/system/cpu-sheet.tsx:166
 msgid "Per-core average utilization"
 msgstr "每个核心的平均利用率"
 
-#: src/components/routes/system/charts/disk-charts.tsx
+#: src/components/routes/system/charts/disk-charts.tsx:232
 msgid "Percent of time the disk is busy with I/O"
 msgstr "磁盘忙于 I/O 操作的时间百分比"
 
-#: src/components/routes/system/cpu-sheet.tsx
+#: src/components/routes/system/cpu-sheet.tsx:116
 msgid "Percentage of time spent in each state"
 msgstr "在每个状态下花费的时间百分比"
 
-#: src/components/alerts/alerts-sheet.tsx
+#: src/components/alerts/alerts-sheet.tsx:27
 msgid "Please check logs for more details."
 msgstr "请检查日志以获取更多详细信息。"
 
-#: src/components/login/auth-form.tsx
+#: src/components/login/auth-form.tsx:66
 msgid "Please check your credentials and try again"
 msgstr "请检查您的凭据并重试"
 
-#: src/components/containers-table/containers-table-columns.tsx
+#: src/components/containers-table/containers-table-columns.tsx:239
 msgctxt "Container ports"
 msgid "Ports"
 msgstr "端口"
 
 #. Power On Time
-#: src/components/routes/system/smart-table.tsx
+#: src/components/routes/system/smart-table.tsx:157
 msgid "Power On"
 msgstr "开机时间"
 
-#: src/components/routes/system/charts/gpu-charts.tsx
-#: src/components/routes/system/charts/memory-charts.tsx
+#: src/components/routes/system/charts/gpu-charts.tsx:152
+#: src/components/routes/system/charts/memory-charts.tsx:34
 msgid "Precise utilization at the recorded time"
 msgstr "采集时间下的精确内存使用率"
 
-#: src/components/routes/system/disk-io-sheet.tsx
+#: src/components/routes/system/disk-io-sheet.tsx:54
 msgctxt "Disk I/O average queue depth"
 msgid "Queue Depth"
 msgstr "队列深度"
 
 #. Disk read
-#: src/components/routes/system/charts/disk-charts.tsx
-#: src/components/routes/system/disk-io-sheet-utils.ts
-#: src/components/routes/system/disk-io-sheet-utils.ts
-#: src/components/routes/system/disk-io-sheet-utils.ts
+#: src/components/routes/system/charts/disk-charts.tsx:192
+#: src/components/routes/system/disk-io-sheet-utils.ts:115
+#: src/components/routes/system/disk-io-sheet-utils.ts:136
+#: src/components/routes/system/disk-io-sheet-utils.ts:166
 msgid "Read"
 msgstr "读取"
 
-#: src/components/routes/system/charts/network-charts.tsx
+#: src/components/routes/system/charts/network-charts.tsx:54
 msgid "Received"
 msgstr "接收"
 
-#: src/components/containers-table/containers-table.tsx
-#: src/components/containers-table/containers-table.tsx
-#: src/components/routes/system/smart-table.tsx
-#: src/components/routes/system/smart-table.tsx
+#: src/components/containers-table/containers-table.tsx:1464
+#: src/components/containers-table/containers-table.tsx:1465
+#: src/components/routes/system/smart-table.tsx:422
+#: src/components/routes/system/smart-table.tsx:701
 msgid "Refresh"
 msgstr "刷新"
 
-#: src/components/alerts-history-columns.tsx
-#: src/components/routes/settings/alerts-history-data-table.tsx
+#: src/components/alerts-history-columns.tsx:145
+#: src/components/routes/settings/alerts-history-data-table.tsx:249
 msgid "Resolved"
 msgstr "已解决"
 
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/systems-table/systems-table-columns.tsx:689
 msgid "Resume"
 msgstr "恢复"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx
+#: src/components/routes/settings/alerts-history-data-table.tsx:428
 msgid "Rows per page"
 msgstr "每页行数"
 
-#: src/components/routes/system/smart-device-sheet.tsx
+#: src/components/routes/system/smart-device-sheet.tsx:105
 msgid "S.M.A.R.T. Details"
 msgstr "S.M.A.R.T. 详情"
 
-#: src/components/routes/system/smart-device-sheet.tsx
+#: src/components/routes/system/smart-device-sheet.tsx:147
 msgid "S.M.A.R.T. Self-Test"
 msgstr "S.M.A.R.T. 自检"
 
-#: src/components/routes/settings/general.tsx
+#: src/components/routes/settings/general.tsx:56
 msgid "Save Settings"
 msgstr "保存设置"
 
-#: src/components/add-system.tsx
+#: src/components/add-system.tsx:589
 msgid "Save system"
 msgstr "保存系统"
 
-#: src/components/routes/system/charts/network-charts.tsx
+#: src/components/routes/system/charts/network-charts.tsx:43
 msgid "Sent"
 msgstr "发送"
 
-#: src/components/routes/system/smart-device-sheet.tsx
+#: src/components/routes/system/smart-device-sheet.tsx:119
 msgid "Serial Number"
 msgstr "序列号"
 
-#: src/components/routes/settings/layout.tsx
-#: src/components/routes/settings/layout.tsx
+#: src/components/routes/settings/layout.tsx:205
+#: src/components/routes/settings/layout.tsx:233
 msgid "Settings"
 msgstr "设置"
 
-#: src/components/routes/settings/layout.tsx
+#: src/components/routes/settings/layout.tsx:81
 msgid "Settings saved"
 msgstr "设置已保存"
 
-#: src/components/login/auth-form.tsx
+#: src/components/login/auth-form.tsx:440
 msgid "Sign in"
 msgstr "登录"
 
-#: src/components/systems-table/systems-table.tsx
+#: src/components/systems-table/systems-table.tsx:278
 msgid "Sort By"
 msgstr "排序依据"
 
 #. Context: alert state (active or resolved)
-#: src/components/alerts-history-columns.tsx
+#: src/components/alerts-history-columns.tsx:105
 msgid "State"
 msgstr "状态"
 
-#: src/components/containers-table/containers-table-columns.tsx
-#: src/components/routes/system/smart-table.tsx
-#: src/components/systems-table/systems-table.tsx
-#: src/lib/alerts.ts
+#: src/components/containers-table/containers-table-columns.tsx:283
+#: src/components/routes/system/smart-table.tsx:133
+#: src/components/systems-table/systems-table.tsx:197
+#: src/lib/alerts.ts:14
 msgid "Status"
 msgstr "状态"
 
-#: src/components/routes/system/charts/memory-charts.tsx
+#: src/components/routes/system/charts/memory-charts.tsx:149
 msgid "Swap space used by the system"
 msgstr "系统使用的 SWAP 空间"
 
-#: src/components/routes/system/charts/memory-charts.tsx
+#: src/components/routes/system/charts/memory-charts.tsx:149
 msgid "Swap Usage"
 msgstr "SWAP 使用率"
 
-#: src/components/mode-toggle.tsx
-#: src/components/mode-toggle.tsx
+#: src/components/mode-toggle.tsx:24
+#: src/components/mode-toggle.tsx:36
 msgid "Switch theme"
 msgstr "切换主题"
 
-#: src/components/alerts-history-columns.tsx
-#: src/components/containers-table/containers-table-columns.tsx
-#: src/components/routes/system/smart-table.tsx
-#: src/components/systems-table/systems-table-columns.tsx
-#: src/lib/alerts.ts
+#: src/components/alerts-history-columns.tsx:30
+#: src/components/containers-table/containers-table-columns.tsx:138
+#: src/components/routes/system/smart-table.tsx:78
+#: src/components/systems-table/systems-table-columns.tsx:102
+#: src/lib/alerts.ts:19
 msgid "System"
 msgstr "系统"
 
-#: src/components/routes/system/charts/load-average-chart.tsx
+#: src/components/routes/system/charts/load-average-chart.tsx:25
 msgid "System load averages over time"
 msgstr "系统负载平均值随时间变化"
 
 #. Temperature label in systems table
-#: src/components/routes/system/smart-table.tsx
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/routes/system/smart-table.tsx:190
+#: src/components/systems-table/systems-table-columns.tsx:332
 msgid "Temp"
 msgstr "温度"
 
-#: src/components/routes/system/charts/sensor-charts.tsx
-#: src/lib/alerts.ts
+#: src/components/routes/system/charts/sensor-charts.tsx:190
+#: src/lib/alerts.ts:53
 msgid "Temperature"
 msgstr "温度"
 
-#: src/components/routes/settings/general.tsx
+#: src/components/routes/settings/general.tsx:125
 msgid "Temperature unit"
 msgstr "温度单位"
 
-#: src/components/routes/system/charts/sensor-charts.tsx
+#: src/components/routes/system/charts/sensor-charts.tsx:191
 msgid "Temperatures of system sensors"
 msgstr "系统传感器的温度"
 
-#: src/components/routes/system/charts/disk-charts.tsx
+#: src/components/routes/system/charts/disk-charts.tsx:156
 msgid "Throughput of {extraFsName}"
 msgstr "{extraFsName}的吞吐量"
 
-#: src/components/routes/system/charts/disk-charts.tsx
+#: src/components/routes/system/charts/disk-charts.tsx:156
 msgid "Throughput of root filesystem"
 msgstr "根文件系统的吞吐量"
 
-#: src/components/routes/settings/general.tsx
+#: src/components/routes/settings/general.tsx:100
 msgid "Time format"
 msgstr "时间格式"
 
-#: src/components/add-system.tsx
+#: src/components/add-system.tsx:491
 msgid "Token"
 msgstr "令牌"
 
-#: src/components/routes/system/charts/cpu-charts.tsx
-#: src/components/routes/system/charts/memory-charts.tsx
-#: src/components/routes/system/charts/network-charts.tsx
-#: src/components/ui/chart.tsx
-#: src/components/ui/chart.tsx
+#: src/components/routes/system/charts/cpu-charts.tsx:76
+#: src/components/routes/system/charts/memory-charts.tsx:105
+#: src/components/routes/system/charts/network-charts.tsx:107
+#: src/components/ui/chart.tsx:146
+#: src/components/ui/chart.tsx:147
 msgid "Total"
 msgstr "总计"
 
-#: src/components/routes/system/charts/cpu-charts.tsx
+#: src/components/routes/system/charts/cpu-charts.tsx:69
 msgid "Total CPU utilization of containers"
 msgstr "容器 CPU 总占用"
 
-#: src/components/routes/system/network-sheet.tsx
+#: src/components/routes/system/network-sheet.tsx:177
 msgid "Total data received for each interface"
 msgstr "每个接口的总接收数据量"
 
-#: src/components/routes/system/network-sheet.tsx
+#: src/components/routes/system/network-sheet.tsx:200
 msgid "Total data sent for each interface"
 msgstr "每个接口的总发送数据量"
 
-#: src/components/routes/system/charts/memory-charts.tsx
+#: src/components/routes/system/charts/memory-charts.tsx:98
 msgid "Total memory usage of docker containers"
 msgstr "Docker 容器内存总占用"
 
-#: src/components/routes/system/charts/network-charts.tsx
+#: src/components/routes/system/charts/network-charts.tsx:100
 msgid "Total network traffic of docker containers"
 msgstr "Docker 容器网络总占用"
 
-#: src/components/routes/system/disk-io-sheet.tsx
+#: src/components/routes/system/disk-io-sheet.tsx:106
 msgctxt "Disk I/O"
 msgid "Total time spent on read/write (can exceed 100%)"
 msgstr "读写总耗时（可能超过 100%）"
 
-#: src/lib/alerts.ts
+#: src/lib/alerts.ts:66
 msgid "Triggers when 1 minute load average exceeds a threshold"
 msgstr "当 1 分钟负载平均值超过阈值时触发"
 
-#: src/lib/alerts.ts
+#: src/lib/alerts.ts:86
 msgid "Triggers when 15 minute load average exceeds a threshold"
 msgstr "当 15 分钟负载平均值超过阈值时触发"
 
-#: src/lib/alerts.ts
+#: src/lib/alerts.ts:76
 msgid "Triggers when 5 minute load average exceeds a threshold"
 msgstr "当 5 分钟内的平均负载超过阈值时触发"
 
-#: src/lib/alerts.ts
+#: src/lib/alerts.ts:56
 msgid "Triggers when any sensor exceeds a threshold"
 msgstr "当任何传感器超过阈值时触发"
 
-#: src/lib/alerts.ts
+#: src/lib/alerts.ts:92
 msgid "Triggers when battery charge drops below a threshold"
 msgstr "当电池电量降至阈值以下时触发"
 
-#: src/lib/alerts.ts
+#: src/lib/alerts.ts:43
 msgid "Triggers when combined up/down exceeds a threshold"
 msgstr "当网络的上/下行速度超过阈值时触发"
 
-#: src/lib/alerts.ts
+#: src/lib/alerts.ts:25
 msgid "Triggers when CPU usage exceeds a threshold"
 msgstr "当 CPU 使用率超过阈值时触发"
 
-#: src/lib/alerts.ts
+#: src/lib/alerts.ts:50
 msgid "Triggers when GPU usage exceeds a threshold"
 msgstr "当 GPU 使用率超过阈值时触发"
 
-#: src/lib/alerts.ts
+#: src/lib/alerts.ts:31
 msgid "Triggers when memory usage exceeds a threshold"
 msgstr "当内存使用率超过阈值时触发"
 
-#: src/lib/alerts.ts
+#: src/lib/alerts.ts:17
 msgid "Triggers when status switches between up and down"
 msgstr "当状态在上线与掉线之间切换时触发"
 
-#: src/lib/alerts.ts
+#: src/lib/alerts.ts:37
 msgid "Triggers when usage of any disk exceeds a threshold"
 msgstr "当任何磁盘的使用率超过阈值时触发"
 
-#: src/components/routes/system/smart-table.tsx
+#: src/components/routes/system/smart-table.tsx:146
 msgid "Type"
 msgstr "类型"
 
 #. Temperature / network units
-#: src/components/routes/settings/general.tsx
+#: src/components/routes/settings/general.tsx:122
 msgid "Unit preferences"
 msgstr "单位偏好"
 
 #. Context: Battery state
-#: src/lib/i18n.ts
+#: src/lib/i18n.ts:32
 msgid "Unknown"
 msgstr "未知"
 
-#: src/components/systems-table/systems-table.tsx
+#: src/components/systems-table/systems-table.tsx:422
 msgid "Unsupported"
 msgstr "不支持"
 
 #. Context: System is up
-#: src/components/routes/system/info-bar.tsx
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/routes/system/info-bar.tsx:183
+#: src/components/systems-table/systems-table-columns.tsx:109
 msgid "Up"
 msgstr "在线"
 
-#: src/components/containers-table/containers-table-columns.tsx
-#: src/components/routes/system/smart-table.tsx
+#: src/components/containers-table/containers-table-columns.tsx:297
+#: src/components/routes/system/smart-table.tsx:215
 msgid "Updated"
 msgstr "更新于"
 
-#: src/components/routes/system/network-sheet.tsx
+#: src/components/routes/system/network-sheet.tsx:151
 msgid "Upload"
 msgstr "上传"
 
-#: src/components/routes/system/info-bar.tsx
-#: src/components/systems-table/systems-table-columns.tsx
+#: src/components/routes/system/info-bar.tsx:140
+#: src/components/systems-table/systems-table-columns.tsx:400
 msgid "Uptime"
 msgstr "运行时间"
 
-#: src/components/routes/system/charts/disk-charts.tsx
-#: src/components/routes/system/charts/gpu-charts.tsx
-#: src/components/routes/system/cpu-sheet-utils.ts
+#: src/components/routes/system/charts/disk-charts.tsx:117
+#: src/components/routes/system/charts/gpu-charts.tsx:158
+#: src/components/routes/system/cpu-sheet-utils.ts:105
 msgid "Usage"
 msgstr "使用"
 
-#: src/components/routes/system/charts/disk-charts.tsx
+#: src/components/routes/system/charts/disk-charts.tsx:118
 msgid "Usage of root partition"
 msgstr "根分区的使用"
 
-#: src/components/routes/system/charts/memory-charts.tsx
-#: src/components/routes/system/charts/memory-charts.tsx
+#: src/components/routes/system/charts/memory-charts.tsx:53
+#: src/components/routes/system/charts/memory-charts.tsx:164
 msgid "Used"
 msgstr "已用"
 
-#: src/components/login/auth-form.tsx
+#: src/components/login/auth-form.tsx:352
 msgid "Username"
 msgstr "用户名"
 
-#: src/components/login/auth-form.tsx
+#: src/components/login/auth-form.tsx:567
 msgid "Username can only contain letters, numbers, _.-"
 msgstr "用户名只能包含字母、数字、_、.、-"
 
-#: src/components/login/auth-form.tsx
+#: src/components/login/auth-form.tsx:565
 msgid "Username must be at least 3 characters."
 msgstr "用户名至少需要 3 个字符。"
 
-#: src/components/login/auth-form.tsx
+#: src/components/login/auth-form.tsx:566
 msgid "Username must be less than 32 characters."
 msgstr "用户名必须少于 32 个字符。"
 
-#: src/components/login/auth-form.tsx
+#: src/components/login/auth-form.tsx:569
 msgid "Username or email is required."
 msgstr "请输入用户名或电子邮件。"
 
-#: src/components/routes/system/charts/disk-charts.tsx
+#: src/components/routes/system/charts/disk-charts.tsx:245
 msgctxt "Disk I/O utilization"
 msgid "Utilization"
 msgstr "利用率"
 
-#: src/components/alerts-history-columns.tsx
+#: src/components/alerts-history-columns.tsx:76
 msgid "Value"
 msgstr "值"
 
-#: src/components/routes/system/cpu-sheet.tsx
-#: src/components/routes/system/disk-io-sheet.tsx
-#: src/components/routes/system/network-sheet.tsx
+#: src/components/routes/system/cpu-sheet.tsx:65
+#: src/components/routes/system/disk-io-sheet.tsx:61
+#: src/components/routes/system/network-sheet.tsx:64
 msgid "View more"
 msgstr "查看更多"
 
-#: src/components/systems-table/systems-table.tsx
+#: src/components/systems-table/systems-table.tsx:312
 msgid "Visible Fields"
 msgstr "可见列"
 
-#: src/components/routes/system/chart-card.tsx
+#: src/components/routes/system/chart-card.tsx:135
 msgid "Waiting for enough records to display"
 msgstr "正在收集足够的数据来显示"
 
-#: src/components/routes/settings/general.tsx
+#: src/components/routes/settings/general.tsx:192
 msgid "Warning (%)"
 msgstr "警告 (%)"
 
-#: src/components/routes/settings/general.tsx
+#: src/components/routes/settings/general.tsx:189
 msgid "Warning thresholds"
 msgstr "警告阈值"
 
 #. Disk write
-#: src/components/routes/system/charts/disk-charts.tsx
-#: src/components/routes/system/disk-io-sheet-utils.ts
-#: src/components/routes/system/disk-io-sheet-utils.ts
-#: src/components/routes/system/disk-io-sheet-utils.ts
+#: src/components/routes/system/charts/disk-charts.tsx:186
+#: src/components/routes/system/disk-io-sheet-utils.ts:107
+#: src/components/routes/system/disk-io-sheet-utils.ts:128
+#: src/components/routes/system/disk-io-sheet-utils.ts:160
 msgid "Write"
 msgstr "写入"
 
-#: src/components/routes/settings/layout.tsx
+#: src/components/routes/settings/layout.tsx:82
 msgid "Your user settings have been updated."
 msgstr "您的用户设置已更新。"
 
 #. placeholder {0}: latest.target
 #. placeholder {1}: latest.count
-#: src/components/notification-failures-banner.tsx
+#: src/components/notification-failures-banner.tsx:66
 msgid "最近一次失败来自 {0}，已连续失败 {1} 次。请检查 Webhook URL、网络或目标服务状态。"
 msgstr "最近一次失败来自 {0}，已连续失败 {1} 次。请检查 Webhook URL、网络或目标服务状态。"
 
-#: src/components/notification-failures-banner.tsx
+#: src/components/notification-failures-banner.tsx:63
 msgid "外部通知发送失败"
 msgstr "外部通知发送失败"
 
 #. placeholder {0}: failures.length
-#: src/components/notification-failures-banner.tsx
+#: src/components/notification-failures-banner.tsx:71
 msgid "当前共有 {0} 个通知通道存在失败记录。"
 msgstr "当前共有 {0} 个通知通道存在失败记录。"
 
-#: src/components/notification-failures-banner.tsx
+#: src/components/notification-failures-banner.tsx:80
 msgid "检查通知"
 msgstr "检查通知"
 
-#: src/components/routes/settings/notifications.tsx
+#: src/components/routes/settings/notifications.tsx:428
 msgid "测试通知已发送"
 msgstr "测试通知已发送"
 
-#: src/components/routes/settings/notifications.tsx
+#: src/components/routes/settings/notifications.tsx:429
 msgid "请检查对应通知服务是否收到消息。"
 msgstr "请检查对应通知服务是否收到消息。"

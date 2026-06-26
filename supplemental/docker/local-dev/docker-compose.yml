@@ -1,6 +1,6 @@
 services:
   pulse-hub:
-    image: pulse-hub:1.0.5
+    image: pulse-hub:1.0.6
     container_name: pulse-hub
     restart: unless-stopped
     ports:

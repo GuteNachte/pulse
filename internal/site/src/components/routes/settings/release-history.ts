@@ -19,7 +19,11 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "Web / Hub",
 				items: [
-					"新增 PocketBase 基座审计文档：梳理 Pulse 当前如何嵌入 PocketBase、如何使用 migrations、collection rules、users / superusers、auth hooks、自定义 /api/pulse/*、备份、实时订阅、前端 SDK 和 Android auth store，并记录 v0.36.8 -> v0.39.4 / JS SDK 0.26.2 -> 0.27.0 的升级风险、验证清单和安全边界；本轮只沉淀升级策略，不直接盲升依赖。",
+					"PocketBase 基座升级到当前最新链路：Go 端 github.com/pocketbase/pocketbase 从 v0.36.8 升级到 v0.39.4，前端 JS SDK 从 0.26.2 升级到 0.27.0，并补齐基座审计文档、测试路由 helper 和告警虚拟时间测试隔离，避免新版 PocketBase 后台 watcher / logger / DB goroutine 进入 synctest 导致测试挂起。",
+					'PocketBase JS SDK 0.27.0 的 Vite 8 开发链路完成源头兼容：pocketbase 从 dev 依赖预构建中排除，并在 Vite 转换前把 SDK ESM 包里的 async import(...) 方法名改写为等价的 async ["import"](...)，避免 Vite import analysis 误注入 __vite__injectQuery 导致浏览器空白页；同时切换到 @vitejs/plugin-react + @rolldown/plugin-babel + linguiTransformerBabelPreset()，让 Lingui macro 在开发和生产构建中都按 Lingui 6 官方链路编译。',
+					"前端依赖升级到当前 npm 可见最新版本：同步更新 Vite、React、Radix、Lingui、Biome、Capacitor、Recharts、Tailwind 等依赖，移除旧 @nanostores/router peer override，并完成 Biome 2.5 / Lingui 6 / Vite 8 兼容修复；npm outdated --long 当前无输出，npm audit --omit=dev 当前为 0 漏洞。",
+					"go.mod 写入的 direct / indirect 依赖均已确认无可升级项，实际编译和测试包依赖图也没有命中 go list -m -u all 中的可升级模块；剩余提示只来自上游旧模块图，不再为了清空提示强行添加显式 require 或 replace。",
+					"About 页 Agent 目标版本修正为不低于当前 Hub 版本：本地旧 agent_releases 目录仍保留 1.0.5 安装包时，也不会把 1.0.6 开发运行态的 Agent 目标版本误显示成 1.0.5。",
 					"本地化资源继续收口：补齐 CPU 详情页 “CPU time breakdown and per-core utilization” 的中文翻译，前端生产构建不再提示 zh-CN catalog 缺失条目。",
 					"About 页版本记录继续收敛：版本卡默认只展示摘要、分组数和更新条数，详情改为独立展开按钮，避免首屏一次性铺开大量更新内容，同时修复折叠按钮可访问名称包含整段更新文本的问题；版本记录数据源不变。",
 					"本地源码预览修复旧 Service Worker 干扰：development Hub 会向前端注入开发构建标记，并把 /sw.js 改为开发态注销脚本；Web 在开发构建下自动注销旧 Service Worker 并清理缓存，避免浏览器继续请求旧生产 chunk 导致页面卡在“正在加载页面资源”。",

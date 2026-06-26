@@ -740,6 +740,9 @@ func (h *Hub) latestEnabledAgentVersion() string {
 	if latest == "" {
 		return pulse.Version
 	}
+	if compareAgentReleaseVersions(latest, pulse.Version) < 0 {
+		return pulse.Version
+	}
 	return latest
 }
 

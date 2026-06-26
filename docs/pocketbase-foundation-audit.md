@@ -17,12 +17,21 @@ Pulse 现在不是“顺手用了 PocketBase”，而是把 PocketBase 当成 Hu
 
 已验证：
 
-- Go 依赖：`github.com/pocketbase/pocketbase v0.36.8`。
+- Go 依赖：`github.com/pocketbase/pocketbase v0.39.4`。
 - Go DB helper：`github.com/pocketbase/dbx v1.12.0`。
-- 前端 SDK：`pocketbase ^0.26.2`，lockfile 实际安装 `0.26.2`。
+- 前端 SDK：`pocketbase ^0.27.0`，lockfile 实际安装 `0.27.0`。
 - Go 可见最新版本：`github.com/pocketbase/pocketbase v0.39.4`。
 - 前端 SDK 最新版本：`pocketbase 0.27.0`。
 - `dbx` 当前仍是最新 `v1.12.0`。
+
+本轮升级结果：
+
+- `go.mod` / `go.sum` 已升级到 PocketBase `v0.39.4`，并随新版 PocketBase 更新 `golang.org/x/*`、`modernc.org/sqlite`、`fsnotify` 等间接依赖。
+- `internal/site/package.json` / `package-lock.json` 已升级到 PocketBase JS SDK `0.27.0`，同时把前端依赖更新到当前 npm 可见最新版本；`npm outdated --long` 当前无输出，`npm audit --omit=dev` 当前为 0 漏洞。
+- Vite 8 开发链路已经针对 PocketBase JS SDK 0.27.0 做了兼容：`pocketbase` 预构建被排除，原始 SDK ESM 包会在转换前把 `async import(...)` 重写为等价的 `async ["import"](...)`，避免 import analysis 误注入导致浏览器解析失败；Lingui macro 改由 `@rolldown/plugin-babel` + `linguiTransformerBabelPreset()` 处理，避免弃用的 SWC 组合与 React Refresh 冲突。
+- Go 当前源码和测试实际包依赖图已核对：`go.mod` 里写入的 direct / indirect 依赖均无可升级项，`go list -deps -test -f '{{with .Module}}{{.Path}}{{end}}' ./...` 中实际使用的模块也没有命中 `go list -m -u all` 的可升级项；`go list -m -u all` 仍能看到少量上游旧模块图里的 legacy transitive update，但这些模块不在当前 package deps 中，不应为了清空提示强行保留显式 `require` 或 `replace`。
+- PocketBase `v0.39.x` 的测试生命周期变化已处理：测试 API helper 复用每个 `TestApp` 的 serve mux，避免重复绑定新版 Admin UI 扩展路由；告警虚拟时间测试把 PocketBase `TestApp` 和系统 updater 放到 `synctest` 外，避免后台 watcher / logger / DB goroutine 让测试挂起。
+- Hub 运行态版本口径已修正：`agent_target_version` 不再被本地旧 `agent_releases` 数据压低到低于当前 Hub 版本，避免 1.0.6 开发环境因为仍保留 1.0.5 Agent 安装包而在 About 页显示错误目标版本。
 
 官方来源：
 
@@ -183,11 +192,19 @@ Pulse 现在不是“顺手用了 PocketBase”，而是把 PocketBase 当成 Hu
 - `AsyncAuthStore`、`beforeSend`、`realtime.unsubscribe()`、`subscribe` 返回值这几处是升级回归重点。
 - Android 登录态存储由自定义 adapter 接管，不能只在浏览器验证。
 
+已验证的前端链路修正：
+
+- `pocketbase` 不再参与 Vite dev 预构建，避免 SDK ESM 被二次转换后出现解析错误。
+- PocketBase SDK ESM 中的 `async import(...)` 方法名已在 Vite pre-transform 中改写为 `async ["import"](...)`，语义保持不变。
+- Lingui macro 现在通过 `@rolldown/plugin-babel` 和 `linguiTransformerBabelPreset()` 处理，不再依赖旧的 SWC 组合。
+- 前端未再使用 `authStore.isAdmin`、`authStore.isAuthRecord`、`authStore.model`、`buildUrl`、`getFileUrl`、`getUrl` 等旧 API。
+
 更好的维护方式：
 
 - PocketBase JS SDK 升级必须和前端 `check`、`build`、浏览器登录回归、Android 登录态保持一起做。
 - 不要在页面里重复创建 PocketBase client，继续保持 `lib/api.ts` 单例。
 - 高频列表继续优先用 `/api/pulse/*` 轻量汇总接口，避免直接拉大 collection。
+- 前端依赖升级后要优先用浏览器实际渲染结果验证，不要只看 `npm run build`；Vite dev、PocketBase SDK 和 Lingui macro 这条链路必须一起验。
 
 ### 6. Admin UI 和高级维护入口
 
@@ -239,15 +256,15 @@ Pulse 现在不是“顺手用了 PocketBase”，而是把 PocketBase 当成 Hu
 
 目标：
 
-- 不升级依赖。
-- 固定当前 PocketBase 认知。
+- 先固定当前 PocketBase 认知和风险清单。
+- 再按独立改动升级依赖，避免和 UI / Agent 业务改动混在一起。
 - 补齐必须回归的测试清单。
 
 应做：
 
 - 保留本文档。
-- 把 PocketBase 升级列入 `1.0.6` 开发记录。
-- 如果后续要动手升级，先开独立提交，不和 UI 改动混在一起。
+- PocketBase 升级已进入 `1.0.6` 开发记录。
+- 后续继续保持原则：PocketBase 升级独立提交，不和视觉、Agent 或业务功能改动混在一起。
 
 ### 阶段 2：Go 侧升级
 

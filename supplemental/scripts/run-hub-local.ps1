@@ -1,9 +1,9 @@
 param(
-    [string]$Image = "pulse-hub:1.0.5",
+    [string]$Image = "pulse-hub:1.0.6",
     [string]$ContainerName = "pulse-hub",
     [string]$DataDir = "pulse_data",
     [int]$Port = 8090,
-    [string]$HubVersion = "1.0.5",
+    [string]$HubVersion = "1.0.6",
     [switch]$HostCheck,
     [switch]$SkipBuild
 )

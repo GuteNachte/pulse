@@ -1,8 +1,20 @@
 import { defineConfig } from "vite"
 import path from "node:path"
+import babel from "@rolldown/plugin-babel"
 import tailwindcss from "@tailwindcss/vite"
-import react from "@vitejs/plugin-react-swc"
-import { lingui } from "@lingui/vite-plugin"
+import react from "@vitejs/plugin-react"
+import { lingui, linguiTransformerBabelPreset } from "@lingui/vite-plugin"
+
+const pocketbaseImportMethodCompat = () => ({
+	name: "pulse:pocketbase-import-method-compat",
+	enforce: "pre" as const,
+	transform(code: string, id: string) {
+		if (!id.includes("node_modules/pocketbase/dist/pocketbase.es.mjs")) {
+			return
+		}
+		return code.replaceAll("async import(", 'async ["import"](')
+	},
+})
 
 export default defineConfig(({ mode }) => ({
 	base: mode === "capacitor" ? "/" : "./",
@@ -13,14 +25,16 @@ export default defineConfig(({ mode }) => ({
 		},
 	},
 	plugins: [
-		react({
-			plugins: [["@lingui/swc-plugin", {}]],
+		pocketbaseImportMethodCompat(),
+		react(),
+		babel({
+			presets: [linguiTransformerBabelPreset()],
 		}),
 		lingui(),
 		tailwindcss(),
 	],
-	esbuild: {
-		legalComments: "external",
+	optimizeDeps: {
+		exclude: ["pocketbase"],
 	},
 	resolve: {
 		alias: {
@@ -28,7 +42,8 @@ export default defineConfig(({ mode }) => ({
 		},
 	},
 	build: {
-		rollupOptions: {
+		target: "baseline-widely-available",
+		rolldownOptions: {
 			output: {
 				manualChunks(id) {
 					if (!id.includes("node_modules")) {

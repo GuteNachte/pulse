@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase/apis"
+	"gutenacht.site/pulse"
 	systemEntity "gutenacht.site/pulse/internal/entities/system"
 	pulseTests "gutenacht.site/pulse/internal/tests"
 
@@ -46,35 +45,8 @@ func performTestAPIRequest(
 	headers map[string]string,
 ) testAPIResponse {
 	t.Helper()
-
-	baseRouter, err := apis.NewRouter(app)
-	require.NoError(t, err)
-
-	serveEvent := new(core.ServeEvent)
-	serveEvent.App = app
-	serveEvent.Router = baseRouter
-
-	var result testAPIResponse
-	serveErr := app.OnServe().Trigger(serveEvent, func(e *core.ServeEvent) error {
-		recorder := httptest.NewRecorder()
-		req := httptest.NewRequest(method, url, body)
-		req.Header.Set("content-type", "application/json")
-		for key, value := range headers {
-			req.Header.Set(key, value)
-		}
-
-		mux, err := e.Router.BuildMux()
-		require.NoError(t, err)
-		mux.ServeHTTP(recorder, req)
-		result = testAPIResponse{
-			Status: recorder.Result().StatusCode,
-			Body:   strings.TrimSpace(recorder.Body.String()),
-		}
-		return nil
-	})
-	require.NoError(t, serveErr)
-
-	return result
+	result := pulseTests.PerformTestAPIRequest(t, app, method, url, body, headers)
+	return testAPIResponse(result)
 }
 
 func TestApiRoutesAuthentication(t *testing.T) {
@@ -1072,7 +1044,7 @@ func TestApiRoutesAuthentication(t *testing.T) {
 				"Authorization": userToken,
 			},
 			ExpectedStatus:     200,
-			ExpectedContent:    []string{"\"v\":", "\"agent_target_version\":\"1.0.5\"", "\"agent_actual_versions\":", "\"agent_total_systems\":1"},
+			ExpectedContent:    []string{"\"v\":", "\"agent_target_version\":\"" + pulse.Version + "\"", "\"agent_actual_versions\":", "\"agent_total_systems\":1"},
 			NotExpectedContent: []string{"\"key\":", "\"readiness\":"},
 			TestAppFactory:     testAppFactory,
 		},
@@ -2538,8 +2510,8 @@ func TestFirstUserCreation(t *testing.T) {
 					"email":    "firstuser@example.com",
 					"password": "password123",
 				}),
-				ExpectedStatus:  404,
-				ExpectedContent: []string{"wasn't found"},
+				ExpectedStatus:  403,
+				ExpectedContent: []string{"Forbidden"},
 				TestAppFactory:  testAppFactoryExisting,
 			},
 		}
