@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { IconPreview, URLInput } from "./form-controls"
 import { FormField } from "./shared-ui"
 import { resolveFormIconURL, splitURL, targetKindScope } from "./target-utils"
+import type { AssetRecord } from "@/types"
 import type { IconPreviewState, IconSource, MonitorForm, MonitorTargetForm, TargetKind } from "./types"
 import { targetKindOptions } from "./types"
 
@@ -23,11 +24,13 @@ export function MonitorDialog({
 	open,
 	form,
 	systems,
+	assets,
 	saving,
 	iconPreview,
 	onOpenChange,
 	onFormChange,
 	onIconPreviewChange,
+	onAssetChange,
 	onSave,
 	onFetchIcon,
 	onAddTarget,
@@ -36,11 +39,13 @@ export function MonitorDialog({
 	open: boolean
 	form: MonitorForm
 	systems: Array<{ id: string; name: string }>
+	assets: AssetRecord[]
 	saving: boolean
 	iconPreview: IconPreviewState
 	onOpenChange: (open: boolean) => void
 	onFormChange: (form: MonitorForm) => void
 	onIconPreviewChange: (preview: IconPreviewState) => void
+	onAssetChange: (assetId: string) => void
 	onSave: () => void
 	onFetchIcon: () => void
 	onAddTarget: () => void
@@ -83,14 +88,15 @@ export function MonitorDialog({
 							</FormField>
 							<FormField label="归属机器">
 								<Select
-									value={form.system || ""}
-									onValueChange={(system) => onFormChange({ ...form, system })}
+									value={form.system || "none"}
+									onValueChange={(system) => onFormChange({ ...form, system: system === "none" ? "" : system })}
 									disabled={!systems.length}
 								>
 									<SelectTrigger>
 										<SelectValue placeholder="选择机器" />
 									</SelectTrigger>
 									<SelectContent>
+										<SelectItem value="none">不关联机器</SelectItem>
 										{systems.map((system) => (
 											<SelectItem key={system.id} value={system.id}>
 												{system.name}
@@ -100,7 +106,7 @@ export function MonitorDialog({
 								</Select>
 							</FormField>
 						</div>
-						<div className="grid gap-4 sm:grid-cols-[1fr_160px]">
+						<div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_220px]">
 							<FormField label="分组">
 								<Input
 									value={form.group}
@@ -108,6 +114,33 @@ export function MonitorDialog({
 									placeholder="媒体"
 								/>
 							</FormField>
+							<FormField label="关联资产">
+								<Select
+									value={form.asset || "none"}
+									onValueChange={(asset) => {
+										if (asset !== "none") {
+											onAssetChange(asset)
+										}
+									}}
+									disabled={!assets.length}
+								>
+									<SelectTrigger>
+										<SelectValue placeholder="选择资产" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="none" disabled>
+											{assets.length ? "请选择网页端点资产" : "资产中心暂无网页端点资产"}
+										</SelectItem>
+										{assets.map((asset) => (
+											<SelectItem key={asset.id} value={asset.id}>
+												{asset.name}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</FormField>
+						</div>
+						<div className="grid gap-4 sm:grid-cols-[1fr_160px]">
 							<FormField label="启用状态">
 								<div className="flex h-10 items-center justify-between rounded-md border border-border/70 bg-card px-3">
 									<Label className="text-sm font-normal">启用监控</Label>

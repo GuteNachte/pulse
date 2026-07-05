@@ -22,6 +22,15 @@ func TestAlertsHistory(t *testing.T) {
 	systems, err := pulseTests.CreateSystems(hub, 1, user.Id, "up")
 	assert.NoError(t, err)
 	system := systems[0]
+	asset, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user":   user.Id,
+		"name":   "Status alert host",
+		"type":   "physical_host",
+		"status": "active",
+	})
+	assert.NoError(t, err)
+	system.Set("asset", asset.Id)
+	assert.NoError(t, hub.SaveNoValidate(system))
 
 	alert, err := pulseTests.CreateRecord(hub, "alerts", map[string]any{
 		"name":   "Status",
@@ -70,12 +79,14 @@ func TestAlertsHistory(t *testing.T) {
 		assert.NotNil(t, historyRecord, "Alert history record should exist")
 		assert.Equal(t, alert.Id, historyRecord.GetString("alert_id"), "Alert history should reference correct alert")
 		assert.Equal(t, system.Id, historyRecord.GetString("system"), "Alert history should reference correct system")
+		assert.Equal(t, asset.Id, historyRecord.GetString("asset"), "Alert history should reference correct asset")
 		assert.Equal(t, "Status", historyRecord.GetString("name"), "Alert history should have correct name")
 
 		// The alert history might be resolved immediately in some cases, so let's check the alert's triggered status
 		alertRecord, err := hub.FindFirstRecordByFilter("alerts", "id={:id}", dbx.Params{"id": alert.Id})
 		assert.NoError(t, err)
 		assert.True(t, alertRecord.GetBool("triggered"), "Alert should still be triggered when checking history")
+		assert.Equal(t, asset.Id, alertRecord.GetString("asset"), "Active alert should keep the asset binding")
 
 		// Now resolve the alert by setting system back to up
 		system.Set("status", "up")
@@ -152,10 +163,23 @@ func TestSetAlertTriggered(t *testing.T) {
 	hub.StartHub()
 
 	user, _ := pulseTests.CreateUser(hub, "test@example.com", "password")
+	asset1, _ := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user":   user.Id,
+		"name":   "test-asset-1",
+		"type":   "physical_host",
+		"status": "active",
+	})
+	asset2, _ := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user":   user.Id,
+		"name":   "test-asset-2",
+		"type":   "physical_host",
+		"status": "active",
+	})
 	system, _ := pulseTests.CreateRecord(hub, "systems", map[string]any{
 		"name":  "test-system",
 		"users": []string{user.Id},
 		"host":  "127.0.0.1",
+		"asset": asset1.Id,
 	})
 
 	alertRecord, _ := pulseTests.CreateRecord(hub, "alerts", map[string]any{
@@ -178,6 +202,7 @@ func TestSetAlertTriggered(t *testing.T) {
 	updatedRecord, err := hub.FindRecordById("alerts", alert.Id)
 	assert.NoError(t, err)
 	assert.True(t, updatedRecord.GetBool("triggered"))
+	assert.Equal(t, asset1.Id, updatedRecord.GetString("asset"))
 
 	// Test un-triggering the alert
 	err = am.SetAlertTriggered(alert, false)
@@ -186,4 +211,12 @@ func TestSetAlertTriggered(t *testing.T) {
 	updatedRecord, err = hub.FindRecordById("alerts", alert.Id)
 	assert.NoError(t, err)
 	assert.False(t, updatedRecord.GetBool("triggered"))
+
+	system.Set("asset", asset2.Id)
+	err = hub.Save(system)
+	assert.NoError(t, err)
+
+	updatedRecord, err = hub.FindRecordById("alerts", alert.Id)
+	assert.NoError(t, err)
+	assert.Equal(t, asset2.Id, updatedRecord.GetString("asset"))
 }

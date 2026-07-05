@@ -69,24 +69,26 @@ export function SidebarNav({ className, items, ...props }: SidebarNavProps) {
 			</div>
 
 			{/* Desktop View */}
-			<nav className={cn("sticky top-6 hidden gap-2 lg:grid", className)} {...props}>
+			<nav className={cn("sticky top-24 hidden gap-1.5 lg:grid", className)} {...props}>
 				<label htmlFor="settings-nav-search" className="sr-only">
 					搜索设置
 				</label>
-				<div className="relative mb-2">
-					<SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+				<div className="relative mb-1.5 min-w-0">
+					<SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
 					<Input
 						id="settings-nav-search"
 						value={query}
 						onChange={(event) => setQuery(event.target.value)}
 						placeholder="搜索设置"
-						className="h-10 bg-card pl-9 text-sm shadow-none"
+						className="h-9 w-full bg-card pl-8 pr-2.5 text-sm shadow-none"
 					/>
 				</div>
 				{groupedItems.length ? (
 					groupedItems.map((group) => (
-						<div key={group.title} className="grid gap-1">
-							<div className="px-2 pt-2 pb-1 text-[11px] font-medium text-muted-foreground">{group.title}</div>
+						<div key={group.title} className="grid gap-0.5">
+							<div className="px-2 pt-1 pb-0 text-[10px] font-medium leading-4 text-muted-foreground">
+								{group.title}
+							</div>
 							{group.items.map((item) => {
 								const active = page?.path === item.href
 								return (
@@ -95,7 +97,7 @@ export function SidebarNav({ className, items, ...props }: SidebarNavProps) {
 										key={item.href}
 										href={item.href}
 										className={cn(
-											"flex min-h-11 items-start justify-start gap-3 rounded-md px-2.5 py-2 text-left text-sm font-medium transition-[background-color,color,transform] active:scale-[0.96]",
+											"flex min-h-9 w-full min-w-0 items-center justify-start gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition-[background-color,color,transform] active:scale-[0.96]",
 											active ? "bg-card text-foreground" : "text-muted-foreground hover:bg-card hover:text-foreground"
 										)}
 										aria-current={active ? "page" : undefined}
@@ -103,21 +105,16 @@ export function SidebarNav({ className, items, ...props }: SidebarNavProps) {
 										{item.icon && (
 											<span
 												className={cn(
-													"mt-0.5 grid size-7 shrink-0 place-items-center rounded-md border border-border/70 bg-surface-soft text-muted-foreground",
+													"grid size-6 shrink-0 place-items-center rounded-md border border-border/70 bg-surface-soft text-muted-foreground",
 													active && "bg-surface-soft text-foreground",
 													item.danger && "text-amber-600"
 												)}
 											>
-												<item.icon className="size-4" strokeWidth={1.9} />
+												<item.icon className="size-3.5" strokeWidth={1.9} />
 											</span>
 										)}
 										<span className="min-w-0">
 											<span className="block truncate">{item.title}</span>
-											{item.description && (
-												<span className="mt-0.5 block truncate text-[11px] font-normal text-muted-foreground">
-													{item.description}
-												</span>
-											)}
 										</span>
 									</Link>
 								)

@@ -85,6 +85,20 @@ func TestApiRoutesAuthentication(t *testing.T) {
 		"pairing_confirmed": true,
 	})
 	require.NoError(t, err, "Failed to create test system")
+	hostAsset, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user":   user.Id,
+		"name":   "test-host-asset",
+		"type":   "physical_host",
+		"status": "active",
+	})
+	require.NoError(t, err, "Failed to create host asset")
+	upsAsset, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user":   user.Id,
+		"name":   "test-ups-asset",
+		"type":   "ups",
+		"status": "active",
+	})
+	require.NoError(t, err, "Failed to create UPS asset")
 	fingerprint, err := pulseTests.CreateRecord(hub, "fingerprints", map[string]any{
 		"system":      system.Id,
 		"token":       "agent-token-secret-123",
@@ -281,14 +295,39 @@ func TestApiRoutesAuthentication(t *testing.T) {
 			TestAppFactory:  testAppFactory,
 		},
 		{
+			Name:   "POST /pairing-codes - without asset should fail",
+			Method: http.MethodPost,
+			URL:    "/api/pulse/pairing-codes",
+			Headers: map[string]string{
+				"Authorization": userToken,
+			},
+			Body:            jsonReader(map[string]any{"target_ip": "192.168.1.5"}),
+			ExpectedStatus:  400,
+			ExpectedContent: []string{"客户端监控必须先绑定资产中心"},
+			TestAppFactory:  testAppFactory,
+		},
+		{
+			Name:   "POST /pairing-codes - wrong asset type should fail",
+			Method: http.MethodPost,
+			URL:    "/api/pulse/pairing-codes",
+			Headers: map[string]string{
+				"Authorization": userToken,
+			},
+			Body:            jsonReader(map[string]any{"target_ip": "192.168.1.5", "asset": upsAsset.Id}),
+			ExpectedStatus:  400,
+			ExpectedContent: []string{"客户端监控只能绑定物理主机"},
+			TestAppFactory:  testAppFactory,
+		},
+		{
 			Name:   "POST /pairing-codes - with auth should create code",
 			Method: http.MethodPost,
 			URL:    "/api/pulse/pairing-codes",
 			Headers: map[string]string{
 				"Authorization": userToken,
 			},
+			Body:            jsonReader(map[string]any{"target_ip": "192.168.1.5", "asset": hostAsset.Id}),
 			ExpectedStatus:  200,
-			ExpectedContent: []string{"code", "expires_at", "\"used\":false"},
+			ExpectedContent: []string{"code", "expires_at", "\"used\":false", hostAsset.Id},
 			TestAppFactory:  testAppFactory,
 		},
 		{
@@ -305,6 +344,7 @@ func TestApiRoutesAuthentication(t *testing.T) {
 				record.Set("id", "paircode0000001")
 				record.Set("code", "555666")
 				record.Set("user", user.Id)
+				record.Set("asset", hostAsset.Id)
 				record.Set("expected_ip", "192.168.1.5")
 				record.Set("connect_ip", "192.168.1.5")
 				record.Set("reported_ips", []string{"192.168.1.5", "fe80::1"})
@@ -322,6 +362,7 @@ func TestApiRoutesAuthentication(t *testing.T) {
 			ExpectedStatus: 200,
 			ExpectedContent: []string{
 				"555-666",
+				hostAsset.Id,
 				"target_ip",
 				"connect_ip",
 				"reported_ips",
@@ -359,6 +400,7 @@ func TestApiRoutesAuthentication(t *testing.T) {
 				record := core.NewRecord(pairingCollection)
 				record.Set("code", "111222")
 				record.Set("user", user.Id)
+				record.Set("asset", hostAsset.Id)
 				record.Set("expected_ip", "192.168.1.5")
 				record.Set("expires_at", "2099-01-01 00:00:00.000Z")
 				require.NoError(t, app.SaveNoValidate(record))
@@ -368,6 +410,7 @@ func TestApiRoutesAuthentication(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, systems, 1)
 				require.False(t, systems[0].GetBool("pairing_confirmed"))
+				require.Equal(t, hostAsset.Id, systems[0].GetString("asset"))
 				require.Equal(t, "192.168.1.5", systems[0].GetString("target_ip"))
 				require.Equal(t, "192.168.1.5", systems[0].GetString("connect_ip"))
 				require.Equal(t, "windows-host", systems[0].GetString("agent_profile"))
@@ -390,6 +433,7 @@ func TestApiRoutesAuthentication(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, pairingCodes, 1)
 				require.Equal(t, "192.168.1.5", pairingCodes[0].GetString("connect_ip"))
+				require.Equal(t, hostAsset.Id, pairingCodes[0].GetString("asset"))
 				require.Equal(t, "pair-test", pairingCodes[0].GetString("hostname"))
 				require.Equal(t, "windows-host", pairingCodes[0].GetString("agent_profile"))
 				require.Equal(t, "windows", pairingCodes[0].GetString("platform"))
@@ -535,6 +579,7 @@ func TestApiRoutesAuthentication(t *testing.T) {
 				record := core.NewRecord(pairingCollection)
 				record.Set("code", "777888")
 				record.Set("user", user.Id)
+				record.Set("asset", hostAsset.Id)
 				record.Set("expected_ip", "192.168.1.6")
 				record.Set("expires_at", "2099-01-01 00:00:00.000Z")
 				require.NoError(t, app.SaveNoValidate(record))
@@ -587,6 +632,7 @@ func TestApiRoutesAuthentication(t *testing.T) {
 				record := core.NewRecord(pairingCollection)
 				record.Set("code", "999000")
 				record.Set("user", user.Id)
+				record.Set("asset", hostAsset.Id)
 				record.Set("expected_ip", "192.168.1.7")
 				record.Set("expires_at", "2099-01-01 00:00:00.000Z")
 				require.NoError(t, app.SaveNoValidate(record))
@@ -615,6 +661,7 @@ func TestApiRoutesAuthentication(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, newSystems, 1)
 				require.False(t, newSystems[0].GetBool("pairing_confirmed"))
+				require.Equal(t, hostAsset.Id, newSystems[0].GetString("asset"))
 			},
 			ExpectedStatus:  200,
 			ExpectedContent: []string{"agent_id", "token", "agent_secret", "repaired-pair"},
@@ -1295,12 +1342,20 @@ func TestPairingCodeCreationDoesNotCreateSystem(t *testing.T) {
 
 	userToken, err := user.NewAuthToken()
 	require.NoError(t, err)
+	hostAsset, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user":   user.Id,
+		"name":   "pairing-session-host",
+		"type":   "physical_host",
+		"status": "active",
+	})
+	require.NoError(t, err)
 
 	beforeCount, err := hub.CountRecords("systems")
 	require.NoError(t, err)
 
 	res := performTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/pulse/pairing-codes", jsonReader(map[string]any{
 		"target_ip": "192.0.2.25",
+		"asset":     hostAsset.Id,
 	}), map[string]string{
 		"Authorization": userToken,
 	})

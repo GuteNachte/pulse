@@ -1,5 +1,13 @@
 import { getPagePath } from "@nanostores/router"
-import { ActivityIcon, AlertOctagonIcon, BadgeCheckIcon, ContainerIcon, Globe2Icon, ServerIcon } from "lucide-react"
+import {
+	ActivityIcon,
+	AlertOctagonIcon,
+	BadgeCheckIcon,
+	BoxesIcon,
+	ContainerIcon,
+	Globe2Icon,
+	ServerIcon,
+} from "lucide-react"
 import { useMemo } from "react"
 import { ActiveAlerts } from "@/components/active-alerts"
 import { NotificationFailuresBanner } from "@/components/notification-failures-banner"
@@ -31,6 +39,10 @@ export function MobileDashboard({
 	totalSystems,
 	abnormalSystems,
 	activeAlertCount,
+	assetCount,
+	assetDetail,
+	assetHref,
+	assetTone,
 	containerCount,
 	containerDetail,
 	containerTone,
@@ -43,6 +55,10 @@ export function MobileDashboard({
 	totalSystems: number
 	abnormalSystems: number
 	activeAlertCount: number
+	assetCount: number
+	assetDetail: string
+	assetHref: string
+	assetTone: MobileStatusTone
 	containerCount: number
 	containerDetail: string
 	containerTone: MobileStatusTone
@@ -69,6 +85,12 @@ export function MobileDashboard({
 
 			<MobileSummaryStrip
 				items={[
+					{
+						label: "资产",
+						value: assetCount,
+						tone: assetTone,
+						icon: BoxesIcon,
+					},
 					{
 						label: "机器",
 						value: `${onlineSystems}/${totalSystems}`,
@@ -102,6 +124,18 @@ export function MobileDashboard({
 
 			<MobileSection title="服务概览">
 				<div className="grid grid-cols-2 gap-2">
+					<MobileListItem href={assetHref}>
+						<div className="flex items-center justify-between gap-3">
+							<div>
+								<div className="text-xs text-muted-foreground">资产</div>
+								<div className="mt-1 text-lg font-semibold tabular-nums">{assetCount}</div>
+								<div className={cn("mt-0.5 line-clamp-1 text-[11px]", metricToneClassName(assetTone))}>
+									{assetDetail}
+								</div>
+							</div>
+							<BoxesIcon className="size-5 text-muted-foreground" />
+						</div>
+					</MobileListItem>
 					<MobileListItem href={getPagePath($router, "containers")}>
 						<div className="flex items-center justify-between gap-3">
 							<div>

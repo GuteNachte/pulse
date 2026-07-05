@@ -11,7 +11,13 @@ import { isReadOnlyUser, pb } from "@/lib/api"
 import { pageTitle } from "@/lib/branding"
 import { $allSystemsById } from "@/lib/stores"
 import { getSystemDisplayName } from "@/lib/system-roles"
-import type { SystemRecord, WebsiteMonitorFailureCategory, WebsiteMonitorRecord } from "@/types"
+import type {
+	AssetRecord,
+	AssetRelationRecord,
+	SystemRecord,
+	WebsiteMonitorFailureCategory,
+	WebsiteMonitorRecord,
+} from "@/types"
 import { WebsiteDetailPanel } from "./websites/detail-panel"
 import { failureCategoryLabel, formatMonitorError } from "./websites/format"
 import { hasMonitorCheckInputsChanged } from "./websites/monitor-save-utils"
@@ -27,9 +33,11 @@ import {
 	nextAvailableTargetKind,
 	resolveFormIconURL,
 	resolveIconURL,
+	normalizeOptionalURL,
 	targetKindScope,
+	splitURL,
 } from "./websites/target-utils"
-import type { IconPreviewState, MonitorForm } from "./websites/types"
+import type { IconPreviewState, MonitorForm, TargetKind, TargetScope } from "./websites/types"
 import { createEmptyForm } from "./websites/types"
 import { useWebsiteMonitorData } from "./websites/use-website-monitor-data"
 
@@ -44,6 +52,8 @@ export default memo(function Websites() {
 	const [deletingId, setDeletingId] = useState("")
 	const [iconPreview, setIconPreview] = useState<IconPreviewState>({ status: "idle", url: "" })
 	const [mobileDetailOpen, setMobileDetailOpen] = useState(false)
+	const [assets, setAssets] = useState<AssetRecord[]>([])
+	const [assetsLoading, setAssetsLoading] = useState(true)
 	const { isMobile } = useMobileLayout()
 	const handledInitialAdd = useRef(false)
 	const {
@@ -77,35 +87,109 @@ export default memo(function Websites() {
 
 	useEffect(() => {
 		document.title = pageTitle("网站监控")
+		setAssetsLoading(true)
+		pb.collection<AssetRecord>("assets")
+			.getFullList({ sort: "type,name", requestKey: null })
+			.then((records) => setAssets(records.filter((asset) => asset.type === "web_endpoint")))
+			.catch((error) => console.error("load website assets", error))
+			.finally(() => setAssetsLoading(false))
 	}, [])
 	const readOnly = isReadOnlyUser()
-	const hasSystems = systems.length > 0
-	const waitingForSystems = loading && !hasSystems
+	const hasWebEndpointAssets = assets.length > 0
+	const waitingForAssets = assetsLoading && !hasWebEndpointAssets
 
 	useEffect(() => {
-		if (handledInitialAdd.current || readOnly || !systems.length) {
+		if (handledInitialAdd.current || readOnly) {
 			return
 		}
 		const params = new URLSearchParams(window.location.search)
-		if (params.get("add") !== "1") {
+		const requestedAsset = params.get("asset") ?? ""
+		if (params.get("add") !== "1" && !requestedAsset) {
 			return
 		}
 		const requestedSystem = params.get("system") ?? ""
 		const system = systems.find((item) => item.id === requestedSystem) ?? systems[0]
-		handledInitialAdd.current = true
-		setSystemFilter(system.id)
-		setForm({ ...createEmptyForm(), system: system.id })
-		setIconPreview({ status: "idle", url: "" })
-		setDialogOpen(true)
-	}, [readOnly, systems])
-
-	function openCreateDialog() {
-		if (!systems.length) {
-			toast({ title: "请先添加机器", description: "网站监控需要选择归属机器后才能添加。", variant: "destructive" })
+		if (assetsLoading) {
 			return
 		}
-		setForm({ ...createEmptyForm(), system: systemFilter || systems[0]?.id || "" })
-		setIconPreview({ status: "idle", url: "" })
+		let cancelled = false
+		async function openFromURL() {
+			if (requestedAsset) {
+				const asset = assets.find((item) => item.id === requestedAsset)
+				if (!asset) {
+					handledInitialAdd.current = true
+					toast({
+						title: "网页端点资产不可用",
+						description: "URL 指向的资产不存在，或不是资产中心里的网页端点资产。",
+						variant: "destructive",
+					})
+					return
+				}
+				handledInitialAdd.current = true
+				setSystemFilter(system?.id || "")
+				const existingMonitor = await findWebsiteMonitorByAsset(requestedAsset)
+				if (cancelled) {
+					return
+				}
+				if (existingMonitor) {
+					setDialogOpen(false)
+					await refreshMonitor(existingMonitor.id).catch(() => undefined)
+					if (cancelled) {
+						return
+					}
+					setSelectedId(existingMonitor.id)
+					toast({
+						title: "该网页端点已接入网站监控",
+						description: "已为你打开现有监控，避免重复创建同一个资产的监控配置。",
+					})
+					return
+				}
+				const nextForm = createMonitorFormFromAsset(asset, { system: system?.id || "" })
+				setForm(nextForm)
+				setIconPreview({ status: "idle", url: nextForm.icon_url })
+				setDialogOpen(true)
+				return
+			}
+			const asset = assets[0]
+			if (!asset) {
+				handledInitialAdd.current = true
+				toast({
+					title: "请先添加网页端点资产",
+					description: "网站监控需要从资产中心选择网页端点，避免监控对象游离在资产中心之外。",
+					variant: "destructive",
+				})
+				return
+			}
+			handledInitialAdd.current = true
+			setSystemFilter(system?.id || "")
+			const nextForm = createMonitorFormFromAsset(asset, { system: system?.id || "" })
+			setForm(nextForm)
+			setIconPreview({ status: "idle", url: nextForm.icon_url })
+			setDialogOpen(true)
+		}
+		openFromURL().catch((error) => {
+			console.error("open website monitor from url", error)
+			handledInitialAdd.current = true
+			toast({ title: "读取网站监控失败", description: "无法确认该网页端点是否已接入监控。", variant: "destructive" })
+		})
+		return () => {
+			cancelled = true
+		}
+	}, [assets, assetsLoading, readOnly, refreshMonitor, setSelectedId, setSystemFilter, systems])
+
+	function openCreateDialog() {
+		if (!assets.length) {
+			toast({
+				title: "请先添加网页端点资产",
+				description: "网站监控需要从资产中心选择网页端点，避免监控对象游离在资产中心之外。",
+				variant: "destructive",
+			})
+			return
+		}
+		const selectedSystem = systems.find((item) => item.id === (systemFilter || systems[0]?.id || ""))
+		const nextForm = createMonitorFormFromAsset(assets[0], { system: selectedSystem?.id || "" })
+		setForm(nextForm)
+		setIconPreview({ status: "idle", url: nextForm.icon_url })
 		setDialogOpen(true)
 	}
 
@@ -116,7 +200,7 @@ export default memo(function Websites() {
 		}
 	}
 
-	const clientsPath = getPagePath($router, "clients")
+	const assetsPath = getPagePath($router, "assets")
 
 	function openEditDialog(monitor: WebsiteMonitorRecord) {
 		const internalURL = monitor.internal_url || monitor.url || ""
@@ -126,6 +210,7 @@ export default memo(function Websites() {
 		const nextForm = {
 			id: monitor.id,
 			system: monitor.system ?? "",
+			asset: monitor.asset ?? "",
 			name: monitor.name,
 			description: monitor.description ?? "",
 			targets,
@@ -145,10 +230,27 @@ export default memo(function Websites() {
 	async function saveMonitor() {
 		const targetPayload = buildTargetPayload(form.targets)
 		const { internalURL, externalURL, fallbackURL: checkURL } = getTargetURLSet(targetPayload)
-		if (!form.name.trim() || !form.system || !checkURL) {
+		const selectedAsset = assets.find((asset) => asset.id === form.asset)
+		if (!selectedAsset) {
+			toast({
+				title: "请选择网页端点资产",
+				description: "网站监控必须绑定资产中心里的网页端点。",
+				variant: "destructive",
+			})
+			return
+		}
+		if (selectedAsset.type !== "web_endpoint") {
+			toast({
+				title: "资产类型不正确",
+				description: "网站监控只能绑定资产中心里的网页端点资产。",
+				variant: "destructive",
+			})
+			return
+		}
+		if (!form.name.trim() || !checkURL) {
 			toast({
 				title: "信息不完整",
-				description: "名称、归属机器和至少一个 HTTP/HTTPS 地址必须填写。",
+				description: "名称和至少一个 HTTP/HTTPS 地址必须填写。",
 				variant: "destructive",
 			})
 			return
@@ -163,6 +265,7 @@ export default memo(function Websites() {
 			const payload = {
 				user: pb.authStore.record?.id,
 				system: form.system,
+				asset: form.asset,
 				name: form.name.trim(),
 				description: form.description.trim(),
 				internal_url: internalURL,
@@ -180,6 +283,15 @@ export default memo(function Websites() {
 			const record = form.id
 				? await pb.collection<WebsiteMonitorRecord>("website_monitors").update(form.id, payload)
 				: await pb.collection<WebsiteMonitorRecord>("website_monitors").create(payload)
+			const syncedAsset = await syncWebEndpointAssetFromMonitor(selectedAsset, {
+				internalURL,
+				externalURL,
+				checkURL,
+			})
+			if (syncedAsset) {
+				setAssets((current) => current.map((asset) => (asset.id === syncedAsset.id ? syncedAsset : asset)))
+			}
+			await syncWebsiteMonitorHostedOnRelation(record, selectedAsset, form.system, systemsById, systems)
 			setDialogOpen(false)
 			setSelectedId(record.id)
 			await load()
@@ -279,6 +391,23 @@ export default memo(function Websites() {
 		setIconPreview({ status: "idle", url: iconURL })
 	}
 
+	function changeAsset(assetId: string) {
+		const asset = assets.find((item) => item.id === assetId)
+		if (!asset) {
+			setFormWithSyncedIcon({ ...form, asset: "" }, true)
+			return
+		}
+		const nextForm = createMonitorFormFromAsset(asset, {
+			base: form,
+			system: form.system,
+			interval_seconds: form.interval_seconds,
+			timeout_seconds: form.timeout_seconds,
+			enabled: form.enabled,
+		})
+		setForm(nextForm)
+		setIconPreview({ status: "idle", url: nextForm.icon_url })
+	}
+
 	function addTarget() {
 		const nextKind = nextAvailableTargetKind(form.targets)
 		setFormWithSyncedIcon(
@@ -322,9 +451,9 @@ export default memo(function Websites() {
 					loading={loading}
 					runningId={runningId}
 					readOnly={readOnly}
-					hasSystems={hasSystems}
-					waitingForSystems={waitingForSystems}
-					clientsPath={clientsPath}
+					hasWebEndpointAssets={hasWebEndpointAssets}
+					waitingForAssets={waitingForAssets}
+					assetsPath={assetsPath}
 					onLoad={load}
 					onCreate={openCreateDialog}
 					onSelect={selectMonitor}
@@ -383,11 +512,13 @@ export default memo(function Websites() {
 				open={dialogOpen}
 				form={form}
 				systems={systems}
+				assets={assets}
 				saving={saving}
 				iconPreview={iconPreview}
 				onOpenChange={setDialogOpen}
 				onFormChange={setForm}
 				onIconPreviewChange={setIconPreview}
+				onAssetChange={changeAsset}
 				onSave={saveMonitor}
 				onFetchIcon={fetchIconURL}
 				onAddTarget={addTarget}
@@ -481,4 +612,269 @@ function websiteMonitorCheckToast(response: WebsiteMonitorCheckResponse) {
 		description: category ? `${category}：${detail}` : detail,
 		variant: "destructive" as const,
 	}
+}
+
+async function syncWebEndpointAssetFromMonitor(
+	asset: AssetRecord,
+	values: {
+		internalURL: string
+		externalURL: string
+		checkURL: string
+	}
+) {
+	const metadata = { ...(asset.metadata ?? {}) }
+	let changed = false
+	changed = setMissingMetadataString(metadata, "internal_url", values.internalURL) || changed
+	changed = setMissingMetadataString(metadata, "external_url", values.externalURL) || changed
+	changed = setMissingMetadataString(metadata, "url", values.checkURL) || changed
+	changed = setMissingMetadataString(metadata, "endpoint_scope", endpointScopeFromMonitorURLs(values)) || changed
+	if (!changed) return null
+	return await pb.collection<AssetRecord>("assets").update(asset.id, { metadata })
+}
+
+async function syncWebsiteMonitorHostedOnRelation(
+	monitor: WebsiteMonitorRecord,
+	endpointAsset: AssetRecord,
+	systemId: string,
+	systemsById: Record<string, SystemRecord>,
+	systems: SystemRecord[]
+) {
+	const ownRelations = await getWebsiteMonitorHostedOnRelations(endpointAsset.id, monitor.id)
+	const hostSystem = await resolveWebsiteMonitorHostSystem(systemId, systemsById, systems)
+	const hostAssetId = hostSystem?.asset?.trim() ?? ""
+
+	if (!hostAssetId || hostAssetId === endpointAsset.id) {
+		await deleteWebsiteMonitorOwnedRelations(ownRelations)
+		return
+	}
+
+	for (const relation of ownRelations) {
+		if (relation.target_asset !== hostAssetId) {
+			await pb.collection("asset_relations").delete(relation.id)
+		}
+	}
+	if (ownRelations.some((relation) => relation.target_asset === hostAssetId)) {
+		return
+	}
+	const existingRelation = await findHostedOnRelation(endpointAsset.id, hostAssetId)
+	if (existingRelation) {
+		return
+	}
+	await pb.collection("asset_relations").create({
+		user: pb.authStore.record?.id,
+		source_asset: endpointAsset.id,
+		target_asset: hostAssetId,
+		kind: "hosted_on",
+		label: "网站监控归属",
+		metadata: {
+			source: "website-monitor",
+			monitor: monitor.id,
+			system: hostSystem?.id ?? systemId,
+		},
+	})
+}
+
+async function resolveWebsiteMonitorHostSystem(
+	systemId: string,
+	systemsById: Record<string, SystemRecord>,
+	systems: SystemRecord[]
+) {
+	if (!systemId) {
+		return undefined
+	}
+	const cachedSystem = systemsById[systemId] ?? systems.find((system) => system.id === systemId)
+	if (cachedSystem?.asset?.trim()) {
+		return cachedSystem
+	}
+	try {
+		return await pb.collection<SystemRecord>("systems").getOne(systemId, { requestKey: null })
+	} catch (error) {
+		console.error("load website monitor host system", error)
+		return cachedSystem
+	}
+}
+
+async function getWebsiteMonitorHostedOnRelations(endpointAssetId: string, monitorId: string) {
+	const records = await pb.collection<AssetRelationRecord>("asset_relations").getFullList({
+		filter: pb.filter("source_asset = {:source} && kind = {:kind}", {
+			source: endpointAssetId,
+			kind: "hosted_on",
+		}),
+		requestKey: null,
+	})
+	return records.filter((relation) => {
+		const metadata = relation.metadata ?? {}
+		return (
+			metadataStringFromRecord(metadata, "source") === "website-monitor" &&
+			metadataStringFromRecord(metadata, "monitor") === monitorId
+		)
+	})
+}
+
+async function deleteWebsiteMonitorOwnedRelations(relations: AssetRelationRecord[]) {
+	for (const relation of relations) {
+		await pb.collection("asset_relations").delete(relation.id)
+	}
+}
+
+async function findHostedOnRelation(endpointAssetId: string, hostAssetId: string) {
+	try {
+		return await pb.collection<AssetRelationRecord>("asset_relations").getFirstListItem(
+			pb.filter("source_asset = {:source} && target_asset = {:target} && kind = {:kind}", {
+				source: endpointAssetId,
+				target: hostAssetId,
+				kind: "hosted_on",
+			}),
+			{ requestKey: null }
+		)
+	} catch (error) {
+		if (isPocketBaseNotFound(error)) {
+			return null
+		}
+		throw error
+	}
+}
+
+function setMissingMetadataString(metadata: Record<string, unknown>, key: string, value: string) {
+	if (!value.trim() || metadataStringFromRecord(metadata, key)) {
+		return false
+	}
+	metadata[key] = value.trim()
+	return true
+}
+
+function metadataStringFromRecord(metadata: Record<string, unknown>, key: string) {
+	const value = metadata[key]
+	if (typeof value === "string") {
+		return value.trim()
+	}
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return String(value)
+	}
+	return ""
+}
+
+function endpointScopeFromMonitorURLs(values: { internalURL: string; externalURL: string }) {
+	if (values.internalURL && values.externalURL) return "内外网"
+	if (values.externalURL) return "外网"
+	if (values.internalURL) return "内网"
+	return ""
+}
+
+async function findWebsiteMonitorByAsset(assetId: string) {
+	try {
+		return await pb.collection<WebsiteMonitorRecord>("website_monitors").getFirstListItem(
+			pb.filter("asset = {:asset}", {
+				asset: assetId,
+			}),
+			{ requestKey: null }
+		)
+	} catch (error) {
+		if (isPocketBaseNotFound(error)) {
+			return null
+		}
+		throw error
+	}
+}
+
+function isPocketBaseNotFound(error: unknown) {
+	return (
+		typeof error === "object" && error !== null && "status" in error && (error as { status?: unknown }).status === 404
+	)
+}
+
+function createMonitorFormFromAsset(
+	asset: AssetRecord,
+	options?: {
+		base?: MonitorForm
+		system?: string
+		interval_seconds?: number
+		timeout_seconds?: number
+		enabled?: boolean
+	}
+): MonitorForm {
+	const base = options?.base ?? createEmptyForm()
+	const targets = webEndpointTargetsFromAsset(asset)
+	const iconSource = targets.some((target) => target.kind.startsWith("internal"))
+		? "internal"
+		: targets.some((target) => target.kind.startsWith("external"))
+			? "external"
+			: base.icon_source
+	const nextForm: MonitorForm = {
+		...base,
+		id: base.id,
+		system: options?.system ?? base.system,
+		asset: asset.id,
+		name: asset.name || base.name,
+		description: firstNonEmpty(asset.notes, asset.role, base.description),
+		targets: targets.length ? targets : base.targets,
+		icon_source: iconSource,
+		group: firstNonEmpty(asset.location, asset.role, base.group),
+		interval_seconds: options?.interval_seconds ?? base.interval_seconds,
+		timeout_seconds: options?.timeout_seconds ?? base.timeout_seconds,
+		enabled: options?.enabled ?? base.enabled,
+	}
+	return { ...nextForm, icon_url: resolveFormIconURL(nextForm) }
+}
+
+function webEndpointTargetsFromAsset(asset: AssetRecord): MonitorForm["targets"] {
+	const internalURL = normalizeOptionalURL(metadataString(asset, "internal_url"))
+	const externalURL = normalizeOptionalURL(metadataString(asset, "external_url"))
+	const defaultURL = normalizeOptionalURL(metadataString(asset, "url"))
+	const candidates: Array<{ scope: TargetScope; url: string }> = []
+	if (internalURL) {
+		candidates.push({ scope: "internal", url: internalURL })
+	}
+	if (externalURL) {
+		candidates.push({ scope: "external", url: externalURL })
+	}
+	if (!candidates.length && defaultURL) {
+		candidates.push({ scope: defaultScopeFromAsset(asset), url: defaultURL })
+	}
+
+	const seenURLs = new Set<string>()
+	return candidates.flatMap((candidate) => {
+		if (!candidate.url || seenURLs.has(candidate.url)) {
+			return []
+		}
+		seenURLs.add(candidate.url)
+		const kind = targetKindForURL(candidate.url, candidate.scope)
+		const parts = splitURL(candidate.url, candidate.scope === "internal" ? "http://" : "https://")
+		return [{ id: kind, kind, protocol: parts.protocol, address: parts.address }]
+	})
+}
+
+function targetKindForURL(rawURL: string, scope: TargetScope): TargetKind {
+	return `${scope}-${urlLooksIPv6(rawURL) ? "ipv6" : "ipv4"}` as TargetKind
+}
+
+function urlLooksIPv6(rawURL: string) {
+	try {
+		return new URL(rawURL).hostname.includes(":")
+	} catch {
+		return rawURL.includes("[") && rawURL.includes("]")
+	}
+}
+
+function defaultScopeFromAsset(asset: AssetRecord): TargetScope {
+	const scope = metadataString(asset, "endpoint_scope").toLowerCase()
+	if (scope.includes("外") || scope.includes("public") || scope.includes("external")) {
+		return "external"
+	}
+	return "internal"
+}
+
+function metadataString(asset: AssetRecord, key: string) {
+	const value = asset.metadata?.[key]
+	if (typeof value === "string") {
+		return value.trim()
+	}
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return String(value)
+	}
+	return ""
+}
+
+function firstNonEmpty(...values: Array<string | undefined>) {
+	return values.map((value) => value?.trim() ?? "").find(Boolean) ?? ""
 }

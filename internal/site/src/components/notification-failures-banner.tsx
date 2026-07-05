@@ -19,7 +19,8 @@ export function NotificationFailuresBanner() {
 			try {
 				const records = await pb.collection<NotificationFailureRecord>("notification_failures").getFullList({
 					sort: "-updated",
-					fields: "id,title,target,error,count,created,updated",
+					expand: "asset",
+					fields: "id,title,target,error,count,created,updated,asset,expand.asset.name,expand.asset.type",
 				})
 				if (!ignore) {
 					setFailures(records)
@@ -53,6 +54,7 @@ export function NotificationFailuresBanner() {
 	}
 
 	const latest = failures[0]
+	const latestAsset = latest.expand?.asset?.name || latest.asset || ""
 
 	return (
 		<Alert className="border-orange-500/24 bg-card text-foreground shadow-none dark:border-orange-300/18 dark:bg-card">
@@ -66,6 +68,7 @@ export function NotificationFailuresBanner() {
 						<Trans>
 							最近一次失败来自 {latest.target}，已连续失败 {latest.count} 次。请检查 Webhook URL、网络或目标服务状态。
 						</Trans>
+						{latestAsset && <span className="ms-1">关联资产：{latestAsset}。</span>}
 						{failures.length > 1 && (
 							<span className="ms-1">
 								<Trans>当前共有 {failures.length} 个通知通道存在失败记录。</Trans>

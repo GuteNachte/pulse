@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { alertInfo } from "@/lib/alerts"
 import { cn } from "@/lib/utils"
-import type { AlertPolicyRecord } from "@/types"
+import type { AlertPolicyCoverageAsset, AlertPolicyRecord } from "@/types"
 
 type AlertRuleDetail = {
 	key: string
@@ -16,6 +16,8 @@ type AlertRuleDetail = {
 	enabled: boolean
 	threshold: string
 	scope: string
+	coverageLabel?: string
+	coverageAssets?: AlertPolicyCoverageAsset[]
 	updated?: string
 	icon: ComponentType<{ className?: string }>
 }
@@ -132,13 +134,21 @@ export function AlertRulesOverview({
 	const [selectedRule, setSelectedRule] = useState<AlertRuleDetail | null>(null)
 	const resourceRules = useMemo(() => buildResourceRuleDetails(policies), [policies])
 	const enabledResourceCount = resourceRules.filter((rule) => rule.enabled).length
-	const disabledResourceCount = resourceRules.length - enabledResourceCount
+	const coveredAssetCount = useMemo(() => {
+		const assetIds = new Set<string>()
+		for (const policy of policies) {
+			for (const asset of policy.coverage_assets ?? []) {
+				assetIds.add(asset.id)
+			}
+		}
+		return assetIds.size
+	}, [policies])
 
 	return (
 		<div className={cn("grid min-w-0 gap-4", className)}>
 			<div className="grid gap-3 sm:grid-cols-3">
 				<RuleMetric label="资源规则" value={loading ? "读取中" : `${enabledResourceCount} 项`} tone="success" />
-				<RuleMetric label="未启用资源" value={loading ? "..." : `${disabledResourceCount} 项`} />
+				<RuleMetric label="覆盖资产" value={loading ? "..." : `${coveredAssetCount} 台`} tone="info" />
 				<RuleMetric label="事件类告警" value={`${eventRules.length} 类`} tone="info" />
 			</div>
 
@@ -230,6 +240,9 @@ function RuleCard({ rule, onClick }: { rule: AlertRuleDetail; onClick: () => voi
 				</Badge>
 			</div>
 			<div className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{rule.threshold}</div>
+			{rule.coverageLabel && (
+				<div className="truncate text-xs font-medium text-foreground/75">{rule.coverageLabel}</div>
+			)}
 		</button>
 	)
 }
@@ -266,7 +279,29 @@ function RuleDetailSheet({
 						<DetailRow label="类型" value={rule.kind === "resource" ? "资源阈值" : "事件结果"} />
 						<DetailRow label="触发条件" value={rule.threshold} />
 						<DetailRow label="覆盖范围" value={rule.scope} />
+						{rule.coverageLabel && <DetailRow label="实际覆盖" value={rule.coverageLabel} />}
 						{rule.updated && <DetailRow label="更新时间" value={formatDate(rule.updated)} />}
+						{rule.coverageAssets && rule.coverageAssets.length > 0 && (
+							<div className="grid gap-2 rounded-lg border border-border/70 bg-card p-3 shadow-none">
+								<div className="text-xs text-muted-foreground">作用资产列表</div>
+								<div className="grid gap-1.5">
+									{rule.coverageAssets.slice(0, 12).map((asset) => (
+										<div
+											key={`${asset.id}-${asset.system_id ?? ""}`}
+											className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-border/70 bg-surface-soft px-2.5 py-2"
+										>
+											<span className="min-w-0 truncate font-medium">{asset.name}</span>
+											<span className="shrink-0 text-xs text-muted-foreground">
+												{asset.system_name || asset.type || "已监控"}
+											</span>
+										</div>
+									))}
+									{rule.coverageAssets.length > 12 && (
+										<div className="text-xs text-muted-foreground">另 {rule.coverageAssets.length - 12} 台资产</div>
+									)}
+								</div>
+							</div>
+						)}
 						<div className="rounded-lg border border-border/70 bg-card p-3 text-xs leading-relaxed text-muted-foreground shadow-none">
 							<BellIcon className="mr-1.5 inline size-3.5 align-[-2px]" />
 							触发后会先写入告警中心；如果配置了外部通知通道，再按当前用户的通知设置发送。已静默的同一未恢复告警不会重复推送。
@@ -302,10 +337,29 @@ function buildResourceRuleDetails(policies: AlertPolicyRecord[]): AlertRuleDetai
 			enabled: Boolean(policy),
 			threshold: policy ? formatResourceThreshold(key, policy) : "未启用全局规则",
 			scope: key === "Status" ? "加入告警的机器" : "所有已接入机器",
+			coverageLabel: policy ? formatPolicyCoverage(policy) : undefined,
+			coverageAssets: policy?.coverage_assets,
 			updated: policy?.updated,
 			icon: info.icon,
 		}
 	})
+}
+
+export function getPoliciesForAsset(policies: AlertPolicyRecord[], assetId: string) {
+	if (!assetId) return []
+	return policies.filter((policy) => policy.coverage_assets?.some((asset) => asset.id === assetId))
+}
+
+export function formatPolicyCoverage(policy: AlertPolicyRecord) {
+	const assetCount = policy.coverage_count ?? policy.coverage_assets?.length ?? 0
+	const systemCount = policy.coverage_system_count ?? assetCount
+	if (assetCount <= 0 && systemCount <= 0) {
+		return "当前未覆盖已监控资产"
+	}
+	if (assetCount === systemCount) {
+		return `覆盖 ${assetCount} 台资产`
+	}
+	return `覆盖 ${assetCount} 台资产 / ${systemCount} 台机器`
 }
 
 function formatResourceThreshold(key: string, policy: AlertPolicyRecord) {

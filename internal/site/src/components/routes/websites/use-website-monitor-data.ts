@@ -41,6 +41,7 @@ export function useWebsiteMonitorData(systemsById: Record<string, SystemRecord>)
 	const checksRequestId = useRef(0)
 	const listRequestId = useRef(0)
 	const reloadTimer = useRef<number | undefined>(undefined)
+	const initialMonitorId = useRef(new URLSearchParams(window.location.search).get("monitor") ?? "")
 	const pageSize = 50
 
 	const load = useCallback(
@@ -71,12 +72,33 @@ export function useWebsiteMonitorData(systemsById: Record<string, SystemRecord>)
 				if (requestId !== listRequestId.current) {
 					return
 				}
-				setMonitors(response.items)
+				let items = response.items
+				if (initialMonitorId.current && !items.some((monitor) => monitor.id === initialMonitorId.current)) {
+					try {
+						const directMonitor = await pb
+							.collection<WebsiteMonitorRecord>("website_monitors")
+							.getOne(initialMonitorId.current, {
+								requestKey: `website-monitor-direct-${initialMonitorId.current}`,
+							})
+						items = [directMonitor, ...items]
+					} catch (error) {
+						console.error("load direct website monitor", error)
+					}
+				}
+				if (requestId !== listRequestId.current) {
+					return
+				}
+				setMonitors(items)
 				setStatusCounts({ ...defaultWebsiteMonitorCounts, ...response.counts })
 				setHasMore(response.hasMore)
 				setSelectedId((current) =>
-					response.items.some((monitor) => monitor.id === current) ? current : response.items[0]?.id || ""
+					initialMonitorId.current && items.some((monitor) => monitor.id === initialMonitorId.current)
+						? initialMonitorId.current
+						: items.some((monitor) => monitor.id === current)
+							? current
+							: items[0]?.id || ""
 				)
+				initialMonitorId.current = ""
 			} catch (error) {
 				if (isPocketBaseAutoCancel(error)) {
 					return
@@ -147,7 +169,9 @@ export function useWebsiteMonitorData(systemsById: Record<string, SystemRecord>)
 			}
 			setMonitors((current) =>
 				monitorMatchesStatusFilter(record, statusFilter)
-					? current.map((monitor) => (monitor.id === monitorId ? record : monitor))
+					? current.some((monitor) => monitor.id === monitorId)
+						? current.map((monitor) => (monitor.id === monitorId ? record : monitor))
+						: [record, ...current]
 					: current.filter((monitor) => monitor.id !== monitorId)
 			)
 			return record

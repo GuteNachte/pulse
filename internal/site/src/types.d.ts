@@ -30,6 +30,7 @@ export interface FingerprintRecord extends RecordModel {
 
 export interface SystemRecord extends RecordModel {
 	name: string
+	asset?: string
 	display_name?: string
 	role?: string
 	custom_role?: string
@@ -48,6 +49,265 @@ export interface SystemRecord extends RecordModel {
 	status: "up" | "down" | "paused" | "pending"
 	info: SystemInfo
 	v: string
+	updated: string
+}
+
+export type AssetType =
+	| "internet"
+	| "physical_host"
+	| "nas"
+	| "server"
+	| "mini_pc"
+	| "router"
+	| "switch"
+	| "ap"
+	| "gateway"
+	| "ont"
+	| "firewall"
+	| "phone"
+	| "tablet"
+	| "camera"
+	| "printer"
+	| "ups"
+	| "game_console"
+	| "handheld"
+	| "ebook"
+	| "wearable"
+	| "tv"
+	| "speaker"
+	| "smarthome_gateway"
+	| "sensor"
+	| "light"
+	| "plug"
+	| "lock"
+	| "vacuum"
+	| "iot"
+	| "vm"
+	| "web_endpoint"
+	| "custom"
+
+export type AssetStatus = "active" | "inactive" | "retired" | "planned"
+
+export interface AssetRecord extends RecordModel {
+	user: string
+	name: string
+	type: AssetType
+	status?: AssetStatus
+	parent_asset?: string
+	vendor?: string
+	model?: string
+	serial_number?: string
+	management_ip?: string
+	location?: string
+	role?: string
+	notes?: string
+	tags?: string[]
+	metadata?: Record<string, unknown>
+	created: string
+	updated: string
+}
+
+export type AssetInterfaceKind = "ethernet" | "wifi" | "wan" | "lan" | "management" | "virtual" | "custom"
+export type AssetInterfaceSource = "manual" | "agent" | "snmp" | "import"
+
+export interface AssetInterfaceRecord extends RecordModel {
+	user: string
+	asset: string
+	name: string
+	kind: AssetInterfaceKind
+	mac?: string
+	ipv4?: string
+	ipv6?: string
+	speed_mbps?: number
+	connected?: boolean
+	primary?: boolean
+	source?: AssetInterfaceSource
+	metadata?: Record<string, unknown>
+	created: string
+	updated: string
+}
+
+export type AssetRelationKind =
+	| "hosted_on"
+	| "connected_to"
+	| "monitors"
+	| "depends_on"
+	| "owns"
+	| "located_in"
+	| "powered_by"
+	| "custom"
+
+export interface AssetRelationRecord extends RecordModel {
+	user: string
+	source_asset: string
+	target_asset: string
+	kind: AssetRelationKind
+	label?: string
+	metadata?: Record<string, unknown>
+	created: string
+	updated: string
+}
+
+export type AssetMaintenanceKind =
+	| "purchase"
+	| "online"
+	| "maintenance"
+	| "repair"
+	| "upgrade"
+	| "replacement"
+	| "warranty"
+	| "retire"
+	| "note"
+
+export interface AssetMaintenanceRecord extends RecordModel {
+	user: string
+	asset: string
+	kind: AssetMaintenanceKind
+	title: string
+	event_date?: string
+	actor?: string
+	cost?: string
+	notes?: string
+	metadata?: Record<string, unknown>
+	created: string
+	updated: string
+}
+
+export type AssetAttachmentKind = "photo" | "invoice" | "warranty" | "manual" | "config" | "document" | "other"
+
+export interface AssetAttachmentRecord extends RecordModel {
+	user: string
+	asset: string
+	kind: AssetAttachmentKind
+	title: string
+	files: string[]
+	notes?: string
+	metadata?: Record<string, unknown>
+	created: string
+	updated: string
+}
+
+export type AssetLocationKind = "room" | "area" | "rack" | "cabinet" | "desk" | "zone" | "custom"
+
+export interface AssetLocationRecord extends RecordModel {
+	user: string
+	name: string
+	kind: AssetLocationKind
+	parent_location?: string
+	sort_order?: number
+	notes?: string
+	metadata?: Record<string, unknown>
+	created: string
+	updated: string
+}
+
+export type AssetChangeAction = "create" | "update" | "delete"
+export type AssetChangeSourceCollection =
+	| "assets"
+	| "asset_interfaces"
+	| "asset_relations"
+	| "asset_maintenance"
+	| "asset_attachments"
+
+export interface AssetChangeRecord extends RecordModel {
+	user: string
+	asset: string
+	source_collection: AssetChangeSourceCollection
+	source_record?: string
+	action: AssetChangeAction
+	summary: string
+	diff?: Record<string, unknown>
+	created: string
+}
+
+export type AssetEnrichmentReportStatus = "draft" | "ready" | "partially_applied" | "applied" | "dismissed" | "failed"
+export type AssetEnrichmentSuggestionStatus = "pending" | "accepted" | "rejected" | "stale"
+export type AssetEnrichmentSuggestionSource = "local" | "online" | "comparison" | "manual"
+export type AssetEnrichmentTargetCollection =
+	| "assets"
+	| "asset_interfaces"
+	| "asset_relations"
+	| "asset_maintenance"
+	| "asset_attachments"
+
+export interface AssetEnrichmentReportRecord extends RecordModel {
+	user: string
+	asset: string
+	trigger?: "manual" | "asset_create" | "scheduled" | "import"
+	status: AssetEnrichmentReportStatus
+	confidence?: number
+	report?: string
+	source_summary?: Record<string, unknown>
+	metadata?: Record<string, unknown>
+	created: string
+	updated: string
+}
+
+export interface AssetEnrichmentSuggestionRecord extends RecordModel {
+	user: string
+	report: string
+	asset: string
+	target_collection: AssetEnrichmentTargetCollection
+	target_record?: string
+	target_field: string
+	target_label: string
+	current_value?: string
+	collected_value?: string
+	online_value?: string
+	recommended_value: string
+	source: AssetEnrichmentSuggestionSource
+	confidence?: number
+	conflict?: boolean
+	status: AssetEnrichmentSuggestionStatus
+	notes?: string
+	metadata?: Record<string, unknown>
+	created: string
+	updated: string
+}
+
+export type AITaskKind = "asset_enrichment" | "asset_visual"
+export type AITaskStatus = "queued" | "running" | "ready" | "failed" | "applied"
+
+export interface AITaskRecord extends RecordModel {
+	user: string
+	asset?: string
+	kind: AITaskKind
+	status: AITaskStatus
+	provider?: string
+	model?: string
+	input_summary?: Record<string, unknown>
+	output_summary?: Record<string, unknown>
+	error?: string
+	metadata?: Record<string, unknown>
+	created: string
+	updated: string
+}
+
+export type AssetVisualKind = "official_reference" | "ai_turntable" | "manual"
+export type AssetVisualStatus = "draft" | "ready" | "accepted" | "rejected" | "failed"
+
+export interface AssetVisualRecord extends RecordModel {
+	user: string
+	asset: string
+	task?: string
+	kind: AssetVisualKind
+	status: AssetVisualStatus
+	title?: string
+	color?: string
+	frame_count?: number
+	primary?: boolean
+	frames?: { index?: number; angle?: number; url?: string }[]
+	sources?: {
+		title?: string
+		url?: string
+		image_url?: string
+		type?: string
+		provider?: string
+		confidence?: number
+	}[]
+	prompt?: string
+	metadata?: Record<string, unknown>
+	created: string
 	updated: string
 }
 
@@ -290,6 +550,7 @@ export interface SystemStatsRecord extends RecordModel {
 export interface AlertRecord extends RecordModel {
 	id: string
 	system: string
+	asset?: string
 	name: string
 	triggered: boolean
 	value: number
@@ -303,6 +564,17 @@ export interface AlertPolicyRecord extends RecordModel {
 	name: string
 	value: number
 	min: number
+	coverage_count?: number
+	coverage_system_count?: number
+	coverage_assets?: AlertPolicyCoverageAsset[]
+}
+
+export interface AlertPolicyCoverageAsset {
+	id: string
+	name: string
+	type?: AssetType
+	system_id?: string
+	system_name?: string
 }
 
 export interface AlertsHistoryRecord extends RecordModel {
@@ -310,6 +582,7 @@ export interface AlertsHistoryRecord extends RecordModel {
 	alert_id?: string
 	user: string
 	system: string
+	asset?: string
 	name: string
 	val: number
 	value?: number
@@ -320,11 +593,16 @@ export interface AlertsHistoryRecord extends RecordModel {
 	silenced_until?: string | null
 	silenced_by?: string
 	silence_reason?: string
+	expand?: {
+		system?: Pick<SystemRecord, "id" | "name" | "display_name">
+		asset?: Pick<AssetRecord, "id" | "name" | "type">
+	}
 }
 
 export interface NotificationFailureRecord extends RecordModel {
 	user: string
 	system?: string
+	asset?: string
 	title: string
 	target: string
 	fingerprint: string
@@ -332,6 +610,9 @@ export interface NotificationFailureRecord extends RecordModel {
 	count: number
 	created: string
 	updated: string
+	expand?: {
+		asset?: Pick<AssetRecord, "id" | "name" | "type">
+	}
 }
 
 export interface NotificationChannelHealthRecord extends RecordModel {
@@ -354,6 +635,7 @@ export interface NotificationChannelHealthRecord extends RecordModel {
 export interface AlertNotificationStateRecord extends RecordModel {
 	user: string
 	system?: string
+	asset?: string
 	fingerprint: string
 	alert_id: string
 	title?: string
@@ -367,6 +649,9 @@ export interface AlertNotificationStateRecord extends RecordModel {
 	last_resolved_at?: string | null
 	created: string
 	updated: string
+	expand?: {
+		asset?: Pick<AssetRecord, "id" | "name" | "type">
+	}
 }
 
 export interface ContainerRecord extends RecordModel {
@@ -412,6 +697,16 @@ export interface UserSettings {
 	colorCrit?: number
 	hourFormat?: HourFormat
 	layoutWidth?: number
+}
+
+export interface ModuleSettingRecord extends RecordModel {
+	user: string
+	module_id: string
+	enabled: boolean
+	settings?: Record<string, unknown>
+	health?: Record<string, unknown>
+	created: string
+	updated: string
 }
 
 type ChartDataContainer = {
@@ -554,6 +849,55 @@ export interface NetworkInterfaceDetails {
 	dns_servers?: string[]
 }
 
+export interface NetworkDeviceRecord extends RecordModel {
+	user: string
+	name: string
+	type: "internet" | "gateway" | "router" | "switch" | "ap" | "custom"
+	model?: string
+	management_ip?: string
+	role?: string
+	notes?: string
+	created: string
+	updated: string
+}
+
+export interface NetworkPortRecord extends RecordModel {
+	user: string
+	device?: string
+	system?: string
+	asset?: string
+	name: string
+	type: "wan" | "lan" | "wifi" | "uplink" | "downlink" | "management" | "system" | "custom"
+	speed_mbps?: number
+	notes?: string
+	created: string
+	updated: string
+}
+
+export interface NetworkLinkRecord extends RecordModel {
+	user: string
+	source_port: string
+	target_port: string
+	kind: "ethernet" | "wifi" | "internet" | "custom"
+	name?: string
+	notes?: string
+	created: string
+	updated: string
+}
+
+export interface NetworkLayoutRecord extends RecordModel {
+	user: string
+	key: string
+	layout?: {
+		nodes?: Record<string, { x: number; y: number }>
+		connection_modes?: Record<string, ("wired" | "wireless")[]>
+		selected?: string
+		viewport?: { x: number; y: number; zoom: number }
+	}
+	created: string
+	updated: string
+}
+
 export interface SmartDeviceRecord extends RecordModel {
 	id: string
 	system: string
@@ -585,6 +929,7 @@ export interface MonitoredServiceRecord extends RecordModel {
 export interface WebsiteMonitorRecord extends RecordModel {
 	user: string
 	system?: string
+	asset?: string
 	name: string
 	url: string
 	description?: string

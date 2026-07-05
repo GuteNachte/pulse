@@ -20,6 +20,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { useToast } from "@/components/ui/use-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
+	alertAssetName,
 	alertCreatedLabel,
 	alertDisplayName,
 	alertDurationLabel,
@@ -65,9 +66,9 @@ export default function AlertsCenter() {
 		}
 		try {
 			const { items } = await pb.collection<AlertsHistoryRecord>("alerts_history").getList(1, 200, {
-				expand: "system",
+				expand: "system,asset",
 				fields:
-					"id,alert_id,name,value,val,created,resolved,acknowledged_at,acknowledged_by,silenced_until,silenced_by,silence_reason,expand.system.name,system",
+					"id,alert_id,name,value,val,created,resolved,acknowledged_at,acknowledged_by,silenced_until,silenced_by,silence_reason,expand.system.name,expand.system.display_name,expand.asset.name,expand.asset.type,system,asset",
 				sort: "-created",
 				requestKey: null,
 			})
@@ -111,9 +112,9 @@ export default function AlertsCenter() {
 		loadPolicies()
 		pb.collection<AlertsHistoryRecord>("alerts_history")
 			.subscribe("*", scheduleRefresh, {
-				expand: "system",
+				expand: "system,asset",
 				fields:
-					"id,alert_id,name,value,val,created,resolved,acknowledged_at,acknowledged_by,silenced_until,silenced_by,silence_reason,expand.system.name,system",
+					"id,alert_id,name,value,val,created,resolved,acknowledged_at,acknowledged_by,silenced_until,silenced_by,silence_reason,expand.system.name,expand.system.display_name,expand.asset.name,expand.asset.type,system,asset",
 			})
 			.then((unsubscribeFn) => {
 				unsubscribe = unsubscribeFn
@@ -401,6 +402,7 @@ function CurrentAlertsList({
 						</div>
 						<div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
 							<span>{alertSystemName(record)}</span>
+							{alertAssetName(record) && <span>资产：{alertAssetName(record)}</span>}
 							<span className="tabular-nums">{alertValueLabel(record)}</span>
 							<span className="tabular-nums">{alertCreatedLabel(record)}</span>
 							{alertIsSilenced(record) && (
@@ -480,6 +482,7 @@ function AlertDetailSheet({
 							<AlertDetailRow label="状态" value={alertStateLabel(record)} />
 							<AlertDetailRow label="级别" value={alertSeverityLabel(record)} />
 							<AlertDetailRow label="来源" value={alertSourceLabel(record)} />
+							{alertAssetName(record) && <AlertDetailRow label="资产" value={alertAssetName(record)} />}
 							<AlertDetailRow label="触发值" value={alertValueLabel(record)} />
 							<AlertDetailRow label="触发时间" value={alertCreatedLabel(record)} />
 							<AlertDetailRow label="恢复时间" value={alertResolvedLabel(record)} />

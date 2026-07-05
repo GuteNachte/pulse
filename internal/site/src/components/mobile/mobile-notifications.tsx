@@ -66,6 +66,7 @@ export type MobileNotificationChannelHealthItem = {
 
 export type MobileAlertCooldownItem = {
 	title: string
+	assetName?: string
 	statusLabel: string
 	statusTone: MobileStatusTone
 	suppressedCount: number
@@ -359,6 +360,9 @@ function MobileNotificationDiagnostics({
 										<div className="truncate text-sm font-medium">{item.title}</div>
 										<MobileStatusTag tone={item.statusTone}>{item.statusLabel}</MobileStatusTag>
 									</div>
+									{item.assetName && (
+										<div className="truncate text-[11px] text-muted-foreground">资产：{item.assetName}</div>
+									)}
 									<div className="text-[11px] text-muted-foreground">
 										已抑制 {item.suppressedCount} 次，下一次允许发送：{item.nextAllowed ?? "等待冷却结束"}
 									</div>

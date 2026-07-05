@@ -36,9 +36,9 @@ export function WebsiteMonitorListPanel({
 	loading,
 	runningId,
 	readOnly,
-	hasSystems,
-	waitingForSystems,
-	clientsPath,
+	hasWebEndpointAssets,
+	waitingForAssets,
+	assetsPath,
 	onLoad,
 	onCreate,
 	onSelect,
@@ -66,9 +66,9 @@ export function WebsiteMonitorListPanel({
 	loading: boolean
 	runningId: string
 	readOnly: boolean
-	hasSystems: boolean
-	waitingForSystems: boolean
-	clientsPath: string
+	hasWebEndpointAssets: boolean
+	waitingForAssets: boolean
+	assetsPath: string
 	onLoad: () => void
 	onCreate: () => void
 	onSelect: (monitor: WebsiteMonitorRecord, openMobileDetail: boolean) => void
@@ -120,9 +120,9 @@ export function WebsiteMonitorListPanel({
 						</Button>
 						<CreateMonitorButton
 							readOnly={readOnly}
-							hasSystems={hasSystems}
-							waitingForSystems={waitingForSystems}
-							clientsPath={clientsPath}
+							hasWebEndpointAssets={hasWebEndpointAssets}
+							waitingForAssets={waitingForAssets}
+							assetsPath={assetsPath}
 							onCreate={onCreate}
 						/>
 					</div>
@@ -176,9 +176,9 @@ export function WebsiteMonitorListPanel({
 					<EmptyMonitorList
 						hasActiveFilter={hasActiveFilter}
 						readOnly={readOnly}
-						hasSystems={hasSystems}
-						waitingForSystems={waitingForSystems}
-						clientsPath={clientsPath}
+						hasWebEndpointAssets={hasWebEndpointAssets}
+						waitingForAssets={waitingForAssets}
+						assetsPath={assetsPath}
 						onCreate={onCreate}
 					/>
 				)}
@@ -217,21 +217,21 @@ export function WebsiteMonitorListPanel({
 
 function CreateMonitorButton({
 	readOnly,
-	hasSystems,
-	waitingForSystems,
-	clientsPath,
+	hasWebEndpointAssets,
+	waitingForAssets,
+	assetsPath,
 	onCreate,
 }: {
 	readOnly: boolean
-	hasSystems: boolean
-	waitingForSystems: boolean
-	clientsPath: string
+	hasWebEndpointAssets: boolean
+	waitingForAssets: boolean
+	assetsPath: string
 	onCreate: () => void
 }) {
 	if (readOnly) {
 		return null
 	}
-	if (hasSystems) {
+	if (hasWebEndpointAssets) {
 		return (
 			<Button onClick={onCreate} className="h-10 gap-1.5 px-3">
 				<PlusIcon className="size-4" />
@@ -239,17 +239,17 @@ function CreateMonitorButton({
 			</Button>
 		)
 	}
-	if (waitingForSystems) {
+	if (waitingForAssets) {
 		return (
 			<Button className="h-10 px-3" disabled>
 				<RefreshCwIcon className="me-2 size-4 animate-spin" />
-				读取机器...
+				读取资产...
 			</Button>
 		)
 	}
 	return (
 		<Button asChild className="h-10 px-3">
-			<Link href={clientsPath}>先添加机器</Link>
+			<Link href={assetsPath}>先添加网页端点</Link>
 		</Button>
 	)
 }
@@ -257,20 +257,20 @@ function CreateMonitorButton({
 function EmptyMonitorList({
 	hasActiveFilter,
 	readOnly,
-	hasSystems,
-	waitingForSystems,
-	clientsPath,
+	hasWebEndpointAssets,
+	waitingForAssets,
+	assetsPath,
 	onCreate,
 }: {
 	hasActiveFilter: boolean
 	readOnly: boolean
-	hasSystems: boolean
-	waitingForSystems: boolean
-	clientsPath: string
+	hasWebEndpointAssets: boolean
+	waitingForAssets: boolean
+	assetsPath: string
 	onCreate: () => void
 }) {
 	const title = hasActiveFilter ? "没有匹配结果" : "暂无网站监控"
-	const description = hasActiveFilter ? "换个关键词或筛选条件再试。" : "添加第一个网页服务后会自动执行一次检测。"
+	const description = hasActiveFilter ? "换个关键词或筛选条件再试。" : "先在资产中心添加网页端点，再为它启用网站监控。"
 
 	return (
 		<div className="sm:col-span-2 xl:col-span-1">
@@ -281,12 +281,12 @@ function EmptyMonitorList({
 				description={description}
 				className="min-h-72"
 			>
-				{!readOnly && !hasActiveFilter && hasSystems ? (
+				{!readOnly && !hasActiveFilter ? (
 					<CreateMonitorButton
 						readOnly={readOnly}
-						hasSystems={hasSystems}
-						waitingForSystems={waitingForSystems}
-						clientsPath={clientsPath}
+						hasWebEndpointAssets={hasWebEndpointAssets}
+						waitingForAssets={waitingForAssets}
+						assetsPath={assetsPath}
 						onCreate={onCreate}
 					/>
 				) : null}

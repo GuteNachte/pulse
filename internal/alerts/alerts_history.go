@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"strings"
 	"time"
 
 	"github.com/pocketbase/dbx"
@@ -47,6 +48,7 @@ func resolveAlertHistoryRecord(app core.App, alertRecordID string) error {
 		return err
 	}
 	alertHistoryRecord.Set("resolved", time.Now().UTC())
+	setAlertHistoryAssetFromAlertRecord(app, alertHistoryRecord, nil)
 	err = app.Save(alertHistoryRecord)
 	if err != nil {
 		app.Logger().Error("Failed to resolve alert history", "err", err)
@@ -64,6 +66,7 @@ func createAlertHistoryRecord(app core.App, alertRecord *core.Record) (alertHist
 	alertHistoryRecord.Set("alert_id", alertRecord.Id)
 	alertHistoryRecord.Set("user", alertRecord.GetString("user"))
 	alertHistoryRecord.Set("system", alertRecord.GetString("system"))
+	setAlertHistoryAssetFromAlertRecord(app, alertHistoryRecord, alertRecord)
 	alertHistoryRecord.Set("name", alertRecord.GetString("name"))
 	alertHistoryRecord.Set("value", alertRecord.GetFloat("value"))
 	err = app.Save(alertHistoryRecord)
@@ -71,4 +74,28 @@ func createAlertHistoryRecord(app core.App, alertRecord *core.Record) (alertHist
 		app.Logger().Error("Failed to save alert history", "err", err)
 	}
 	return alertHistoryRecord, err
+}
+
+func setAlertHistoryAssetFromAlertRecord(app core.App, alertHistoryRecord *core.Record, alertRecord *core.Record) bool {
+	if alertHistoryRecord == nil {
+		return false
+	}
+	assetID := ""
+	if alertRecord != nil {
+		assetID = strings.TrimSpace(alertRecord.GetString("asset"))
+	}
+	systemID := strings.TrimSpace(alertHistoryRecord.GetString("system"))
+	if assetID == "" && alertRecord != nil {
+		systemID = strings.TrimSpace(alertRecord.GetString("system"))
+	}
+	if assetID == "" && systemID != "" {
+		if systemRecord, err := app.FindRecordById("systems", systemID); err == nil && systemRecord != nil {
+			assetID = strings.TrimSpace(systemRecord.GetString("asset"))
+		}
+	}
+	if assetID == "" || alertHistoryRecord.GetString("asset") == assetID {
+		return false
+	}
+	alertHistoryRecord.Set("asset", assetID)
+	return true
 }

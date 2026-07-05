@@ -31,12 +31,29 @@ const failedUpdateToast = (error: unknown) => {
 
 /** Create or update alerts for a given name and systems */
 const upsertAlerts = debounce(
-	async ({ name, value, min, systems }: { name: string; value: number; min: number; systems: string[] }) => {
+	async ({
+		name,
+		value,
+		min,
+		systems,
+		assets,
+	}: {
+		name: string
+		value: number
+		min: number
+		systems?: string[]
+		assets?: string[]
+	}) => {
+		const targetSystems = systems ?? []
+		const targetAssets = assets ?? []
+		if (!targetSystems.length && !targetAssets.length) {
+			return
+		}
 		try {
 			await pb.send<{ success: boolean }>(endpoint, {
 				method: "POST",
 				// overwrite is always true because we've done filtering client side
-				body: { name, value, min, systems, overwrite: true },
+				body: { name, value, min, systems: targetSystems, assets: targetAssets, overwrite: true },
 			})
 		} catch (error) {
 			failedUpdateToast(error)
@@ -46,19 +63,24 @@ const upsertAlerts = debounce(
 )
 
 /** Delete alerts for a given name and systems */
-const deleteAlerts = debounce(async ({ name, systems }: { name: string; systems: string[] }) => {
-	if (!systems.length) {
-		return
-	}
-	try {
-		await pb.send<{ success: boolean }>(endpoint, {
-			method: "DELETE",
-			body: { name, systems },
-		})
-	} catch (error) {
-		failedUpdateToast(error)
-	}
-}, alertDebounce)
+const deleteAlerts = debounce(
+	async ({ name, systems, assets }: { name: string; systems?: string[]; assets?: string[] }) => {
+		const targetSystems = systems ?? []
+		const targetAssets = assets ?? []
+		if (!targetSystems.length && !targetAssets.length) {
+			return
+		}
+		try {
+			await pb.send<{ success: boolean }>(endpoint, {
+				method: "DELETE",
+				body: { name, systems: targetSystems, assets: targetAssets },
+			})
+		} catch (error) {
+			failedUpdateToast(error)
+		}
+	},
+	alertDebounce
+)
 
 const upsertGlobalPolicy = debounce(async ({ name, value, min }: { name: string; value: number; min: number }) => {
 	try {
@@ -216,6 +238,7 @@ export function AlertContent({
 	alertKey,
 	data: alertData,
 	system,
+	assetId,
 	alert,
 	global = false,
 	overwriteExisting = false,
@@ -226,6 +249,7 @@ export function AlertContent({
 	alertKey: string
 	data: AlertInfo
 	system?: SystemRecord
+	assetId?: string
 	alert?: AlertRecord
 	global?: boolean
 	overwriteExisting?: boolean
@@ -245,6 +269,9 @@ export function AlertContent({
 
 	/** Get system ids to update */
 	function getSystemIds(): string[] {
+		if (assetId) {
+			return []
+		}
 		// if not global, update only the current system
 		if (!global) {
 			return system ? [system.id] : []
@@ -264,6 +291,15 @@ export function AlertContent({
 	function sendUpsert(min: number, value: number) {
 		if (global && onGlobalUpsert) {
 			onGlobalUpsert({ name: alertKey, value, min })
+			return
+		}
+		if (assetId) {
+			upsertAlerts({
+				name: alertKey,
+				value,
+				min,
+				assets: [assetId],
+			})
 			return
 		}
 		const systems = getSystemIds()
@@ -309,6 +345,10 @@ export function AlertContent({
 						} else {
 							if (global && onGlobalDelete) {
 								onGlobalDelete(alertKey)
+								return
+							}
+							if (assetId) {
+								deleteAlerts({ name: alertKey, assets: [assetId] })
 								return
 							}
 							// if unchecked, delete alert (unless global and overwriteExisting is false)

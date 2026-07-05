@@ -73,10 +73,96 @@ func upsertAlertForSystem(app core.App, alertsCollection *core.Collection, userI
 		alertRecord.Set("name", name)
 	}
 
+	alertRecord.Set("asset", resolveSystemAssetID(app, systemID))
 	alertRecord.Set("value", value)
 	alertRecord.Set("min", min)
 
 	return app.SaveNoValidate(alertRecord)
+}
+
+func resolveSystemAssetID(app core.App, systemID string) string {
+	systemID = strings.TrimSpace(systemID)
+	if systemID == "" {
+		return ""
+	}
+	systemRecord, err := app.FindRecordById("systems", systemID)
+	if err != nil || systemRecord == nil {
+		return ""
+	}
+	return strings.TrimSpace(systemRecord.GetString("asset"))
+}
+
+func resolveUserAlertTargetSystems(app core.App, userID string, systemIDs []string, assetIDs []string, requireTargets bool) ([]string, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, errors.New("missing user")
+	}
+	targets := make([]string, 0, len(systemIDs)+len(assetIDs))
+	seen := map[string]struct{}{}
+
+	addSystem := func(systemID string) error {
+		systemID = strings.TrimSpace(systemID)
+		if systemID == "" {
+			return nil
+		}
+		if _, ok := seen[systemID]; ok {
+			return nil
+		}
+		systemRecord, err := app.FindRecordById("systems", systemID)
+		if err != nil || systemRecord == nil {
+			return fmt.Errorf("invalid system target")
+		}
+		if !slices.Contains(systemRecord.GetStringSlice("users"), userID) {
+			return fmt.Errorf("system target is not visible to current user")
+		}
+		seen[systemID] = struct{}{}
+		targets = append(targets, systemID)
+		return nil
+	}
+
+	for _, systemID := range systemIDs {
+		if err := addSystem(systemID); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, assetID := range assetIDs {
+		assetID = strings.TrimSpace(assetID)
+		if assetID == "" {
+			continue
+		}
+		assetRecord, err := app.FindRecordById("assets", assetID)
+		if err != nil || assetRecord == nil {
+			return nil, fmt.Errorf("invalid asset target")
+		}
+		if strings.TrimSpace(assetRecord.GetString("user")) != userID {
+			return nil, fmt.Errorf("asset target is not visible to current user")
+		}
+		records, err := app.FindRecordsByFilter(
+			"systems",
+			"users ~ {:user} && asset = {:asset}",
+			"",
+			-1,
+			0,
+			dbx.Params{"user": userID, "asset": assetID},
+		)
+		if err != nil {
+			return nil, err
+		}
+		if requireTargets && len(records) == 0 {
+			return nil, fmt.Errorf("asset target has no monitored system")
+		}
+		for _, record := range records {
+			if err := addSystem(record.Id); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if requireTargets && len(targets) == 0 {
+		return nil, fmt.Errorf("no valid alert targets")
+	}
+	return targets, nil
 }
 
 func deleteAlertForSystem(app core.App, userID string, systemID string, name string) (bool, error) {
@@ -121,8 +207,8 @@ func DeleteStatusAlertForSystem(app core.App, systemID string) (int, error) {
 	return len(records), nil
 }
 
-// UpsertUserAlerts handles API request to create or update alerts for a user
-// across multiple systems (POST /api/pulse/user-alerts)
+// UpsertUserAlerts handles API requests to create or update alerts for a user
+// across multiple systems or monitored assets (POST /api/pulse/user-alerts).
 func UpsertUserAlerts(e *core.RequestEvent) error {
 	userID := e.Auth.Id
 
@@ -131,10 +217,15 @@ func UpsertUserAlerts(e *core.RequestEvent) error {
 		Value     float64  `json:"value"`
 		Name      string   `json:"name"`
 		Systems   []string `json:"systems"`
+		Assets    []string `json:"assets"`
 		Overwrite bool     `json:"overwrite"`
 	}{}
 	err := e.BindBody(&reqData)
-	if err != nil || userID == "" || reqData.Name == "" || len(reqData.Systems) == 0 {
+	if err != nil || userID == "" || reqData.Name == "" || (len(reqData.Systems) == 0 && len(reqData.Assets) == 0) {
+		return e.BadRequestError("Bad data", err)
+	}
+	targetSystems, err := resolveUserAlertTargetSystems(e.App, userID, reqData.Systems, reqData.Assets, true)
+	if err != nil {
 		return e.BadRequestError("Bad data", err)
 	}
 
@@ -144,7 +235,7 @@ func UpsertUserAlerts(e *core.RequestEvent) error {
 	}
 
 	err = e.App.RunInTransaction(func(txApp core.App) error {
-		for _, systemId := range reqData.Systems {
+		for _, systemId := range targetSystems {
 			if err := upsertAlertForSystem(txApp, alertsCollection, userID, systemId, reqData.Name, reqData.Value, reqData.Min, reqData.Overwrite); err != nil {
 				return err
 			}
@@ -157,28 +248,33 @@ func UpsertUserAlerts(e *core.RequestEvent) error {
 		return err
 	}
 
-	writeOperationAudit(e.App, userID, "", "upsert_user_alerts", reqData.Name, "success", alertSystemsAuditDetail(len(reqData.Systems), "updated"), "", auditRequestIP(e.Request))
+	writeOperationAudit(e.App, userID, "", "upsert_user_alerts", reqData.Name, "success", alertSystemsAuditDetail(len(targetSystems), "updated"), "", auditRequestIP(e.Request))
 	return e.JSON(http.StatusOK, map[string]any{"success": true})
 }
 
-// DeleteUserAlerts handles API request to delete alerts for a user across multiple systems
-// (DELETE /api/pulse/user-alerts)
+// DeleteUserAlerts handles API requests to delete alerts for a user across
+// multiple systems or monitored assets (DELETE /api/pulse/user-alerts).
 func DeleteUserAlerts(e *core.RequestEvent) error {
 	userID := e.Auth.Id
 
 	reqData := struct {
 		AlertName string   `json:"name"`
 		Systems   []string `json:"systems"`
+		Assets    []string `json:"assets"`
 	}{}
 	err := e.BindBody(&reqData)
-	if err != nil || userID == "" || reqData.AlertName == "" || len(reqData.Systems) == 0 {
+	if err != nil || userID == "" || reqData.AlertName == "" || (len(reqData.Systems) == 0 && len(reqData.Assets) == 0) {
+		return e.BadRequestError("Bad data", err)
+	}
+	targetSystems, err := resolveUserAlertTargetSystems(e.App, userID, reqData.Systems, reqData.Assets, false)
+	if err != nil {
 		return e.BadRequestError("Bad data", err)
 	}
 
 	var numDeleted uint16
 
 	err = e.App.RunInTransaction(func(txApp core.App) error {
-		for _, systemId := range reqData.Systems {
+		for _, systemId := range targetSystems {
 			deleted, err := deleteAlertForSystem(txApp, userID, systemId, reqData.AlertName)
 			if err != nil {
 				return err
@@ -212,19 +308,116 @@ func ListGlobalAlertPolicies(e *core.RequestEvent) error {
 	if err != nil {
 		return err
 	}
+	coverageByName := buildAlertPolicyCoverage(e.App, e.Auth.Id)
 	items := make([]map[string]any, 0, len(records))
 	for _, record := range records {
+		coverage := coverageByName[record.GetString("name")]
 		items = append(items, map[string]any{
-			"id":      record.Id,
-			"user":    record.GetString("user"),
-			"name":    record.GetString("name"),
-			"value":   record.GetFloat("value"),
-			"min":     record.GetInt("min"),
-			"created": record.GetString("created"),
-			"updated": record.GetString("updated"),
+			"id":                    record.Id,
+			"user":                  record.GetString("user"),
+			"name":                  record.GetString("name"),
+			"value":                 record.GetFloat("value"),
+			"min":                   record.GetInt("min"),
+			"coverage_count":        len(coverage.Assets),
+			"coverage_system_count": coverage.SystemCount,
+			"coverage_assets":       coverage.Assets,
+			"created":               record.GetString("created"),
+			"updated":               record.GetString("updated"),
 		})
 	}
 	return e.JSON(http.StatusOK, map[string]any{"items": items})
+}
+
+type alertPolicyCoverageAsset struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Type       string `json:"type,omitempty"`
+	SystemID   string `json:"system_id,omitempty"`
+	SystemName string `json:"system_name,omitempty"`
+}
+
+type alertPolicyCoverage struct {
+	SystemCount int                        `json:"system_count"`
+	Assets      []alertPolicyCoverageAsset `json:"assets"`
+}
+
+func buildAlertPolicyCoverage(app core.App, userID string) map[string]alertPolicyCoverage {
+	result := map[string]alertPolicyCoverage{}
+	if userID == "" {
+		return result
+	}
+	alertRecords, err := app.FindRecordsByFilter(
+		"alerts",
+		"user = {:user}",
+		"name",
+		-1,
+		0,
+		dbx.Params{"user": userID},
+	)
+	if err != nil {
+		app.Logger().Warn("Failed to load alert policy coverage", "err", err)
+		return result
+	}
+
+	assetCache := map[string]*core.Record{}
+	seenAssetsByPolicy := map[string]map[string]struct{}{}
+	for _, alertRecord := range alertRecords {
+		name := alertRecord.GetString("name")
+		if name == "" {
+			continue
+		}
+		coverage := result[name]
+		coverage.SystemCount++
+
+		systemID := alertRecord.GetString("system")
+		systemName := systemID
+		assetID := strings.TrimSpace(alertRecord.GetString("asset"))
+		if systemID != "" {
+			if systemRecord, err := app.FindRecordById("systems", systemID); err == nil {
+				if displayName := strings.TrimSpace(systemRecord.GetString("display_name")); displayName != "" {
+					systemName = displayName
+				} else if name := strings.TrimSpace(systemRecord.GetString("name")); name != "" {
+					systemName = name
+				}
+				if assetID == "" {
+					assetID = strings.TrimSpace(systemRecord.GetString("asset"))
+				}
+			}
+		}
+		if assetID != "" {
+			if seenAssetsByPolicy[name] == nil {
+				seenAssetsByPolicy[name] = map[string]struct{}{}
+			}
+			if _, ok := seenAssetsByPolicy[name][assetID]; !ok {
+				seenAssetsByPolicy[name][assetID] = struct{}{}
+				assetRecord, ok := assetCache[assetID]
+				if !ok {
+					record, err := app.FindRecordById("assets", assetID)
+					if err == nil {
+						assetRecord = record
+						assetCache[assetID] = record
+					}
+				}
+				assetName := assetID
+				assetType := ""
+				if assetRecord != nil {
+					if name := strings.TrimSpace(assetRecord.GetString("name")); name != "" {
+						assetName = name
+					}
+					assetType = assetRecord.GetString("type")
+				}
+				coverage.Assets = append(coverage.Assets, alertPolicyCoverageAsset{
+					ID:         assetID,
+					Name:       assetName,
+					Type:       assetType,
+					SystemID:   systemID,
+					SystemName: systemName,
+				})
+			}
+		}
+		result[name] = coverage
+	}
+	return result
 }
 
 // UpsertGlobalAlertPolicy stores a global alert policy and applies it to all current systems.

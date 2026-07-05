@@ -2,6 +2,10 @@
 
 const routePaths = {
 	home: "/",
+	asset: "/assets/:id",
+	assets: "/assets",
+	smarthome: "/smarthome",
+	network: "/network",
 	clients: "/clients",
 	containers: "/containers",
 	websites: "/websites",

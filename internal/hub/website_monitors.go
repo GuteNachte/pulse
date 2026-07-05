@@ -62,7 +62,7 @@ func (h *Hub) cleanupDeletedWebsiteMonitor(app core.App, monitor *core.Record) e
 			return err
 		}
 	}
-	_, err := h.resolveWebsiteMonitorAlertHistory(monitor)
+	_, err := h.resolveWebsiteMonitorAlertHistory(monitor, nil)
 	return err
 }
 
@@ -563,7 +563,7 @@ func (h *Hub) syncWebsiteMonitorAlert(monitor *core.Record, previousStatus strin
 	}
 
 	if status == "up" && previousStatus == "down" {
-		resolved, err := h.resolveWebsiteMonitorAlertHistory(monitor)
+		resolved, err := h.resolveWebsiteMonitorAlertHistory(monitor, systemRecord)
 		if err != nil {
 			return err
 		}
@@ -582,6 +582,11 @@ func (h *Hub) createWebsiteMonitorAlertHistory(monitor *core.Record, systemRecor
 		dbx.Params{"alert_id": alertID},
 	)
 	if err == nil && existing != nil {
+		if setAlertHistoryAssetFromWebsiteMonitor(existing, monitor, systemRecord) {
+			if err := h.SaveNoValidate(existing); err != nil {
+				return false, err
+			}
+		}
 		return false, nil
 	}
 
@@ -593,6 +598,7 @@ func (h *Hub) createWebsiteMonitorAlertHistory(monitor *core.Record, systemRecor
 	record.Set("alert_id", alertID)
 	record.Set("user", monitor.GetString("user"))
 	record.Set("system", systemRecord.Id)
+	setAlertHistoryAssetFromWebsiteMonitor(record, monitor, systemRecord)
 	record.Set("name", websiteMonitorAlertName(monitor))
 	record.Set("value", countDownWebsiteMonitorTargets(results))
 	if err := h.SaveNoValidate(record); err != nil {
@@ -601,7 +607,7 @@ func (h *Hub) createWebsiteMonitorAlertHistory(monitor *core.Record, systemRecor
 	return true, nil
 }
 
-func (h *Hub) resolveWebsiteMonitorAlertHistory(monitor *core.Record) (bool, error) {
+func (h *Hub) resolveWebsiteMonitorAlertHistory(monitor *core.Record, systemRecord *core.Record) (bool, error) {
 	record, err := h.FindFirstRecordByFilter(
 		"alerts_history",
 		"alert_id={:alert_id} && resolved=null",
@@ -611,10 +617,29 @@ func (h *Hub) resolveWebsiteMonitorAlertHistory(monitor *core.Record) (bool, err
 		return false, nil
 	}
 	record.Set("resolved", time.Now().UTC())
+	setAlertHistoryAssetFromWebsiteMonitor(record, monitor, systemRecord)
 	if err := h.SaveNoValidate(record); err != nil {
 		return false, err
 	}
 	return true, nil
+}
+
+func setAlertHistoryAssetFromWebsiteMonitor(alertRecord *core.Record, monitor *core.Record, systemRecord *core.Record) bool {
+	if alertRecord == nil {
+		return false
+	}
+	assetID := ""
+	if monitor != nil {
+		assetID = strings.TrimSpace(monitor.GetString("asset"))
+	}
+	if assetID == "" && systemRecord != nil {
+		assetID = strings.TrimSpace(systemRecord.GetString("asset"))
+	}
+	if assetID == "" || alertRecord.GetString("asset") == assetID {
+		return false
+	}
+	alertRecord.Set("asset", assetID)
+	return true
 }
 
 func (h *Hub) sendWebsiteMonitorNotification(monitor *core.Record, systemRecord *core.Record, status string, results []websiteMonitorCheckResult) {
@@ -640,6 +665,7 @@ func (h *Hub) sendWebsiteMonitorNotification(monitor *core.Record, systemRecord 
 	if err := h.SendAlert(alerts.AlertMessageData{
 		UserID:   monitor.GetString("user"),
 		SystemID: systemRecord.Id,
+		AssetID:  firstNonEmptyString(monitor.GetString("asset"), systemRecord.GetString("asset")),
 		AlertID:  websiteMonitorAlertID(monitor.Id),
 		Title:    title,
 		Message:  message,

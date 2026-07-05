@@ -448,8 +448,16 @@ func TestSystemCreateRecordsSyncsContainerAlertHistory(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	assetRecord, err := tests.CreateRecord(hub, "assets", map[string]any{
+		"user":   user.Id,
+		"name":   "Container host asset",
+		"type":   "server",
+		"status": "active",
+	})
+	require.NoError(t, err)
 	systemRecord, err := tests.CreateRecord(hub, "systems", map[string]any{
 		"name":  "container-alert-system",
+		"asset": assetRecord.Id,
 		"users": []string{user.Id},
 	})
 	require.NoError(t, err)
@@ -480,6 +488,7 @@ func TestSystemCreateRecordsSyncsContainerAlertHistory(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, history, 1)
 	assert.Equal(t, float64(1), history[0].GetFloat("value"))
+	assert.Equal(t, assetRecord.Id, history[0].GetString("asset"))
 	assert.Empty(t, history[0].GetString("resolved"))
 
 	_, err = sys.CreateRecords(&system.CombinedData{

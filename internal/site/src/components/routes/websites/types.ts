@@ -23,6 +23,7 @@ export type MonitorTargetPayload = {
 export type MonitorForm = {
 	id?: string
 	system: string
+	asset: string
 	name: string
 	description: string
 	targets: MonitorTargetForm[]
@@ -55,6 +56,7 @@ export const targetKindOptions: Array<{
 export function createEmptyForm(): MonitorForm {
 	return {
 		system: "",
+		asset: "",
 		name: "",
 		description: "",
 		targets: [

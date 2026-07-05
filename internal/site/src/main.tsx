@@ -2,6 +2,7 @@ import "./index.css"
 import { i18n } from "@lingui/core"
 import { I18nProvider } from "@lingui/react"
 import { useStore } from "@nanostores/react"
+import { getPagePath } from "@nanostores/router"
 import { DirectionProvider } from "@radix-ui/react-direction"
 import { lazy, memo, Suspense, useEffect, useState } from "react"
 import ReactDOM from "react-dom/client"
@@ -14,12 +15,21 @@ import { Button } from "@/components/ui/button.tsx"
 import { LoadingState } from "@/components/ui/loading-state.tsx"
 import { Toaster } from "@/components/ui/toaster.tsx"
 import { alertManager } from "@/lib/alerts"
-import { initializePocketBaseRuntime, isPocketBaseAutoCancel, pb, updateUserSettings, verifyAuth } from "@/lib/api.ts"
+import {
+	initializePocketBaseRuntime,
+	isAdmin,
+	isPocketBaseAutoCancel,
+	pb,
+	updateUserSettings,
+	verifyAuth,
+} from "@/lib/api.ts"
 import { pageTitle } from "@/lib/branding"
 import { dynamicActivate, getLocale } from "@/lib/i18n"
 import { syncAgentHubURLFromRuntime } from "@/lib/runtime-info"
 import { $authenticated, $copyContent, $direction } from "@/lib/stores.ts"
 import * as systemsManager from "@/lib/systemsManager.ts"
+import { $moduleSettings, refreshModuleSettings } from "@/modules/module-state"
+import { getModuleForAppRoute, getPulseModule } from "@/modules/registry"
 import { MobileBottomNav } from "@/components/mobile/mobile-bottom-nav"
 import { MobileHubSetup } from "@/components/mobile/mobile-hub-setup"
 import { MobileOfflineBanner, MobileSnapshotBridge } from "@/components/mobile/mobile-offline"
@@ -32,6 +42,10 @@ dynamicActivate(getLocale())
 
 const LoginPage = lazy(() => import("@/components/login/login.tsx"))
 const Home = lazy(() => import("@/components/routes/home.tsx"))
+const Assets = lazy(() => import("@/components/routes/assets.tsx"))
+const AssetDetail = lazy(() => import("@/modules/asset-center/asset-detail-page.tsx"))
+const Smarthome = lazy(() => import("@/modules/smarthome/page.tsx"))
+const NetworkTopology = lazy(() => import("@/components/routes/network.tsx"))
 const Clients = lazy(() => import("@/components/routes/clients.tsx"))
 const Containers = lazy(() => import("@/components/routes/containers.tsx"))
 const Websites = lazy(() => import("@/components/routes/websites.tsx"))
@@ -43,6 +57,7 @@ const CopyToClipboardDialog = lazy(() => import("@/components/copy-to-clipboard.
 
 const App = memo(() => {
 	const page = useStore($router)
+	const moduleSettings = useStore($moduleSettings)
 
 	useEffect(() => {
 		// change auth store on auth change
@@ -57,6 +72,7 @@ const App = memo(() => {
 		})
 		// get user settings
 		updateUserSettings()
+		refreshModuleSettings()
 		// need to get system list before alerts
 		systemsManager.init()
 		systemsManager
@@ -77,8 +93,21 @@ const App = memo(() => {
 
 	if (!page) {
 		return <NotFoundPage />
+	}
+
+	const moduleId = getModuleForAppRoute(page.route, page.params?.name)
+	if (moduleId && moduleSettings[moduleId]?.effectiveEnabled === false) {
+		return <ModuleDisabledPage moduleId={moduleId} />
 	} else if (page.route === "home") {
 		return <Home />
+	} else if (page.route === "assets") {
+		return <Assets />
+	} else if (page.route === "asset") {
+		return <AssetDetail id={page.params.id} />
+	} else if (page.route === "smarthome") {
+		return <Smarthome />
+	} else if (page.route === "network") {
+		return <NetworkTopology />
 	} else if (page.route === "clients") {
 		return <Clients />
 	} else if (page.route === "system") {
@@ -97,6 +126,44 @@ const App = memo(() => {
 		return <Settings />
 	}
 })
+
+function ModuleDisabledPage({ moduleId }: { moduleId: ReturnType<typeof getModuleForAppRoute> }) {
+	const module = moduleId ? getPulseModule(moduleId) : undefined
+	useEffect(() => {
+		document.title = pageTitle(module ? `${module.name}已关闭` : "模块已关闭")
+	}, [module])
+
+	return (
+		<section className="mx-auto grid min-h-[calc(100svh-10rem)] w-full max-w-3xl place-items-center py-10 sm:py-16">
+			<div className="w-full rounded-lg border border-border/70 bg-card p-3 shadow-none">
+				<div className="rounded-md bg-surface-soft p-5 text-center sm:p-8">
+					<div className="mx-auto grid size-12 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground shadow-none">
+						<SearchXIcon className="size-5" strokeWidth={1.9} />
+					</div>
+					<div className="mt-5 text-xs font-medium text-muted-foreground">Module disabled</div>
+					<h1 className="mt-2 text-balance text-2xl font-semibold tracking-[-0.03em] text-foreground sm:text-3xl">
+						{module?.name ?? "模块"}已关闭
+					</h1>
+					<p className="mx-auto mt-3 max-w-md text-pretty text-sm leading-relaxed text-muted-foreground">
+						入口和直接访问已暂停，历史数据和配置仍保留。
+					</p>
+					<div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-center">
+						<Button variant="outline" className="gap-2" onClick={() => window.history.back()}>
+							<ArrowLeftIcon className="size-4" />
+							返回上一页
+						</Button>
+						<Button asChild className="gap-2">
+							<Link href={getPagePath($router, "settings", { name: isAdmin() ? "modules" : "about" })}>
+								<HomeIcon className="size-4" />
+								{isAdmin() ? "打开模块管理" : "打开关于页"}
+							</Link>
+						</Button>
+					</div>
+				</div>
+			</div>
+		</section>
+	)
+}
 
 function NotFoundPage() {
 	useEffect(() => {
@@ -199,7 +266,13 @@ const Layout = () => {
 				</Suspense>
 			) : (
 				<div className={cn(isMobile && "pulse-mobile-root", isMobile && isAndroidApp() && "pulse-android-app")}>
-					<div className="container">
+					<div
+						className={cn(
+							"container",
+							!isMobile &&
+								"sticky top-0 z-40 bg-background/95 py-1 backdrop-blur supports-[backdrop-filter]:bg-background/85"
+						)}
+					>
 						<Navbar />
 					</div>
 					<div className={cn("container relative", isMobile ? "pulse-mobile-content" : "pb-0")}>

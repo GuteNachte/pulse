@@ -157,8 +157,7 @@ const ChartTooltipContent = React.forwardRef<
 					return filterTerms.some((term) => itemName?.includes(term))
 				})
 			}
-			if (itemSorter) {
-				// @ts-expect-error
+			if (typeof itemSorter === "function") {
 				payload?.sort(itemSorter)
 			}
 		}, [itemSorter, payload])

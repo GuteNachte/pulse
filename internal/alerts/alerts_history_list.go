@@ -21,6 +21,7 @@ type alertHistoryListItem struct {
 	AlertID        string             `db:"alert_id" json:"alert_id,omitempty"`
 	User           string             `db:"user" json:"user"`
 	System         string             `db:"system" json:"system"`
+	Asset          string             `db:"asset" json:"asset,omitempty"`
 	Name           string             `db:"name" json:"name"`
 	Value          float64            `db:"value" json:"value"`
 	Created        string             `db:"created" json:"created"`
@@ -31,16 +32,24 @@ type alertHistoryListItem struct {
 	SilencedBy     string             `db:"silenced_by" json:"silenced_by,omitempty"`
 	SilenceReason  string             `db:"silence_reason" json:"silence_reason,omitempty"`
 	SystemName     string             `db:"system_name" json:"-"`
+	AssetName      string             `db:"asset_name" json:"-"`
 	Expand         alertHistoryExpand `json:"expand"`
 }
 
 type alertHistoryExpand struct {
 	System alertHistorySystemExpand `json:"system"`
+	Asset  *alertHistoryAssetExpand `json:"asset,omitempty"`
 }
 
 type alertHistorySystemExpand struct {
 	Id   string `json:"id"`
 	Name string `json:"name"`
+}
+
+type alertHistoryAssetExpand struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type,omitempty"`
 }
 
 func ListAlertHistory(e *core.RequestEvent) error {
@@ -78,7 +87,7 @@ func ListAlertHistory(e *core.RequestEvent) error {
 		where = append(where, sourceClause)
 	}
 	if search != "" {
-		where = append(where, `(h.name LIKE {:search} OR h.alert_id LIKE {:search} OR h.system LIKE {:search} OR s.name LIKE {:search} OR s.display_name LIKE {:search})`)
+		where = append(where, `(h.name LIKE {:search} OR h.alert_id LIKE {:search} OR h.system LIKE {:search} OR h.asset LIKE {:search} OR s.name LIKE {:search} OR s.display_name LIKE {:search} OR a.name LIKE {:search})`)
 		params["search"] = "%" + search + "%"
 	}
 
@@ -89,6 +98,7 @@ func ListAlertHistory(e *core.RequestEvent) error {
 			COALESCE(h.alert_id, '') AS alert_id,
 			h."user",
 			h.system,
+			COALESCE(h.asset, '') AS asset,
 			h.name,
 			COALESCE(h.value, 0) AS value,
 			h.created,
@@ -98,9 +108,11 @@ func ListAlertHistory(e *core.RequestEvent) error {
 			COALESCE(h.silenced_until, '') AS silenced_until,
 			COALESCE(h.silenced_by, '') AS silenced_by,
 			COALESCE(h.silence_reason, '') AS silence_reason,
-			COALESCE(NULLIF(s.display_name, ''), NULLIF(s.name, ''), h.system) AS system_name
+			COALESCE(NULLIF(s.display_name, ''), NULLIF(s.name, ''), h.system) AS system_name,
+			COALESCE(NULLIF(a.name, ''), h.asset) AS asset_name
 		FROM alerts_history h
 		LEFT JOIN systems s ON s.id = h.system
+		LEFT JOIN assets a ON a.id = h.asset
 		WHERE ` + strings.Join(where, " AND ") + `
 		ORDER BY h.created DESC
 		LIMIT {:limit}
@@ -118,6 +130,12 @@ func ListAlertHistory(e *core.RequestEvent) error {
 		items[i].Expand.System = alertHistorySystemExpand{
 			Id:   items[i].System,
 			Name: items[i].SystemName,
+		}
+		if items[i].Asset != "" {
+			items[i].Expand.Asset = &alertHistoryAssetExpand{
+				Id:   items[i].Asset,
+				Name: items[i].AssetName,
+			}
 		}
 	}
 

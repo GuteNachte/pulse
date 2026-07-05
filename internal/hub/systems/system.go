@@ -1305,6 +1305,7 @@ func (sys *System) resolveMissingImportantMonitoringAlerts(systemRecord *core.Re
 			continue
 		}
 		record.Set("resolved", time.Now().UTC())
+		setAlertHistoryAssetFromSystem(record, systemRecord)
 		if err := sys.manager.hub.SaveNoValidate(record); err != nil {
 			return err
 		}
@@ -1328,9 +1329,19 @@ func (sys *System) createImportantMonitoringAlertHistory(systemRecord *core.Reco
 		dbx.Params{"alert_id": target.id, "user": userID, "system": systemRecord.Id},
 	)
 	if err == nil && existing != nil {
-		if existing.GetString("name") != target.name || existing.GetFloat("value") != float64(target.value) {
+		changed := false
+		if existing.GetString("name") != target.name {
 			existing.Set("name", target.name)
+			changed = true
+		}
+		if existing.GetFloat("value") != float64(target.value) {
 			existing.Set("value", target.value)
+			changed = true
+		}
+		if setAlertHistoryAssetFromSystem(existing, systemRecord) {
+			changed = true
+		}
+		if changed {
 			if err := sys.manager.hub.SaveNoValidate(existing); err != nil {
 				return false, err
 			}
@@ -1346,6 +1357,7 @@ func (sys *System) createImportantMonitoringAlertHistory(systemRecord *core.Reco
 	record.Set("alert_id", target.id)
 	record.Set("user", userID)
 	record.Set("system", systemRecord.Id)
+	setAlertHistoryAssetFromSystem(record, systemRecord)
 	record.Set("name", target.name)
 	record.Set("value", target.value)
 	if err := sys.manager.hub.SaveNoValidate(record); err != nil {
@@ -1364,12 +1376,25 @@ func (sys *System) resolveImportantMonitoringAlertHistory(systemRecord *core.Rec
 		return false, nil
 	}
 	record.Set("resolved", time.Now().UTC())
+	setAlertHistoryAssetFromSystem(record, systemRecord)
 	if err := sys.manager.hub.SaveNoValidate(record); err != nil {
 		return false, err
 	}
 	target.name = record.GetString("name")
 	sys.sendImportantMonitoringAlertNotification(systemRecord, userID, target, true)
 	return true, nil
+}
+
+func setAlertHistoryAssetFromSystem(alertRecord *core.Record, systemRecord *core.Record) bool {
+	if alertRecord == nil || systemRecord == nil {
+		return false
+	}
+	assetID := strings.TrimSpace(systemRecord.GetString("asset"))
+	if assetID == "" || alertRecord.GetString("asset") == assetID {
+		return false
+	}
+	alertRecord.Set("asset", assetID)
+	return true
 }
 
 func (sys *System) sendImportantMonitoringAlertNotification(systemRecord *core.Record, userID string, target importantMonitoringAlertTarget, resolved bool) {
@@ -1400,6 +1425,7 @@ func (sys *System) sendImportantMonitoringAlertNotification(systemRecord *core.R
 	if err := sys.manager.hub.SendAlert(alerts.AlertMessageData{
 		UserID:   userID,
 		SystemID: systemRecord.Id,
+		AssetID:  strings.TrimSpace(systemRecord.GetString("asset")),
 		AlertID:  target.id,
 		Title:    title,
 		Message:  message,
@@ -1533,6 +1559,7 @@ func (sys *System) resolveMissingContainerAlerts(systemRecord *core.Record, curr
 			continue
 		}
 		record.Set("resolved", time.Now().UTC())
+		setAlertHistoryAssetFromSystem(record, systemRecord)
 		if err := sys.manager.hub.SaveNoValidate(record); err != nil {
 			return err
 		}
@@ -1555,9 +1582,19 @@ func (sys *System) createContainerAlertHistory(systemRecord *core.Record, userID
 		dbx.Params{"alert_id": target.id, "user": userID, "system": systemRecord.Id},
 	)
 	if err == nil && existing != nil {
-		if existing.GetString("name") != target.name || existing.GetFloat("value") != float64(target.value) {
+		changed := false
+		if existing.GetString("name") != target.name {
 			existing.Set("name", target.name)
+			changed = true
+		}
+		if existing.GetFloat("value") != float64(target.value) {
 			existing.Set("value", target.value)
+			changed = true
+		}
+		if setAlertHistoryAssetFromSystem(existing, systemRecord) {
+			changed = true
+		}
+		if changed {
 			if err := sys.manager.hub.SaveNoValidate(existing); err != nil {
 				return false, err
 			}
@@ -1573,6 +1610,7 @@ func (sys *System) createContainerAlertHistory(systemRecord *core.Record, userID
 	record.Set("alert_id", target.id)
 	record.Set("user", userID)
 	record.Set("system", systemRecord.Id)
+	setAlertHistoryAssetFromSystem(record, systemRecord)
 	record.Set("name", target.name)
 	record.Set("value", target.value)
 	if err := sys.manager.hub.SaveNoValidate(record); err != nil {
@@ -1591,6 +1629,7 @@ func (sys *System) resolveContainerAlertHistory(systemRecord *core.Record, userI
 		return false, nil
 	}
 	record.Set("resolved", time.Now().UTC())
+	setAlertHistoryAssetFromSystem(record, systemRecord)
 	if err := sys.manager.hub.SaveNoValidate(record); err != nil {
 		return false, err
 	}
@@ -1628,6 +1667,7 @@ func (sys *System) sendContainerAlertNotification(systemRecord *core.Record, use
 	if err := sys.manager.hub.SendAlert(alerts.AlertMessageData{
 		UserID:   userID,
 		SystemID: systemRecord.Id,
+		AssetID:  strings.TrimSpace(systemRecord.GetString("asset")),
 		AlertID:  target.id,
 		Title:    title,
 		Message:  message,

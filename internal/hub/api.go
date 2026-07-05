@@ -153,6 +153,12 @@ func (h *Hub) registerApiRouteGroup(se *core.ServeEvent, prefix string) error {
 	apiAuth.POST("/important-monitoring/rules", h.upsertImportantMonitoringRule).BindFunc(excludeReadOnlyRole)
 	apiAuth.DELETE("/important-monitoring/rules/{kind}/{id}", h.deleteImportantMonitoringRule).BindFunc(excludeReadOnlyRole)
 	apiAuth.DELETE("/systems/{id}", h.deleteSystemAndRelatedData).BindFunc(excludeReadOnlyRole)
+	apiAuth.POST("/assets/{id}/enrichment-reports", h.generateAssetEnrichmentReport).BindFunc(excludeReadOnlyRole)
+	apiAuth.POST("/assets/{id}/visuals/turntable", h.generateAssetTurntableVisual).BindFunc(excludeReadOnlyRole)
+	apiAuth.GET("/asset-enrichment/config", h.getAssetEnrichmentConfig).BindFunc(requireAdminRole)
+	apiAuth.POST("/asset-enrichment/config", h.updateAssetEnrichmentConfig).BindFunc(requireAdminRole)
+	apiAuth.POST("/asset-enrichment-suggestions/{id}/accept", h.acceptAssetEnrichmentSuggestion).BindFunc(excludeReadOnlyRole)
+	apiAuth.POST("/asset-enrichment-suggestions/{id}/reject", h.rejectAssetEnrichmentSuggestion).BindFunc(excludeReadOnlyRole)
 	apiAuth.DELETE("/service-control-rules/{id}", h.deleteServiceControlRule).BindFunc(excludeReadOnlyRole)
 	// operations extension
 	apiAuth.GET("/operations", h.getOperations)
@@ -199,6 +205,7 @@ type agentPairRequest struct {
 type createPairingCodeRequest struct {
 	ExpectedIP string `json:"expected_ip"`
 	TargetIP   string `json:"target_ip"`
+	Asset      string `json:"asset"`
 }
 
 func normalizePairingCode(code string) string {
@@ -246,6 +253,11 @@ func (h *Hub) createPairingCode(e *core.RequestEvent) error {
 		h.createOperationAudit(e, "", "create_pairing_code", firstNonEmpty(req.TargetIP, req.ExpectedIP), "", "failed", "Invalid target IP", operationFailureInvalidRequest)
 		return e.BadRequestError("Invalid target IP", err)
 	}
+	assetID := strings.TrimSpace(req.Asset)
+	if err := h.validateAgentPairingAsset(assetID, e.Auth.Id); err != nil {
+		h.createOperationAudit(e, "", "create_pairing_code", assetID, "", "failed", err.Error(), operationFailureInvalidRequest)
+		return e.BadRequestError(err.Error(), err)
+	}
 
 	code, err := generatePairingCode()
 	if err != nil {
@@ -269,6 +281,7 @@ func (h *Hub) createPairingCode(e *core.RequestEvent) error {
 	record := core.NewRecord(collection)
 	record.Set("code", code)
 	record.Set("user", e.Auth.Id)
+	record.Set("asset", assetID)
 	record.Set("expected_ip", expectedIP)
 	record.Set("expires_at", expiresAt.Format(time.RFC3339Nano))
 	record.Set("used", false)
@@ -353,6 +366,11 @@ func (h *Hub) pairAgent(e *core.RequestEvent) error {
 	}
 
 	userID := pairingRecord.GetString("user")
+	assetID := strings.TrimSpace(pairingRecord.GetString("asset"))
+	if err := h.validateAgentPairingAsset(assetID, userID); err != nil {
+		h.createOperationAuditForUser(e, userID, "", "pair_agent", req.Hostname, "", "failed", err.Error(), operationFailureDenied)
+		return e.BadRequestError(err.Error(), err)
+	}
 	fingerprintInUse, err := h.rejectOrClearPairingFingerprintConflict(req.Fingerprint)
 	if err != nil {
 		h.createOperationAuditForUser(e, pairingRecord.GetString("user"), "", "pair_agent", req.Hostname, "", "failed", err.Error(), operationFailureFailed)
@@ -364,7 +382,7 @@ func (h *Hub) pairAgent(e *core.RequestEvent) error {
 	}
 
 	targetIP := pairingRecord.GetString("expected_ip")
-	systemID, err := h.createPairedSystem(req, userID, remoteIP, targetIP)
+	systemID, err := h.createPairedSystem(req, userID, assetID, remoteIP, targetIP)
 	if err != nil {
 		h.createOperationAuditForUser(e, userID, "", "pair_agent", req.Hostname, "", "failed", err.Error(), operationFailureFailed)
 		return e.InternalServerError("", err)
@@ -420,7 +438,7 @@ func (h *Hub) pairAgent(e *core.RequestEvent) error {
 	})
 }
 
-func (h *Hub) createPairedSystem(req agentPairRequest, userID string, remoteAddr string, targetIP string) (string, error) {
+func (h *Hub) createPairedSystem(req agentPairRequest, userID string, assetID string, remoteAddr string, targetIP string) (string, error) {
 	collection, err := h.FindCachedCollectionByNameOrId("systems")
 	if err != nil {
 		return "", err
@@ -431,6 +449,7 @@ func (h *Hub) createPairedSystem(req agentPairRequest, userID string, remoteAddr
 	record.Set("name", name)
 	record.Set("status", "pending")
 	record.Set("pairing_confirmed", false)
+	record.Set("asset", strings.TrimSpace(assetID))
 	record.Set("target_ip", targetIP)
 	record.Set("connect_ip", remoteAddr)
 	record.Set("reported_ips", normalizePairingReportedIPs(req.ReportedIPs))
@@ -471,6 +490,7 @@ func (h *Hub) pairingCodeResponse(record *core.Record) map[string]any {
 	return map[string]any{
 		"id":                  record.Id,
 		"code":                formatPairingCode(record.GetString("code")),
+		"asset":               record.GetString("asset"),
 		"expected_ip":         targetIP,
 		"target_ip":           targetIP,
 		"connect_ip":          record.GetString("connect_ip"),

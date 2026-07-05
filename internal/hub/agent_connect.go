@@ -453,6 +453,9 @@ func (acr *agentConnectRequest) findOrCreateLocalSystemRecord(agentFingerprint c
 			return nil, errors.New("local agent token cannot claim a non-Hub agent record")
 		}
 		updateLocalSystemRecord(record, agentFingerprint, false)
+		if _, err := acr.hub.ensureSystemAssetBinding(record, firstSystemUserID(record), agentFingerprint, getRealIP(acr.req), autoAssetSourceHubLocalAgent); err != nil {
+			return nil, err
+		}
 		if err := acr.clearOtherLocalSystemRecords(record.Id); err != nil {
 			return nil, err
 		}
@@ -462,6 +465,9 @@ func (acr *agentConnectRequest) findOrCreateLocalSystemRecord(agentFingerprint c
 	record, err = acr.findReusableLocalSystemRecord(agentFingerprint)
 	if err == nil {
 		updateLocalSystemRecord(record, agentFingerprint, false)
+		if _, err := acr.hub.ensureSystemAssetBinding(record, firstSystemUserID(record), agentFingerprint, getRealIP(acr.req), autoAssetSourceHubLocalAgent); err != nil {
+			return nil, err
+		}
 		if err := acr.clearOtherLocalSystemRecords(record.Id); err != nil {
 			return nil, err
 		}
@@ -482,6 +488,9 @@ func (acr *agentConnectRequest) findOrCreateLocalSystemRecord(agentFingerprint c
 	record.Set("pairing_confirmed", true)
 	remoteIP := getRealIP(acr.req)
 	updateLocalSystemRecord(record, agentFingerprint, true)
+	if _, err := acr.hub.ensureSystemAssetBinding(record, userID, agentFingerprint, remoteIP, autoAssetSourceHubLocalAgent); err != nil {
+		return nil, err
+	}
 	record.Set("info", map[string]any{
 		"ct": system.ConnectionTypeWebSocket,
 		"h":  agentFingerprint.Hostname,
@@ -694,6 +703,9 @@ func (acr *agentConnectRequest) createSystem(agentFingerprint common.Fingerprint
 		"h":  agentFingerprint.Hostname,
 		"ip": getRealIP(acr.req),
 	})
+	if _, err := acr.hub.ensureSystemAssetBinding(systemRecord, acr.userId, agentFingerprint, getRealIP(acr.req), autoAssetSourceUniversalToken); err != nil {
+		return "", err
+	}
 	if err := acr.hub.Save(systemRecord); err != nil {
 		return "", err
 	}

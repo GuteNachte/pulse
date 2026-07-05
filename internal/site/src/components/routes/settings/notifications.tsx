@@ -146,7 +146,8 @@ const SettingsNotificationsPage = ({
 		try {
 			const records = await pb.collection<NotificationFailureRecord>("notification_failures").getFullList({
 				sort: "-updated",
-				fields: "id,title,target,fingerprint,error,count,created,updated",
+				expand: "asset",
+				fields: "id,title,target,fingerprint,error,count,created,updated,asset,expand.asset.name,expand.asset.type",
 			})
 			setFailures(records)
 		} catch {
@@ -165,8 +166,9 @@ const SettingsNotificationsPage = ({
 		try {
 			const records = await pb.collection<AlertNotificationStateRecord>("alert_notification_states").getFullList({
 				sort: "-updated",
+				expand: "asset",
 				fields:
-					"id,user,system,alert_id,title,status,last_error,suppressed_count,last_attempt_at,last_sent_at,last_suppressed_at,next_allowed_at,last_resolved_at,created,updated,expand.system.name",
+					"id,user,system,asset,alert_id,title,status,last_error,suppressed_count,last_attempt_at,last_sent_at,last_suppressed_at,next_allowed_at,last_resolved_at,created,updated,expand.asset.name,expand.asset.type",
 			})
 			setAlertNotificationStates(records)
 		} catch {
@@ -279,6 +281,7 @@ const SettingsNotificationsPage = ({
 				})
 				.map((item) => ({
 					title: item.title || item.alert_id,
+					assetName: item.expand?.asset?.name,
 					statusLabel: alertNotificationStateLabel(item.status),
 					statusTone: alertNotificationStateTone(item.status),
 					suppressedCount: item.suppressed_count ?? 0,
@@ -789,6 +792,7 @@ function NotificationDiagnosticsPanel({
 										<div className="truncate font-medium text-sm">{item.title}</div>
 										<Badge variant={statusBadgeVariant(item.statusTone)}>{item.statusLabel}</Badge>
 									</div>
+									{item.assetName && <div className="text-muted-foreground">资产：{item.assetName}</div>}
 									<div className="text-muted-foreground">
 										已抑制 {item.suppressedCount} 次，下一次允许发送：{item.nextAllowed ?? "等待冷却结束"}
 									</div>
@@ -860,6 +864,11 @@ function ChannelRow({
 					{channel.failure && (
 						<div className="mt-2 rounded-md border border-orange-500/24 bg-card p-2 text-xs leading-relaxed text-foreground shadow-none dark:border-orange-300/18 dark:bg-card">
 							<div className="font-medium">{channel.failure.title}</div>
+							{notificationFailureAssetName(channel.failure) && (
+								<div className="mt-1 text-muted-foreground">
+									关联资产：{notificationFailureAssetName(channel.failure)}
+								</div>
+							)}
 							<div className="mt-1 break-words">{channel.failure.error}</div>
 							<div className="mt-1 text-muted-foreground">最后失败：{formatTime(channel.failure.updated)}</div>
 						</div>
@@ -979,6 +988,10 @@ function showTestNotificationError(msg: string) {
 
 function normalizeTestNotificationError(message?: string) {
 	return message?.trim() || t`Failed to send test notification`
+}
+
+function notificationFailureAssetName(record: NotificationFailureRecord) {
+	return record.expand?.asset?.name || record.asset || ""
 }
 
 async function clearFailureForUrl(url: string) {
