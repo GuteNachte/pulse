@@ -16,12 +16,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/use-toast"
 import { pb } from "@/lib/api"
 import type { AITaskRecord } from "@/types"
 
 type AssetEnrichmentConfig = {
+	base_url: string
+	base_url_host: string
+	api_key: string
+	api_key_configured: boolean
 	ai: AIProviderConfig
 	visual_ai: AIProviderConfig & {
 		frame_count: number
@@ -41,6 +44,9 @@ type AIProviderConfig = {
 }
 
 type AISettingsForm = {
+	baseUrl: string
+	apiKey: string
+	clearApiKey: boolean
 	aiEnabled: boolean
 	aiProvider: string
 	aiEndpoint: string
@@ -57,6 +63,9 @@ type AISettingsForm = {
 }
 
 const defaultForm: AISettingsForm = {
+	baseUrl: "https://apihub.agnes-ai.com/v1",
+	apiKey: "",
+	clearApiKey: false,
 	aiEnabled: false,
 	aiProvider: "agnes",
 	aiEndpoint: "https://apihub.agnes-ai.com/v1/chat/completions",
@@ -82,12 +91,12 @@ export default function AISettings() {
 	const readyCount = useMemo(() => {
 		if (!config) return 0
 		return [
-			config.ai.endpoint_configured && config.ai.api_key_configured,
-			config.visual_ai.endpoint_configured && config.visual_ai.api_key_configured,
+			config.base_url && config.api_key_configured,
+			config.base_url && config.api_key_configured && config.visual_ai.model,
 		].filter(Boolean).length
 	}, [config])
-	const textAccessReady = Boolean(config?.ai.endpoint_configured && config?.ai.api_key_configured)
-	const imageAccessReady = Boolean(config?.visual_ai.endpoint_configured && config?.visual_ai.api_key_configured)
+	const textAccessReady = Boolean(config?.base_url && config?.api_key_configured)
+	const imageAccessReady = Boolean(config?.base_url && config?.api_key_configured)
 	const latestEnrichmentTask = aiTasks.find((task) => task.kind === "asset_enrichment")
 	const latestVisualTask = aiTasks.find((task) => task.kind === "asset_visual")
 
@@ -115,21 +124,22 @@ export default function AISettings() {
 			const next = await pb.send<AssetEnrichmentConfig>("/api/pulse/asset-enrichment/config", {
 				method: "POST",
 				body: {
+					base_url: form.baseUrl,
+					api_key: form.apiKey,
+					clear_api_key: form.clearApiKey,
 					ai: {
 						enabled: form.aiEnabled,
 						provider: "agnes",
-						endpoint: form.aiEndpoint,
 						model: form.aiModel,
 						api_key: form.aiApiKey,
-						clear_api_key: form.clearAiApiKey,
+						clear_api_key: form.clearApiKey || form.clearAiApiKey,
 					},
 					visual_ai: {
 						enabled: form.visualEnabled,
 						provider: "agnes",
-						endpoint: form.visualEndpoint,
 						model: form.visualModel,
 						api_key: form.visualApiKey,
-						clear_api_key: form.clearVisualApiKey,
+						clear_api_key: form.clearApiKey || form.clearVisualApiKey,
 						frame_count: form.frameCount,
 					},
 				},
@@ -184,50 +194,36 @@ export default function AISettings() {
 						<SettingsPanel
 							icon={BrainCircuitIcon}
 							title="大模型接入配置"
-							description="只配置模型服务的接入方式和密钥。这里不定义任何具体任务，Agent 会引用这些接入能力执行自己的工作。"
+							description="按 Agnes 官方 OpenAI-compatible 方式只配置一个 Base URL 和一个 API Key。Agent 自己决定调用文本或图片接口。"
 						>
-							<div className="grid gap-4 xl:grid-cols-2">
-								<ModelAccessForm
-									title="文本模型接入"
-									description="供资料补全、后续文本分析类 Agent 使用。"
-									endpoint={form.aiEndpoint}
-									onEndpointChange={(value) => setForm((current) => ({ ...current, aiEndpoint: value }))}
-									apiKey={form.aiApiKey}
-									onApiKeyChange={(value) =>
-										setForm((current) => ({ ...current, aiApiKey: value, clearAiApiKey: false }))
-									}
-									clearApiKey={form.clearAiApiKey}
-									onClearApiKeyChange={(value) =>
-										setForm((current) => ({
-											...current,
-											clearAiApiKey: value,
-											aiApiKey: value ? "" : current.aiApiKey,
-										}))
-									}
-									configured={config?.ai.api_key_configured}
-									endpointHost={config?.ai.endpoint_host}
-								/>
-								<ModelAccessForm
-									title="图片模型接入"
-									description="供设备全貌图和后续图片生成类 Agent 使用。"
-									endpoint={form.visualEndpoint}
-									onEndpointChange={(value) => setForm((current) => ({ ...current, visualEndpoint: value }))}
-									apiKey={form.visualApiKey}
-									onApiKeyChange={(value) =>
-										setForm((current) => ({ ...current, visualApiKey: value, clearVisualApiKey: false }))
-									}
-									clearApiKey={form.clearVisualApiKey}
-									onClearApiKeyChange={(value) =>
-										setForm((current) => ({
-											...current,
-											clearVisualApiKey: value,
-											visualApiKey: value ? "" : current.visualApiKey,
-										}))
-									}
-									configured={config?.visual_ai.api_key_configured}
-									endpointHost={config?.visual_ai.endpoint_host}
-								/>
-							</div>
+							<ModelAccessForm
+								baseUrl={form.baseUrl}
+								onBaseUrlChange={(value) => setForm((current) => ({ ...current, baseUrl: value }))}
+								apiKey={form.apiKey}
+								onApiKeyChange={(value) =>
+									setForm((current) => ({
+										...current,
+										apiKey: value,
+										aiApiKey: value,
+										visualApiKey: value,
+										clearApiKey: false,
+										clearAiApiKey: false,
+										clearVisualApiKey: false,
+									}))
+								}
+								clearApiKey={form.clearApiKey}
+								onClearApiKeyChange={(value) =>
+									setForm((current) => ({
+										...current,
+										clearApiKey: value,
+										apiKey: value ? "" : current.apiKey,
+										aiApiKey: value ? "" : current.aiApiKey,
+										visualApiKey: value ? "" : current.visualApiKey,
+									}))
+								}
+								configured={config?.api_key_configured}
+								baseUrlHost={config?.base_url_host}
+							/>
 						</SettingsPanel>
 
 						<div className="grid gap-4 xl:grid-cols-2">
@@ -252,7 +248,8 @@ export default function AISettings() {
 									<div className="rounded-md border border-border/70 bg-surface-soft p-3 text-xs leading-relaxed text-muted-foreground">
 										执行口径：优先使用资产主档里的厂商、型号、内部型号、支持页、本地 Agent
 										采集结果；需要外部资料时由资料补全 Agent
-										自己完成资料查找和来源整理。字段建议必须带可追溯来源，仍需人工确认后才写回主档。
+										优先查找厂家官网、官方支持页、官方规格页、说明书和官方图片，
+										规格库只做交叉验证。字段建议必须带可追溯来源，仍需人工确认后才写回主档。
 									</div>
 								</div>
 							</SettingsPanel>
@@ -265,7 +262,7 @@ export default function AISettings() {
 								<div className="grid gap-4">
 									<ToggleRow
 										label="启用设备全貌图 Agent"
-										description="关闭后不再生成新的全貌图候选；已确认的展示图不受影响。"
+										description="关闭后不再生成新的全貌图候选；生成时优先使用已确认官方图片或官网图片作为参考。"
 										checked={form.visualEnabled}
 										onCheckedChange={(value) => setForm((current) => ({ ...current, visualEnabled: value }))}
 									/>
@@ -362,15 +359,17 @@ function getConfigErrorMessage(error: unknown) {
 function formFromConfig(config: AssetEnrichmentConfig): AISettingsForm {
 	return {
 		...defaultForm,
+		baseUrl: config.base_url || defaultForm.baseUrl,
+		apiKey: config.api_key || "",
 		aiEnabled: config.ai.enabled,
 		aiProvider: config.ai.provider || defaultForm.aiProvider,
 		aiEndpoint: config.ai.endpoint || defaultForm.aiEndpoint,
 		aiModel: config.ai.model || defaultForm.aiModel,
-		aiApiKey: config.ai.api_key || "",
+		aiApiKey: config.api_key || config.ai.api_key || "",
 		visualEnabled: config.visual_ai.enabled,
 		visualEndpoint: config.visual_ai.endpoint || defaultForm.visualEndpoint,
 		visualModel: config.visual_ai.model || defaultForm.visualModel,
-		visualApiKey: config.visual_ai.api_key || "",
+		visualApiKey: config.api_key || config.visual_ai.api_key || "",
 		frameCount: config.visual_ai.frame_count || defaultForm.frameCount,
 	}
 }
@@ -546,33 +545,31 @@ function ToggleRow({
 }
 
 function ModelAccessForm({
-	title,
-	description,
-	endpoint,
-	onEndpointChange,
+	baseUrl,
+	onBaseUrlChange,
 	apiKey,
 	onApiKeyChange,
 	clearApiKey,
 	onClearApiKeyChange,
 	configured,
-	endpointHost,
+	baseUrlHost,
 }: {
-	title: string
-	description: string
-	endpoint: string
-	onEndpointChange: (value: string) => void
+	baseUrl: string
+	onBaseUrlChange: (value: string) => void
 	apiKey: string
 	onApiKeyChange: (value: string) => void
 	clearApiKey: boolean
 	onClearApiKeyChange: (value: boolean) => void
 	configured?: boolean
-	endpointHost?: string
+	baseUrlHost?: string
 }) {
 	return (
 		<div className="grid gap-4 rounded-lg border border-border/70 bg-surface-soft p-3">
 			<div className="min-w-0">
-				<div className="text-sm font-semibold text-foreground">{title}</div>
-				<p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
+				<div className="text-sm font-semibold text-foreground">Agnes 接入</div>
+				<p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+					项目专用 Agnes 接入。Base URL 固定使用官方 OpenAI-compatible 根地址，文本和图片接口由 Hub 自动拼接。
+				</p>
 			</div>
 			<div className="grid gap-2">
 				<Label className="text-xs">服务商</Label>
@@ -581,17 +578,16 @@ function ModelAccessForm({
 				</div>
 			</div>
 			<div className="grid gap-2">
-				<Label className="text-xs">Endpoint</Label>
-				<Textarea
-					value={endpoint}
-					onChange={(event) => onEndpointChange(event.target.value)}
-					placeholder="https://apihub.agnes-ai.com/v1/..."
-					className="min-h-16"
+				<Label className="text-xs">Base URL</Label>
+				<Input
+					value={baseUrl}
+					onChange={(event) => onBaseUrlChange(event.target.value)}
+					placeholder="https://apihub.agnes-ai.com/v1"
 				/>
-				{endpointHost ? <div className="text-xs text-muted-foreground">当前 host：{endpointHost}</div> : null}
+				{baseUrlHost ? <div className="text-xs text-muted-foreground">当前 host：{baseUrlHost}</div> : null}
 			</div>
 			<SecretField
-				id={`api-key-${title}`}
+				id="agnes-api-key"
 				label="API Key"
 				placeholder={configured ? "已配置，留空保持不变" : "未配置"}
 				value={apiKey}

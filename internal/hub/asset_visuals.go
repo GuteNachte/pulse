@@ -230,8 +230,21 @@ func (h *Hub) createAssetVisualRecord(userID string, asset *core.Record, taskID 
 func (h *Hub) collectAssetVisualReferenceSources(asset *core.Record) []map[string]any {
 	online := h.collectAssetOnlineReferenceEnrichment(asset)
 	result := make([]map[string]any, 0, len(online.Sources))
+	if officialImageURL := recordMetadataString(asset, "official_image_url"); isLikelyImageURL(officialImageURL) {
+		result = append(result, map[string]any{
+			"title":      "已确认官方设备图片",
+			"url":        officialImageURL,
+			"image_url":  officialImageURL,
+			"type":       "official_image",
+			"provider":   "asset_master",
+			"confidence": 96,
+		})
+	}
 	for _, source := range online.Sources {
 		if source.URL == "" {
+			continue
+		}
+		if source.ImageURL == "" && !isLikelyImageURL(source.URL) {
 			continue
 		}
 		result = append(result, map[string]any{
@@ -261,7 +274,7 @@ func buildAssetTurntablePrompt(asset *core.Record, color string, frameCount int,
 		"Device: "+strings.Join(nonEmptyStrings(asset.GetString("vendor"), asset.GetString("model"), recordMetadataString(asset, "internal_model"), asset.GetString("name")), " / "),
 		"Color: "+color+".",
 		fmt.Sprintf("Need %d frames around the same device, clean studio lighting, realistic 3D product render, neutral background, no text, no logos except real device branding if visible in official reference.", frameCount),
-		"If official references are provided, use them as factual visual reference and do not invent ports/buttons that contradict the reference.",
+		"Use official product photos or official CDN images as factual visual reference. Do not invent ports, camera modules, buttons, materials or logos that contradict official references.",
 		"Official reference URLs: "+strings.Join(referenceLines, " ; "),
 	), "\n")
 }
@@ -286,7 +299,7 @@ func (h *Hub) generateAssetTurntableFrames(config assetVisualAIConfig, prompt st
 
 func (h *Hub) generateAssetVisualFrame(config assetVisualAIConfig, prompt string, referenceURL string) (string, error) {
 	extraBody := map[string]any{"response_format": "url"}
-	if referenceURL != "" {
+	if isLikelyImageURL(referenceURL) {
 		extraBody["image"] = []string{referenceURL}
 	}
 	payload := map[string]any{
@@ -318,7 +331,7 @@ func (h *Hub) generateAssetVisualFrame(config assetVisualAIConfig, prompt string
 		return "", err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("Agnes 图像生成返回非成功状态：%d", resp.StatusCode)
+		return "", fmt.Errorf("Agnes 图像生成返回非成功状态：%d%s", resp.StatusCode, formatRemoteErrorBody(rawBody))
 	}
 	imageURL := extractAssetVisualImageURL(rawBody)
 	if imageURL == "" {
@@ -354,11 +367,29 @@ func firstReferenceURL(references []map[string]any) string {
 		if value, _ := source["image_url"].(string); value != "" {
 			return value
 		}
-	}
-	for _, source := range references {
-		if value, _ := source["url"].(string); value != "" {
+		if value, _ := source["url"].(string); isLikelyImageURL(value) {
 			return value
 		}
 	}
 	return ""
+}
+
+func isLikelyImageURL(rawURL string) bool {
+	lower := strings.ToLower(strings.TrimSpace(rawURL))
+	return strings.HasSuffix(lower, ".png") ||
+		strings.HasSuffix(lower, ".jpg") ||
+		strings.HasSuffix(lower, ".jpeg") ||
+		strings.HasSuffix(lower, ".webp") ||
+		strings.HasSuffix(lower, ".avif")
+}
+
+func formatRemoteErrorBody(rawBody []byte) string {
+	text := cleanOnlineText(string(rawBody))
+	if text == "" {
+		return ""
+	}
+	if len([]rune(text)) > 500 {
+		text = string([]rune(text)[:500])
+	}
+	return "；响应：" + text
 }

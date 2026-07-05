@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 
@@ -15,7 +16,10 @@ import (
 const assetEnrichmentSettingsKey = "asset_enrichment"
 
 type assetEnrichmentConfigUpdateRequest struct {
-	AI struct {
+	BaseURL     string `json:"base_url"`
+	APIKey      string `json:"api_key"`
+	ClearAPIKey bool   `json:"clear_api_key"`
+	AI          struct {
 		Enabled     *bool  `json:"enabled"`
 		Provider    string `json:"provider"`
 		Endpoint    string `json:"endpoint"`
@@ -48,23 +52,33 @@ func (h *Hub) updateAssetEnrichmentConfig(e *core.RequestEvent) error {
 	next := cloneStringAnyMap(current)
 	delete(next, "public_search_enabled")
 	delete(next, "brave_search_api_key")
+	if strings.TrimSpace(req.BaseURL) != "" {
+		baseURL, err := normalizeConfigBaseURL(req.BaseURL)
+		if err != nil {
+			return e.BadRequestError("Agnes Base URL 无效。", err)
+		}
+		next["base_url"] = baseURL
+	}
+	if req.ClearAPIKey {
+		next["api_key"] = ""
+	} else if strings.TrimSpace(req.APIKey) != "" {
+		next["api_key"] = strings.TrimSpace(req.APIKey)
+	}
 
 	ai := cloneStringAnyMap(anyMap(next["ai"]))
 	ai["provider"] = "agnes"
+	delete(ai, "endpoint")
 	if req.AI.Enabled != nil {
 		ai["enabled"] = *req.AI.Enabled
-	}
-	if req.AI.Endpoint != "" {
-		endpoint, err := normalizeConfigEndpoint(req.AI.Endpoint)
-		if err != nil {
-			return e.BadRequestError("资料补全 endpoint 无效。", err)
-		}
-		ai["endpoint"] = endpoint
 	}
 	if req.AI.Model != "" {
 		ai["model"] = strings.TrimSpace(req.AI.Model)
 	}
-	if req.AI.ClearAPIKey {
+	if req.ClearAPIKey {
+		ai["api_key"] = ""
+	} else if strings.TrimSpace(req.APIKey) != "" {
+		ai["api_key"] = strings.TrimSpace(req.APIKey)
+	} else if req.AI.ClearAPIKey {
 		ai["api_key"] = ""
 	} else if strings.TrimSpace(req.AI.APIKey) != "" {
 		ai["api_key"] = strings.TrimSpace(req.AI.APIKey)
@@ -73,15 +87,9 @@ func (h *Hub) updateAssetEnrichmentConfig(e *core.RequestEvent) error {
 
 	visualAI := cloneStringAnyMap(anyMap(next["visual_ai"]))
 	visualAI["provider"] = "agnes"
+	delete(visualAI, "endpoint")
 	if req.VisualAI.Enabled != nil {
 		visualAI["enabled"] = *req.VisualAI.Enabled
-	}
-	if req.VisualAI.Endpoint != "" {
-		endpoint, err := normalizeConfigEndpoint(req.VisualAI.Endpoint)
-		if err != nil {
-			return e.BadRequestError("图片生成 endpoint 无效。", err)
-		}
-		visualAI["endpoint"] = endpoint
 	}
 	if req.VisualAI.Model != "" {
 		visualAI["model"] = strings.TrimSpace(req.VisualAI.Model)
@@ -89,7 +97,11 @@ func (h *Hub) updateAssetEnrichmentConfig(e *core.RequestEvent) error {
 	if req.VisualAI.FrameCount > 0 {
 		visualAI["frame_count"] = normalizeAssetTurntableFrameCountWithDefault(req.VisualAI.FrameCount, defaultAssetTurntableFrameCount)
 	}
-	if req.VisualAI.ClearAPIKey {
+	if req.ClearAPIKey {
+		visualAI["api_key"] = ""
+	} else if strings.TrimSpace(req.APIKey) != "" {
+		visualAI["api_key"] = strings.TrimSpace(req.APIKey)
+	} else if req.VisualAI.ClearAPIKey {
 		visualAI["api_key"] = ""
 	} else if strings.TrimSpace(req.VisualAI.APIKey) != "" {
 		visualAI["api_key"] = strings.TrimSpace(req.VisualAI.APIKey)
@@ -106,7 +118,17 @@ func (h *Hub) updateAssetEnrichmentConfig(e *core.RequestEvent) error {
 func (h *Hub) assetEnrichmentConfigResponse() map[string]any {
 	aiConfig := h.assetOnlineAIConfig()
 	visualConfig := h.assetVisualAIConfig()
+	baseURL := h.assetAIBaseURL()
+	apiKey := firstNonEmpty(
+		strings.TrimSpace(configString(anyMap(h.loadAssetEnrichmentStoredSettings()), "api_key")),
+		aiConfig.APIKey,
+		visualConfig.APIKey,
+	)
 	return map[string]any{
+		"base_url":           baseURL,
+		"base_url_host":      safeAssetOnlineEndpointHost(baseURL),
+		"api_key":            apiKey,
+		"api_key_configured": strings.TrimSpace(apiKey) != "",
 		"ai": map[string]any{
 			"enabled":             aiConfig.Enabled,
 			"provider":            aiConfig.Provider,
@@ -135,6 +157,7 @@ func (h *Hub) assetEnrichmentConfigResponse() map[string]any {
 
 func (h *Hub) assetOnlineAIConfig() assetOnlineAIConfig {
 	config := assetOnlineAIConfigFromEnv()
+	baseURL := h.assetAIBaseURL()
 	section := anyMap(h.loadAssetEnrichmentStoredSettings()["ai"])
 	if value, ok := configBoolFromMap(section, "enabled"); ok {
 		config.Enabled = value
@@ -142,21 +165,27 @@ func (h *Hub) assetOnlineAIConfig() assetOnlineAIConfig {
 	if value, ok := configStringFromMap(section, "provider"); ok {
 		config.Provider = value
 	}
-	if value, ok := configStringFromMap(section, "endpoint"); ok {
-		config.Endpoint = value
-	}
 	if value, ok := configStringFromMap(section, "api_key"); ok && value != "" {
+		config.APIKey = value
+	}
+	if value := configString(h.loadAssetEnrichmentStoredSettings(), "api_key"); value != "" {
 		config.APIKey = value
 	}
 	if value, ok := configStringFromMap(section, "model"); ok {
 		config.Model = value
 	}
 	config.Provider = "agnes"
+	if envEndpoint := strings.TrimSpace(os.Getenv("PULSE_ASSET_ENRICHMENT_AI_ENDPOINT")); envEndpoint != "" {
+		config.Endpoint = normalizeConfigEndpointValue(envEndpoint, "/chat/completions")
+	} else {
+		config.Endpoint = normalizeConfigEndpointValue(baseURL, "/chat/completions")
+	}
 	return config
 }
 
 func (h *Hub) assetVisualAIConfig() assetVisualAIConfig {
 	config := assetVisualAIConfigFromEnv()
+	baseURL := h.assetAIBaseURL()
 	section := anyMap(h.loadAssetEnrichmentStoredSettings()["visual_ai"])
 	if value, ok := configBoolFromMap(section, "enabled"); ok {
 		config.Enabled = value
@@ -164,10 +193,10 @@ func (h *Hub) assetVisualAIConfig() assetVisualAIConfig {
 	if value, ok := configStringFromMap(section, "provider"); ok {
 		config.Provider = value
 	}
-	if value, ok := configStringFromMap(section, "endpoint"); ok {
-		config.Endpoint = value
-	}
 	if value, ok := configStringFromMap(section, "api_key"); ok && value != "" {
+		config.APIKey = value
+	}
+	if value := configString(h.loadAssetEnrichmentStoredSettings(), "api_key"); value != "" {
 		config.APIKey = value
 	}
 	if value, ok := configStringFromMap(section, "model"); ok {
@@ -177,7 +206,22 @@ func (h *Hub) assetVisualAIConfig() assetVisualAIConfig {
 		config.FrameCount = normalizeAssetTurntableFrameCountWithDefault(value, defaultAssetTurntableFrameCount)
 	}
 	config.Provider = "agnes"
+	if envEndpoint := strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_AI_ENDPOINT")); envEndpoint != "" {
+		config.Endpoint = normalizeConfigEndpointValue(envEndpoint, "/images/generations")
+	} else {
+		config.Endpoint = normalizeConfigEndpointValue(baseURL, "/images/generations")
+	}
 	return config
+}
+
+func (h *Hub) assetAIBaseURL() string {
+	settings := h.loadAssetEnrichmentStoredSettings()
+	if value := configString(settings, "base_url"); value != "" {
+		if normalized, err := normalizeConfigBaseURL(value); err == nil {
+			return normalized
+		}
+	}
+	return "https://apihub.agnes-ai.com/v1"
 }
 
 func (h *Hub) loadAssetEnrichmentStoredSettings() map[string]any {
@@ -212,7 +256,7 @@ func (h *Hub) saveAssetEnrichmentStoredSettings(settings map[string]any) error {
 	return h.Save(record)
 }
 
-func normalizeConfigEndpoint(raw string) (string, error) {
+func normalizeConfigBaseURL(raw string) (string, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
 		return "", nil
@@ -226,15 +270,43 @@ func normalizeConfigEndpoint(raw string) (string, error) {
 	}
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
+	parsed.Path = strings.TrimRight(parsed.Path, "/")
+	if parsed.Path == "" {
+		parsed.Path = "/v1"
+	}
 	return parsed.String(), nil
 }
 
+func normalizeConfigEndpoint(raw string, suffix string) (string, error) {
+	value, err := normalizeConfigBaseURL(raw)
+	if err != nil {
+		return "", err
+	}
+	return normalizeConfigEndpointValue(value, suffix), nil
+}
+
+func normalizeConfigEndpointValue(raw string, suffix string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return ""
+	}
+	if strings.HasSuffix(value, suffix) {
+		return value
+	}
+	return strings.TrimRight(value, "/") + suffix
+}
+
 func safeEditableEndpoint(raw string) string {
-	endpoint, err := normalizeConfigEndpoint(raw)
+	endpoint, err := normalizeConfigBaseURL(raw)
 	if err != nil {
 		return ""
 	}
 	return endpoint
+}
+
+func configString(input map[string]any, key string) string {
+	value, _ := configStringFromMap(input, key)
+	return value
 }
 
 func anyMap(value any) map[string]any {

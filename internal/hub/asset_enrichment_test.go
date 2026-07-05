@@ -89,8 +89,13 @@ func TestAssetEnrichmentReportIncludesOnlineSupportSource(t *testing.T) {
 func TestAssetEnrichmentOnlineDetailedSpecsFromSupportPage(t *testing.T) {
 	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-phone-specs@example.com")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/product/redmik50/specs.js") {
+			w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+			_, _ = w.Write([]byte(`e._v("天玑8100");e._v("工艺制程：台积电5nm");e._v("CPU架构：Cortex-A78 + Cortex-A55，最高主频可达2.85GHz");e._v("CPU核数：八核处理器");e._v("GPU：Mali-G610 六核");e._v("OLED 柔性直屏");e._v("尺寸：6.67英寸");e._v("分辨率：3200*1440（2K）");e._v("显示帧率：最高 120Hz");e._v("触控采样率：最高 480Hz");e._v("8bit｜DCI-P3｜HDR10/10+视频｜AI显示｜护眼模式｜阳光屏丨杜比视界");e._v("康宁®大猩猩®玻璃Victus™");e._v("后置 4800 万像素三摄");e._v("4800 万像素主摄： IMX582｜1/2英寸感光元件｜6P镜头｜1.6μm 融合像素｜OIS光学防抖");e._v("800万 像素超广角镜头：119° FOV");e._v("200万 像素微距镜头");e._v("5500mAh 大电量 + 67W 闪充");e._v("VC 液冷散热");e._v("立体声双扬声器");e._v("Hi-Res Audio认证｜Hi-Res Wireless认证｜杜比全景声");`))
+			return
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 规格</title><meta name="description" content="Redmi K50 天玑 8100、2K 直屏、5500mAh 电池、67W 快充"></head><body>
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 规格</title><meta name="description" content="Redmi K50 天玑 8100、2K 直屏、5500mAh 电池、67W 快充"><meta property="og:image" content="/redmi-k50-official.png"><script src="/product/redmik50/specs.js"></script></head><body>
 			<h1>Redmi K50</h1>
 			<p>天玑 8100，5nm，Mali-G610，有点狠的 2K 直屏，OLED，3200 x 1440 pixels，120 Hz 屏幕刷新率，1200 nits，Corning Gorilla Glass Victus。</p>
 			<p>5500 mAh Li-Po 电池，67W 充电，30W wireless charging，rear 48 MP camera，front 20 MP camera，4K video recording。</p>
@@ -120,12 +125,21 @@ func TestAssetEnrichmentOnlineDetailedSpecsFromSupportPage(t *testing.T) {
 
 	suggestions := fixture.findSuggestions(t)
 	requireSuggestionValue(t, suggestions, "metadata.cpu_model", "天玑 8100")
+	requireSuggestionValue(t, suggestions, "metadata.official_image_url", server.URL+"/redmi-k50-official.png")
+	requireSuggestionValue(t, suggestions, "metadata.cpu_vendor", "MediaTek")
 	requireSuggestionValue(t, suggestions, "metadata.cpu_process", "5nm")
+	requireSuggestionValue(t, suggestions, "metadata.cpu_architecture", "Cortex-A78 + Cortex-A55")
+	requireSuggestionValue(t, suggestions, "metadata.cpu_cores", "八核处理器")
+	requireSuggestionValue(t, suggestions, "metadata.cpu_frequency", "2.85GHz")
 	requireSuggestionValue(t, suggestions, "metadata.gpu_model", "Mali-G610")
-	requireSuggestionValue(t, suggestions, "metadata.screen_size", "2K 直屏")
+	requireSuggestionValue(t, suggestions, "metadata.gpu_detail", "Mali-G610 六核")
+	requireSuggestionValue(t, suggestions, "metadata.screen_size", "6.67英寸")
 	requireSuggestionValue(t, suggestions, "metadata.display_type", "OLED")
 	requireSuggestionValue(t, suggestions, "metadata.display_resolution", "3200 x 1440 pixels")
 	requireSuggestionValue(t, suggestions, "metadata.screen_refresh_rate", "120 Hz")
+	requireSuggestionValue(t, suggestions, "metadata.touch_sampling_rate", "480 Hz")
+	requireSuggestionValue(t, suggestions, "metadata.display_color_depth", "8bit / DCI-P3")
+	requireSuggestionValue(t, suggestions, "metadata.hdr_support", "HDR10/10+视频 / AI显示 / 护眼模式 / 阳光屏 / 杜比视界")
 	requireSuggestionValue(t, suggestions, "metadata.display_brightness", "1200 nits")
 	requireSuggestionValue(t, suggestions, "metadata.display_protection", "Corning Gorilla Glass Victus")
 	requireSuggestionValue(t, suggestions, "metadata.battery_capacity_mah", "5500 mAh")
@@ -133,6 +147,9 @@ func TestAssetEnrichmentOnlineDetailedSpecsFromSupportPage(t *testing.T) {
 	requireSuggestionValue(t, suggestions, "metadata.charging_power_w", "67W")
 	requireSuggestionValue(t, suggestions, "metadata.wireless_charging", "30W wireless charging")
 	requireSuggestionValue(t, suggestions, "metadata.rear_camera_detail", "rear 48 MP camera")
+	requireSuggestionValue(t, suggestions, "metadata.rear_main_camera", "4800 万像素主摄： IMX582 / 1/2英寸感光元件 / 6P镜头 / 1.6μm 融合像素 / OIS光学防抖")
+	requireSuggestionValue(t, suggestions, "metadata.rear_ultrawide_camera", "800万 像素超广角镜头：119° FOV")
+	requireSuggestionValue(t, suggestions, "metadata.rear_macro_camera", "200万 像素微距镜头")
 	requireSuggestionValue(t, suggestions, "metadata.front_camera_detail", "front 20 MP camera")
 	requireSuggestionValue(t, suggestions, "metadata.video_recording", "4K video recording")
 	requireSuggestionValue(t, suggestions, "metadata.storage_detail", "UFS 3.1")
@@ -145,6 +162,9 @@ func TestAssetEnrichmentOnlineDetailedSpecsFromSupportPage(t *testing.T) {
 	requireSuggestionValue(t, suggestions, "metadata.infrared", "支持红外")
 	requireSuggestionValue(t, suggestions, "metadata.water_resistance", "IP53")
 	requireSuggestionValue(t, suggestions, "metadata.speaker_detail", "stereo speakers")
+	requireSuggestionValue(t, suggestions, "metadata.audio_detail", "Hi-Res Audio认证 / Hi-Res Wireless认证 / 杜比全景声")
+	requireSuggestionValue(t, suggestions, "metadata.image_stabilization", "OIS 光学防抖")
+	requireSuggestionValue(t, suggestions, "metadata.cooling_system", "VC 液冷散热")
 	requireSuggestionValue(t, suggestions, "metadata.sensor_detail", "指纹识别")
 	require.NotNil(t, findSuggestionByField(suggestions, "metadata.online_specs_summary"), "fields: %v", suggestionFields(suggestions))
 }
@@ -320,6 +340,7 @@ func TestAssetEnrichmentConfigUpdateStoresEditableSettingsAndReturnsAdminKeys(t 
 	require.NoError(t, err)
 
 	requestBody, err := json.Marshal(map[string]any{
+		"base_url": "https://proxy.example.test/v1?key=do-not-return",
 		"ai": map[string]any{
 			"enabled":  true,
 			"provider": "agnes",
@@ -359,13 +380,13 @@ func TestAssetEnrichmentConfigUpdateStoresEditableSettingsAndReturnsAdminKeys(t 
 	ai, ok := payload["ai"].(map[string]any)
 	require.True(t, ok, "payload: %v", payload)
 	require.Equal(t, "agnes", ai["provider"])
-	require.Equal(t, "https://llm.example.test/v1/chat/completions", ai["endpoint"])
+	require.Equal(t, "https://proxy.example.test/v1/chat/completions", ai["endpoint"])
 	require.Equal(t, "ai-updated-secret", ai["api_key"])
 	require.Equal(t, true, ai["ready"])
 	visualAI, ok := payload["visual_ai"].(map[string]any)
 	require.True(t, ok, "payload: %v", payload)
 	require.Equal(t, "agnes", visualAI["provider"])
-	require.Equal(t, "https://image.example.test/v1/images/generations", visualAI["endpoint"])
+	require.Equal(t, "https://proxy.example.test/v1/images/generations", visualAI["endpoint"])
 	require.Equal(t, "visual-updated-secret", visualAI["api_key"])
 	require.Equal(t, float64(5), visualAI["frame_count"])
 	require.Equal(t, true, visualAI["ready"])

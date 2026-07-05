@@ -10,6 +10,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -179,10 +180,10 @@ func (h *Hub) collectAssetOnlineAIEnrichment(asset *core.Record, sources []asset
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+config.APIKey)
 
-	client := &http.Client{Timeout: 25 * time.Second}
+	client := &http.Client{Timeout: 75 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		result.Error = "AI 识别请求失败"
+		result.Error = "AI 识别请求失败：" + err.Error()
 		return result, nil
 	}
 	defer resp.Body.Close()
@@ -192,7 +193,7 @@ func (h *Hub) collectAssetOnlineAIEnrichment(asset *core.Record, sources []asset
 		return result, nil
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		result.Error = "AI 识别返回非成功状态：" + strconvItoa(resp.StatusCode)
+		result.Error = "AI 识别返回非成功状态：" + strconvItoa(resp.StatusCode) + formatRemoteErrorBody(rawBody)
 		return result, nil
 	}
 	content := extractAssetOnlineAIContent(rawBody)
@@ -275,14 +276,18 @@ func buildAssetOnlineAIRequestPayload(asset *core.Record, sources []assetOnlineS
 		})
 	}
 	allowedFields := []string{
-		"device_os", "cpu_model", "cpu_process", "gpu_model", "memory_detail", "storage_gb", "storage_detail",
-		"screen_size", "display_type", "display_resolution", "screen_refresh_rate", "display_brightness",
-		"display_protection", "battery_capacity_mah", "battery_type", "charging_power_w", "wireless_charging",
-		"camera_summary", "rear_camera_detail", "front_camera_detail", "video_recording", "mobile_network",
+		"device_os", "cpu_model", "cpu_vendor", "cpu_process", "cpu_architecture", "cpu_cores", "cpu_frequency",
+		"gpu_model", "gpu_detail", "memory_gb", "memory_detail", "memory_type", "storage_gb", "storage_detail",
+		"storage_options", "screen_size", "display_type", "display_resolution", "screen_refresh_rate",
+		"touch_sampling_rate", "display_brightness", "display_color_depth", "hdr_support", "display_protection",
+		"battery_capacity_mah", "battery_type", "charging_power_w", "wireless_charging", "battery_life_note",
+		"camera_summary", "rear_camera_detail", "rear_main_camera", "rear_ultrawide_camera", "rear_macro_camera",
+		"rear_telephoto_camera", "front_camera_detail", "video_recording", "image_stabilization", "mobile_network",
 		"sim_detail", "wifi_standard", "bluetooth_version", "positioning", "usb_detail", "nfc", "infrared",
-		"dimensions", "weight", "water_resistance", "speaker_detail", "sensor_detail", "online_specs_summary",
+		"dimensions", "weight", "body_material", "colors_available", "water_resistance", "speaker_detail",
+		"audio_detail", "biometrics", "sensor_detail", "cooling_system", "official_image_url", "online_specs_summary",
 	}
-	instruction := "你是 Pulse 资产中心的资料补全 Agent。你的任务是基于资产主档线索、本地采集摘要和可追溯资料，补全设备长期档案。若 sources 提供了网页摘录，优先使用 sources；若 sources 为空且你的运行环境具备联网或检索能力，可以按厂商、型号、内部型号搜索官方支持页、规格页、说明书或可信规格库。不要凭常识编造。返回严格 JSON：{\"suggestions\":[{\"field\":\"cpu_model\",\"label\":\"芯片 / SoC\",\"value\":\"...\",\"confidence\":0-100,\"notes\":\"...\",\"source_urls\":[\"...\"]}]}。field 只能从 allowed_fields 选择；value 必须短且可直接写入资产档案；每条建议必须有可追溯 source_urls，没有来源就不要输出。"
+	instruction := "你是 Pulse 资产中心的资料补全 Agent。目标是为家庭资产管理补全长期可信的设备主档。必须按可信来源优先级工作：1 厂商官网产品页、支持页、规格页、说明书、驱动页、官方图片或官方 CDN 图片；2 权威渠道或运营商资料；3 GSMArena、DeviceSpecifications、Kimovil 等规格库只做交叉验证；4 普通博客、电商、论坛只能作为低置信度线索，若已有官网来源则不要采用。若 sources 提供网页摘录，优先使用 sources；若 sources 为空且你的运行环境具备联网或检索能力，可以按厂商、型号、内部型号搜索上述可信来源。不要凭常识编造，不要把同系列其他变体写入当前设备。手机、平板等固定规格设备要尽量拆细处理器、GPU、内存、存储、屏幕、相机、电池、外观、网络、音频、传感器和官方图片。返回严格 JSON：{\"suggestions\":[{\"field\":\"cpu_model\",\"label\":\"芯片 / SoC\",\"value\":\"...\",\"confidence\":0-100,\"notes\":\"...\",\"source_urls\":[\"...\"]}]}。field 只能从 allowed_fields 选择；value 必须短且可直接写入资产档案；每条建议必须有可追溯 source_urls，没有来源就不要输出。"
 	return map[string]any{
 		"model":       model,
 		"temperature": 0.1,
@@ -299,7 +304,12 @@ func buildAssetOnlineAIRequestPayload(asset *core.Record, sources []assetOnlineS
 					"support_url":    recordMetadataString(asset, "support_url"),
 				},
 				"allowed_fields": allowedFields,
-				"sources":        excerpts,
+				"source_policy": map[string]any{
+					"trust_order":       []string{"manufacturer_official", "carrier_or_authoritative_channel", "trusted_spec_database_cross_check", "low_confidence_web_only_if_no_official_source"},
+					"preferred_sources": []string{"official product page", "official support page", "official specs page", "official manual", "official driver or firmware page", "official image or CDN image"},
+					"reject":            []string{"untraceable content", "same-series but different variant", "blog or ecommerce claims when official source exists"},
+				},
+				"sources": excerpts,
 			})},
 		},
 		"response_format": map[string]string{"type": "json_object"},
@@ -352,6 +362,9 @@ func parseAssetOnlineAISuggestions(asset *core.Record, content string, sources [
 	if err := json.Unmarshal([]byte(strings.TrimSpace(content)), &parsed); err != nil {
 		return nil
 	}
+	if assetAISuggestionsVariantConflict(asset, parsed.Suggestions) {
+		return nil
+	}
 	result := make([]assetEnrichmentSuggestionInput, 0, len(parsed.Suggestions))
 	for _, item := range parsed.Suggestions {
 		field := strings.TrimSpace(item.Field)
@@ -380,6 +393,47 @@ func parseAssetOnlineAISuggestions(asset *core.Record, content string, sources [
 		result = append(result, buildOnlineRecordSuggestion(asset, "metadata."+field, label, metadataValueString(asset, field), value, firstNonEmpty(item.Notes, "AI 结构化提取的联网资料建议，需人工确认后写入。"), matchedSources, confidence))
 	}
 	return result
+}
+
+func assetAISuggestionsVariantConflict(asset *core.Record, suggestions []struct {
+	Field      string   `json:"field"`
+	Label      string   `json:"label"`
+	Value      string   `json:"value"`
+	Confidence int      `json:"confidence"`
+	Notes      string   `json:"notes"`
+	SourceURLs []string `json:"source_urls"`
+}) bool {
+	currentCPU := strings.ToLower(recordMetadataString(asset, "cpu_model"))
+	if currentCPU == "" {
+		return false
+	}
+	currentFamily := chipsetFamily(currentCPU)
+	if currentFamily == "" {
+		return false
+	}
+	for _, item := range suggestions {
+		if strings.TrimSpace(item.Field) != "cpu_model" {
+			continue
+		}
+		suggestedFamily := chipsetFamily(strings.ToLower(item.Value))
+		if suggestedFamily != "" && suggestedFamily != currentFamily {
+			return true
+		}
+	}
+	return false
+}
+
+func chipsetFamily(value string) string {
+	switch {
+	case strings.Contains(value, "dimensity") || strings.Contains(value, "天玑") || strings.Contains(value, "mediatek"):
+		return "mediatek-dimensity"
+	case strings.Contains(value, "snapdragon") || strings.Contains(value, "骁龙") || strings.Contains(value, "qualcomm"):
+		return "qualcomm-snapdragon"
+	case strings.Contains(value, "apple a") || strings.Contains(value, "apple m"):
+		return "apple-silicon"
+	default:
+		return ""
+	}
 }
 
 func assetOnlineSourcesFromAIURLs(urls []string) []assetOnlineSource {
@@ -459,6 +513,13 @@ func (h *Hub) fetchAssetSupportURLSource(rawURL string) (assetOnlineSource, erro
 	if title == "" {
 		title = parsed.Host
 	}
+	pageText := extractAssetOnlinePageText(body)
+	if scriptText := h.extractAssetProductScriptText(parsed, body); scriptText != "" {
+		pageText = cleanOnlineText(pageText + " " + scriptText)
+		if len([]rune(pageText)) > 18000 {
+			pageText = string([]rune(pageText)[:18000])
+		}
+	}
 	return assetOnlineSource{
 		Provider:   "support_url",
 		Type:       "official_support",
@@ -467,8 +528,71 @@ func (h *Hub) fetchAssetSupportURLSource(rawURL string) (assetOnlineSource, erro
 		ImageURL:   absolutizeAssetOnlineURL(parsed, extractMetaImageURL(body)),
 		Snippet:    firstNonEmpty(extractMetaDescription(body), "来自资产主档中手动填写的厂家官方支持页。"),
 		Confidence: 95,
-		Text:       extractAssetOnlinePageText(body),
+		Text:       pageText,
 	}, nil
+}
+
+func (h *Hub) extractAssetProductScriptText(base *url.URL, body string) string {
+	scriptURLs := extractAssetProductScriptURLs(base, body)
+	parts := make([]string, 0, len(scriptURLs))
+	for _, scriptURL := range scriptURLs {
+		js, err := h.fetchAssetOnlineURL(scriptURL, 1024*1024)
+		if err != nil {
+			continue
+		}
+		if text := extractAssetVueCompiledText(js); text != "" {
+			parts = append(parts, text)
+		}
+		if len(parts) >= 2 {
+			break
+		}
+	}
+	return cleanOnlineText(strings.Join(parts, " "))
+}
+
+func extractAssetProductScriptURLs(base *url.URL, body string) []string {
+	pattern := regexp.MustCompile(`(?is)<script[^>]+src=["']([^"']+)["'][^>]*>`)
+	matches := pattern.FindAllStringSubmatch(body, -1)
+	result := make([]string, 0, len(matches))
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		raw := strings.TrimSpace(html.UnescapeString(match[1]))
+		lower := strings.ToLower(raw)
+		if !strings.Contains(lower, "/product/") && !strings.Contains(lower, "/spec") {
+			continue
+		}
+		absolute := absolutizeAssetOnlineURL(base, raw)
+		if absolute != "" {
+			result = append(result, absolute)
+		}
+	}
+	return dedupeStrings(result)
+}
+
+func extractAssetVueCompiledText(js string) string {
+	pattern := regexp.MustCompile(`e\._v\("((?:\\.|[^"\\])*)"\)`)
+	matches := pattern.FindAllStringSubmatch(js, -1)
+	parts := make([]string, 0, len(matches))
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		value, err := strconv.Unquote(`"` + match[1] + `"`)
+		if err != nil {
+			value = match[1]
+		}
+		value = cleanOnlineText(value)
+		if value != "" {
+			parts = append(parts, value)
+		}
+	}
+	text := strings.Join(parts, "。 ")
+	if len([]rune(text)) > 14000 {
+		text = string([]rune(text)[:14000])
+	}
+	return cleanOnlineText(text)
 }
 
 func (h *Hub) fetchAssetOnlineURL(rawURL string, maxBytes int64) (string, error) {
@@ -517,6 +641,14 @@ func (h *Hub) enrichAssetOnlineSources(sources []assetOnlineSource) []assetOnlin
 			}
 		}
 		sources[index].Text = extractAssetOnlinePageText(body)
+		if parsed, err := url.Parse(sources[index].URL); err == nil {
+			if scriptText := h.extractAssetProductScriptText(parsed, body); scriptText != "" {
+				sources[index].Text = cleanOnlineText(sources[index].Text + " " + scriptText)
+				if len([]rune(sources[index].Text)) > 18000 {
+					sources[index].Text = string([]rune(sources[index].Text)[:18000])
+				}
+			}
+		}
 		if title := extractHTMLTitle(body); title != "" {
 			sources[index].Title = title
 		}
@@ -548,6 +680,9 @@ func buildAssetOnlineSuggestions(asset *core.Record, sources []assetOnlineSource
 	}
 	if supportURL := chooseAssetSupportURL(sources); supportURL != "" {
 		suggestions = append(suggestions, buildOnlineRecordSuggestion(asset, "metadata.support_url", "厂家官方支持页", recordMetadataString(asset, "support_url"), supportURL, "优先选择官网、支持、规格或说明书页面；写入前请确认页面确实对应这台资产。", sources, 82))
+	}
+	if imageURL := chooseAssetOfficialImageURL(sources); imageURL != "" {
+		suggestions = append(suggestions, buildOnlineRecordSuggestion(asset, "metadata.official_image_url", "官方图片", recordMetadataString(asset, "official_image_url"), imageURL, "优先选择官网或官方 CDN 暴露的设备图片，后续设备全貌图生成会优先使用该图片作为参考。", sources, 82))
 	}
 	for _, item := range specs.Items {
 		suggestions = append(suggestions, buildOnlineRecordSuggestion(asset, "metadata."+item.Field, item.Label, metadataValueString(asset, item.Field), item.Value, item.Notes, item.Sources, item.Confidence))
@@ -621,31 +756,67 @@ func extractAssetOnlineSpecs(asset *core.Record, sources []assetOnlineSource) as
 	if value := firstRegexCapture(combined, `(天玑\s*\d{3,5}|骁龙\s*\d(?:\s*\w+)?|麒麟\s*\d{3,5})`); value != "" {
 		add("cpu_model", "芯片 / SoC", value, 72, "联网资料提取到的 SoC 线索。")
 	}
-	if value := firstRegexCapture(combined, `(?i)\b(\d+\s*nm)\b`); value != "" {
+	if value := inferCPUVendorFromSpecs(combined); value != "" {
+		add("cpu_vendor", "芯片厂商", value, 58, "联网资料提取到的芯片厂商线索。")
+	}
+	if value := firstRegexCapture(combined, `(?:工艺制程[:：]?\s*)?((?:台积电|TSMC)?\s*\d+\s*nm)`); value != "" {
 		add("cpu_process", "制程 / 架构", value, 58, "联网资料提取到的芯片制程线索。")
+	}
+	if value := firstRegexCapture(combined, `CPU架构[:：]?\s*([^。；,，]{0,80}(?:Cortex|A78|A55|X\d)[^。；,，]{0,80})`); value != "" {
+		add("cpu_architecture", "CPU 架构", value, 58, "联网资料提取到的 CPU 架构线索。")
+	}
+	if value := firstRegexCapture(combined, `(八核处理器|六核处理器|四核处理器|十核处理器|\d+\s*核处理器|\d+\s*cores?)`); value != "" {
+		add("cpu_cores", "CPU 核心", value, 56, "联网资料提取到的 CPU 核心数线索。")
+	}
+	if value := firstRegexCapture(combined, `(?i)(?:最高主频可达|最高频率|up to)\s*([\d.]+\s*GHz)`); value != "" {
+		add("cpu_frequency", "CPU 频率", value, 56, "联网资料提取到的 CPU 频率线索。")
 	}
 	if value := firstRegexCapture(combined, `(?i)\b(Mali[- ]?[A-Za-z0-9]+|Adreno\s*\d{3,4}|Apple\s*GPU|Immortalis[- ]?[A-Za-z0-9]+)\b`); value != "" {
 		add("gpu_model", "GPU", value, 58, "联网资料提取到的 GPU 线索。")
 	}
+	if value := firstRegexCapture(combined, `(?i)\b((?:Mali[- ]?[A-Za-z0-9]+|Adreno\s*\d{3,4})[^。；,，]{0,24}(?:六核|四核|core|cores))`); value != "" {
+		add("gpu_detail", "GPU 详情", value, 56, "联网资料提取到的 GPU 详情线索。")
+	}
 	if value := firstRegexCapture(combined, `(?i)\b(\d+(?:\.\d+)?\s*(?:inch|英寸)[^。；,，]{0,32}(?:OLED|AMOLED|LCD|屏|display|screen)?)`); value != "" {
 		add("screen_size", "屏幕 / 尺寸", value, 68, "联网资料提取到的屏幕规格。")
+	}
+	if value := firstRegexCapture(combined, `尺寸[:：]?\s*(\d+(?:\.\d+)?\s*英寸)`); value != "" {
+		add("screen_size", "屏幕 / 尺寸", value, 68, "联网资料提取到的屏幕尺寸。")
 	}
 	if value := firstRegexCapture(combined, `(2K[^。；,，]{0,24}(?:直屏|屏幕|屏))`); value != "" {
 		add("screen_size", "屏幕 / 尺寸", value, 68, "联网资料提取到的屏幕规格。")
 	}
-	if value := firstRegexCapture(combined, `(?i)\b(OLED|AMOLED|LTPO|LCD|IPS|E[- ]?Ink|Mini[- ]?LED)\b`); value != "" {
+	if value := extractDisplayTypeSpec(combined, asset.GetString("type")); value != "" {
 		add("display_type", "屏幕类型", value, 58, "联网资料提取到的屏幕面板类型。")
 	}
 	if value := firstRegexCapture(combined, `(?i)\b(\d{3,4}\s*x\s*\d{3,4}\s*(?:pixels|px|像素)?)\b`); value != "" {
 		add("display_resolution", "屏幕分辨率", value, 62, "联网资料提取到的屏幕分辨率线索。")
 	}
+	if value := firstRegexCapture(combined, `分辨率[:：]?\s*(\d{3,4}\s*[*xX]\s*\d{3,4}(?:（2K）|\(2K\)|\s*2K)?)`); value != "" {
+		add("display_resolution", "屏幕分辨率", value, 62, "联网资料提取到的屏幕分辨率线索。")
+	}
 	if value := firstRegexCapture(combined, `(?i)\b(\d{2,3}\s*Hz)\s*(?:刷新率|refresh|screen|display|屏)`); value != "" {
 		add("screen_refresh_rate", "屏幕刷新率", value, 62, "联网资料提取到的刷新率线索。")
+	}
+	if value := firstRegexCapture(combined, `(?:显示帧率|刷新率)[:：]?\s*(?:最高\s*)?(\d{2,3}\s*Hz)`); value != "" {
+		add("screen_refresh_rate", "屏幕刷新率", value, 62, "联网资料提取到的刷新率线索。")
+	}
+	if value := firstRegexCapture(combined, `触控采样率[:：]?\s*(?:最高\s*)?(\d{2,4}\s*Hz)`); value != "" {
+		add("touch_sampling_rate", "触控采样率", value, 58, "联网资料提取到的触控采样率线索。")
 	}
 	if value := firstRegexCapture(combined, `(?i)\b(\d{3,4}\s*nits?)\b`); value != "" {
 		add("display_brightness", "屏幕亮度", value, 56, "联网资料提取到的屏幕亮度线索。")
 	}
+	if value := firstRegexCapture(combined, `(?i)\b((?:8|10|12)\s*bit[^。；,，]{0,40}(?:DCI-P3|P3|色彩)|DCI-P3[^。；,，]{0,32})`); value != "" {
+		add("display_color_depth", "色深 / 色彩", value, 54, "联网资料提取到的显示色彩线索。")
+	}
+	if value := firstRegexCapture(combined, `(?i)\b(HDR10(?:/10\+)?[^。；,，]{0,40}|Dolby Vision|杜比视界)`); value != "" {
+		add("hdr_support", "HDR", value, 54, "联网资料提取到的 HDR 线索。")
+	}
 	if value := firstRegexCapture(combined, `(?i)\b(Corning\s+Gorilla\s+Glass[^。；,，]{0,32}|Gorilla\s+Glass[^。；,，]{0,32})`); value != "" {
+		add("display_protection", "屏幕保护", value, 54, "联网资料提取到的屏幕保护玻璃线索。")
+	}
+	if value := firstRegexCapture(combined, `(康宁[^。；,，]{0,32}玻璃[^。；,，]{0,32}|Victus[^。；,，]{0,24})`); value != "" {
 		add("display_protection", "屏幕保护", value, 54, "联网资料提取到的屏幕保护玻璃线索。")
 	}
 	if value := firstRegexCapture(combined, `(?i)\b(\d{3,5}\s*mAh)\b`); value != "" {
@@ -666,6 +837,15 @@ func extractAssetOnlineSpecs(asset *core.Record, sources []assetOnlineSource) as
 	if value := firstRegexCapture(combined, `(?i)\b((?:rear|后置)[^。；,，]{0,80}(?:camera|摄像|相机|MP|万像素))`); value != "" {
 		add("rear_camera_detail", "后置影像", value, 58, "联网资料提取到的后置影像线索。")
 	}
+	if value := firstRegexCapture(combined, `(4800\s*万像素主摄[^。；]{0,120}|主摄[:：]\s*[^。；]{0,120})`); value != "" {
+		add("rear_main_camera", "主摄", value, 58, "联网资料提取到的主摄规格线索。")
+	}
+	if value := firstRegexCapture(combined, `(800\s*万\s*像素超广角镜头[^。；]{0,80}|超广角镜头[:：]?\s*[^。；]{0,80})`); value != "" {
+		add("rear_ultrawide_camera", "超广角", value, 56, "联网资料提取到的超广角规格线索。")
+	}
+	if value := firstRegexCapture(combined, `(200\s*万\s*像素微距镜头[^。；]{0,80}|微距镜头[:：]?\s*[^。；]{0,80})`); value != "" {
+		add("rear_macro_camera", "微距", value, 54, "联网资料提取到的微距规格线索。")
+	}
 	if value := firstRegexCapture(combined, `(?i)\b((?:front|前置)[^。；,，]{0,80}(?:camera|摄像|相机|MP|万像素))`); value != "" {
 		add("front_camera_detail", "前置影像", value, 58, "联网资料提取到的前置影像线索。")
 	}
@@ -680,6 +860,9 @@ func extractAssetOnlineSpecs(asset *core.Record, sources []assetOnlineSource) as
 	}
 	if value := firstRegexCapture(combined, `(?i)\b(UFS\s*\d(?:\.\d)?|NVMe|eMMC\s*\d(?:\.\d)?)\b`); value != "" {
 		add("storage_detail", "存储规格", value, 56, "联网资料提取到的存储规格线索。")
+	}
+	if value := firstRegexCapture(combined, `(?i)\b(LPDDR\dX?|LPDDR\d)\b`); value != "" {
+		add("memory_type", "内存类型", value, 54, "联网资料提取到的内存类型线索。")
 	}
 	if value := firstRegexCapture(combined, `\b(\d{2,4}(?:\.\d+)?(?:\s+g|克))\b`); value != "" {
 		add("weight", "重量", value, 56, "联网资料提取到的重量线索。")
@@ -710,6 +893,15 @@ func extractAssetOnlineSpecs(asset *core.Record, sources []assetOnlineSource) as
 	}
 	if value := firstRegexCapture(combined, `(立体声双扬声器|双扬声器|stereo speakers?|Hi-Res[^。；,，]{0,24})`); value != "" {
 		add("speaker_detail", "扬声器 / 音频", value, 50, "联网资料提取到的音频规格线索。")
+	}
+	if value := firstRegexCapture(combined, `(Hi-Res[^。；]{0,80}|杜比全景声|Dolby Atmos[^。；,，]{0,32})`); value != "" {
+		add("audio_detail", "音频详情", value, 50, "联网资料提取到的音频认证或音效线索。")
+	}
+	if strings.Contains(combined, "OIS光学防抖") || strings.Contains(strings.ToLower(combined), "ois") {
+		add("image_stabilization", "防抖 / 对焦", "OIS 光学防抖", 52, "联网资料提取到的影像防抖线索。")
+	}
+	if value := firstRegexCapture(combined, `(VC\s*液冷散热|液冷散热[^。；,，]{0,24}|均热板[^。；,，]{0,24})`); value != "" {
+		add("cooling_system", "散热", value, 50, "联网资料提取到的散热结构线索。")
 	}
 	if value := firstRegexCapture(combined, `(指纹识别|屏下指纹|侧边指纹|陀螺仪|距离传感器|环境光传感器|加速度传感器)[^。；,，]{0,48}`); value != "" {
 		add("sensor_detail", "传感器", value, 50, "联网资料提取到的传感器线索。")
@@ -836,6 +1028,20 @@ func chooseAssetSupportURL(sources []assetOnlineSource) string {
 	return ""
 }
 
+func chooseAssetOfficialImageURL(sources []assetOnlineSource) string {
+	for _, source := range sources {
+		if source.ImageURL != "" && (source.Type == "official_support" || source.Type == "official_product") && isLikelyImageURL(source.ImageURL) {
+			return source.ImageURL
+		}
+	}
+	for _, source := range sources {
+		if source.ImageURL != "" && isLikelyImageURL(source.ImageURL) {
+			return source.ImageURL
+		}
+	}
+	return ""
+}
+
 func buildAssetOnlineMatchNote(sources []assetOnlineSource, query string) string {
 	if len(sources) == 0 {
 		return ""
@@ -944,24 +1150,39 @@ func classifyAssetOnlineURL(rawURL string) string {
 func sourceTypeBonus(sourceType string) int {
 	switch sourceType {
 	case "official_support":
-		return 12
+		return 22
 	case "official_product":
-		return 8
+		return 18
 	case "spec_database":
-		return 7
+		return 3
 	case "structured_profile":
 		return 5
 	default:
-		return 0
+		return -4
 	}
 }
 
 func vendorDomainBonus(vendor string, rawURL string) int {
-	text := strings.ToLower(vendor + " " + rawURL)
-	if strings.Contains(text, "xiaomi") || strings.Contains(text, "redmi") || strings.Contains(text, "mi.com") || strings.Contains(text, "小米") {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed.Host == "" {
+		return 0
+	}
+	vendorText := strings.ToLower(vendor)
+	host := strings.ToLower(parsed.Host)
+	if (strings.Contains(vendorText, "xiaomi") || strings.Contains(vendorText, "redmi") || strings.Contains(vendorText, "小米")) &&
+		(strings.Contains(host, "mi.com") || strings.Contains(host, "xiaomi.com") || strings.Contains(host, "redmi.com")) {
 		return 8
 	}
-	if strings.Contains(text, "apple.com") || strings.Contains(text, "samsung.com") || strings.Contains(text, "lenovo.com") || strings.Contains(text, "asus.com") || strings.Contains(text, "tp-link.com") || strings.Contains(text, "synology.com") {
+	officialHosts := []string{"apple.com", "samsung.com", "lenovo.com", "asus.com", "tp-link.com", "synology.com"}
+	for _, officialHost := range officialHosts {
+		if strings.Contains(host, officialHost) {
+			return 8
+		}
+	}
+	if strings.Contains(vendorText, "qnap") && strings.Contains(host, "qnap.com") {
+		return 8
+	}
+	if strings.Contains(vendorText, "unraid") && strings.Contains(host, "unraid.net") {
 		return 8
 	}
 	return 0
@@ -1087,9 +1308,28 @@ func cleanOnlineText(value string) string {
 
 func cleanOnlineSpecValue(value string) string {
 	value = cleanOnlineText(value)
+	value = strings.ReplaceAll(value, "｜", " / ")
+	value = strings.ReplaceAll(value, "丨", " / ")
+	value = regexp.MustCompile(`(?i)(台积电|TSMC)\s*(\d+\s*nm)`).ReplaceAllString(value, "$1 $2")
 	value = regexp.MustCompile(`(?i)\b(\d{3,5})\s*mAh\b`).ReplaceAllString(value, "$1 mAh")
 	value = regexp.MustCompile(`(?i)\b(\d{2,3})\s*Hz\b`).ReplaceAllString(value, "$1 Hz")
 	return value
+}
+
+func inferCPUVendorFromSpecs(value string) string {
+	lower := strings.ToLower(value)
+	switch {
+	case strings.Contains(lower, "mediatek") || strings.Contains(value, "天玑"):
+		return "MediaTek"
+	case strings.Contains(lower, "qualcomm") || strings.Contains(lower, "snapdragon") || strings.Contains(value, "骁龙"):
+		return "Qualcomm"
+	case strings.Contains(lower, "apple a") || strings.Contains(lower, "apple m"):
+		return "Apple"
+	case strings.Contains(lower, "exynos"):
+		return "Samsung"
+	default:
+		return ""
+	}
 }
 
 func normalizeOnlineModelCandidate(value string) string {
@@ -1176,6 +1416,20 @@ func extractMobileNetworkSpec(value string) string {
 		return ""
 	}
 	return strings.Join(dedupeStrings(parts), " / ")
+}
+
+func extractDisplayTypeSpec(value string, assetType string) string {
+	candidates := []string{"AMOLED", "OLED", "LTPO", "LCD", "IPS", "E-Ink", "E Ink"}
+	if assetType != "phone" && assetType != "tablet" && assetType != "wearable" && assetType != "handheld" {
+		candidates = append(candidates, "Mini-LED", "Mini LED")
+	}
+	lower := strings.ToLower(value)
+	for _, candidate := range candidates {
+		if strings.Contains(lower, strings.ToLower(candidate)) {
+			return candidate
+		}
+	}
+	return ""
 }
 
 func dedupeStrings(values []string) []string {
