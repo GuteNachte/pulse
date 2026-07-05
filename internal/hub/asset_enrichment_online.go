@@ -275,9 +275,12 @@ func buildAssetOnlineAIRequestPayload(asset *core.Record, sources []assetOnlineS
 		})
 	}
 	allowedFields := []string{
-		"device_os", "cpu_model", "memory_detail", "storage_gb", "screen_size", "display_resolution", "screen_refresh_rate",
-		"battery_capacity_mah", "charging_power_w", "camera_summary", "mobile_network", "sim_detail", "wifi_standard",
-		"bluetooth_version", "usb_detail", "nfc", "infrared", "dimensions", "weight", "online_specs_summary",
+		"device_os", "cpu_model", "cpu_process", "gpu_model", "memory_detail", "storage_gb", "storage_detail",
+		"screen_size", "display_type", "display_resolution", "screen_refresh_rate", "display_brightness",
+		"display_protection", "battery_capacity_mah", "battery_type", "charging_power_w", "wireless_charging",
+		"camera_summary", "rear_camera_detail", "front_camera_detail", "video_recording", "mobile_network",
+		"sim_detail", "wifi_standard", "bluetooth_version", "positioning", "usb_detail", "nfc", "infrared",
+		"dimensions", "weight", "water_resistance", "speaker_detail", "sensor_detail", "online_specs_summary",
 	}
 	instruction := "你是 Pulse 资产中心的资料补全 Agent。你的任务是基于资产主档线索、本地采集摘要和可追溯资料，补全设备长期档案。若 sources 提供了网页摘录，优先使用 sources；若 sources 为空且你的运行环境具备联网或检索能力，可以按厂商、型号、内部型号搜索官方支持页、规格页、说明书或可信规格库。不要凭常识编造。返回严格 JSON：{\"suggestions\":[{\"field\":\"cpu_model\",\"label\":\"芯片 / SoC\",\"value\":\"...\",\"confidence\":0-100,\"notes\":\"...\",\"source_urls\":[\"...\"]}]}。field 只能从 allowed_fields 选择；value 必须短且可直接写入资产档案；每条建议必须有可追溯 source_urls，没有来源就不要输出。"
 	return map[string]any{
@@ -618,11 +621,20 @@ func extractAssetOnlineSpecs(asset *core.Record, sources []assetOnlineSource) as
 	if value := firstRegexCapture(combined, `(天玑\s*\d{3,5}|骁龙\s*\d(?:\s*\w+)?|麒麟\s*\d{3,5})`); value != "" {
 		add("cpu_model", "芯片 / SoC", value, 72, "联网资料提取到的 SoC 线索。")
 	}
+	if value := firstRegexCapture(combined, `(?i)\b(\d+\s*nm)\b`); value != "" {
+		add("cpu_process", "制程 / 架构", value, 58, "联网资料提取到的芯片制程线索。")
+	}
+	if value := firstRegexCapture(combined, `(?i)\b(Mali[- ]?[A-Za-z0-9]+|Adreno\s*\d{3,4}|Apple\s*GPU|Immortalis[- ]?[A-Za-z0-9]+)\b`); value != "" {
+		add("gpu_model", "GPU", value, 58, "联网资料提取到的 GPU 线索。")
+	}
 	if value := firstRegexCapture(combined, `(?i)\b(\d+(?:\.\d+)?\s*(?:inch|英寸)[^。；,，]{0,32}(?:OLED|AMOLED|LCD|屏|display|screen)?)`); value != "" {
 		add("screen_size", "屏幕 / 尺寸", value, 68, "联网资料提取到的屏幕规格。")
 	}
 	if value := firstRegexCapture(combined, `(2K[^。；,，]{0,24}(?:直屏|屏幕|屏))`); value != "" {
 		add("screen_size", "屏幕 / 尺寸", value, 68, "联网资料提取到的屏幕规格。")
+	}
+	if value := firstRegexCapture(combined, `(?i)\b(OLED|AMOLED|LTPO|LCD|IPS|E[- ]?Ink|Mini[- ]?LED)\b`); value != "" {
+		add("display_type", "屏幕类型", value, 58, "联网资料提取到的屏幕面板类型。")
 	}
 	if value := firstRegexCapture(combined, `(?i)\b(\d{3,4}\s*x\s*\d{3,4}\s*(?:pixels|px|像素)?)\b`); value != "" {
 		add("display_resolution", "屏幕分辨率", value, 62, "联网资料提取到的屏幕分辨率线索。")
@@ -630,20 +642,44 @@ func extractAssetOnlineSpecs(asset *core.Record, sources []assetOnlineSource) as
 	if value := firstRegexCapture(combined, `(?i)\b(\d{2,3}\s*Hz)\s*(?:刷新率|refresh|screen|display|屏)`); value != "" {
 		add("screen_refresh_rate", "屏幕刷新率", value, 62, "联网资料提取到的刷新率线索。")
 	}
+	if value := firstRegexCapture(combined, `(?i)\b(\d{3,4}\s*nits?)\b`); value != "" {
+		add("display_brightness", "屏幕亮度", value, 56, "联网资料提取到的屏幕亮度线索。")
+	}
+	if value := firstRegexCapture(combined, `(?i)\b(Corning\s+Gorilla\s+Glass[^。；,，]{0,32}|Gorilla\s+Glass[^。；,，]{0,32})`); value != "" {
+		add("display_protection", "屏幕保护", value, 54, "联网资料提取到的屏幕保护玻璃线索。")
+	}
 	if value := firstRegexCapture(combined, `(?i)\b(\d{3,5}\s*mAh)\b`); value != "" {
 		add("battery_capacity_mah", "电池容量", value, 70, "联网资料提取到的电池容量。")
+	}
+	if value := firstRegexCapture(combined, `(锂离子电池|锂聚合物电池|双电芯|single-cell|dual-cell|Li-Po|Li-Ion)`); value != "" {
+		add("battery_type", "电池类型", value, 54, "联网资料提取到的电池类型线索。")
 	}
 	if value := firstRegexCapture(combined, `(?i)\b(\d{2,3}\s*W)\s*(?:快充|charging|charge|充电)`); value != "" {
 		add("charging_power_w", "充电功率", value, 67, "联网资料提取到的充电规格。")
 	}
+	if value := firstRegexCapture(combined, `(?i)\b(\d{1,3}\s*W\s*(?:wireless charging|无线充电)|wireless charging|无线充电)\b`); value != "" {
+		add("wireless_charging", "无线充电", value, 52, "联网资料提取到的无线充电线索。")
+	}
 	if value := firstRegexCapture(combined, `(?i)\b((?:\d{1,3}\s*MP|[一二三四五六七八九十百千万0-9]+\s*万像素)[^。；]{0,40}(?:camera|摄像|相机|主摄))`); value != "" {
 		add("camera_summary", "摄像头摘要", value, 62, "联网资料提取到的摄像头线索。")
+	}
+	if value := firstRegexCapture(combined, `(?i)\b((?:rear|后置)[^。；,，]{0,80}(?:camera|摄像|相机|MP|万像素))`); value != "" {
+		add("rear_camera_detail", "后置影像", value, 58, "联网资料提取到的后置影像线索。")
+	}
+	if value := firstRegexCapture(combined, `(?i)\b((?:front|前置)[^。；,，]{0,80}(?:camera|摄像|相机|MP|万像素))`); value != "" {
+		add("front_camera_detail", "前置影像", value, 58, "联网资料提取到的前置影像线索。")
+	}
+	if value := firstRegexCapture(combined, `(?i)\b(4K[^。；,，]{0,32}(?:video|视频|recording)|1080p[^。；,，]{0,32}(?:video|视频|recording))`); value != "" {
+		add("video_recording", "视频规格", value, 52, "联网资料提取到的视频规格线索。")
 	}
 	if value := firstRegexCapture(combined, `(?i)\b(\d+\s*GB\s*(?:RAM|内存))\b`); value != "" {
 		add("memory_detail", "内存规格", value, 60, "联网资料提取到的内存容量线索。")
 	}
 	if value := firstRegexCapture(combined, `(?i)\b(\d+\s*GB\s*(?:ROM|storage|存储))\b`); value != "" {
 		add("storage_gb", "存储 GB", value, 58, "联网资料提取到的存储容量线索。")
+	}
+	if value := firstRegexCapture(combined, `(?i)\b(UFS\s*\d(?:\.\d)?|NVMe|eMMC\s*\d(?:\.\d)?)\b`); value != "" {
+		add("storage_detail", "存储规格", value, 56, "联网资料提取到的存储规格线索。")
 	}
 	if value := firstRegexCapture(combined, `\b(\d{2,4}(?:\.\d+)?(?:\s+g|克))\b`); value != "" {
 		add("weight", "重量", value, 56, "联网资料提取到的重量线索。")
@@ -657,6 +693,9 @@ func extractAssetOnlineSpecs(asset *core.Record, sources []assetOnlineSource) as
 	if value := firstRegexCapture(combined, `\b((?:Nano-)?SIM(?:\s*卡| card| slot| tray| 双卡| 单卡)?[^。；,，]{0,48}|双卡[^。；,，]{0,24}|SIM卡[^。；,，]{0,24})`); value != "" {
 		add("sim_detail", "SIM / 卡槽", value, 54, "联网资料提取到的 SIM 或卡槽线索。")
 	}
+	if value := firstRegexCapture(combined, `(?i)\b(GPS(?:\s+(?:GLONASS|Galileo|BeiDou|北斗))*)\b`); value != "" {
+		add("positioning", "定位系统", value, 52, "联网资料提取到的定位系统线索。")
+	}
 	if value := firstRegexCapture(combined, `(?i)\b(USB[- ]?C[^。；,，]{0,32}|USB\s*Type[- ]?C[^。；,，]{0,32})`); value != "" {
 		add("usb_detail", "USB / 接口", value, 54, "联网资料提取到的接口线索。")
 	}
@@ -665,6 +704,15 @@ func extractAssetOnlineSpecs(asset *core.Record, sources []assetOnlineSource) as
 	}
 	if strings.Contains(combined, "红外") || strings.Contains(strings.ToLower(combined), "infrared") {
 		add("infrared", "红外", "支持红外", 54, "联网资料提取到的红外线索。")
+	}
+	if value := firstRegexCapture(combined, `(?i)\b(IP\d{2})\b`); value != "" {
+		add("water_resistance", "防尘防水", value, 52, "联网资料提取到的防尘防水等级线索。")
+	}
+	if value := firstRegexCapture(combined, `(立体声双扬声器|双扬声器|stereo speakers?|Hi-Res[^。；,，]{0,24})`); value != "" {
+		add("speaker_detail", "扬声器 / 音频", value, 50, "联网资料提取到的音频规格线索。")
+	}
+	if value := firstRegexCapture(combined, `(指纹识别|屏下指纹|侧边指纹|陀螺仪|距离传感器|环境光传感器|加速度传感器)[^。；,，]{0,48}`); value != "" {
+		add("sensor_detail", "传感器", value, 50, "联网资料提取到的传感器线索。")
 	}
 
 	specs.Summary = buildOnlineSpecsSummary(specs.Items)

@@ -92,9 +92,10 @@ func TestAssetEnrichmentOnlineDetailedSpecsFromSupportPage(t *testing.T) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 规格</title><meta name="description" content="Redmi K50 天玑 8100、2K 直屏、5500mAh 电池、67W 快充"></head><body>
 			<h1>Redmi K50</h1>
-			<p>天玑 8100，有点狠的 2K 直屏，3200 x 1440 pixels，120 Hz 屏幕刷新率。</p>
-			<p>5500 mAh 电池，67W 充电，4800万像素光学防抖主摄相机。</p>
-			<p>8GB RAM，256GB ROM，5G / LTE 全网通，Nano-SIM 双卡，USB-C，NFC，红外。</p>
+			<p>天玑 8100，5nm，Mali-G610，有点狠的 2K 直屏，OLED，3200 x 1440 pixels，120 Hz 屏幕刷新率，1200 nits，Corning Gorilla Glass Victus。</p>
+			<p>5500 mAh Li-Po 电池，67W 充电，30W wireless charging，rear 48 MP camera，front 20 MP camera，4K video recording。</p>
+			<p>8GB RAM，256GB ROM，UFS 3.1，5G / LTE 全网通，Nano-SIM 双卡，GPS GLONASS Galileo BeiDou，USB-C，NFC，红外。</p>
+			<p>IP53，stereo speakers，指纹识别。</p>
 			<p>Dimensions: 76.15 x 163.1 x 8.48 mm, Weight: 201 g.</p>
 		</body></html>`))
 	}))
@@ -119,17 +120,32 @@ func TestAssetEnrichmentOnlineDetailedSpecsFromSupportPage(t *testing.T) {
 
 	suggestions := fixture.findSuggestions(t)
 	requireSuggestionValue(t, suggestions, "metadata.cpu_model", "天玑 8100")
+	requireSuggestionValue(t, suggestions, "metadata.cpu_process", "5nm")
+	requireSuggestionValue(t, suggestions, "metadata.gpu_model", "Mali-G610")
 	requireSuggestionValue(t, suggestions, "metadata.screen_size", "2K 直屏")
+	requireSuggestionValue(t, suggestions, "metadata.display_type", "OLED")
 	requireSuggestionValue(t, suggestions, "metadata.display_resolution", "3200 x 1440 pixels")
 	requireSuggestionValue(t, suggestions, "metadata.screen_refresh_rate", "120 Hz")
+	requireSuggestionValue(t, suggestions, "metadata.display_brightness", "1200 nits")
+	requireSuggestionValue(t, suggestions, "metadata.display_protection", "Corning Gorilla Glass Victus")
 	requireSuggestionValue(t, suggestions, "metadata.battery_capacity_mah", "5500 mAh")
+	requireSuggestionValue(t, suggestions, "metadata.battery_type", "Li-Po")
 	requireSuggestionValue(t, suggestions, "metadata.charging_power_w", "67W")
+	requireSuggestionValue(t, suggestions, "metadata.wireless_charging", "30W wireless charging")
+	requireSuggestionValue(t, suggestions, "metadata.rear_camera_detail", "rear 48 MP camera")
+	requireSuggestionValue(t, suggestions, "metadata.front_camera_detail", "front 20 MP camera")
+	requireSuggestionValue(t, suggestions, "metadata.video_recording", "4K video recording")
+	requireSuggestionValue(t, suggestions, "metadata.storage_detail", "UFS 3.1")
 	requireSuggestionValue(t, suggestions, "metadata.mobile_network", "5G / LTE / 全网通")
+	requireSuggestionValue(t, suggestions, "metadata.positioning", "GPS GLONASS Galileo BeiDou")
 	requireSuggestionValue(t, suggestions, "metadata.weight", "201 g")
 	require.NotEqual(t, "5G", findSuggestionByField(suggestions, "metadata.weight").GetString("recommended_value"))
 	requireSuggestionValue(t, suggestions, "metadata.dimensions", "76.15 x 163.1 x 8.48 mm")
 	requireSuggestionValue(t, suggestions, "metadata.nfc", "支持 NFC")
 	requireSuggestionValue(t, suggestions, "metadata.infrared", "支持红外")
+	requireSuggestionValue(t, suggestions, "metadata.water_resistance", "IP53")
+	requireSuggestionValue(t, suggestions, "metadata.speaker_detail", "stereo speakers")
+	requireSuggestionValue(t, suggestions, "metadata.sensor_detail", "指纹识别")
 	require.NotNil(t, findSuggestionByField(suggestions, "metadata.online_specs_summary"), "fields: %v", suggestionFields(suggestions))
 }
 

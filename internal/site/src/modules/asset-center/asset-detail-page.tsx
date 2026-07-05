@@ -1734,6 +1734,7 @@ type AssetParameterRow = {
 	value: string
 	href?: string
 	capture?: AssetFieldDefinition["capture"]
+	section?: string
 }
 
 type AssetParameterGroup = {
@@ -1806,6 +1807,7 @@ function AssetOverviewColumn({
 }
 
 function AssetParameterDetailPanel({ group }: { group?: AssetParameterGroup }) {
+	const rowSections = group ? groupRowsBySection(group.rows) : []
 	return (
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
@@ -1816,15 +1818,40 @@ function AssetParameterDetailPanel({ group }: { group?: AssetParameterGroup }) {
 					<CardTitle className="truncate text-lg tracking-[-0.02em]">{group?.title ?? "参数详情"}</CardTitle>
 				</div>
 			</CardHeader>
-			<CardContent className="grid gap-2.5 p-4">
+			<CardContent className="grid gap-3 p-4">
 				{group ? (
-					group.rows.map((row) => <ParameterDetailRow key={`${group.id}-${row.label}`} row={row} />)
+					rowSections.map((section) => (
+						<section key={`${group.id}-${section.title}`} className="grid gap-2">
+							{section.title && (
+								<div className="px-0.5 text-xs font-semibold text-muted-foreground">{section.title}</div>
+							)}
+							<div className="grid gap-2">
+								{section.rows.map((row) => (
+									<ParameterDetailRow key={`${group.id}-${section.title}-${row.label}`} row={row} />
+								))}
+							</div>
+						</section>
+					))
 				) : (
 					<EmptyBlock icon={<ListChecksIcon className="size-5" />} text="选择左侧参数大项查看详情。" />
 				)}
 			</CardContent>
 		</Card>
 	)
+}
+
+function groupRowsBySection(rows: AssetParameterRow[]) {
+	const sections: { title: string; rows: AssetParameterRow[] }[] = []
+	for (const row of rows) {
+		const title = row.section ?? ""
+		let section = sections.find((item) => item.title === title)
+		if (!section) {
+			section = { title, rows: [] }
+			sections.push(section)
+		}
+		section.rows.push(row)
+	}
+	return sections
 }
 
 function CompactParameterRow({ row }: { row: AssetParameterRow }) {
@@ -1896,7 +1923,13 @@ function buildAssetParameterGroups(asset: AssetRecord): AssetParameterGroup[] {
 					id: `host-${normalizeGroupId(group.title)}-${index}`,
 					title: group.title,
 					icon: group.icon,
-					rows: group.rows.map((row) => ({ label: row.label, value: row.value, href: row.href, capture: row.capture })),
+					rows: group.rows.map((row) => ({
+						label: row.label,
+						value: row.value,
+						href: row.href,
+						capture: row.capture,
+						section: row.section,
+					})),
 					summary: getParameterGroupSummary(group.rows),
 				}))
 		: []
@@ -1934,7 +1967,54 @@ function archiveRowToParameterRow(row: ArchiveDetailRow): AssetParameterRow {
 		value: row.value,
 		href: isUrl ? row.value : undefined,
 		capture: row.field.capture,
+		section: getArchiveRowDetailSection(row.field.key),
 	}
+}
+
+const archiveParameterDetailSectionMap = new Map<string, string>([
+	["device_os", "系统"],
+	["cpu_model", "处理器"],
+	["cpu_process", "处理器"],
+	["gpu_model", "图形"],
+	["memory_detail", "内存"],
+	["storage_gb", "存储"],
+	["storage_detail", "存储"],
+	["screen_size", "面板"],
+	["display_type", "面板"],
+	["display_resolution", "显示"],
+	["screen_refresh_rate", "显示"],
+	["display_brightness", "显示"],
+	["display_protection", "耐用性"],
+	["battery_capacity_mah", "电池"],
+	["battery_type", "电池"],
+	["charging_power_w", "有线充电"],
+	["wireless_charging", "无线充电"],
+	["camera_summary", "摘要"],
+	["rear_camera_detail", "后置影像"],
+	["front_camera_detail", "前置影像"],
+	["video_recording", "视频"],
+	["mobile_network", "蜂窝"],
+	["sim_detail", "蜂窝"],
+	["wifi_standard", "无线"],
+	["bluetooth_version", "无线"],
+	["positioning", "定位"],
+	["usb_detail", "接口"],
+	["nfc", "近场 / 红外"],
+	["infrared", "近场 / 红外"],
+	["dimensions", "尺寸重量"],
+	["weight", "尺寸重量"],
+	["water_resistance", "防护"],
+	["speaker_detail", "音频"],
+	["sensor_detail", "传感器"],
+	["account_note", "归属"],
+	["power_mode", "供电"],
+])
+
+function getArchiveRowDetailSection(fieldKey: string) {
+	const section = archiveParameterDetailSectionMap.get(fieldKey)
+	if (section) return section
+	if (fieldKey.endsWith("_support_url")) return "资料来源"
+	return undefined
 }
 
 function getParameterGroupSummary(rows: { label: string; value: string }[]) {
@@ -2631,24 +2711,40 @@ type ArchiveDetailRow = {
 const archivePersonalDeviceSectionMap = new Map<string, string>([
 	["device_os", "系统与性能"],
 	["cpu_model", "系统与性能"],
+	["cpu_process", "系统与性能"],
+	["gpu_model", "系统与性能"],
 	["memory_detail", "系统与性能"],
 	["storage_gb", "系统与性能"],
+	["storage_detail", "系统与性能"],
 	["screen_size", "屏幕"],
+	["display_type", "屏幕"],
 	["display_resolution", "屏幕"],
 	["screen_refresh_rate", "屏幕"],
+	["display_brightness", "屏幕"],
+	["display_protection", "屏幕"],
 	["battery_capacity_mah", "电池与充电"],
+	["battery_type", "电池与充电"],
 	["charging_power_w", "电池与充电"],
+	["wireless_charging", "电池与充电"],
 	["camera_summary", "影像"],
+	["rear_camera_detail", "影像"],
+	["front_camera_detail", "影像"],
+	["video_recording", "影像"],
 	["mobile_network", "网络与接口"],
 	["sim_detail", "网络与接口"],
 	["wifi_standard", "网络与接口"],
 	["bluetooth_version", "网络与接口"],
+	["positioning", "网络与接口"],
 	["usb_detail", "网络与接口"],
 	["nfc", "网络与接口"],
 	["infrared", "网络与接口"],
 	["dimensions", "机身与外观"],
 	["weight", "机身与外观"],
+	["water_resistance", "机身与外观"],
+	["speaker_detail", "机身与外观"],
+	["sensor_detail", "机身与外观"],
 	["account_note", "关联账号"],
+	["power_mode", "关联账号"],
 ])
 
 const hiddenArchiveDetailFieldKeys = new Set(["online_specs_summary"])
