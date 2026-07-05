@@ -1763,7 +1763,7 @@ function AssetOverviewColumn({
 				<CardHeader className="border-b border-border/70 bg-surface-soft px-3 py-2.5">
 					<CardTitle className="text-base tracking-[-0.02em]">资产信息</CardTitle>
 				</CardHeader>
-				<CardContent className="grid gap-2 p-3">
+				<CardContent className="grid gap-2 p-3 sm:grid-cols-2">
 					{identityRows.map((row) => (
 						<CompactParameterRow key={row.label} row={row} />
 					))}
@@ -1774,7 +1774,7 @@ function AssetOverviewColumn({
 				<CardHeader className="border-b border-border/70 bg-surface-soft px-3 py-2.5">
 					<CardTitle className="text-base tracking-[-0.02em]">软硬件参数</CardTitle>
 				</CardHeader>
-				<CardContent className="grid gap-2 p-3">
+				<CardContent className="grid gap-2 p-3 sm:grid-cols-2">
 					{parameterGroups.length > 0 ? (
 						parameterGroups.map((group) => (
 							<button
@@ -1782,23 +1782,25 @@ function AssetOverviewColumn({
 								key={group.id}
 								onClick={() => onSelectGroup(group.id)}
 								className={cn(
-									"grid min-w-0 grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-border/70 bg-surface-soft px-2.5 py-2 text-left transition-colors hover:border-blue-400/60 hover:bg-blue-50/60 dark:hover:bg-blue-950/20",
+									"grid min-w-0 grid-cols-[1.75rem_minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-border/70 bg-surface-soft px-2 py-1.5 text-left transition-colors hover:border-blue-400/60 hover:bg-blue-50/60 dark:hover:bg-blue-950/20",
 									group.id === selectedGroupId &&
 										"border-blue-500/70 bg-blue-50 text-blue-950 dark:bg-blue-950/30 dark:text-blue-50"
 								)}
 							>
-								<span className="grid size-8 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
+								<span className="grid size-7 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
 									{group.icon}
 								</span>
 								<span className="min-w-0">
-									<span className="block truncate text-sm font-medium text-foreground">{group.title}</span>
-									<span className="mt-0.5 block truncate text-xs text-muted-foreground">{group.summary}</span>
+									<span className="block truncate text-xs font-medium text-foreground">{group.title}</span>
+									<span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{group.summary}</span>
 								</span>
-								<ChevronRightIcon className="size-4 text-muted-foreground" />
+								<ChevronRightIcon className="size-3.5 text-muted-foreground" />
 							</button>
 						))
 					) : (
-						<EmptyBlock icon={<ListChecksIcon className="size-5" />} text="暂无已确认的软硬件参数。" />
+						<div className="sm:col-span-2">
+							<EmptyBlock icon={<ListChecksIcon className="size-5" />} text="暂无已确认的软硬件参数。" />
+						</div>
 					)}
 				</CardContent>
 			</Card>
@@ -1856,9 +1858,9 @@ function groupRowsBySection(rows: AssetParameterRow[]) {
 
 function CompactParameterRow({ row }: { row: AssetParameterRow }) {
 	return (
-		<div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2 rounded-md border border-border/70 bg-surface-soft px-2.5 py-2">
-			<div className="truncate text-xs text-muted-foreground">{row.label}</div>
-			<div className="min-w-0 truncate text-sm font-medium text-foreground">{row.value}</div>
+		<div className="grid min-h-10 grid-cols-[4.25rem_minmax(0,1fr)] items-center gap-2 rounded-md border border-border/70 bg-surface-soft px-2 py-1.5">
+			<div className="truncate text-[11px] text-muted-foreground">{row.label}</div>
+			<div className="min-w-0 truncate text-xs font-medium text-foreground">{row.value}</div>
 		</div>
 	)
 }
