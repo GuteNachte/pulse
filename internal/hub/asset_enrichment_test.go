@@ -405,15 +405,23 @@ func TestAssetVisualCollectsTraceableImagesWithoutImageGeneration(t *testing.T) 
 		_, _ = w.Write([]byte(`{"data":[{"url":"https://example.test/redmi-k50-frame.png"}]}`))
 	}))
 	t.Cleanup(imageServer.Close)
-	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var referenceServer *httptest.Server
+	referenceServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if r.URL.Path == "/product/redmik50/index.js" {
+			_, _ = w.Write([]byte(`const imgPath="/redmik504qyoae2/";const site={productFileSite:"` + referenceServer.URL + `"};
+				imgPath+"sw1-1.jpg";imgPath+"sw2-1.jpg";imgPath+"sw2-2.jpg";imgPath+"sw3-1.jpg";imgPath+"spec-color2.jpg";
+				const pic={imgPath:"".concat(site.productFileSite,"/redmik504qyoae2/")};`))
+			return
+		}
+		if r.URL.Path == "/products/redmi-k50" {
+			_, _ = w.Write([]byte(`<html><head><title>Redmi K50 产品主页</title><script src="/product/redmik50/index.js"></script></head><body>Redmi K50 产品主页。</body></html>`))
+			return
+		}
 		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title><meta property="og:image" content="/redmi-k50-official.png"></head><body>
 			Redmi K50 官方产品资料。
 			<img class="thumb" data-src="/mi-mall/3f5c0cd26cf1cd44b020005fe94f8dbf.png" src="/placeholder-40.png" width="40" height="40" alt=""><span>顶部分类导航</span>
 			<img src="/xiaomi-17-ultra.png" alt="Xiaomi 17 Ultra" width="160" height="110">
-			<img src="/redmi-k50-front.png" alt="Redmi K50">
-			<img src="/redmi-k50-moyu-black.png" alt="Redmi K50 墨羽黑">
-			<img srcset="/redmi-k50-back.png 1x, /redmi-k50-side.png 2x" alt="Redmi K50">
 		</body></html>`))
 	}))
 	t.Cleanup(referenceServer.Close)
@@ -425,7 +433,7 @@ func TestAssetVisualCollectsTraceableImagesWithoutImageGeneration(t *testing.T) 
 	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
 	require.NoError(t, err)
 	metadata := recordMetadata(t, asset)
-	metadata["support_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["support_url"] = referenceServer.URL + "/products/redmi-k50/specs"
 	asset.Set("vendor", "小米 / Redmi")
 	asset.Set("model", "Redmi K50")
 	asset.Set("metadata", metadata)
@@ -458,12 +466,13 @@ func TestAssetVisualCollectsTraceableImagesWithoutImageGeneration(t *testing.T) 
 	require.Equal(t, "白天", frames[0]["label"])
 	require.Equal(t, "night", frames[1]["theme"])
 	require.Equal(t, "夜晚", frames[1]["label"])
-	require.Equal(t, referenceServer.URL+"/redmi-k50-official.png", frames[0]["url"])
-	require.Equal(t, referenceServer.URL+"/redmi-k50-moyu-black.png", frames[1]["url"])
+	require.Equal(t, referenceServer.URL+"/redmik504qyoae2/sw2-1.jpg", frames[0]["url"])
+	require.Equal(t, referenceServer.URL+"/redmik504qyoae2/sw2-2.jpg", frames[1]["url"])
 	require.Contains(t, fmt.Sprint(frames), "theme:day")
 	require.Contains(t, fmt.Sprint(frames), "theme:night")
 	require.NotContains(t, fmt.Sprint(frames), "xiaomi-17-ultra")
 	require.NotContains(t, fmt.Sprint(frames), "3f5c0cd26cf1cd44b020005fe94f8dbf")
+	require.NotContains(t, fmt.Sprint(frames), "spec-color2")
 }
 
 func TestAssetEnrichmentAcceptWritesMetadataAndChange(t *testing.T) {

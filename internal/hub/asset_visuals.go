@@ -191,7 +191,7 @@ func (h *Hub) collectAssetVisualReferenceSources(asset *core.Record) []map[strin
 	online := h.collectAssetOnlineReferenceEnrichment(asset)
 	result := make([]map[string]any, 0, len(online.Sources))
 	seen := map[string]bool{}
-	candidateLimit := defaultAssetTurntableFrameCount * 3
+	candidateLimit := defaultAssetTurntableFrameCount * 6
 	if officialImageURL := recordMetadataString(asset, "official_image_url"); isLikelyImageURL(officialImageURL) {
 		result = appendAssetVisualReferenceSource(result, seen, map[string]any{
 			"title":      "已确认官方设备图片",
@@ -201,6 +201,9 @@ func (h *Hub) collectAssetVisualReferenceSources(asset *core.Record) []map[strin
 			"provider":   "asset_master",
 			"confidence": 96,
 		})
+	}
+	if len(result) < candidateLimit {
+		result = h.collectAssetVisualPageImageSources(asset, result, seen, candidateLimit)
 	}
 	for _, source := range online.Sources {
 		if source.URL == "" {
@@ -220,9 +223,6 @@ func (h *Hub) collectAssetVisualReferenceSources(asset *core.Record) []map[strin
 		if len(result) >= candidateLimit {
 			break
 		}
-	}
-	if len(result) < candidateLimit {
-		result = h.collectAssetVisualPageImageSources(asset, result, seen, candidateLimit)
 	}
 	return result
 }
@@ -252,6 +252,7 @@ func (h *Hub) collectAssetVisualPageImageSources(asset *core.Record, result []ma
 		recordMetadataString(asset, "product_url"),
 		recordMetadataString(asset, "official_url"),
 	))
+	pageURLs = dedupeStrings(append(pageURLs, assetVisualRelatedProductPageURLs(pageURLs)...))
 	for _, rawURL := range pageURLs {
 		if len(result) >= limit {
 			break
@@ -318,6 +319,25 @@ func (h *Hub) collectAssetVisualBundleImageSources(pageURL *url.URL, body string
 				break
 			}
 		}
+	}
+	return result
+}
+
+func assetVisualRelatedProductPageURLs(pageURLs []string) []string {
+	result := make([]string, 0, len(pageURLs))
+	for _, rawURL := range pageURLs {
+		parsed, err := url.Parse(strings.TrimSpace(rawURL))
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			continue
+		}
+		path := strings.TrimRight(parsed.Path, "/")
+		if !strings.HasSuffix(path, "/specs") {
+			continue
+		}
+		parsed.Path = strings.TrimSuffix(path, "/specs")
+		parsed.RawQuery = ""
+		parsed.Fragment = ""
+		result = append(result, parsed.String())
 	}
 	return result
 }
@@ -413,13 +433,15 @@ func isLikelyAssetProductBundleImageName(fileName string) bool {
 		"icon",
 		"add",
 		"banner-title",
+		"sw1-",
+		"sw3-",
 	}
 	for _, marker := range rejected {
 		if strings.Contains(lower, marker) {
 			return false
 		}
 	}
-	preferred := []string{"spec-color", "color", "product", "phone", "appearance", "overview", "front", "back", "side", "gallery", "main"}
+	preferred := []string{"sw2-", "color", "product", "phone", "appearance", "overview", "front", "back", "side", "gallery", "main", "spec-color"}
 	for _, marker := range preferred {
 		if strings.Contains(lower, marker) {
 			return true
@@ -644,6 +666,7 @@ func buildCollectedAssetVisualFrames(references []map[string]any, limit int) []m
 			"source_title": title,
 			"source_url":   sourceURL,
 			"theme_score":  scoreAssetVisualNightCandidate(source),
+			"visual_score": scoreAssetVisualDisplayCandidate(source),
 		})
 	}
 	if len(candidates) == 0 {
@@ -671,19 +694,41 @@ func orderAssetVisualThemeCandidates(candidates []map[string]any, limit int) []m
 		return candidates
 	}
 	dayIndex := 0
-	nightIndex := 0
-	bestDayScore := int(^uint(0) >> 1)
+	nightIndex := -1
+	bestDayVisualScore := -1 << 30
+	bestDayNightScore := int(^uint(0) >> 1)
 	bestNightScore := -1
+	bestNightVisualScore := -1 << 30
 	for index, candidate := range candidates {
-		score := intFromAny(candidate["theme_score"])
-		if score < bestDayScore {
+		nightScore := intFromAny(candidate["theme_score"])
+		visualScore := intFromAny(candidate["visual_score"])
+		if visualScore > bestDayVisualScore || (visualScore == bestDayVisualScore && nightScore < bestDayNightScore) {
 			dayIndex = index
-			bestDayScore = score
+			bestDayVisualScore = visualScore
+			bestDayNightScore = nightScore
 		}
-		if score > bestNightScore {
+		if nightScore > bestNightScore || (nightScore == bestNightScore && visualScore > bestNightVisualScore) {
 			nightIndex = index
-			bestNightScore = score
+			bestNightScore = nightScore
+			bestNightVisualScore = visualScore
 		}
+	}
+	if bestNightScore <= 0 {
+		nightIndex = -1
+		bestNightVisualScore = -1 << 30
+		for index, candidate := range candidates {
+			if index == dayIndex {
+				continue
+			}
+			visualScore := intFromAny(candidate["visual_score"])
+			if visualScore > bestNightVisualScore {
+				nightIndex = index
+				bestNightVisualScore = visualScore
+			}
+		}
+	}
+	if nightIndex < 0 {
+		nightIndex = dayIndex
 	}
 	if dayIndex == nightIndex && len(candidates) > 1 {
 		if dayIndex == 0 {
@@ -704,6 +749,36 @@ func orderAssetVisualThemeCandidates(candidates []map[string]any, limit int) []m
 		ordered = append(ordered, candidate)
 	}
 	return ordered
+}
+
+func scoreAssetVisualDisplayCandidate(source map[string]any) int {
+	text := strings.ToLower(strings.Join(nonEmptyStrings(
+		stringFromAny(source["image_url"]),
+		stringFromAny(source["url"]),
+		stringFromAny(source["title"]),
+		stringFromAny(source["source_title"]),
+		stringFromAny(source["type"]),
+	), " "))
+	score := 0
+	if strings.Contains(text, "official_product_bundle_image") {
+		score += 12
+	}
+	for _, marker := range []string{"sw2-", "front", "back", "side", "appearance", "gallery", "main", "phone", "product"} {
+		if strings.Contains(text, marker) {
+			score += 20
+		}
+	}
+	for _, marker := range []string{"spec-color", "specs", "overview", "参数", "规格"} {
+		if strings.Contains(text, marker) {
+			score -= 18
+		}
+	}
+	for _, marker := range []string{"logo", "screen", "cpu", "chip", "soc", "battery", "charge", "camera", "sample", "样张"} {
+		if strings.Contains(text, marker) {
+			score -= 30
+		}
+	}
+	return score
 }
 
 func scoreAssetVisualNightCandidate(source map[string]any) int {
