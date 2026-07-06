@@ -145,16 +145,22 @@ export function AssetPreviewPanel({ asset, parent, monitored, maintenanceCount, 
 
 	const Icon = getAssetIcon(asset.type)
 	const detailHref = getPagePath($router, "asset", { id: asset.id })
-	const summaryRows = getAssetSummaryRows(asset).slice(0, 4)
+	const summaryRows = getAssetSummaryRows(asset)
+		.filter((row) => !hiddenPreviewSummaryLabels.has(row.label))
+		.slice(0, 3)
 	const completeness = getAssetCompleteness(asset)
 	const warranty = getAssetWarrantyStatus(asset)
-	const identity = getAssetIdentityLabel(asset)
-	const ip = getAssetIpLabel(asset)
-	const network = getAssetNetworkLabel(asset)
 	const assetTag = getMetadataString(asset.metadata, "asset_tag")
-	const internalModel = getMetadataString(asset.metadata, "internal_model")
 	const mac = getMetadataString(asset.metadata, "mac")
 	const color = getMetadataString(asset.metadata, "color") || getMetadataString(asset.metadata, "device_color")
+	const profileRows = [
+		asset.role ? { label: "用途", value: asset.role } : undefined,
+		assetTag ? { label: "编号", value: assetTag, mono: true } : undefined,
+		color ? { label: "颜色", value: color } : undefined,
+		mac ? { label: "主 MAC", value: mac, mono: true } : undefined,
+		parent ? { label: "归属", value: parent.name } : undefined,
+		...summaryRows,
+	].filter(Boolean) as { label: string; value: string; mono?: boolean }[]
 	const connectionHref = isAgentMonitorableAsset(asset)
 		? `${getPagePath($router, "clients")}?asset=${encodeURIComponent(asset.id)}`
 		: isWebsiteMonitorableAsset(asset)
@@ -172,24 +178,23 @@ export function AssetPreviewPanel({ asset, parent, monitored, maintenanceCount, 
 						<h2 className="truncate text-lg font-semibold tracking-[-0.02em] text-foreground">{asset.name}</h2>
 						<StatusDot status={asset.status || "active"} />
 					</div>
-					<div className="mt-1 truncate text-xs text-muted-foreground">{identity}</div>
+					<div className="mt-1 truncate text-xs text-muted-foreground">当前选中资产</div>
 				</div>
 				<Button asChild variant="outline" size="sm" className="h-8 shrink-0 gap-1.5 px-2.5">
 					<Link href={detailHref}>
-						<span>详情</span>
+						<span className="sr-only">查看详情</span>
 						<ChevronRightIcon className="size-3.5" />
 					</Link>
 				</Button>
 			</div>
 
 			<div className="grid gap-2 rounded-md border border-border/70 bg-surface-soft p-3">
-				<div className="grid grid-cols-2 gap-2 text-xs">
-					<InfoRow label="类型" value={getAssetTypeLabel(asset.type)} />
-					<InfoRow label="状态" value={getStatusLabel(asset.status || "active")} />
-					<InfoRow label="位置" value={asset.location || "未填写"} />
-					<InfoRow label="IP" value={ip} mono={ip !== "未填写"} />
-					<InfoRow label="接入" value={network} />
-					<InfoRow label="资料" value={`${completeness.score}%`} mono />
+				<div className="flex items-center justify-between gap-3">
+					<div className="min-w-0">
+						<div className="text-xs font-medium text-foreground">{completeness.label}</div>
+						<div className="mt-0.5 text-[11px] text-muted-foreground">资料完整度</div>
+					</div>
+					<div className="font-mono text-lg font-semibold tabular-nums text-foreground">{completeness.score}%</div>
 				</div>
 				<div className="h-1.5 overflow-hidden rounded-full bg-card">
 					<div
@@ -206,30 +211,23 @@ export function AssetPreviewPanel({ asset, parent, monitored, maintenanceCount, 
 						style={{ width: `${completeness.score}%` }}
 					/>
 				</div>
+				{completeness.missing.length > 0 && (
+					<div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
+						待补：{completeness.missing.slice(0, 3).join("、")}
+						{completeness.missing.length > 3 ? ` 等 ${completeness.missing.length} 项` : ""}
+					</div>
+				)}
 			</div>
 
 			<div className="grid gap-2">
-				{internalModel && <InfoRow label="内部型号" value={internalModel} mono />}
-				{mac && <InfoRow label="主 MAC" value={mac} mono />}
-				{assetTag && <InfoRow label="资产编号" value={assetTag} mono />}
-				{color && <InfoRow label="颜色" value={color} />}
-				{parent && <InfoRow label="归属" value={parent.name} />}
-				{summaryRows.length > 0 ? (
-					summaryRows.map((row) => <InfoRow key={row.label} label={row.label} value={row.value} mono={row.mono} />)
+				{profileRows.length > 0 ? (
+					profileRows.map((row) => <InfoRow key={row.label} label={row.label} value={row.value} mono={row.mono} />)
 				) : (
 					<div className="rounded-md border border-border/70 bg-surface-soft px-3 py-2 text-sm text-muted-foreground">
-						未填写关键参数
+						暂无额外档案
 					</div>
 				)}
-				{asset.role && <InfoRow label="角色" value={asset.role} />}
 			</div>
-
-			{completeness.missing.length > 0 && (
-				<div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
-					待补：{completeness.missing.slice(0, 3).join("、")}
-					{completeness.missing.length > 3 ? ` 等 ${completeness.missing.length} 项` : ""}
-				</div>
-			)}
 
 			<div className="flex flex-wrap gap-1.5">
 				{monitored && <AssetCardMetaTag tone="ok">已监控</AssetCardMetaTag>}
@@ -247,6 +245,8 @@ export function AssetPreviewPanel({ asset, parent, monitored, maintenanceCount, 
 		</aside>
 	)
 }
+
+const hiddenPreviewSummaryLabels = new Set(["类型", "状态", "型号", "位置", "固定 IP", "管理 IP", "IP", "接入", "公网"])
 
 function AssetLedgerCell({
 	label,
