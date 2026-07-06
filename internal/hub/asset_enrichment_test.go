@@ -409,6 +409,7 @@ func TestAssetVisualCollectsTraceableImagesWithoutImageGeneration(t *testing.T) 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title><meta property="og:image" content="/redmi-k50-official.png"></head><body>
 			Redmi K50 官方产品资料。
+			<img src="/xiaomi-17-ultra.png" alt="Xiaomi 17 Ultra" width="160" height="110">
 			<img src="/redmi-k50-front.png" alt="Redmi K50">
 			<img srcset="/redmi-k50-back.png 1x, /redmi-k50-side.png 2x" alt="Redmi K50">
 		</body></html>`))
@@ -454,6 +455,7 @@ func TestAssetVisualCollectsTraceableImagesWithoutImageGeneration(t *testing.T) 
 	require.Contains(t, fmt.Sprint(frames), referenceServer.URL+"/redmi-k50-front.png")
 	require.Contains(t, fmt.Sprint(frames), referenceServer.URL+"/redmi-k50-back.png")
 	require.Contains(t, fmt.Sprint(frames), referenceServer.URL+"/redmi-k50-side.png")
+	require.NotContains(t, fmt.Sprint(frames), "xiaomi-17-ultra")
 }
 
 func TestAssetEnrichmentAcceptWritesMetadataAndChange(t *testing.T) {

@@ -3902,12 +3902,12 @@ function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 				<CardTitle className="text-base tracking-[-0.02em]">设备全貌图</CardTitle>
 			</CardHeader>
 			<CardContent className="p-3">
-				<div className="relative grid aspect-[3/4] min-h-[20rem] w-full select-none place-items-center overflow-hidden rounded-md border border-border/70 bg-surface-soft sm:min-h-[24rem] xl:min-h-[28rem]">
+				<div className="relative grid aspect-[3/4] min-h-[24rem] w-full select-none place-items-center overflow-hidden rounded-md border border-border/70 bg-surface-soft sm:min-h-[30rem] xl:min-h-[34rem]">
 					{activeFrame?.url ? (
 						<img
 							src={activeFrame.url}
 							alt="设备全貌图"
-							className="h-full w-full object-contain p-4 sm:p-5"
+							className="h-full w-full object-contain p-1 sm:p-2"
 							draggable={false}
 						/>
 					) : (
