@@ -72,7 +72,7 @@ const defaultForm: AISettingsForm = {
 	visualEndpoint: "https://apihub.agnes-ai.com/v1/images/generations",
 	visualModel: "agnes-image-2.1-flash",
 	visualApiKey: "",
-	frameCount: 6,
+	frameCount: 2,
 }
 
 export default function AISettings() {
@@ -254,9 +254,9 @@ export default function AISettings() {
 										<Label htmlFor="visual-frame-count" className="text-xs">
 											图片收集上限
 										</Label>
-										<Input id="visual-frame-count" type="number" min={6} max={6} value={6} readOnly className="mt-2" />
+										<Input id="visual-frame-count" type="number" min={2} max={2} value={2} readOnly className="mt-2" />
 										<p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-											最多收集 6 张真实设备图片。当前不再生成 3D 或固定视角图。
+											固定收集白天 / 夜晚两张真实设备图片。当前不再生成 3D 或固定视角图。
 										</p>
 									</div>
 								</div>

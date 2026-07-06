@@ -388,7 +388,7 @@ func TestAssetEnrichmentConfigUpdateStoresEditableSettingsAndReturnsAdminKeys(t 
 	require.Equal(t, "agnes", visualAI["provider"])
 	require.Equal(t, "https://proxy.example.test/v1/images/generations", visualAI["endpoint"])
 	require.Equal(t, "visual-updated-secret", visualAI["api_key"])
-	require.Equal(t, float64(6), visualAI["frame_count"])
+	require.Equal(t, float64(2), visualAI["frame_count"])
 	require.Equal(t, true, visualAI["ready"])
 }
 
@@ -449,12 +449,17 @@ func TestAssetVisualCollectsTraceableImagesWithoutImageGeneration(t *testing.T) 
 	require.Len(t, visuals, 1)
 	require.Equal(t, "ready", visuals[0].GetString("status"))
 	require.Equal(t, "official_reference", visuals[0].GetString("kind"))
-	require.Equal(t, 4, visuals[0].GetInt("frame_count"))
-	frames := recordJSONField(t, visuals[0], "frames")
-	require.Contains(t, fmt.Sprint(frames), referenceServer.URL+"/redmi-k50-official.png")
-	require.Contains(t, fmt.Sprint(frames), referenceServer.URL+"/redmi-k50-front.png")
-	require.Contains(t, fmt.Sprint(frames), referenceServer.URL+"/redmi-k50-back.png")
-	require.Contains(t, fmt.Sprint(frames), referenceServer.URL+"/redmi-k50-side.png")
+	require.Equal(t, 2, visuals[0].GetInt("frame_count"))
+	frames := recordJSONArrayField(t, visuals[0], "frames")
+	require.Len(t, frames, 2)
+	require.Equal(t, "day", frames[0]["theme"])
+	require.Equal(t, "白天", frames[0]["label"])
+	require.Equal(t, "night", frames[1]["theme"])
+	require.Equal(t, "夜晚", frames[1]["label"])
+	require.Equal(t, referenceServer.URL+"/redmi-k50-official.png", frames[0]["url"])
+	require.Equal(t, referenceServer.URL+"/redmi-k50-front.png", frames[1]["url"])
+	require.Contains(t, fmt.Sprint(frames), "theme:day")
+	require.Contains(t, fmt.Sprint(frames), "theme:night")
 	require.NotContains(t, fmt.Sprint(frames), "xiaomi-17-ultra")
 }
 
@@ -715,6 +720,19 @@ func recordJSONField(t testing.TB, record *core.Record, field string) map[string
 	}
 	if values == nil {
 		values = map[string]any{}
+	}
+	return values
+}
+
+func recordJSONArrayField(t testing.TB, record *core.Record, field string) []map[string]any {
+	t.Helper()
+	var values []map[string]any
+	if err := record.UnmarshalJSONField(field, &values); err != nil || values == nil {
+		raw := strings.TrimSpace(record.GetString(field))
+		require.True(t, raw == "" || json.Unmarshal([]byte(raw), &values) == nil)
+	}
+	if values == nil {
+		values = []map[string]any{}
 	}
 	return values
 }

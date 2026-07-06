@@ -45,6 +45,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/use-toast"
+import { useTheme } from "@/components/theme-provider"
 import {
 	alertCreatedLabel,
 	alertDisplayName,
@@ -80,6 +81,7 @@ import {
 	getStatusLabel,
 	type AssetFieldDefinition,
 	type AssetLifecycleTone,
+	isPhoneVariantSpecRequired,
 } from "./asset-schema"
 import { getAssetSourceProfile } from "./asset-source-profile"
 import type {
@@ -305,7 +307,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const [recognitionStage, setRecognitionStage] = useState<"idle" | "blocked" | "running" | "ready" | "failed">("idle")
 	const [recognitionMessage, setRecognitionMessage] = useState("")
 	const [visualColor, setVisualColor] = useState("")
-	const [visualFrameCount, setVisualFrameCount] = useState(6)
+	const [visualFrameCount, setVisualFrameCount] = useState(2)
 	const [fileToken, setFileToken] = useState("")
 	const [editingInterface, setEditingInterface] = useState<AssetInterfaceRecord | null>(null)
 	const [editingRelation, setEditingRelation] = useState<AssetRelationRecord | null>(null)
@@ -323,7 +325,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	useEffect(() => {
 		if (!asset) return
 		setVisualColor(getAssetVisualColor(asset))
-		setVisualFrameCount(6)
+		setVisualFrameCount(2)
 		setRecognitionStage("idle")
 		setRecognitionMessage("")
 	}, [asset?.id])
@@ -798,7 +800,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		try {
 			const response = await pb.send<{ status?: string }>(`/api/pulse/assets/${asset.id}/visuals/turntable`, {
 				method: "POST",
-				body: { color: color.trim(), frame_count: options?.frameCount ?? 6 },
+				body: { color: color.trim(), frame_count: options?.frameCount ?? 2 },
 			})
 			await loadDetail({ waitSecondary: true })
 			if (response.status === "no_sources") {
@@ -829,7 +831,9 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		const name = form.get("name")?.toString().trim() || asset.name
 		const fixedIpv4 = form.get("fixed_ipv4")?.toString().trim() || ""
 		const managementIp = form.get("management_ip")?.toString().trim() || fixedIpv4
+		const targetType = (form.get("type")?.toString() as AssetRecord["type"] | undefined) || asset.type
 		const requiredErrors = validateAssetProfileForm({
+			type: targetType,
 			name,
 			vendor: form.get("vendor")?.toString().trim() || "",
 			model: form.get("model")?.toString().trim() || "",
@@ -838,6 +842,8 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			assetTag: form.get("asset_tag")?.toString().trim() || "",
 			location: form.get("location")?.toString().trim() || "",
 			ipv4: managementIp,
+			memoryGb: form.get("memory_gb")?.toString().trim() || "",
+			storageGb: form.get("storage_gb")?.toString().trim() || "",
 		})
 		if (requiredErrors.length > 0) {
 			toast({
@@ -854,11 +860,15 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		metadata.fixed_ipv4 = fixedIpv4
 		metadata.support_url = form.get("support_url")?.toString().trim() || ""
 		metadata.management_url = form.get("management_url")?.toString().trim() || ""
+		if (isPhoneVariantSpecRequired(targetType)) {
+			metadata.memory_gb = Number(form.get("memory_gb")?.toString().trim())
+			metadata.storage_gb = Number(form.get("storage_gb")?.toString().trim())
+		}
 		setSaving(true)
 		try {
 			await pb.collection("assets").update(asset.id, {
 				name,
-				type: form.get("type")?.toString() || asset.type,
+				type: targetType,
 				status: form.get("status")?.toString() || asset.status || "active",
 				vendor: form.get("vendor")?.toString().trim() || "",
 				model: form.get("model")?.toString().trim() || "",
@@ -1971,7 +1981,7 @@ function splitArchiveSectionIntoParameterGroups(section: ArchiveDetailSection): 
 		},
 		{
 			title: "内存与存储",
-			keys: ["memory_detail", "memory_type", "storage_gb", "storage_detail", "storage_options"],
+			keys: ["memory_gb", "memory_detail", "memory_type", "storage_gb", "storage_detail", "storage_options"],
 			icon: <HardDriveIcon className="size-4" />,
 		},
 	]
@@ -2003,6 +2013,7 @@ const archiveParameterDetailSectionMap = new Map<string, string>([
 	["cpu_frequency", "处理器"],
 	["gpu_model", "图形"],
 	["gpu_detail", "图形"],
+	["memory_gb", "内存"],
 	["memory_detail", "内存"],
 	["memory_type", "内存"],
 	["storage_gb", "存储"],
@@ -2189,10 +2200,12 @@ function AssetEditWorkbench({
 	onDelete: () => void
 }) {
 	const metadata = asset.metadata ?? {}
+	const [selectedType, setSelectedType] = useState<AssetRecord["type"]>(asset.type)
 	const [locationValue, setLocationValue] = useState(asset.location || "")
 	useEffect(() => {
+		setSelectedType(asset.type)
 		setLocationValue(asset.location || "")
-	}, [asset.id, asset.location])
+	}, [asset.id, asset.location, asset.type])
 	const locationOptions = useMemo(
 		() => buildAssetLocationOptions(state.assets, state.locations, { includePresets: true }).values,
 		[state.assets, state.locations]
@@ -2231,7 +2244,8 @@ function AssetEditWorkbench({
 									name="type"
 									label="所属类型"
 									options={ASSET_TYPE_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
-									defaultValue={asset.type}
+									value={selectedType}
+									onChange={(value) => setSelectedType(value as AssetRecord["type"])}
 								/>
 								<TextField name="vendor" label="厂商 / 品牌" required defaultValue={asset.vendor} />
 								<TextField name="model" label="型号 / 规格" required defaultValue={asset.model} />
@@ -2242,6 +2256,24 @@ function AssetEditWorkbench({
 									defaultValue={getMetadataString(metadata, "internal_model")}
 								/>
 								<TextField name="color" label="外观颜色" required defaultValue={getAssetVisualColor(asset)} />
+								{isPhoneVariantSpecRequired(selectedType) && (
+									<>
+										<TextField
+											name="memory_gb"
+											label="运行内存 GB"
+											type="number"
+											required
+											defaultValue={String(getMetadataNumber(metadata, "memory_gb") ?? "")}
+										/>
+										<TextField
+											name="storage_gb"
+											label="存储容量 GB"
+											type="number"
+											required
+											defaultValue={String(getMetadataNumber(metadata, "storage_gb") ?? "")}
+										/>
+									</>
+								)}
 								<TextField
 									name="asset_tag"
 									label="资产编号"
@@ -2409,7 +2441,7 @@ function AssetEditWorkbench({
 									<div className="grid gap-2">
 										<Label htmlFor="asset-visual-frame-count">收集数量</Label>
 										<Input id="asset-visual-frame-count" value={visualFrameCount} readOnly className="bg-card" />
-										<div className="text-xs text-muted-foreground">最多收集 6 张可追溯设备图片。</div>
+										<div className="text-xs text-muted-foreground">固定收集白天 / 夜晚两张可追溯设备图片。</div>
 									</div>
 								</div>
 								<div className="relative grid aspect-[3/4] max-h-[30rem] min-h-[18rem] place-items-center overflow-hidden rounded-md border border-border/70 bg-card">
@@ -2755,6 +2787,7 @@ const archivePersonalDeviceSectionMap = new Map<string, string>([
 	["cpu_frequency", "系统与性能"],
 	["gpu_model", "系统与性能"],
 	["gpu_detail", "系统与性能"],
+	["memory_gb", "系统与性能"],
 	["memory_detail", "系统与性能"],
 	["memory_type", "系统与性能"],
 	["storage_gb", "系统与性能"],
@@ -3879,14 +3912,39 @@ type AssetCollectionWriteback = {
 }
 
 function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
+	const { theme } = useTheme()
+	const [systemTheme, setSystemTheme] = useState<"dark" | "light">(() =>
+		typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+	)
 	const latestVisual =
 		visuals.find((item) => item.kind === "official_reference") ??
 		visuals.find((item) => item.kind === "ai_turntable") ??
 		visuals[0]
-	const frames = latestVisual?.frames?.filter(isDisplayableAssetVisualFrame) ?? []
+	const frames = useMemo(() => latestVisual?.frames?.filter(isDisplayableAssetVisualFrame) ?? [], [latestVisual])
 	const [frameIndex, setFrameIndex] = useState(0)
 	const activeFrame = frames.length ? frames[((frameIndex % frames.length) + frames.length) % frames.length] : undefined
 	const activeIndex = frames.length ? ((frameIndex % frames.length) + frames.length) % frames.length : 0
+	const effectiveTheme = theme === "system" ? systemTheme : theme
+	const themedFrameIndex = useMemo(() => {
+		const targetTheme = effectiveTheme === "dark" ? "night" : "day"
+		return frames.findIndex((frame) => frame.theme === targetTheme)
+	}, [effectiveTheme, frames])
+
+	useEffect(() => {
+		if (theme !== "system" || typeof window === "undefined") return
+		const media = window.matchMedia("(prefers-color-scheme: dark)")
+		const syncSystemTheme = () => setSystemTheme(media.matches ? "dark" : "light")
+		syncSystemTheme()
+		media.addEventListener("change", syncSystemTheme)
+		return () => media.removeEventListener("change", syncSystemTheme)
+	}, [theme])
+
+	useEffect(() => {
+		if (themedFrameIndex >= 0) {
+			setFrameIndex(themedFrameIndex)
+		}
+	}, [themedFrameIndex])
+
 	const previousFrame = () => {
 		if (frames.length <= 1) return
 		setFrameIndex((current) => current - 1)
@@ -3897,12 +3955,9 @@ function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 	}
 
 	return (
-		<Card className="border-border/70 bg-card shadow-none">
-			<CardHeader className="border-b border-border/70 bg-surface-soft px-3 py-2.5">
-				<CardTitle className="text-base tracking-[-0.02em]">设备全貌图</CardTitle>
-			</CardHeader>
-			<CardContent className="p-3">
-				<div className="relative grid aspect-[3/4] min-h-[24rem] w-full select-none place-items-center overflow-hidden rounded-md border border-border/70 bg-surface-soft sm:min-h-[30rem] xl:min-h-[34rem]">
+		<Card className="overflow-hidden border-border/70 bg-card shadow-none">
+			<CardContent className="p-2">
+				<div className="relative grid aspect-[3/4] min-h-[24rem] w-full select-none place-items-center overflow-hidden rounded-md border border-border/70 bg-card sm:min-h-[30rem] xl:min-h-[34rem] dark:bg-background">
 					{activeFrame?.url ? (
 						<img
 							src={activeFrame.url}
@@ -6253,7 +6308,7 @@ function getAssetVisualColor(asset: AssetRecord) {
 function getAssetRecognitionRequirements(asset: AssetRecord): AssetRecognitionRequirement[] {
 	const metadata = asset.metadata ?? {}
 	const fixedIpv4 = firstNonEmpty(asset.management_ip, getMetadataString(metadata, "fixed_ipv4"))
-	return [
+	const requirements: AssetRecognitionRequirement[] = [
 		{ label: "IPv4 地址", value: fixedIpv4, ok: Boolean(fixedIpv4) },
 		{ label: "厂商 / 品牌", value: asset.vendor || "", ok: Boolean(asset.vendor?.trim()) },
 		{ label: "型号 / 规格", value: asset.model || "", ok: Boolean(asset.model?.trim()) },
@@ -6271,9 +6326,19 @@ function getAssetRecognitionRequirements(asset: AssetRecord): AssetRecognitionRe
 		{ label: "所属类型", value: getAssetTypeLabel(asset.type), ok: Boolean(asset.type) },
 		{ label: "位置", value: asset.location || "", ok: Boolean(asset.location?.trim()) },
 	]
+	if (isPhoneVariantSpecRequired(asset.type)) {
+		const memoryGb = getMetadataNumber(metadata, "memory_gb")
+		const storageGb = getMetadataNumber(metadata, "storage_gb")
+		requirements.push(
+			{ label: "运行内存", value: memoryGb ? `${memoryGb}GB` : "", ok: Boolean(memoryGb) },
+			{ label: "存储容量", value: storageGb ? `${storageGb}GB` : "", ok: Boolean(storageGb) }
+		)
+	}
+	return requirements
 }
 
 function validateAssetProfileForm(values: {
+	type: AssetRecord["type"]
 	name: string
 	vendor: string
 	model: string
@@ -6282,6 +6347,8 @@ function validateAssetProfileForm(values: {
 	assetTag: string
 	location: string
 	ipv4: string
+	memoryGb: string
+	storageGb: string
 }) {
 	const errors: string[] = []
 	if (!values.name.trim()) errors.push("资产名称")
@@ -6296,7 +6363,17 @@ function validateAssetProfileForm(values: {
 	if (!values.color.trim()) errors.push("外观颜色")
 	if (!values.assetTag.trim()) errors.push("资产编号")
 	if (!values.location.trim()) errors.push("位置")
+	if (isPhoneVariantSpecRequired(values.type)) {
+		if (!isPositiveNumberString(values.memoryGb)) errors.push("运行内存")
+		if (!isPositiveNumberString(values.storageGb)) errors.push("存储容量")
+	}
 	return errors
+}
+
+function isPositiveNumberString(value: string | undefined) {
+	if (!value?.trim()) return false
+	const number = Number(value)
+	return Number.isFinite(number) && number > 0
 }
 
 function isValidAssetIpv4(value: string) {

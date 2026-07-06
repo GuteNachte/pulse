@@ -635,9 +635,10 @@ const personalDeviceFields: AssetFieldDefinition[] = [
 	{ key: "cpu_frequency", label: "CPU 频率", source: "metadata", placeholder: "最高 2.85GHz" },
 	{ key: "gpu_model", label: "GPU", source: "metadata", placeholder: "Mali-G610 / Adreno / Apple GPU" },
 	{ key: "gpu_detail", label: "GPU 详情", source: "metadata", placeholder: "核心数、频率或图形能力" },
+	{ key: "memory_gb", label: "运行内存 GB", source: "metadata", type: "number", placeholder: "12" },
 	{ key: "memory_detail", label: "内存规格", source: "metadata", placeholder: "8GB / LPDDR5" },
 	{ key: "memory_type", label: "内存类型", source: "metadata", placeholder: "LPDDR5 / LPDDR5X" },
-	{ key: "storage_gb", label: "存储 GB", source: "metadata", type: "number", placeholder: "256" },
+	{ key: "storage_gb", label: "存储容量 GB", source: "metadata", type: "number", placeholder: "256" },
 	{ key: "storage_detail", label: "存储规格", source: "metadata", placeholder: "UFS 3.1 / NVMe / eMMC" },
 	{ key: "storage_options", label: "存储版本", source: "metadata", placeholder: "128GB / 256GB / 512GB" },
 	{ key: "screen_size", label: "屏幕 / 尺寸", source: "metadata", placeholder: "6.7 英寸 / 27 英寸 / 65 英寸" },
@@ -740,6 +741,22 @@ const personalDeviceFields: AssetFieldDefinition[] = [
 	{ key: "account_note", label: "账号 / 平台备注", source: "metadata", placeholder: "Apple ID / Steam / 米家账号备注" },
 	{ key: "power_mode", label: "供电方式", source: "metadata", placeholder: "电池 / AC / USB-C" },
 ]
+
+function getPersonalDeviceFields(type: AssetType): AssetFieldDefinition[] {
+	if (!isPhoneVariantSpecRequired(type)) {
+		return personalDeviceFields
+	}
+	return personalDeviceFields.map((field) => {
+		if (field.key !== "memory_gb" && field.key !== "storage_gb") {
+			return field
+		}
+		return {
+			...field,
+			required: true,
+			capture: "manual",
+		}
+	})
+}
 
 const cameraFields: AssetFieldDefinition[] = [
 	{ key: "connection_type", label: "连接方式", source: "metadata", type: "select", options: connectionOptions },
@@ -860,7 +877,7 @@ export function getAssetFormSections(type: AssetType): AssetFieldSection[] {
 			{ title: "基础身份", fields: commonIdentityFields },
 			{ title: "硬件识别", fields: hardwareIdentityFields },
 			{ title: "固定地址", fields: fixedAddressFields },
-			{ title: "设备参数", fields: personalDeviceFields },
+			{ title: "设备参数", fields: getPersonalDeviceFields(type) },
 			{ title: "生命周期", fields: lifecycleFields },
 			{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },
 		]
@@ -929,6 +946,10 @@ export function getAssetTypeLabel(type: AssetType) {
 
 export function isFixedSpecAssetType(type: AssetType) {
 	return FIXED_SPEC_ASSET_TYPES.includes(type)
+}
+
+export function isPhoneVariantSpecRequired(type: AssetType) {
+	return type === "phone"
 }
 
 export function buildFixedSpecAssetName(type: AssetType, model: string, internalModel?: string) {
@@ -1244,6 +1265,12 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 			{ label: "系统 / 固件", ok: Boolean(getMetadataString(metadata, "device_os")) },
 			{ label: "供电方式", ok: Boolean(getMetadataString(metadata, "power_mode")) }
 		)
+		if (isPhoneVariantSpecRequired(asset.type)) {
+			checks.push(
+				{ label: "运行内存", ok: Boolean(getMetadataNumber(metadata, "memory_gb")) },
+				{ label: "存储容量", ok: Boolean(getMetadataNumber(metadata, "storage_gb")) }
+			)
+		}
 		return checks
 	}
 	if (asset.type === "camera" || asset.type === "printer" || asset.type === "ups") {

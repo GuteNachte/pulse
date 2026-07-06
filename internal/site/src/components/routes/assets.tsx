@@ -94,6 +94,7 @@ import {
 	getAssetTypeLabel,
 	getStatusLabel,
 	getMetadataString,
+	isPhoneVariantSpecRequired,
 	type AssetFieldDefinition,
 	type AssetFieldSection,
 } from "@/modules/asset-center/asset-schema"
@@ -396,8 +397,8 @@ export default memo(function AssetsPage() {
 		})
 	}, [editingCompleteness, formSections, profileFocus])
 	const advancedCreateSections = useMemo(
-		() => getAdvancedCreateFormSections(focusedFormSections),
-		[focusedFormSections]
+		() => getAdvancedCreateFormSections(focusedFormSections, form.type),
+		[focusedFormSections, form.type]
 	)
 
 	function resetFilters() {
@@ -583,6 +584,16 @@ export default memo(function AssetsPage() {
 				toast({
 					title: "关键建档字段未填完整",
 					description: createErrors.join("、"),
+					variant: "destructive",
+				})
+				return
+			}
+		} else {
+			const variantErrors = validatePhoneVariantRequiredFields(form)
+			if (variantErrors.length > 0) {
+				toast({
+					title: "手机规格未填完整",
+					description: variantErrors.join("、"),
 					variant: "destructive",
 				})
 				return
@@ -1580,11 +1591,18 @@ const quickCreateFieldKeys = new Set([
 	"metadata:asset_tag",
 ])
 
-function getAdvancedCreateFormSections(sections: AssetFieldSection[]) {
+const phoneVariantQuickFieldKeys = new Set(["metadata:memory_gb", "metadata:storage_gb"])
+
+function getAdvancedCreateFormSections(sections: AssetFieldSection[], type: AssetType) {
 	return sections
 		.map((section) => ({
 			...section,
-			fields: section.fields.filter((field) => !quickCreateFieldKeys.has(`${field.source}:${field.key}`)),
+			fields: section.fields.filter((field) => {
+				const key = `${field.source}:${field.key}`
+				return (
+					!quickCreateFieldKeys.has(key) && !(isPhoneVariantSpecRequired(type) && phoneVariantQuickFieldKeys.has(key))
+				)
+			}),
 		}))
 		.filter((section) => section.fields.length > 0)
 }
@@ -1655,6 +1673,30 @@ function QuickAssetCreateFields({
 					placeholder="例如 黑色 / 白色 / 蓝色 / 银色"
 				/>
 			</AssetFormField>
+			{isPhoneVariantSpecRequired(form.type) && (
+				<>
+					<AssetFormField label="运行内存 GB" required>
+						<Input
+							type="number"
+							min="1"
+							step="1"
+							value={form.metadata.memory_gb ?? ""}
+							onChange={(event) => onMetadataValue("memory_gb", event.target.value)}
+							placeholder="例如 12"
+						/>
+					</AssetFormField>
+					<AssetFormField label="存储容量 GB" required>
+						<Input
+							type="number"
+							min="1"
+							step="1"
+							value={form.metadata.storage_gb ?? ""}
+							onChange={(event) => onMetadataValue("storage_gb", event.target.value)}
+							placeholder="例如 256"
+						/>
+					</AssetFormField>
+				</>
+			)}
 			<AssetFormField label="资产编号">
 				<Input
 					value={form.metadata.asset_tag ?? ""}
@@ -1686,12 +1728,30 @@ function validateNewAssetRequiredFields(form: AssetFormState, existingAssets: As
 	if (!form.model.trim()) errors.push("型号 / 规格")
 	if (!form.metadata.internal_model?.trim()) errors.push("内部型号 / 搜索代码")
 	if (!form.metadata.color?.trim() && !form.metadata.device_color?.trim()) errors.push("外观颜色")
+	if (isPhoneVariantSpecRequired(form.type)) {
+		if (!isPositiveNumberString(form.metadata.memory_gb)) errors.push("运行内存")
+		if (!isPositiveNumberString(form.metadata.storage_gb)) errors.push("存储容量")
+	}
 	if (!form.location.trim()) errors.push("位置")
 	const assetTag = form.metadata.asset_tag?.trim()
 	if (assetTag && existingAssets.some((asset) => getMetadataString(asset.metadata, "asset_tag") === assetTag)) {
 		errors.push("资产编号已存在")
 	}
 	return errors
+}
+
+function validatePhoneVariantRequiredFields(form: AssetFormState) {
+	if (!isPhoneVariantSpecRequired(form.type)) return []
+	const errors: string[] = []
+	if (!isPositiveNumberString(form.metadata.memory_gb)) errors.push("运行内存")
+	if (!isPositiveNumberString(form.metadata.storage_gb)) errors.push("存储容量")
+	return errors
+}
+
+function isPositiveNumberString(value: string | undefined) {
+	if (!value?.trim()) return false
+	const number = Number(value)
+	return Number.isFinite(number) && number > 0
 }
 
 function getAssetFormIpv4(form: AssetFormState) {

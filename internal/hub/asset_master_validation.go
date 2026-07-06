@@ -2,6 +2,7 @@ package hub
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -12,6 +13,9 @@ func (h *Hub) bindAssetMasterValidationHooks() {
 		if err := h.validateAssetParentRequest(e); err != nil {
 			return err
 		}
+		if err := h.validateAssetRequiredProfileRequest(e); err != nil {
+			return err
+		}
 		if err := h.validateAssetDuplicateRequest(e); err != nil {
 			return err
 		}
@@ -19,6 +23,9 @@ func (h *Hub) bindAssetMasterValidationHooks() {
 	})
 	h.App.OnRecordUpdateRequest("assets").BindFunc(func(e *core.RecordRequestEvent) error {
 		if err := h.validateAssetParentRequest(e); err != nil {
+			return err
+		}
+		if err := h.validateAssetRequiredProfileRequest(e); err != nil {
 			return err
 		}
 		if err := h.validateAssetDuplicateRequest(e); err != nil {
@@ -120,6 +127,22 @@ func (h *Hub) validateAssetParentRequest(e *core.RecordRequestEvent) error {
 	}
 	if h.assetParentChainContains(parentRecord, e.Record.Id) {
 		return e.BadRequestError("父级资产不能形成循环关系。", nil)
+	}
+	return nil
+}
+
+func (h *Hub) validateAssetRequiredProfileRequest(e *core.RecordRequestEvent) error {
+	if e == nil || e.Record == nil {
+		return nil
+	}
+	if strings.TrimSpace(e.Record.GetString("type")) != "phone" {
+		return nil
+	}
+	if !recordMetadataPositiveNumber(e.Record, "memory_gb") {
+		return e.BadRequestError("手机资产必须填写运行内存。", nil)
+	}
+	if !recordMetadataPositiveNumber(e.Record, "storage_gb") {
+		return e.BadRequestError("手机资产必须填写存储容量。", nil)
 	}
 	return nil
 }
@@ -426,6 +449,36 @@ func recordMetadataString(record *core.Record, key string) string {
 		return ""
 	}
 	return strings.TrimSpace(text)
+}
+
+func recordMetadataPositiveNumber(record *core.Record, key string) bool {
+	if record == nil || strings.TrimSpace(key) == "" {
+		return false
+	}
+	metadata := recordMetadataMap(record.Get("metadata"))
+	if len(metadata) == 0 {
+		_ = record.UnmarshalJSONField("metadata", &metadata)
+	}
+	value, ok := metadata[key]
+	if !ok {
+		return false
+	}
+	switch typed := value.(type) {
+	case int:
+		return typed > 0
+	case int64:
+		return typed > 0
+	case float64:
+		return typed > 0
+	case json.Number:
+		number, err := typed.Float64()
+		return err == nil && number > 0
+	case string:
+		number, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
+		return err == nil && number > 0
+	default:
+		return false
+	}
 }
 
 func recordAssetIPValues(record *core.Record) map[string]string {

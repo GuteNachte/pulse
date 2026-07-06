@@ -300,6 +300,7 @@ export interface AssetVisualRecord extends RecordModel {
 		index?: number
 		angle?: number
 		view?: string
+		theme?: string
 		label?: string
 		url?: string
 		source_title?: string

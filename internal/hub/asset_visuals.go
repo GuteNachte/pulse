@@ -14,7 +14,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 )
 
-const defaultAssetTurntableFrameCount = 6
+const defaultAssetTurntableFrameCount = 2
 
 type assetTurntableVisualRequest struct {
 	Color      string `json:"color"`
@@ -78,13 +78,14 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 	}
 
 	task.Set("status", "ready")
-	task.Set("output_summary", map[string]any{"collected_images": len(frames)})
+	task.Set("output_summary", map[string]any{"collected_images": len(frames), "theme_images": len(frames)})
 	visual.Set("status", "ready")
 	visual.Set("frames", frames)
 	visual.Set("frame_count", len(frames))
 	visual.Set("metadata", map[string]any{
 		"collection_status": "ready",
-		"note":              "设备图片来自可追溯来源。后续如需统一风格，只能基于这些真实图片做一致性整理。",
+		"theme_mode":        "day_night",
+		"note":              "设备图片来自可追溯来源，按白天 / 夜晚两张主题图保存。后续如需统一风格，只能基于这些真实图片做一致性整理。",
 	})
 	if err := h.Save(task); err != nil {
 		return e.InternalServerError("Failed to update AI task.", err)
@@ -127,7 +128,7 @@ func assetVisualAIConfigFromEnv() assetVisualAIConfig {
 func normalizeAssetTurntableFrameCount(value int) int {
 	if value <= 0 {
 		if _, err := strconv.Atoi(strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_FRAME_COUNT"))); err == nil {
-			// Legacy env var is intentionally ignored now: device visuals are fixed to six factual views.
+			// Legacy env var is intentionally ignored now: device visuals are fixed to day/night factual images.
 		}
 	}
 	return defaultAssetTurntableFrameCount
@@ -550,13 +551,23 @@ func buildAssetImageCollectionPrompt(asset *core.Record, color string, frameCoun
 		"Collect traceable device images for a home asset catalog.",
 		"Device: "+strings.Join(nonEmptyStrings(asset.GetString("vendor"), asset.GetString("model"), recordMetadataString(asset, "internal_model"), asset.GetString("name")), " / "),
 		"Color: "+color+".",
-		fmt.Sprintf("Need up to %d real source images. Do not invent device appearance.", frameCount),
+		fmt.Sprintf("Need exactly %d theme-ready real source images: day and night. Do not invent device appearance.", frameCount),
 		"Traceable image URLs: "+strings.Join(referenceLines, " ; "),
 	), "\n")
 }
 
 func buildCollectedAssetVisualFrames(references []map[string]any, limit int) []map[string]any {
-	frames := make([]map[string]any, 0, limit)
+	themeLabels := []struct {
+		theme string
+		label string
+	}{
+		{theme: "day", label: "白天"},
+		{theme: "night", label: "夜晚"},
+	}
+	if limit <= 0 || limit > len(themeLabels) {
+		limit = len(themeLabels)
+	}
+	candidates := make([]map[string]any, 0, limit)
 	for _, source := range references {
 		imageURL, _ := source["image_url"].(string)
 		if imageURL == "" {
@@ -567,17 +578,30 @@ func buildCollectedAssetVisualFrames(references []map[string]any, limit int) []m
 		}
 		title, _ := source["title"].(string)
 		sourceURL, _ := source["url"].(string)
-		frames = append(frames, map[string]any{
-			"index":        len(frames),
-			"view":         "collected",
-			"label":        fmt.Sprintf("图片 %d", len(frames)+1),
+		candidates = append(candidates, map[string]any{
 			"url":          imageURL,
 			"source_title": title,
 			"source_url":   sourceURL,
 		})
-		if len(frames) >= limit {
+		if len(candidates) >= limit {
 			break
 		}
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	frames := make([]map[string]any, 0, limit)
+	for index := 0; index < limit; index++ {
+		source := candidates[index%len(candidates)]
+		frames = append(frames, map[string]any{
+			"index":        index,
+			"view":         "theme",
+			"theme":        themeLabels[index].theme,
+			"label":        themeLabels[index].label,
+			"url":          source["url"],
+			"source_title": source["source_title"],
+			"source_url":   source["source_url"],
+		})
 	}
 	return frames
 }

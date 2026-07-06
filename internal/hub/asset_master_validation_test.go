@@ -204,6 +204,50 @@ func TestAssetMasterValidationRejectsDuplicateAssets(t *testing.T) {
 	require.Equal(t, http.StatusOK, ownInterfaceIPAsManagementIP.Status, ownInterfaceIPAsManagementIP.Body)
 }
 
+func TestAssetMasterValidationRequiresPhoneVariantSpecs(t *testing.T) {
+	hub, err := pulseTests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer hub.Cleanup()
+
+	user, err := pulseTests.CreateUser(hub, "asset-phone-variant@example.com", "password")
+	require.NoError(t, err)
+	token, err := user.NewAuthToken()
+	require.NoError(t, err)
+	headers := map[string]string{"Authorization": token}
+
+	missingMemory := pulseTests.PerformTestAPIRequest(
+		t,
+		hub.TestApp,
+		http.MethodPost,
+		"/api/collections/assets/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","name":"Redmi K50","type":"phone","metadata":{"storage_gb":256}}`, user.Id)),
+		headers,
+	)
+	require.Equal(t, http.StatusBadRequest, missingMemory.Status, missingMemory.Body)
+	require.Contains(t, missingMemory.Body, "手机资产必须填写运行内存")
+
+	missingStorage := pulseTests.PerformTestAPIRequest(
+		t,
+		hub.TestApp,
+		http.MethodPost,
+		"/api/collections/assets/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","name":"Redmi K50","type":"phone","metadata":{"memory_gb":12}}`, user.Id)),
+		headers,
+	)
+	require.Equal(t, http.StatusBadRequest, missingStorage.Status, missingStorage.Body)
+	require.Contains(t, missingStorage.Body, "手机资产必须填写存储容量")
+
+	completePhone := pulseTests.PerformTestAPIRequest(
+		t,
+		hub.TestApp,
+		http.MethodPost,
+		"/api/collections/assets/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","name":"Redmi K50","type":"phone","metadata":{"memory_gb":12,"storage_gb":256}}`, user.Id)),
+		headers,
+	)
+	require.Equal(t, http.StatusOK, completePhone.Status, completePhone.Body)
+}
+
 func TestAssetInterfaceValidationKeepsSinglePrimaryInterface(t *testing.T) {
 	hub, err := pulseTests.NewTestHub(t.TempDir())
 	require.NoError(t, err)
