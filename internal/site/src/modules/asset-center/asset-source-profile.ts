@@ -30,8 +30,8 @@ const sourceProfiles: Record<AssetFieldCapture, { label: string; brief: string }
 		brief: "来自 Agent 或局域网采集，只生成待确认建议",
 	},
 	future_collectable: {
-		label: "联网 / 专项匹配",
-		brief: "基于型号、硬件 ID 或资料源生成候选",
+		label: "资料补全 / 专项识别",
+		brief: "由资料补全 Agent 或专项识别生成候选",
 	},
 }
 

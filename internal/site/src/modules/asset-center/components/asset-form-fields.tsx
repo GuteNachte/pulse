@@ -367,7 +367,7 @@ export function AssetFieldCaptureTag({
 			: capture === "agent_collectable"
 				? "本地采集"
 				: capture === "future_collectable"
-					? "联网匹配"
+					? "资料补全"
 					: "手动主档"
 	return (
 		<span

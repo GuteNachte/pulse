@@ -47,13 +47,9 @@ type AISettingsForm = {
 	baseUrl: string
 	apiKey: string
 	aiEnabled: boolean
-	aiProvider: string
-	aiEndpoint: string
 	aiModel: string
 	aiApiKey: string
 	visualEnabled: boolean
-	visualProvider: string
-	visualEndpoint: string
 	visualModel: string
 	visualApiKey: string
 	frameCount: number
@@ -63,13 +59,9 @@ const defaultForm: AISettingsForm = {
 	baseUrl: "https://apihub.agnes-ai.com/v1",
 	apiKey: "",
 	aiEnabled: false,
-	aiProvider: "agnes",
-	aiEndpoint: "https://apihub.agnes-ai.com/v1/chat/completions",
 	aiModel: "agnes-2.0-flash",
 	aiApiKey: "",
 	visualEnabled: false,
-	visualProvider: "agnes",
-	visualEndpoint: "https://apihub.agnes-ai.com/v1/images/generations",
 	visualModel: "agnes-image-2.1-flash",
 	visualApiKey: "",
 	frameCount: 2,
@@ -322,7 +314,7 @@ function getConfigErrorMessage(error: unknown) {
 			return message.trim()
 		}
 	}
-	return "请检查 endpoint、模型参数和管理员权限。"
+	return "请检查 Agnes Base URL、模型参数和管理员权限。"
 }
 
 function formFromConfig(config: AssetEnrichmentConfig): AISettingsForm {
@@ -331,12 +323,9 @@ function formFromConfig(config: AssetEnrichmentConfig): AISettingsForm {
 		baseUrl: config.base_url || defaultForm.baseUrl,
 		apiKey: config.api_key || "",
 		aiEnabled: config.ai.enabled,
-		aiProvider: config.ai.provider || defaultForm.aiProvider,
-		aiEndpoint: config.ai.endpoint || defaultForm.aiEndpoint,
 		aiModel: config.ai.model || defaultForm.aiModel,
 		aiApiKey: config.api_key || config.ai.api_key || "",
 		visualEnabled: config.visual_ai.enabled,
-		visualEndpoint: config.visual_ai.endpoint || defaultForm.visualEndpoint,
 		visualModel: config.visual_ai.model || defaultForm.visualModel,
 		visualApiKey: config.api_key || config.visual_ai.api_key || "",
 		frameCount: defaultForm.frameCount,

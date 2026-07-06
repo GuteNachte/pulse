@@ -733,9 +733,9 @@ const personalDeviceFields: AssetFieldDefinition[] = [
 	},
 	{
 		key: "online_specs_summary",
-		label: "联网规格摘要",
+		label: "资料规格摘要",
 		source: "metadata",
-		placeholder: "由联网补全报告确认写入的规格摘要",
+		placeholder: "由资料补全报告确认写入的规格摘要",
 		span: "full",
 	},
 	{ key: "account_note", label: "账号 / 平台备注", source: "metadata", placeholder: "Apple ID / Steam / 米家账号备注" },

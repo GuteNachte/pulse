@@ -995,7 +995,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			return
 		}
 		setRecognitionStage("running")
-		setRecognitionMessage("正在调用资料补全 Agent，读取本地采集、联网资料和 AI 结构化结果。")
+		setRecognitionMessage("正在调用资料补全 Agent，读取本地采集、可追溯资料和 AI 结构化结果。")
 		setSaving(true)
 		try {
 			await pb.send(`/api/pulse/assets/${asset.id}/enrichment-reports`, { method: "POST" })
@@ -5674,9 +5674,9 @@ function getOnlineProviderLabel(provider?: string) {
 		case "wikidata":
 			return "Wikidata"
 		case "duckduckgo":
-			return "公开搜索"
+			return "资料来源"
 		case "brave":
-			return "Brave"
+			return "资料来源"
 		case "openai-compatible":
 			return "AI 提取"
 		default:
