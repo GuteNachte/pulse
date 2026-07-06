@@ -1,9 +1,28 @@
-import type { ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import type { AssetFieldDefinition, AssetLifecycleTone } from "@/modules/asset-center/asset-schema"
+
+export const PHONE_MEMORY_OPTIONS = [
+	{ value: "4", label: "4 GB" },
+	{ value: "6", label: "6 GB" },
+	{ value: "8", label: "8 GB" },
+	{ value: "12", label: "12 GB" },
+	{ value: "16", label: "16 GB" },
+	{ value: "18", label: "18 GB" },
+	{ value: "24", label: "24 GB" },
+]
+
+export const PHONE_STORAGE_OPTIONS = [
+	{ value: "64", label: "64 GB" },
+	{ value: "128", label: "128 GB" },
+	{ value: "256", label: "256 GB" },
+	{ value: "512", label: "512 GB" },
+	{ value: "1024", label: "1 TB" },
+	{ value: "2048", label: "2 TB" },
+]
 
 export function AssetFormSection({ title, children }: { title: string; children: ReactNode }) {
 	return (
@@ -41,6 +60,20 @@ export function AssetInput({
 					locationOptions={locationOptions ?? []}
 					onChange={onChange}
 				/>
+			) : field.key === "memory_gb" ? (
+				<PhoneVariantSpecInput
+					value={value}
+					onChange={onChange}
+					options={PHONE_MEMORY_OPTIONS}
+					customPlaceholder="例如 10"
+				/>
+			) : field.key === "storage_gb" ? (
+				<PhoneVariantSpecInput
+					value={value}
+					onChange={onChange}
+					options={PHONE_STORAGE_OPTIONS}
+					customPlaceholder="例如 384"
+				/>
 			) : field.type === "select" ? (
 				<select
 					value={value}
@@ -63,6 +96,64 @@ export function AssetInput({
 				/>
 			)}
 		</AssetFormField>
+	)
+}
+
+export function PhoneVariantSpecInput({
+	value,
+	onChange,
+	options,
+	customPlaceholder,
+}: {
+	value: string
+	onChange: (value: string) => void
+	options: { value: string; label: string }[]
+	customPlaceholder?: string
+}) {
+	const normalizedValue = value.trim()
+	const isPreset = options.some((option) => option.value === normalizedValue)
+	const [customMode, setCustomMode] = useState(Boolean(normalizedValue && !isPreset))
+	const selectValue = customMode || (normalizedValue && !isPreset) ? "__custom__" : normalizedValue
+	const showCustom = customMode || Boolean(normalizedValue && !isPreset)
+
+	useEffect(() => {
+		if (normalizedValue && !isPreset) {
+			setCustomMode(true)
+		} else if (normalizedValue && isPreset) {
+			setCustomMode(false)
+		}
+	}, [isPreset, normalizedValue])
+
+	return (
+		<div className="grid gap-2">
+			<select
+				value={selectValue}
+				onChange={(event) => {
+					const nextValue = event.target.value
+					setCustomMode(nextValue === "__custom__")
+					onChange(nextValue === "__custom__" ? "" : nextValue)
+				}}
+				className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus:border-ring/70 focus:ring-2 focus:ring-ring/15"
+			>
+				<option value="">未设置</option>
+				{options.map((option) => (
+					<option key={option.value} value={option.value}>
+						{option.label}
+					</option>
+				))}
+				<option value="__custom__">自定义</option>
+			</select>
+			{showCustom && (
+				<Input
+					type="number"
+					min="1"
+					step="1"
+					value={normalizedValue}
+					placeholder={customPlaceholder}
+					onChange={(event) => onChange(event.target.value)}
+				/>
+			)}
+		</div>
 	)
 }
 

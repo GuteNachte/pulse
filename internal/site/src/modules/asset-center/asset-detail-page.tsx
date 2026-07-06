@@ -64,7 +64,13 @@ import { pageTitle } from "@/lib/branding"
 import { batteryStateTranslations } from "@/lib/i18n"
 import { cn, decimalString, formatTemperature } from "@/lib/utils"
 import { getAssetIcon } from "./components/asset-card"
-import { AssetFieldCaptureTag, AssetLocationInput } from "./components/asset-form-fields"
+import {
+	AssetFieldCaptureTag,
+	AssetLocationInput,
+	PHONE_MEMORY_OPTIONS,
+	PHONE_STORAGE_OPTIONS,
+	PhoneVariantSpecInput,
+} from "./components/asset-form-fields"
 import { buildAssetLocationOptions } from "./asset-list"
 import {
 	HOST_ASSET_TYPES,
@@ -1980,8 +1986,13 @@ function splitArchiveSectionIntoParameterGroups(section: ArchiveDetailSection): 
 			icon: <CpuIcon className="size-4" />,
 		},
 		{
-			title: "内存与存储",
-			keys: ["memory_gb", "memory_detail", "memory_type", "storage_gb", "storage_detail", "storage_options"],
+			title: "内存",
+			keys: ["memory_gb", "memory_detail", "memory_type"],
+			icon: <HardDriveIcon className="size-4" />,
+		},
+		{
+			title: "存储",
+			keys: ["storage_gb", "storage_detail", "storage_options"],
 			icon: <HardDriveIcon className="size-4" />,
 		},
 	]
@@ -2258,19 +2269,21 @@ function AssetEditWorkbench({
 								<TextField name="color" label="外观颜色" required defaultValue={getAssetVisualColor(asset)} />
 								{isPhoneVariantSpecRequired(selectedType) && (
 									<>
-										<TextField
+										<PhoneVariantSpecField
 											name="memory_gb"
 											label="运行内存 GB"
-											type="number"
 											required
 											defaultValue={String(getMetadataNumber(metadata, "memory_gb") ?? "")}
+											options={PHONE_MEMORY_OPTIONS}
+											customPlaceholder="例如 10"
 										/>
-										<TextField
+										<PhoneVariantSpecField
 											name="storage_gb"
 											label="存储容量 GB"
-											type="number"
 											required
 											defaultValue={String(getMetadataNumber(metadata, "storage_gb") ?? "")}
+											options={PHONE_STORAGE_OPTIONS}
+											customPlaceholder="例如 384"
 										/>
 									</>
 								)}
@@ -5506,6 +5519,43 @@ function SelectField({
 					</option>
 				))}
 			</select>
+		</div>
+	)
+}
+
+function PhoneVariantSpecField({
+	name,
+	label,
+	required,
+	defaultValue,
+	options,
+	customPlaceholder,
+}: {
+	name: string
+	label: string
+	required?: boolean
+	defaultValue?: string
+	options: { value: string; label: string }[]
+	customPlaceholder?: string
+}) {
+	const [value, setValue] = useState(defaultValue ?? "")
+	useEffect(() => {
+		setValue(defaultValue ?? "")
+	}, [defaultValue])
+
+	return (
+		<div className="grid gap-2">
+			<Label htmlFor={`${name}-select`}>
+				{label}
+				{required && <span className="ms-1 text-destructive">*</span>}
+			</Label>
+			<input type="hidden" name={name} value={value} />
+			<PhoneVariantSpecInput
+				value={value}
+				onChange={setValue}
+				options={options}
+				customPlaceholder={customPlaceholder}
+			/>
 		</div>
 	)
 }

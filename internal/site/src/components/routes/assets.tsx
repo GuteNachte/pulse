@@ -22,6 +22,9 @@ import {
 	AssetFormSection,
 	AssetInput,
 	AssetMetaTag,
+	PHONE_MEMORY_OPTIONS,
+	PHONE_STORAGE_OPTIONS,
+	PhoneVariantSpecInput,
 } from "@/modules/asset-center/components/asset-form-fields"
 import { AssetTypePicker, AssetTypeRail } from "@/modules/asset-center/components/asset-type-picker"
 import { Button } from "@/components/ui/button"
@@ -1676,23 +1679,19 @@ function QuickAssetCreateFields({
 			{isPhoneVariantSpecRequired(form.type) && (
 				<>
 					<AssetFormField label="运行内存 GB" required>
-						<Input
-							type="number"
-							min="1"
-							step="1"
+						<PhoneVariantSpecInput
 							value={form.metadata.memory_gb ?? ""}
-							onChange={(event) => onMetadataValue("memory_gb", event.target.value)}
-							placeholder="例如 12"
+							onChange={(value) => onMetadataValue("memory_gb", value)}
+							options={PHONE_MEMORY_OPTIONS}
+							customPlaceholder="例如 10"
 						/>
 					</AssetFormField>
 					<AssetFormField label="存储容量 GB" required>
-						<Input
-							type="number"
-							min="1"
-							step="1"
+						<PhoneVariantSpecInput
 							value={form.metadata.storage_gb ?? ""}
-							onChange={(event) => onMetadataValue("storage_gb", event.target.value)}
-							placeholder="例如 256"
+							onChange={(value) => onMetadataValue("storage_gb", value)}
+							options={PHONE_STORAGE_OPTIONS}
+							customPlaceholder="例如 384"
 						/>
 					</AssetFormField>
 				</>
