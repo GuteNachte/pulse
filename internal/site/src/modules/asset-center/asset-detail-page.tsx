@@ -3938,6 +3938,7 @@ function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 	const activeFrame = frames.length ? frames[((frameIndex % frames.length) + frames.length) % frames.length] : undefined
 	const activeIndex = frames.length ? ((frameIndex % frames.length) + frames.length) % frames.length : 0
 	const effectiveTheme = theme === "system" ? systemTheme : theme
+	const isDarkVisualStage = effectiveTheme === "dark" && Boolean(activeFrame?.url)
 	const themedFrameIndex = useMemo(() => {
 		const targetTheme = effectiveTheme === "dark" ? "night" : "day"
 		return frames.findIndex((frame) => frame.theme === targetTheme)
@@ -3970,14 +3971,45 @@ function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 	return (
 		<Card className="overflow-hidden border-border/70 bg-card shadow-none">
 			<CardContent className="p-2">
-				<div className="relative grid aspect-[3/4] min-h-[24rem] w-full select-none place-items-center overflow-hidden rounded-md border border-border/70 bg-card sm:min-h-[30rem] xl:min-h-[34rem] dark:bg-background">
+				<div
+					className={cn(
+						"relative isolate grid aspect-[3/4] min-h-[24rem] w-full select-none place-items-center overflow-hidden rounded-md border border-border/70 bg-card sm:min-h-[30rem] xl:min-h-[34rem] dark:bg-background",
+						isDarkVisualStage &&
+							"border-white/10 bg-[#050506] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05),inset_0_-80px_120px_rgba(0,0,0,0.55)]"
+					)}
+				>
 					{activeFrame?.url ? (
-						<img
-							src={activeFrame.url}
-							alt="设备全貌图"
-							className="h-full w-full object-contain p-1 sm:p-2"
-							draggable={false}
-						/>
+						<>
+							{isDarkVisualStage && (
+								<>
+									<img
+										src={activeFrame.url}
+										alt=""
+										aria-hidden="true"
+										className="pointer-events-none absolute inset-0 z-0 h-full w-full scale-125 object-cover opacity-30 blur-2xl saturate-90"
+										draggable={false}
+									/>
+									<div
+										aria-hidden="true"
+										className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_42%,rgba(139,92,246,0.22),rgba(10,10,12,0.50)_42%,rgba(5,5,6,0.92)_100%)]"
+									/>
+									<div
+										aria-hidden="true"
+										className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_28%,rgba(0,0,0,0.36)_100%)]"
+									/>
+								</>
+							)}
+							<img
+								src={activeFrame.url}
+								alt="设备全貌图"
+								className={cn(
+									"relative z-10 h-full w-full object-contain p-1 sm:p-2",
+									isDarkVisualStage &&
+										"scale-[1.18] p-0 brightness-110 contrast-110 drop-shadow-[0_30px_52px_rgba(0,0,0,0.72)] sm:p-0"
+								)}
+								draggable={false}
+							/>
+						</>
 					) : (
 						<div className="grid place-items-center gap-2 text-center text-muted-foreground">
 							<div className="grid size-12 place-items-center rounded-md border border-border/70 bg-card">
@@ -3990,7 +4022,7 @@ function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 							<button
 								type="button"
 								onClick={previousFrame}
-								className="absolute left-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md border border-border/70 bg-card/95 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-foreground"
+								className="absolute left-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md border border-border/70 bg-card/95 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-foreground dark:bg-background/82"
 								aria-label="上一张设备图片"
 							>
 								<ChevronLeftIcon className="size-4" />
@@ -3998,7 +4030,7 @@ function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 							<button
 								type="button"
 								onClick={nextFrame}
-								className="absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md border border-border/70 bg-card/95 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-foreground"
+								className="absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md border border-border/70 bg-card/95 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-foreground dark:bg-background/82"
 								aria-label="下一张设备图片"
 							>
 								<ChevronRightIcon className="size-4" />

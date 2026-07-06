@@ -411,6 +411,7 @@ func TestAssetVisualCollectsTraceableImagesWithoutImageGeneration(t *testing.T) 
 			Redmi K50 官方产品资料。
 			<img src="/xiaomi-17-ultra.png" alt="Xiaomi 17 Ultra" width="160" height="110">
 			<img src="/redmi-k50-front.png" alt="Redmi K50">
+			<img src="/redmi-k50-moyu-black.png" alt="Redmi K50 墨羽黑">
 			<img srcset="/redmi-k50-back.png 1x, /redmi-k50-side.png 2x" alt="Redmi K50">
 		</body></html>`))
 	}))
@@ -457,7 +458,7 @@ func TestAssetVisualCollectsTraceableImagesWithoutImageGeneration(t *testing.T) 
 	require.Equal(t, "night", frames[1]["theme"])
 	require.Equal(t, "夜晚", frames[1]["label"])
 	require.Equal(t, referenceServer.URL+"/redmi-k50-official.png", frames[0]["url"])
-	require.Equal(t, referenceServer.URL+"/redmi-k50-front.png", frames[1]["url"])
+	require.Equal(t, referenceServer.URL+"/redmi-k50-moyu-black.png", frames[1]["url"])
 	require.Contains(t, fmt.Sprint(frames), "theme:day")
 	require.Contains(t, fmt.Sprint(frames), "theme:night")
 	require.NotContains(t, fmt.Sprint(frames), "xiaomi-17-ultra")

@@ -191,6 +191,7 @@ func (h *Hub) collectAssetVisualReferenceSources(asset *core.Record) []map[strin
 	online := h.collectAssetOnlineReferenceEnrichment(asset)
 	result := make([]map[string]any, 0, len(online.Sources))
 	seen := map[string]bool{}
+	candidateLimit := defaultAssetTurntableFrameCount * 3
 	if officialImageURL := recordMetadataString(asset, "official_image_url"); isLikelyImageURL(officialImageURL) {
 		result = appendAssetVisualReferenceSource(result, seen, map[string]any{
 			"title":      "已确认官方设备图片",
@@ -216,12 +217,12 @@ func (h *Hub) collectAssetVisualReferenceSources(asset *core.Record) []map[strin
 			"provider":   source.Provider,
 			"confidence": source.Confidence,
 		})
-		if len(result) >= defaultAssetTurntableFrameCount {
+		if len(result) >= candidateLimit {
 			break
 		}
 	}
-	if len(result) < defaultAssetTurntableFrameCount {
-		result = h.collectAssetVisualPageImageSources(asset, result, seen, defaultAssetTurntableFrameCount)
+	if len(result) < candidateLimit {
+		result = h.collectAssetVisualPageImageSources(asset, result, seen, candidateLimit)
 	}
 	return result
 }
@@ -460,7 +461,61 @@ func extractAssetVisualHTMLImageCandidates(base *url.URL, body string) []assetVi
 			}
 		}
 	}
+	result = append(result, extractAssetVisualEmbeddedImageCandidates(base, body)...)
 	return result
+}
+
+func extractAssetVisualEmbeddedImageCandidates(base *url.URL, body string) []assetVisualHTMLImageCandidate {
+	pattern := regexp.MustCompile(`(?i)(?:https?:)?//[^"'<>\\\s]+\.(?:png|jpg|jpeg|webp|avif)|/[\w./-]+\.(?:png|jpg|jpeg|webp|avif)`)
+	matches := pattern.FindAllString(body, -1)
+	result := make([]assetVisualHTMLImageCandidate, 0, len(matches))
+	seen := map[string]bool{}
+	for _, match := range matches {
+		absolute := absolutizeAssetOnlineURL(base, strings.TrimSpace(match))
+		if !isLikelyImageURL(absolute) || !isLikelyAssetEmbeddedProductImage(base, absolute) {
+			continue
+		}
+		key := strings.ToLower(absolute)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, assetVisualHTMLImageCandidate{
+			URL:     absolute,
+			Context: embeddedAssetVisualImageContext(absolute),
+		})
+	}
+	return result
+}
+
+func isLikelyAssetEmbeddedProductImage(base *url.URL, rawURL string) bool {
+	lower := strings.ToLower(strings.TrimSpace(rawURL))
+	if lower == "" {
+		return false
+	}
+	if strings.Contains(lower, "placeholder") || strings.Contains(lower, "download") || strings.Contains(lower, "logo") || strings.Contains(lower, "icon") {
+		return false
+	}
+	parsed, err := url.Parse(lower)
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	if strings.Contains(strings.ToLower(base.Host), "mi.com") {
+		return strings.Contains(parsed.Host, "mi-img.com") ||
+			strings.Contains(parsed.Host, "mifile.cn") ||
+			strings.Contains(parsed.Host, "fds.api.mi-img.com")
+	}
+	return strings.EqualFold(parsed.Host, base.Host)
+}
+
+func embeddedAssetVisualImageContext(rawURL string) string {
+	path := rawURL
+	if parsed, err := url.Parse(rawURL); err == nil && parsed.Path != "" {
+		path = parsed.Path
+	}
+	path = strings.ReplaceAll(path, "-", " ")
+	path = strings.ReplaceAll(path, "_", " ")
+	return path
 }
 
 func extractAssetVisualHTMLAttr(tag string, name string) string {
@@ -582,17 +637,16 @@ func buildCollectedAssetVisualFrames(references []map[string]any, limit int) []m
 			"url":          imageURL,
 			"source_title": title,
 			"source_url":   sourceURL,
+			"theme_score":  scoreAssetVisualNightCandidate(source),
 		})
-		if len(candidates) >= limit {
-			break
-		}
 	}
 	if len(candidates) == 0 {
 		return nil
 	}
 	frames := make([]map[string]any, 0, limit)
+	orderedCandidates := orderAssetVisualThemeCandidates(candidates, limit)
 	for index := 0; index < limit; index++ {
-		source := candidates[index%len(candidates)]
+		source := orderedCandidates[index%len(orderedCandidates)]
 		frames = append(frames, map[string]any{
 			"index":        index,
 			"view":         "theme",
@@ -604,6 +658,105 @@ func buildCollectedAssetVisualFrames(references []map[string]any, limit int) []m
 		})
 	}
 	return frames
+}
+
+func orderAssetVisualThemeCandidates(candidates []map[string]any, limit int) []map[string]any {
+	if len(candidates) <= 1 || limit <= 1 {
+		return candidates
+	}
+	dayIndex := 0
+	nightIndex := 0
+	bestDayScore := int(^uint(0) >> 1)
+	bestNightScore := -1
+	for index, candidate := range candidates {
+		score := intFromAny(candidate["theme_score"])
+		if score < bestDayScore {
+			dayIndex = index
+			bestDayScore = score
+		}
+		if score > bestNightScore {
+			nightIndex = index
+			bestNightScore = score
+		}
+	}
+	if dayIndex == nightIndex && len(candidates) > 1 {
+		if dayIndex == 0 {
+			nightIndex = 1
+		} else {
+			dayIndex = 0
+		}
+	}
+	ordered := make([]map[string]any, 0, len(candidates))
+	ordered = append(ordered, candidates[dayIndex])
+	if nightIndex != dayIndex {
+		ordered = append(ordered, candidates[nightIndex])
+	}
+	for index, candidate := range candidates {
+		if index == dayIndex || index == nightIndex {
+			continue
+		}
+		ordered = append(ordered, candidate)
+	}
+	return ordered
+}
+
+func scoreAssetVisualNightCandidate(source map[string]any) int {
+	text := strings.ToLower(strings.Join(nonEmptyStrings(
+		stringFromAny(source["image_url"]),
+		stringFromAny(source["url"]),
+		stringFromAny(source["title"]),
+		stringFromAny(source["source_title"]),
+		stringFromAny(source["type"]),
+	), " "))
+	score := 0
+	for _, marker := range []string{
+		"night",
+		"dark",
+		"black",
+		"midnight",
+		"obsidian",
+		"shadow",
+		"graphite",
+		"墨",
+		"黑",
+		"夜",
+		"暗",
+		"玄",
+		"幽芒",
+		"墨羽",
+	} {
+		if strings.Contains(text, marker) {
+			score += 10
+		}
+	}
+	for _, marker := range []string{"white", "silver", "snow", "晴雪", "银", "白"} {
+		if strings.Contains(text, marker) {
+			score -= 6
+		}
+	}
+	return score
+}
+
+func stringFromAny(value any) string {
+	if text, ok := value.(string); ok {
+		return text
+	}
+	return ""
+}
+
+func intFromAny(value any) int {
+	switch typed := value.(type) {
+	case int:
+		return typed
+	case int64:
+		return int(typed)
+	case float64:
+		return int(typed)
+	case float32:
+		return int(typed)
+	default:
+		return 0
+	}
 }
 
 func isLikelyImageURL(rawURL string) bool {
