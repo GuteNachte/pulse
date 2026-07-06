@@ -25,7 +25,7 @@ export const assetCenterModule: PulseModuleManifest = {
 		"ai_tasks",
 		"asset_visuals",
 	],
-	jobs: ["资产状态汇总", "资产补全报告", "资产全貌图生成"],
+	jobs: ["资产状态汇总", "资产补全报告", "设备图片收集"],
 	agentCapabilities: [],
 	healthChecks: [
 		"资产集合",

@@ -163,7 +163,7 @@ export default function AISettings() {
 								<div className="text-xs font-medium text-muted-foreground">资产中心</div>
 								<h3 className="mt-1 text-xl font-semibold tracking-tight text-foreground">AI 与识别</h3>
 								<p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-									配置资产资料补全 Agent 和设备全貌图生成。管理员可查看当前项目专用 Agnes Key。
+									配置资产资料补全 Agent 和设备图片收集能力。管理员可查看当前项目专用 Agnes Key。
 								</p>
 							</div>
 						</div>
@@ -234,29 +234,29 @@ export default function AISettings() {
 
 							<SettingsPanel
 								icon={ImageIcon}
-								title="设备全貌图 Agent"
-								description="只配置这个 Agent 的任务行为。它会调用图片模型接入，基于官方参考图和设备颜色生成 6 张固定视角图。"
+								title="设备图片 Agent"
+								description="只配置这个 Agent 的任务行为。它优先收集官方 / 可追溯真实图片，图片模型只作为后续一致性整理预留。"
 							>
 								<div className="grid gap-4">
 									<ToggleRow
-										label="启用设备全貌图 Agent"
-										description="关闭后不再生成新的全貌图候选；生成时优先使用已确认官方图片或官网图片作为参考。"
+										label="启用设备图片 Agent"
+										description="关闭后不再收集新的设备图片；收集时优先使用已确认官方图片、厂家支持页和官网图片。"
 										checked={form.visualEnabled}
 										onCheckedChange={(value) => setForm((current) => ({ ...current, visualEnabled: value }))}
 									/>
 									<AgentModelField
-										label="执行模型"
+										label="一致性整理模型"
 										value={form.visualModel}
 										onChange={(value) => setForm((current) => ({ ...current, visualModel: value }))}
 										placeholder="agnes-image-2.1-flash"
 									/>
 									<div className="rounded-lg border border-border/70 bg-surface-soft p-3">
 										<Label htmlFor="visual-frame-count" className="text-xs">
-											全貌图视角数
+											图片收集上限
 										</Label>
 										<Input id="visual-frame-count" type="number" min={6} max={6} value={6} readOnly className="mt-2" />
 										<p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-											固定生成 6 张：正面、背面、左侧、右侧、顶部、底部。不再做旋转视角。
+											最多收集 6 张真实设备图片。当前不再生成 3D 或固定视角图。
 										</p>
 									</div>
 								</div>
@@ -280,7 +280,7 @@ export default function AISettings() {
 					</div>
 					<div className="grid gap-3 md:grid-cols-2">
 						<AgentTaskStatusCard title="资料补全 Agent" task={latestEnrichmentTask} />
-						<AgentTaskStatusCard title="设备全貌图 Agent" task={latestVisualTask} />
+						<AgentTaskStatusCard title="设备图片 Agent" task={latestVisualTask} />
 					</div>
 
 					<div className="flex items-start gap-2 rounded-lg border border-border/70 bg-surface-soft p-3 text-xs leading-relaxed text-muted-foreground">
@@ -444,8 +444,12 @@ function getAITaskSummary(task: AITaskRecord) {
 		return `${task.provider || "未知服务"} / ${task.model || "未知模型"} · AI 建议 ${suggestions} 条 · 总建议 ${total} 条`
 	}
 	if (task.kind === "asset_visual") {
-		const frames = numberFromRecord(task.output_summary, "generated_frames")
-		return `${task.provider || "未知服务"} / ${task.model || "未知模型"} · 生成 ${frames} 帧`
+		const collected = numberFromRecord(task.output_summary, "collected_images")
+		const legacyFrames = numberFromRecord(task.output_summary, "generated_frames")
+		if (collected > 0) {
+			return `设备图片 Agent · 收集 ${collected} 张`
+		}
+		return `${task.provider || "未知服务"} / ${task.model || "未知模型"} · 历史生成 ${legacyFrames} 帧`
 	}
 	return `${task.provider || "未知服务"} / ${task.model || "未知模型"}`
 }

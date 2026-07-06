@@ -1,31 +1,18 @@
 package hub
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/pocketbase/pocketbase/core"
 )
 
 const defaultAssetTurntableFrameCount = 6
-
-var assetVisualViewLabels = []string{"front", "back", "left", "right", "top", "bottom"}
-
-var assetVisualViewPrompts = map[string]string{
-	"front":  "front view, straight-on product photo, show the main face clearly",
-	"back":   "back view, straight-on product photo, show rear cameras, labels, ports or back panel details only if supported by references",
-	"left":   "left side view, profile product photo, show side buttons, slots or seams only if supported by references",
-	"right":  "right side view, profile product photo, show side buttons, slots or seams only if supported by references",
-	"top":    "top view, product photo from above, show top edge details only if supported by references",
-	"bottom": "bottom view, product photo from below, show charging ports, speaker grilles or bottom edge details only if supported by references",
-}
 
 type assetTurntableVisualRequest struct {
 	Color      string `json:"color"`
@@ -57,7 +44,7 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 	frameCount := normalizeAssetTurntableFrameCountWithDefault(req.FrameCount, config.FrameCount)
 	color := firstNonEmpty(strings.TrimSpace(req.Color), recordMetadataString(asset, "color"), recordMetadataString(asset, "device_color"), "按真实设备配色")
 	references := h.collectAssetVisualReferenceSources(asset)
-	prompt := buildAssetTurntablePrompt(asset, color, frameCount, references)
+	prompt := buildAssetImageCollectionPrompt(asset, color, frameCount, references)
 
 	task, err := h.createAssetAITask(e.Auth.Id, asset.Id, config, frameCount, color, references)
 	if err != nil {
@@ -68,17 +55,16 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 		return e.InternalServerError("Failed to create asset visual.", err)
 	}
 
-	if !config.Ready() {
-		message := "Agnes 图像生成未配置。请配置 PULSE_AGNES_API_KEY 或 PULSE_ASSET_VISUAL_AI_API_KEY。"
+	frames := buildCollectedAssetVisualFrames(references, frameCount)
+	if len(frames) == 0 {
+		message := "没有找到可追溯设备图片。请先补充厂家支持页、官方图片 URL，或运行资料补全 Agent 后再收集。"
 		task.Set("status", "failed")
 		task.Set("error", message)
-		task.Set("output_summary", map[string]any{"generated_frames": 0, "reason": "config_missing"})
-		visual.Set("status", "draft")
+		task.Set("output_summary", map[string]any{"collected_images": 0, "reason": "no_traceable_images"})
+		visual.Set("status", "failed")
 		visual.Set("metadata", map[string]any{
-			"generation_status": "config_missing",
+			"collection_status": "no_sources",
 			"error":             message,
-			"provider":          config.Provider,
-			"model":             config.Model,
 		})
 		if err := h.Save(task); err != nil {
 			return e.InternalServerError("Failed to update AI task.", err)
@@ -86,36 +72,17 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 		if err := h.Save(visual); err != nil {
 			return e.InternalServerError("Failed to update asset visual.", err)
 		}
-		return e.JSON(http.StatusOK, map[string]any{"task": task, "visual": visual, "status": "config_missing"})
-	}
-
-	frames, generateErr := h.generateAssetTurntableFrames(config, prompt, frameCount, references)
-	if generateErr != nil {
-		task.Set("status", "failed")
-		task.Set("error", generateErr.Error())
-		task.Set("output_summary", map[string]any{"generated_frames": len(frames), "error": generateErr.Error()})
-		visual.Set("status", "failed")
-		visual.Set("frames", frames)
-		visual.Set("metadata", map[string]any{
-			"generation_status": "failed",
-			"error":             generateErr.Error(),
-			"provider":          config.Provider,
-			"model":             config.Model,
-		})
-		_ = h.Save(task)
-		_ = h.Save(visual)
-		return e.InternalServerError("Failed to generate asset visual.", generateErr)
+		return e.JSON(http.StatusOK, map[string]any{"task": task, "visual": visual, "status": "no_sources"})
 	}
 
 	task.Set("status", "ready")
-	task.Set("output_summary", map[string]any{"generated_frames": len(frames)})
+	task.Set("output_summary", map[string]any{"collected_images": len(frames)})
 	visual.Set("status", "ready")
 	visual.Set("frames", frames)
+	visual.Set("frame_count", len(frames))
 	visual.Set("metadata", map[string]any{
-		"generation_status": "ready",
-		"provider":          config.Provider,
-		"model":             config.Model,
-		"note":              "AI 渲染图基于可追溯资料和用户确认配色生成，不等同于官方实拍。确认后才作为主视觉使用。",
+		"collection_status": "ready",
+		"note":              "设备图片来自可追溯来源。后续如需统一风格，只能基于这些真实图片做一致性整理。",
 	})
 	if err := h.Save(task); err != nil {
 		return e.InternalServerError("Failed to update AI task.", err)
@@ -123,7 +90,7 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 	if err := h.Save(visual); err != nil {
 		return e.InternalServerError("Failed to update asset visual.", err)
 	}
-	h.createOperationAudit(e, "", "asset_visual_generate", asset.Id, "", "success", "资产设备全貌图已生成")
+	h.createOperationAudit(e, "", "asset_visual_generate", asset.Id, "", "success", "资产设备图片已收集")
 	return e.JSON(http.StatusOK, map[string]any{"task": task, "visual": visual, "status": "ready"})
 }
 
@@ -181,10 +148,10 @@ func (h *Hub) createAssetAITask(userID string, assetID string, config assetVisua
 	record.Set("provider", config.Provider)
 	record.Set("model", config.Model)
 	record.Set("input_summary", map[string]any{
-		"frame_count":       frameCount,
+		"target_count":      frameCount,
 		"color":             color,
 		"reference_sources": references,
-		"endpoint_host":     safeAssetOnlineEndpointHost(config.Endpoint),
+		"mode":              "collect_traceable_images",
 	})
 	record.Set("metadata", map[string]any{"manual_trigger": true})
 	if err := h.Save(record); err != nil {
@@ -202,15 +169,15 @@ func (h *Hub) createAssetVisualRecord(userID string, asset *core.Record, taskID 
 	record.Set("user", userID)
 	record.Set("asset", asset.Id)
 	record.Set("task", taskID)
-	record.Set("kind", "ai_turntable")
+	record.Set("kind", "official_reference")
 	record.Set("status", "draft")
-	record.Set("title", firstNonEmpty(asset.GetString("name"), asset.GetString("model"), "设备全貌图"))
+	record.Set("title", firstNonEmpty(asset.GetString("name"), asset.GetString("model"), "设备图片"))
 	record.Set("color", color)
 	record.Set("frame_count", frameCount)
 	record.Set("primary", false)
 	record.Set("sources", references)
 	record.Set("prompt", prompt)
-	record.Set("metadata", map[string]any{"generation_status": "pending"})
+	record.Set("metadata", map[string]any{"collection_status": "pending"})
 	if err := h.Save(record); err != nil {
 		return nil, err
 	}
@@ -220,8 +187,9 @@ func (h *Hub) createAssetVisualRecord(userID string, asset *core.Record, taskID 
 func (h *Hub) collectAssetVisualReferenceSources(asset *core.Record) []map[string]any {
 	online := h.collectAssetOnlineReferenceEnrichment(asset)
 	result := make([]map[string]any, 0, len(online.Sources))
+	seen := map[string]bool{}
 	if officialImageURL := recordMetadataString(asset, "official_image_url"); isLikelyImageURL(officialImageURL) {
-		result = append(result, map[string]any{
+		result = appendAssetVisualReferenceSource(result, seen, map[string]any{
 			"title":      "已确认官方设备图片",
 			"url":        officialImageURL,
 			"image_url":  officialImageURL,
@@ -237,7 +205,7 @@ func (h *Hub) collectAssetVisualReferenceSources(asset *core.Record) []map[strin
 		if source.ImageURL == "" && !isLikelyImageURL(source.URL) {
 			continue
 		}
-		result = append(result, map[string]any{
+		result = appendAssetVisualReferenceSource(result, seen, map[string]any{
 			"title":      source.Title,
 			"url":        source.URL,
 			"image_url":  source.ImageURL,
@@ -245,154 +213,158 @@ func (h *Hub) collectAssetVisualReferenceSources(asset *core.Record) []map[strin
 			"provider":   source.Provider,
 			"confidence": source.Confidence,
 		})
-		if len(result) >= 4 {
+		if len(result) >= defaultAssetTurntableFrameCount {
 			break
+		}
+	}
+	if len(result) < defaultAssetTurntableFrameCount {
+		result = h.collectAssetVisualPageImageSources(asset, result, seen, defaultAssetTurntableFrameCount)
+	}
+	return result
+}
+
+func appendAssetVisualReferenceSource(result []map[string]any, seen map[string]bool, source map[string]any) []map[string]any {
+	imageURL, _ := source["image_url"].(string)
+	if imageURL == "" {
+		imageURL, _ = source["url"].(string)
+	}
+	if !isLikelyAssetVisualImageURL(imageURL) {
+		return result
+	}
+	key := strings.ToLower(strings.TrimSpace(imageURL))
+	if key == "" || seen[key] {
+		return result
+	}
+	seen[key] = true
+	if source["image_url"] == "" {
+		source["image_url"] = imageURL
+	}
+	return append(result, source)
+}
+
+func (h *Hub) collectAssetVisualPageImageSources(asset *core.Record, result []map[string]any, seen map[string]bool, limit int) []map[string]any {
+	pageURLs := dedupeStrings(nonEmptyStrings(
+		recordMetadataString(asset, "support_url"),
+		recordMetadataString(asset, "product_url"),
+		recordMetadataString(asset, "official_url"),
+	))
+	for _, rawURL := range pageURLs {
+		if len(result) >= limit {
+			break
+		}
+		parsed, err := url.Parse(strings.TrimSpace(rawURL))
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			continue
+		}
+		body, err := h.fetchAssetOnlineURL(parsed.String(), 1024*1024)
+		if err != nil {
+			continue
+		}
+		title := firstNonEmpty(extractHTMLTitle(body), parsed.Host)
+		for _, imageURL := range extractHTMLImageURLs(parsed, body) {
+			result = appendAssetVisualReferenceSource(result, seen, map[string]any{
+				"title":      title,
+				"url":        parsed.String(),
+				"image_url":  imageURL,
+				"type":       "official_page_image",
+				"provider":   "support_url",
+				"confidence": 90,
+			})
+			if len(result) >= limit {
+				break
+			}
 		}
 	}
 	return result
 }
 
-func buildAssetTurntablePrompt(asset *core.Record, color string, frameCount int, references []map[string]any) string {
+func buildAssetImageCollectionPrompt(asset *core.Record, color string, frameCount int, references []map[string]any) string {
 	referenceLines := make([]string, 0, len(references))
 	for _, source := range references {
-		if rawURL, _ := source["url"].(string); rawURL != "" {
-			referenceLines = append(referenceLines, rawURL)
+		if imageURL, _ := source["image_url"].(string); imageURL != "" {
+			referenceLines = append(referenceLines, imageURL)
 		}
 	}
 	return strings.Join(nonEmptyStrings(
-		"Create consistent multi-view product images for a home asset catalog.",
+		"Collect traceable device images for a home asset catalog.",
 		"Device: "+strings.Join(nonEmptyStrings(asset.GetString("vendor"), asset.GetString("model"), recordMetadataString(asset, "internal_model"), asset.GetString("name")), " / "),
 		"Color: "+color+".",
-		fmt.Sprintf("Need %d factual still images of the same physical device: front, back, left side, right side, top and bottom. Use clean studio lighting, neutral background, no text, and no decorative scene.", frameCount),
-		"Use official product photos or official CDN images as factual visual reference. Do not invent ports, camera modules, buttons, materials or logos that contradict official references.",
-		"Official reference URLs: "+strings.Join(referenceLines, " ; "),
+		fmt.Sprintf("Need up to %d real source images. Do not invent device appearance.", frameCount),
+		"Traceable image URLs: "+strings.Join(referenceLines, " ; "),
 	), "\n")
 }
 
-func (h *Hub) generateAssetTurntableFrames(config assetVisualAIConfig, prompt string, frameCount int, references []map[string]any) ([]map[string]any, error) {
-	frames := make([]map[string]any, 0, frameCount)
-	for index, view := range assetVisualViewLabels {
-		if index >= frameCount {
+func buildCollectedAssetVisualFrames(references []map[string]any, limit int) []map[string]any {
+	frames := make([]map[string]any, 0, limit)
+	for _, source := range references {
+		imageURL, _ := source["image_url"].(string)
+		if imageURL == "" {
+			imageURL, _ = source["url"].(string)
+		}
+		if !isLikelyAssetVisualImageURL(imageURL) {
+			continue
+		}
+		title, _ := source["title"].(string)
+		sourceURL, _ := source["url"].(string)
+		frames = append(frames, map[string]any{
+			"index":        len(frames),
+			"view":         "collected",
+			"label":        fmt.Sprintf("图片 %d", len(frames)+1),
+			"url":          imageURL,
+			"source_title": title,
+			"source_url":   sourceURL,
+		})
+		if len(frames) >= limit {
 			break
 		}
-		framePrompt := prompt + fmt.Sprintf("\nCurrent view: %s. %s. Keep the same object, proportions, material, color and camera distance.", view, assetVisualViewPrompts[view])
-		imageURL, err := h.generateAssetVisualFrame(config, framePrompt, firstReferenceURL(references))
-		if err != nil {
-			return frames, err
-		}
-		frames = append(frames, map[string]any{
-			"index": index,
-			"view":  view,
-			"label": assetVisualViewLabelCN(view),
-			"url":   imageURL,
-		})
 	}
-	return frames, nil
-}
-
-func assetVisualViewLabelCN(view string) string {
-	switch view {
-	case "front":
-		return "正面"
-	case "back":
-		return "背面"
-	case "left":
-		return "左侧"
-	case "right":
-		return "右侧"
-	case "top":
-		return "顶部"
-	case "bottom":
-		return "底部"
-	default:
-		return view
-	}
-}
-
-func (h *Hub) generateAssetVisualFrame(config assetVisualAIConfig, prompt string, referenceURL string) (string, error) {
-	extraBody := map[string]any{"response_format": "url"}
-	if isLikelyImageURL(referenceURL) {
-		extraBody["image"] = []string{referenceURL}
-	}
-	payload := map[string]any{
-		"model":      config.Model,
-		"prompt":     prompt,
-		"n":          1,
-		"size":       "1024x1024",
-		"extra_body": extraBody,
-	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-	req, err := http.NewRequest(http.MethodPost, config.Endpoint, bytes.NewReader(body))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+config.APIKey)
-	client := &http.Client{Timeout: 90 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	rawBody, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("Agnes 图像生成返回非成功状态：%d%s", resp.StatusCode, formatRemoteErrorBody(rawBody))
-	}
-	imageURL := extractAssetVisualImageURL(rawBody)
-	if imageURL == "" {
-		return "", fmt.Errorf("Agnes 图像生成响应没有可用图片 URL")
-	}
-	return imageURL, nil
-}
-
-func extractAssetVisualImageURL(rawBody []byte) string {
-	var response struct {
-		Data []struct {
-			URL     string `json:"url"`
-			B64JSON string `json:"b64_json"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(rawBody, &response); err != nil {
-		return ""
-	}
-	if len(response.Data) == 0 {
-		return ""
-	}
-	if url := strings.TrimSpace(response.Data[0].URL); url != "" {
-		return url
-	}
-	if value := strings.TrimSpace(response.Data[0].B64JSON); value != "" && len(value) < 1500000 {
-		return "data:image/png;base64," + value
-	}
-	return ""
-}
-
-func firstReferenceURL(references []map[string]any) string {
-	for _, source := range references {
-		if value, _ := source["image_url"].(string); value != "" {
-			return value
-		}
-		if value, _ := source["url"].(string); isLikelyImageURL(value) {
-			return value
-		}
-	}
-	return ""
+	return frames
 }
 
 func isLikelyImageURL(rawURL string) bool {
 	lower := strings.ToLower(strings.TrimSpace(rawURL))
+	if parsed, err := url.Parse(lower); err == nil && parsed.Path != "" {
+		lower = parsed.Path
+	}
 	return strings.HasSuffix(lower, ".png") ||
 		strings.HasSuffix(lower, ".jpg") ||
 		strings.HasSuffix(lower, ".jpeg") ||
 		strings.HasSuffix(lower, ".webp") ||
 		strings.HasSuffix(lower, ".avif")
+}
+
+func isLikelyAssetVisualImageURL(rawURL string) bool {
+	if !isLikelyImageURL(rawURL) {
+		return false
+	}
+	lower := strings.ToLower(strings.TrimSpace(rawURL))
+	rejected := []string{
+		"appdownload",
+		"download.png",
+		"qrcode",
+		"qr-code",
+		"/qr",
+		"wechat",
+		"weixin",
+		"favicon",
+		"logo",
+		"icon",
+		"sprite",
+		"avatar",
+		"placeholder",
+		"loading",
+		"blank",
+		"appstore",
+		"googleplay",
+		"playstore",
+		"share",
+	}
+	for _, marker := range rejected {
+		if strings.Contains(lower, marker) {
+			return false
+		}
+	}
+	return true
 }
 
 func formatRemoteErrorBody(rawBody []byte) string {

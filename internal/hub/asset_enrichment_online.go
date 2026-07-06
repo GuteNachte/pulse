@@ -682,7 +682,7 @@ func buildAssetOnlineSuggestions(asset *core.Record, sources []assetOnlineSource
 		suggestions = append(suggestions, buildOnlineRecordSuggestion(asset, "metadata.support_url", "厂家官方支持页", recordMetadataString(asset, "support_url"), supportURL, "优先选择官网、支持、规格或说明书页面；写入前请确认页面确实对应这台资产。", sources, 82))
 	}
 	if imageURL := chooseAssetOfficialImageURL(sources); imageURL != "" {
-		suggestions = append(suggestions, buildOnlineRecordSuggestion(asset, "metadata.official_image_url", "官方图片", recordMetadataString(asset, "official_image_url"), imageURL, "优先选择官网或官方 CDN 暴露的设备图片，后续设备全貌图生成会优先使用该图片作为参考。", sources, 82))
+		suggestions = append(suggestions, buildOnlineRecordSuggestion(asset, "metadata.official_image_url", "官方图片", recordMetadataString(asset, "official_image_url"), imageURL, "优先选择官网或官方 CDN 暴露的设备图片，后续设备图片收集会优先使用该图片。", sources, 82))
 	}
 	for _, item := range specs.Items {
 		suggestions = append(suggestions, buildOnlineRecordSuggestion(asset, "metadata."+item.Field, item.Label, metadataValueString(asset, item.Field), item.Value, item.Notes, item.Sources, item.Confidence))
@@ -1270,6 +1270,54 @@ func extractMetaImageURL(body string) string {
 		}
 	}
 	return ""
+}
+
+func extractHTMLImageURLs(base *url.URL, body string) []string {
+	patterns := []*regexp.Regexp{
+		regexp.MustCompile(`(?is)<img[^>]+src=["']([^"']+)["'][^>]*>`),
+		regexp.MustCompile(`(?is)<img[^>]+data-src=["']([^"']+)["'][^>]*>`),
+		regexp.MustCompile(`(?is)<source[^>]+srcset=["']([^"']+)["'][^>]*>`),
+		regexp.MustCompile(`(?is)<img[^>]+srcset=["']([^"']+)["'][^>]*>`),
+	}
+	result := make([]string, 0, 8)
+	for _, pattern := range patterns {
+		matches := pattern.FindAllStringSubmatch(body, -1)
+		for _, match := range matches {
+			if len(match) < 2 {
+				continue
+			}
+			for _, candidate := range splitAssetImageCandidates(match[1]) {
+				absolute := absolutizeAssetOnlineURL(base, candidate)
+				if isLikelyImageURL(absolute) {
+					result = append(result, absolute)
+				}
+			}
+		}
+	}
+	return dedupeStrings(result)
+}
+
+func splitAssetImageCandidates(raw string) []string {
+	raw = html.UnescapeString(strings.TrimSpace(raw))
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value == "" {
+			continue
+		}
+		fields := strings.Fields(value)
+		if len(fields) > 0 {
+			value = fields[0]
+		}
+		if value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func absolutizeAssetOnlineURL(base *url.URL, raw string) string {

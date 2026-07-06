@@ -392,7 +392,7 @@ func TestAssetEnrichmentConfigUpdateStoresEditableSettingsAndReturnsAdminKeys(t 
 	require.Equal(t, true, visualAI["ready"])
 }
 
-func TestAssetVisualTurntableUsesAgnesImagePayload(t *testing.T) {
+func TestAssetVisualCollectsTraceableImagesWithoutImageGeneration(t *testing.T) {
 	fixture := newAssetEnrichmentFixture(t, "asset-visual-agnes@example.com")
 	var imageRequests []map[string]any
 	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -407,7 +407,11 @@ func TestAssetVisualTurntableUsesAgnesImagePayload(t *testing.T) {
 	t.Cleanup(imageServer.Close)
 	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title><meta property="og:image" content="/redmi-k50-official.png"></head><body>Redmi K50 官方产品资料。</body></html>`))
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title><meta property="og:image" content="/redmi-k50-official.png"></head><body>
+			Redmi K50 官方产品资料。
+			<img src="/redmi-k50-front.png" alt="Redmi K50">
+			<img srcset="/redmi-k50-back.png 1x, /redmi-k50-side.png 2x" alt="Redmi K50">
+		</body></html>`))
 	}))
 	t.Cleanup(referenceServer.Close)
 	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
@@ -435,19 +439,7 @@ func TestAssetVisualTurntableUsesAgnesImagePayload(t *testing.T) {
 		fixture.headers,
 	)
 	require.Equal(t, http.StatusOK, response.Status, response.Body)
-	require.Len(t, imageRequests, 6)
-	require.Equal(t, "test-image-model", imageRequests[0]["model"])
-	require.Contains(t, imageRequests[0]["prompt"], "front view")
-	require.Contains(t, imageRequests[1]["prompt"], "back view")
-	require.Contains(t, imageRequests[5]["prompt"], "bottom view")
-	require.NotContains(t, imageRequests[0]["prompt"], "3D product render")
-	extraBody, ok := imageRequests[0]["extra_body"].(map[string]any)
-	require.True(t, ok, "payload: %v", imageRequests[0])
-	require.Equal(t, "url", extraBody["response_format"])
-	referenceImages, ok := extraBody["image"].([]any)
-	require.True(t, ok, "extra_body: %v", extraBody)
-	require.Len(t, referenceImages, 1)
-	require.Equal(t, referenceServer.URL+"/redmi-k50-official.png", referenceImages[0])
+	require.Empty(t, imageRequests)
 
 	visuals, err := fixture.hub.FindRecordsByFilter("asset_visuals", "asset = {:asset}", "-created", -1, 0, map[string]any{
 		"asset": asset.Id,
@@ -455,7 +447,13 @@ func TestAssetVisualTurntableUsesAgnesImagePayload(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, visuals, 1)
 	require.Equal(t, "ready", visuals[0].GetString("status"))
-	require.Equal(t, 6, visuals[0].GetInt("frame_count"))
+	require.Equal(t, "official_reference", visuals[0].GetString("kind"))
+	require.Equal(t, 4, visuals[0].GetInt("frame_count"))
+	frames := recordJSONField(t, visuals[0], "frames")
+	require.Contains(t, fmt.Sprint(frames), referenceServer.URL+"/redmi-k50-official.png")
+	require.Contains(t, fmt.Sprint(frames), referenceServer.URL+"/redmi-k50-front.png")
+	require.Contains(t, fmt.Sprint(frames), referenceServer.URL+"/redmi-k50-back.png")
+	require.Contains(t, fmt.Sprint(frames), referenceServer.URL+"/redmi-k50-side.png")
 }
 
 func TestAssetEnrichmentAcceptWritesMetadataAndChange(t *testing.T) {

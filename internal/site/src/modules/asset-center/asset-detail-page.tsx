@@ -5,6 +5,7 @@ import {
 	BatteryIcon,
 	BellIcon,
 	BoxesIcon,
+	ChevronLeftIcon,
 	ChevronRightIcon,
 	ContainerIcon,
 	CpuIcon,
@@ -800,19 +801,19 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				body: { color: color.trim(), frame_count: options?.frameCount ?? 6 },
 			})
 			await loadDetail({ waitSecondary: true })
-			if (response.status === "config_missing") {
+			if (response.status === "no_sources") {
 				toast({
-					title: "已创建设备全貌图任务",
-					description: "Agnes 图像生成还未配置，任务已留档，配置 Key 后可重新生成。",
+					title: "未找到可用设备图片",
+					description: "请先补充厂家支持页、官方图片 URL，或运行资料补全 Agent 后再收集。",
 				})
 			} else {
-				toast({ title: "设备全貌图已生成", description: "已生成正面、背面、左右侧、顶部和底部视角图。" })
+				toast({ title: "设备图片已收集", description: "已从可追溯来源整理为全貌图轮播。" })
 			}
 		} catch (error) {
-			console.error("generate asset turntable visual", error)
+			console.error("collect asset visual images", error)
 			toast({
-				title: "设备全貌图生成失败",
-				description: "请检查 Agnes 配置、网络或 Hub 日志。",
+				title: "设备图片收集失败",
+				description: "请检查厂家支持页、官方图片 URL 或 Hub 日志。",
 				variant: "destructive",
 			})
 		} finally {
@@ -1345,7 +1346,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					onAcceptAllSuggestions={acceptAllActionableSuggestions}
 					onGenerateVisual={() =>
 						generateTurntableVisual({ color: visualColor, frameCount: visualFrameCount }).catch((error) =>
-							console.error("generate asset turntable visual", error)
+							console.error("collect asset visual images", error)
 						)
 					}
 					onOpenInterface={() => {
@@ -2197,14 +2198,17 @@ function AssetEditWorkbench({
 		[state.assets, state.locations]
 	)
 	const missingRequirements = recognitionRequirements.filter((item) => !item.ok)
-	const latestVisual = state.visuals.find((item) => item.kind === "ai_turntable") ?? state.visuals[0]
-	const latestVisualFrame = latestVisual?.frames?.find((frame) => frame.url)
+	const latestVisual =
+		state.visuals.find((item) => item.kind === "official_reference") ??
+		state.visuals.find((item) => item.kind === "ai_turntable") ??
+		state.visuals[0]
+	const latestVisualFrame = latestVisual?.frames?.find(isDisplayableAssetVisualFrame)
 	return (
 		<DialogContent className="flex max-h-[92vh] max-w-6xl flex-col overflow-hidden">
 			<DialogHeader className="shrink-0">
 				<DialogTitle>编辑资产</DialogTitle>
 				<DialogDescription>
-					主档、智能匹配、参数替换、全貌图生成和资产子档案都在这里处理；外层详情页只负责查看。
+					主档、智能匹配、参数替换、设备图片收集和资产子档案都在这里处理；外层详情页只负责查看。
 				</DialogDescription>
 			</DialogHeader>
 			<div className="min-h-0 overflow-y-auto pr-1">
@@ -2377,7 +2381,7 @@ function AssetEditWorkbench({
 							<div className="mb-3 flex items-center justify-between gap-3">
 								<div className="min-w-0">
 									<div className="text-sm font-semibold text-foreground">全貌图</div>
-									<div className="mt-1 text-xs text-muted-foreground">生成设置和预览集中在编辑里。</div>
+									<div className="mt-1 text-xs text-muted-foreground">收集设置和预览集中在编辑里。</div>
 								</div>
 								<Button
 									type="button"
@@ -2388,7 +2392,7 @@ function AssetEditWorkbench({
 									className="gap-2"
 								>
 									<ImageIcon className="size-3.5" />
-									生成
+									收集
 								</Button>
 							</div>
 							<div className="grid gap-3">
@@ -2403,9 +2407,9 @@ function AssetEditWorkbench({
 										/>
 									</div>
 									<div className="grid gap-2">
-										<Label htmlFor="asset-visual-frame-count">视角数量</Label>
+										<Label htmlFor="asset-visual-frame-count">收集数量</Label>
 										<Input id="asset-visual-frame-count" value={visualFrameCount} readOnly className="bg-card" />
-										<div className="text-xs text-muted-foreground">固定 6 张：正面、背面、左侧、右侧、顶部、底部。</div>
+										<div className="text-xs text-muted-foreground">最多收集 6 张可追溯设备图片。</div>
 									</div>
 								</div>
 								<div className="relative grid aspect-[3/4] max-h-[30rem] min-h-[18rem] place-items-center overflow-hidden rounded-md border border-border/70 bg-card">
@@ -3875,11 +3879,22 @@ type AssetCollectionWriteback = {
 }
 
 function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
-	const latestVisual = visuals.find((item) => item.kind === "ai_turntable") ?? visuals[0]
-	const frames = latestVisual?.frames?.filter((frame) => frame.url) ?? []
+	const latestVisual =
+		visuals.find((item) => item.kind === "official_reference") ??
+		visuals.find((item) => item.kind === "ai_turntable") ??
+		visuals[0]
+	const frames = latestVisual?.frames?.filter(isDisplayableAssetVisualFrame) ?? []
 	const [frameIndex, setFrameIndex] = useState(0)
 	const activeFrame = frames.length ? frames[((frameIndex % frames.length) + frames.length) % frames.length] : undefined
-	const activeFrameLabel = getAssetVisualFrameLabel(activeFrame, frameIndex)
+	const activeIndex = frames.length ? ((frameIndex % frames.length) + frames.length) % frames.length : 0
+	const previousFrame = () => {
+		if (frames.length <= 1) return
+		setFrameIndex((current) => current - 1)
+	}
+	const nextFrame = () => {
+		if (frames.length <= 1) return
+		setFrameIndex((current) => current + 1)
+	}
 
 	return (
 		<Card className="border-border/70 bg-card shadow-none">
@@ -3902,26 +3917,40 @@ function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 							</div>
 						</div>
 					)}
-					{activeFrame?.url && (
-						<div className="absolute left-2 top-2 rounded-md border border-border/70 bg-card px-2 py-1 text-[11px] text-muted-foreground">
-							{activeFrameLabel}
-						</div>
+					{frames.length > 1 && (
+						<>
+							<button
+								type="button"
+								onClick={previousFrame}
+								className="absolute left-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md border border-border/70 bg-card/95 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-foreground"
+								aria-label="上一张设备图片"
+							>
+								<ChevronLeftIcon className="size-4" />
+							</button>
+							<button
+								type="button"
+								onClick={nextFrame}
+								className="absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md border border-border/70 bg-card/95 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-foreground"
+								aria-label="下一张设备图片"
+							>
+								<ChevronRightIcon className="size-4" />
+							</button>
+						</>
 					)}
 				</div>
 				{frames.length > 1 && (
-					<div className="mt-2 grid grid-cols-3 gap-1.5">
+					<div className="mt-2 flex items-center justify-center gap-1.5">
 						{frames.map((frame, index) => (
 							<button
 								key={`${frame.url}-${index}`}
 								type="button"
 								onClick={() => setFrameIndex(index)}
 								className={cn(
-									"rounded-md border border-border/70 bg-surface-soft px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground",
-									index === frameIndex && "border-primary/60 bg-primary/10 text-foreground"
+									"size-1.5 rounded-full bg-muted-foreground/30 transition-all hover:bg-muted-foreground/60",
+									index === activeIndex && "w-5 bg-foreground"
 								)}
-							>
-								{getAssetVisualFrameLabel(frame, index)}
-							</button>
+								aria-label={`查看第 ${index + 1} 张设备图片`}
+							/>
 						))}
 					</div>
 				)}
@@ -3930,24 +3959,31 @@ function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 	)
 }
 
-function getAssetVisualFrameLabel(frame: NonNullable<AssetVisualRecord["frames"]>[number] | undefined, index: number) {
-	if (frame?.label) return frame.label
-	switch (frame?.view) {
-		case "front":
-			return "正面"
-		case "back":
-			return "背面"
-		case "left":
-			return "左侧"
-		case "right":
-			return "右侧"
-		case "top":
-			return "顶部"
-		case "bottom":
-			return "底部"
-		default:
-			return `视角 ${index + 1}`
-	}
+function isDisplayableAssetVisualFrame(frame: NonNullable<AssetVisualRecord["frames"]>[number] | undefined) {
+	if (!frame?.url) return false
+	const lower = frame.url.toLowerCase()
+	const rejected = [
+		"appdownload",
+		"download.png",
+		"qrcode",
+		"qr-code",
+		"/qr",
+		"wechat",
+		"weixin",
+		"favicon",
+		"logo",
+		"icon",
+		"sprite",
+		"avatar",
+		"placeholder",
+		"loading",
+		"blank",
+		"appstore",
+		"googleplay",
+		"playstore",
+		"share",
+	]
+	return !rejected.some((marker) => lower.includes(marker))
 }
 
 function AssetEnrichmentReportDialog({
@@ -5076,7 +5112,7 @@ function getAssetVisualStatusLabel(status?: AssetVisualRecord["status"]) {
 		case "rejected":
 			return "已忽略"
 		case "failed":
-			return "生成失败"
+			return "收集失败"
 		default:
 			return "草稿"
 	}
@@ -5110,9 +5146,9 @@ function getAssetEnrichmentTaskMeta(tasks: AITaskRecord[], reports: AssetEnrichm
 function getAssetVisualTaskMeta(tasks: AITaskRecord[], visuals: AssetVisualRecord[]) {
 	const latestTask = tasks.find((task) => task.kind === "asset_visual")
 	if (latestTask) {
-		return `图像 ${getAITaskStatusLabel(latestTask.status)}`
+		return `图片 ${getAITaskStatusLabel(latestTask.status)}`
 	}
-	return visuals.length ? `${visuals.length} 个候选` : "未生成"
+	return visuals.length ? `${visuals.length} 组图片` : "未收集"
 }
 
 function getEnrichmentSourceLabel(source?: AssetEnrichmentSuggestionRecord["source"]) {
@@ -5179,7 +5215,7 @@ function getEnrichmentOnlineEmptyText(summary?: EnrichmentOnlineSummary) {
 	if (!summary) return "本报告没有资料来源摘要。"
 	if (summary.status === "not_configured") return "资料补全 Agent 未获得可追溯来源，也没有可用的官方支持页。"
 	if (summary.status === "no_match")
-		return "没有命中可追溯资料。可补充更准确的详细型号、内部型号或厂家支持页后重新生成。"
+		return "没有命中可追溯资料。可补充更准确的详细型号、内部型号或厂家支持页后重新收集。"
 	return "本次没有可展示的资料来源。"
 }
 
