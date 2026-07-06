@@ -21,7 +21,6 @@ import {
 	PaperclipIcon,
 	PencilIcon,
 	PlusIcon,
-	RotateCwIcon,
 	SendIcon,
 	ThermometerIcon,
 	Trash2Icon,
@@ -305,7 +304,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const [recognitionStage, setRecognitionStage] = useState<"idle" | "blocked" | "running" | "ready" | "failed">("idle")
 	const [recognitionMessage, setRecognitionMessage] = useState("")
 	const [visualColor, setVisualColor] = useState("")
-	const [visualFrameCount, setVisualFrameCount] = useState(8)
+	const [visualFrameCount, setVisualFrameCount] = useState(6)
 	const [fileToken, setFileToken] = useState("")
 	const [editingInterface, setEditingInterface] = useState<AssetInterfaceRecord | null>(null)
 	const [editingRelation, setEditingRelation] = useState<AssetRelationRecord | null>(null)
@@ -323,7 +322,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	useEffect(() => {
 		if (!asset) return
 		setVisualColor(getAssetVisualColor(asset))
-		setVisualFrameCount(8)
+		setVisualFrameCount(6)
 		setRecognitionStage("idle")
 		setRecognitionMessage("")
 	}, [asset?.id])
@@ -798,7 +797,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		try {
 			const response = await pb.send<{ status?: string }>(`/api/pulse/assets/${asset.id}/visuals/turntable`, {
 				method: "POST",
-				body: { color: color.trim(), frame_count: options?.frameCount ?? 8 },
+				body: { color: color.trim(), frame_count: options?.frameCount ?? 6 },
 			})
 			await loadDetail({ waitSecondary: true })
 			if (response.status === "config_missing") {
@@ -807,7 +806,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					description: "Agnes 图像生成还未配置，任务已留档，配置 Key 后可重新生成。",
 				})
 			} else {
-				toast({ title: "设备全貌图已生成", description: "可在资产详情中拖拽查看候选图。" })
+				toast({ title: "设备全貌图已生成", description: "已生成正面、背面、左右侧、顶部和底部视角图。" })
 			}
 		} catch (error) {
 			console.error("generate asset turntable visual", error)
@@ -1340,7 +1339,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					visualColor={visualColor}
 					visualFrameCount={visualFrameCount}
 					onVisualColorChange={setVisualColor}
-					onVisualFrameCountChange={setVisualFrameCount}
 					onSaveProfile={saveAssetProfile}
 					onRunSmartRecognition={runSmartRecognition}
 					onAcceptSuggestion={(suggestion) => acceptEnrichmentSuggestionDirect(suggestion)}
@@ -2154,7 +2152,6 @@ function AssetEditWorkbench({
 	visualColor,
 	visualFrameCount,
 	onVisualColorChange,
-	onVisualFrameCountChange,
 	onSaveProfile,
 	onRunSmartRecognition,
 	onAcceptSuggestion,
@@ -2179,7 +2176,6 @@ function AssetEditWorkbench({
 	visualColor: string
 	visualFrameCount: number
 	onVisualColorChange: (value: string) => void
-	onVisualFrameCountChange: (value: number) => void
 	onSaveProfile: (event: React.FormEvent<HTMLFormElement>) => void
 	onRunSmartRecognition: () => void
 	onAcceptSuggestion: (suggestion: AssetEnrichmentSuggestionRecord) => void
@@ -2407,17 +2403,9 @@ function AssetEditWorkbench({
 										/>
 									</div>
 									<div className="grid gap-2">
-										<Label htmlFor="asset-visual-frame-count">旋转帧数</Label>
-										<select
-											id="asset-visual-frame-count"
-											value={visualFrameCount}
-											onChange={(event) => onVisualFrameCountChange(Number(event.target.value) || 8)}
-											className="h-10 rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus:border-ring/70 focus:ring-2 focus:ring-ring/15"
-										>
-											<option value={4}>4 帧</option>
-											<option value={8}>8 帧</option>
-											<option value={12}>12 帧</option>
-										</select>
+										<Label htmlFor="asset-visual-frame-count">视角数量</Label>
+										<Input id="asset-visual-frame-count" value={visualFrameCount} readOnly className="bg-card" />
+										<div className="text-xs text-muted-foreground">固定 6 张：正面、背面、左侧、右侧、顶部、底部。</div>
 									</div>
 								</div>
 								<div className="relative grid aspect-[3/4] max-h-[30rem] min-h-[18rem] place-items-center overflow-hidden rounded-md border border-border/70 bg-card">
@@ -3890,22 +3878,8 @@ function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 	const latestVisual = visuals.find((item) => item.kind === "ai_turntable") ?? visuals[0]
 	const frames = latestVisual?.frames?.filter((frame) => frame.url) ?? []
 	const [frameIndex, setFrameIndex] = useState(0)
-	const [dragStart, setDragStart] = useState<number | null>(null)
 	const activeFrame = frames.length ? frames[((frameIndex % frames.length) + frames.length) % frames.length] : undefined
-	const canDrag = frames.length > 1
-
-	function rotateBy(delta: number) {
-		if (!frames.length) return
-		setFrameIndex((current) => current + delta)
-	}
-
-	function handlePointerMove(clientX: number) {
-		if (dragStart === null || !canDrag) return
-		const delta = clientX - dragStart
-		if (Math.abs(delta) < 18) return
-		rotateBy(delta > 0 ? -1 : 1)
-		setDragStart(clientX)
-	}
+	const activeFrameLabel = getAssetVisualFrameLabel(activeFrame, frameIndex)
 
 	return (
 		<Card className="border-border/70 bg-card shadow-none">
@@ -3913,20 +3887,7 @@ function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 				<CardTitle className="text-base tracking-[-0.02em]">设备全貌图</CardTitle>
 			</CardHeader>
 			<CardContent className="p-3">
-				<div
-					className={cn(
-						"relative grid aspect-[3/4] min-h-[20rem] w-full select-none place-items-center overflow-hidden rounded-md border border-border/70 bg-surface-soft sm:min-h-[24rem] xl:min-h-[28rem]",
-						canDrag && "cursor-ew-resize"
-					)}
-					onPointerDown={(event) => {
-						if (!canDrag) return
-						setDragStart(event.clientX)
-						event.currentTarget.setPointerCapture(event.pointerId)
-					}}
-					onPointerMove={(event) => handlePointerMove(event.clientX)}
-					onPointerUp={() => setDragStart(null)}
-					onPointerCancel={() => setDragStart(null)}
-				>
+				<div className="relative grid aspect-[3/4] min-h-[20rem] w-full select-none place-items-center overflow-hidden rounded-md border border-border/70 bg-surface-soft sm:min-h-[24rem] xl:min-h-[28rem]">
 					{activeFrame?.url ? (
 						<img
 							src={activeFrame.url}
@@ -3941,16 +3902,52 @@ function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 							</div>
 						</div>
 					)}
-					{canDrag && (
-						<div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-md border border-border/70 bg-card px-2 py-1 text-[11px] text-muted-foreground">
-							<RotateCwIcon className="size-3" />
-							拖拽旋转
+					{activeFrame?.url && (
+						<div className="absolute left-2 top-2 rounded-md border border-border/70 bg-card px-2 py-1 text-[11px] text-muted-foreground">
+							{activeFrameLabel}
 						</div>
 					)}
 				</div>
+				{frames.length > 1 && (
+					<div className="mt-2 grid grid-cols-3 gap-1.5">
+						{frames.map((frame, index) => (
+							<button
+								key={`${frame.url}-${index}`}
+								type="button"
+								onClick={() => setFrameIndex(index)}
+								className={cn(
+									"rounded-md border border-border/70 bg-surface-soft px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground",
+									index === frameIndex && "border-primary/60 bg-primary/10 text-foreground"
+								)}
+							>
+								{getAssetVisualFrameLabel(frame, index)}
+							</button>
+						))}
+					</div>
+				)}
 			</CardContent>
 		</Card>
 	)
+}
+
+function getAssetVisualFrameLabel(frame: NonNullable<AssetVisualRecord["frames"]>[number] | undefined, index: number) {
+	if (frame?.label) return frame.label
+	switch (frame?.view) {
+		case "front":
+			return "正面"
+		case "back":
+			return "背面"
+		case "left":
+			return "左侧"
+		case "right":
+			return "右侧"
+		case "top":
+			return "顶部"
+		case "bottom":
+			return "底部"
+		default:
+			return `视角 ${index + 1}`
+	}
 }
 
 function AssetEnrichmentReportDialog({

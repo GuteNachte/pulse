@@ -14,7 +14,18 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 )
 
-const defaultAssetTurntableFrameCount = 8
+const defaultAssetTurntableFrameCount = 6
+
+var assetVisualViewLabels = []string{"front", "back", "left", "right", "top", "bottom"}
+
+var assetVisualViewPrompts = map[string]string{
+	"front":  "front view, straight-on product photo, show the main face clearly",
+	"back":   "back view, straight-on product photo, show rear cameras, labels, ports or back panel details only if supported by references",
+	"left":   "left side view, profile product photo, show side buttons, slots or seams only if supported by references",
+	"right":  "right side view, profile product photo, show side buttons, slots or seams only if supported by references",
+	"top":    "top view, product photo from above, show top edge details only if supported by references",
+	"bottom": "bottom view, product photo from below, show charging ports, speaker grilles or bottom edge details only if supported by references",
+}
 
 type assetTurntableVisualRequest struct {
 	Color      string `json:"color"`
@@ -146,36 +157,15 @@ func assetVisualAIConfigFromEnv() assetVisualAIConfig {
 
 func normalizeAssetTurntableFrameCount(value int) int {
 	if value <= 0 {
-		if envValue, err := strconv.Atoi(strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_FRAME_COUNT"))); err == nil {
-			value = envValue
+		if _, err := strconv.Atoi(strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_FRAME_COUNT"))); err == nil {
+			// Legacy env var is intentionally ignored now: device visuals are fixed to six factual views.
 		}
 	}
-	if value <= 0 {
-		return defaultAssetTurntableFrameCount
-	}
-	if value < 4 {
-		return 4
-	}
-	if value > 12 {
-		return 12
-	}
-	return value
+	return defaultAssetTurntableFrameCount
 }
 
 func normalizeAssetTurntableFrameCountWithDefault(value int, fallback int) int {
-	if value <= 0 {
-		value = fallback
-	}
-	if value <= 0 {
-		value = defaultAssetTurntableFrameCount
-	}
-	if value < 4 {
-		return 4
-	}
-	if value > 12 {
-		return 12
-	}
-	return value
+	return defaultAssetTurntableFrameCount
 }
 
 func (h *Hub) createAssetAITask(userID string, assetID string, config assetVisualAIConfig, frameCount int, color string, references []map[string]any) (*core.Record, error) {
@@ -270,10 +260,10 @@ func buildAssetTurntablePrompt(asset *core.Record, color string, frameCount int,
 		}
 	}
 	return strings.Join(nonEmptyStrings(
-		"Create a consistent product turntable render for a home asset catalog.",
+		"Create consistent multi-view product images for a home asset catalog.",
 		"Device: "+strings.Join(nonEmptyStrings(asset.GetString("vendor"), asset.GetString("model"), recordMetadataString(asset, "internal_model"), asset.GetString("name")), " / "),
 		"Color: "+color+".",
-		fmt.Sprintf("Need %d frames around the same device, clean studio lighting, realistic 3D product render, neutral background, no text, no logos except real device branding if visible in official reference.", frameCount),
+		fmt.Sprintf("Need %d factual still images of the same physical device: front, back, left side, right side, top and bottom. Use clean studio lighting, neutral background, no text, and no decorative scene.", frameCount),
 		"Use official product photos or official CDN images as factual visual reference. Do not invent ports, camera modules, buttons, materials or logos that contradict official references.",
 		"Official reference URLs: "+strings.Join(referenceLines, " ; "),
 	), "\n")
@@ -281,20 +271,42 @@ func buildAssetTurntablePrompt(asset *core.Record, color string, frameCount int,
 
 func (h *Hub) generateAssetTurntableFrames(config assetVisualAIConfig, prompt string, frameCount int, references []map[string]any) ([]map[string]any, error) {
 	frames := make([]map[string]any, 0, frameCount)
-	for index := 0; index < frameCount; index++ {
-		angle := int(float64(index) * 360 / float64(frameCount))
-		framePrompt := prompt + fmt.Sprintf("\nCurrent frame angle: %d degrees. Keep the same object, proportions, material, color and camera distance.", angle)
+	for index, view := range assetVisualViewLabels {
+		if index >= frameCount {
+			break
+		}
+		framePrompt := prompt + fmt.Sprintf("\nCurrent view: %s. %s. Keep the same object, proportions, material, color and camera distance.", view, assetVisualViewPrompts[view])
 		imageURL, err := h.generateAssetVisualFrame(config, framePrompt, firstReferenceURL(references))
 		if err != nil {
 			return frames, err
 		}
 		frames = append(frames, map[string]any{
 			"index": index,
-			"angle": angle,
+			"view":  view,
+			"label": assetVisualViewLabelCN(view),
 			"url":   imageURL,
 		})
 	}
 	return frames, nil
+}
+
+func assetVisualViewLabelCN(view string) string {
+	switch view {
+	case "front":
+		return "正面"
+	case "back":
+		return "背面"
+	case "left":
+		return "左侧"
+	case "right":
+		return "右侧"
+	case "top":
+		return "顶部"
+	case "bottom":
+		return "底部"
+	default:
+		return view
+	}
 }
 
 func (h *Hub) generateAssetVisualFrame(config assetVisualAIConfig, prompt string, referenceURL string) (string, error) {

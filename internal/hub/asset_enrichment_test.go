@@ -388,7 +388,7 @@ func TestAssetEnrichmentConfigUpdateStoresEditableSettingsAndReturnsAdminKeys(t 
 	require.Equal(t, "agnes", visualAI["provider"])
 	require.Equal(t, "https://proxy.example.test/v1/images/generations", visualAI["endpoint"])
 	require.Equal(t, "visual-updated-secret", visualAI["api_key"])
-	require.Equal(t, float64(5), visualAI["frame_count"])
+	require.Equal(t, float64(6), visualAI["frame_count"])
 	require.Equal(t, true, visualAI["ready"])
 }
 
@@ -435,8 +435,12 @@ func TestAssetVisualTurntableUsesAgnesImagePayload(t *testing.T) {
 		fixture.headers,
 	)
 	require.Equal(t, http.StatusOK, response.Status, response.Body)
-	require.Len(t, imageRequests, 4)
+	require.Len(t, imageRequests, 6)
 	require.Equal(t, "test-image-model", imageRequests[0]["model"])
+	require.Contains(t, imageRequests[0]["prompt"], "front view")
+	require.Contains(t, imageRequests[1]["prompt"], "back view")
+	require.Contains(t, imageRequests[5]["prompt"], "bottom view")
+	require.NotContains(t, imageRequests[0]["prompt"], "3D product render")
 	extraBody, ok := imageRequests[0]["extra_body"].(map[string]any)
 	require.True(t, ok, "payload: %v", imageRequests[0])
 	require.Equal(t, "url", extraBody["response_format"])
@@ -451,7 +455,7 @@ func TestAssetVisualTurntableUsesAgnesImagePayload(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, visuals, 1)
 	require.Equal(t, "ready", visuals[0].GetString("status"))
-	require.Equal(t, 4, visuals[0].GetInt("frame_count"))
+	require.Equal(t, 6, visuals[0].GetInt("frame_count"))
 }
 
 func TestAssetEnrichmentAcceptWritesMetadataAndChange(t *testing.T) {

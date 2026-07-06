@@ -72,7 +72,7 @@ const defaultForm: AISettingsForm = {
 	visualEndpoint: "https://apihub.agnes-ai.com/v1/images/generations",
 	visualModel: "agnes-image-2.1-flash",
 	visualApiKey: "",
-	frameCount: 8,
+	frameCount: 6,
 }
 
 export default function AISettings() {
@@ -235,7 +235,7 @@ export default function AISettings() {
 							<SettingsPanel
 								icon={ImageIcon}
 								title="设备全貌图 Agent"
-								description="只配置这个 Agent 的任务行为。它会调用图片模型接入，基于官方参考图和设备颜色生成可旋转查看的候选图。"
+								description="只配置这个 Agent 的任务行为。它会调用图片模型接入，基于官方参考图和设备颜色生成 6 张固定视角图。"
 							>
 								<div className="grid gap-4">
 									<ToggleRow
@@ -252,21 +252,11 @@ export default function AISettings() {
 									/>
 									<div className="rounded-lg border border-border/70 bg-surface-soft p-3">
 										<Label htmlFor="visual-frame-count" className="text-xs">
-											全貌图帧数
+											全貌图视角数
 										</Label>
-										<Input
-											id="visual-frame-count"
-											type="number"
-											min={4}
-											max={12}
-											value={form.frameCount}
-											onChange={(event) =>
-												setForm((current) => ({ ...current, frameCount: Number(event.target.value || 8) }))
-											}
-											className="mt-2"
-										/>
+										<Input id="visual-frame-count" type="number" min={6} max={6} value={6} readOnly className="mt-2" />
 										<p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-											范围 4-12。帧数越多，生成时间和费用越高。
+											固定生成 6 张：正面、背面、左侧、右侧、顶部、底部。不再做旋转视角。
 										</p>
 									</div>
 								</div>
@@ -348,7 +338,7 @@ function formFromConfig(config: AssetEnrichmentConfig): AISettingsForm {
 		visualEndpoint: config.visual_ai.endpoint || defaultForm.visualEndpoint,
 		visualModel: config.visual_ai.model || defaultForm.visualModel,
 		visualApiKey: config.api_key || config.visual_ai.api_key || "",
-		frameCount: config.visual_ai.frame_count || defaultForm.frameCount,
+		frameCount: defaultForm.frameCount,
 	}
 }
 
