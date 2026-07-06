@@ -46,38 +46,32 @@ type AIProviderConfig = {
 type AISettingsForm = {
 	baseUrl: string
 	apiKey: string
-	clearApiKey: boolean
 	aiEnabled: boolean
 	aiProvider: string
 	aiEndpoint: string
 	aiModel: string
 	aiApiKey: string
-	clearAiApiKey: boolean
 	visualEnabled: boolean
 	visualProvider: string
 	visualEndpoint: string
 	visualModel: string
 	visualApiKey: string
-	clearVisualApiKey: boolean
 	frameCount: number
 }
 
 const defaultForm: AISettingsForm = {
 	baseUrl: "https://apihub.agnes-ai.com/v1",
 	apiKey: "",
-	clearApiKey: false,
 	aiEnabled: false,
 	aiProvider: "agnes",
 	aiEndpoint: "https://apihub.agnes-ai.com/v1/chat/completions",
 	aiModel: "agnes-2.0-flash",
 	aiApiKey: "",
-	clearAiApiKey: false,
 	visualEnabled: false,
 	visualProvider: "agnes",
 	visualEndpoint: "https://apihub.agnes-ai.com/v1/images/generations",
 	visualModel: "agnes-image-2.1-flash",
 	visualApiKey: "",
-	clearVisualApiKey: false,
 	frameCount: 8,
 }
 
@@ -126,20 +120,17 @@ export default function AISettings() {
 				body: {
 					base_url: form.baseUrl,
 					api_key: form.apiKey,
-					clear_api_key: form.clearApiKey,
 					ai: {
 						enabled: form.aiEnabled,
 						provider: "agnes",
 						model: form.aiModel,
 						api_key: form.aiApiKey,
-						clear_api_key: form.clearApiKey || form.clearAiApiKey,
 					},
 					visual_ai: {
 						enabled: form.visualEnabled,
 						provider: "agnes",
 						model: form.visualModel,
 						api_key: form.visualApiKey,
-						clear_api_key: form.clearApiKey || form.clearVisualApiKey,
 						frame_count: form.frameCount,
 					},
 				},
@@ -206,19 +197,6 @@ export default function AISettings() {
 										apiKey: value,
 										aiApiKey: value,
 										visualApiKey: value,
-										clearApiKey: false,
-										clearAiApiKey: false,
-										clearVisualApiKey: false,
-									}))
-								}
-								clearApiKey={form.clearApiKey}
-								onClearApiKeyChange={(value) =>
-									setForm((current) => ({
-										...current,
-										clearApiKey: value,
-										apiKey: value ? "" : current.apiKey,
-										aiApiKey: value ? "" : current.aiApiKey,
-										visualApiKey: value ? "" : current.visualApiKey,
 									}))
 								}
 								configured={config?.api_key_configured}
@@ -549,8 +527,6 @@ function ModelAccessForm({
 	onBaseUrlChange,
 	apiKey,
 	onApiKeyChange,
-	clearApiKey,
-	onClearApiKeyChange,
 	configured,
 	baseUrlHost,
 }: {
@@ -558,8 +534,6 @@ function ModelAccessForm({
 	onBaseUrlChange: (value: string) => void
 	apiKey: string
 	onApiKeyChange: (value: string) => void
-	clearApiKey: boolean
-	onClearApiKeyChange: (value: boolean) => void
 	configured?: boolean
 	baseUrlHost?: string
 }) {
@@ -592,8 +566,6 @@ function ModelAccessForm({
 				placeholder={configured ? "已配置，留空保持不变" : "未配置"}
 				value={apiKey}
 				onChange={onApiKeyChange}
-				clearChecked={clearApiKey}
-				onClearChange={onClearApiKeyChange}
 				configured={configured}
 			/>
 		</div>
@@ -633,8 +605,6 @@ function SecretField({
 	placeholder,
 	value,
 	onChange,
-	clearChecked,
-	onClearChange,
 	configured,
 }: {
 	id: string
@@ -642,8 +612,6 @@ function SecretField({
 	placeholder: string
 	value: string
 	onChange: (value: string) => void
-	clearChecked: boolean
-	onClearChange: (value: boolean) => void
 	configured?: boolean
 }) {
 	const [visible, setVisible] = useState(false)
@@ -665,7 +633,6 @@ function SecretField({
 					value={value}
 					placeholder={placeholder}
 					onChange={(event) => onChange(event.target.value)}
-					disabled={clearChecked}
 					className="pr-11"
 				/>
 				<Button
@@ -674,21 +641,12 @@ function SecretField({
 					size="icon"
 					className="absolute top-0 right-0 h-10 w-10 text-muted-foreground hover:text-foreground"
 					onClick={() => setVisible((current) => !current)}
-					disabled={clearChecked || !value}
+					disabled={!value}
 					aria-label={visible ? "隐藏 API Key 原文" : "显示 API Key 原文"}
 				>
 					{visible ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
 				</Button>
 			</div>
-			<label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-				<input
-					type="checkbox"
-					className="size-4"
-					checked={clearChecked}
-					onChange={(event) => onClearChange(event.target.checked)}
-				/>
-				清除已保存的密钥
-			</label>
 		</div>
 	)
 }
