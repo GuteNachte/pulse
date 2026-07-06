@@ -466,24 +466,30 @@ func extractAssetVisualHTMLImageCandidates(base *url.URL, body string) []assetVi
 }
 
 func extractAssetVisualEmbeddedImageCandidates(base *url.URL, body string) []assetVisualHTMLImageCandidate {
+	scriptPattern := regexp.MustCompile(`(?is)<script\b[^>]*>(.*?)</script>`)
+	scripts := scriptPattern.FindAllStringSubmatch(body, -1)
 	pattern := regexp.MustCompile(`(?i)(?:https?:)?//[^"'<>\\\s]+\.(?:png|jpg|jpeg|webp|avif)|/[\w./-]+\.(?:png|jpg|jpeg|webp|avif)`)
-	matches := pattern.FindAllString(body, -1)
-	result := make([]assetVisualHTMLImageCandidate, 0, len(matches))
+	result := make([]assetVisualHTMLImageCandidate, 0)
 	seen := map[string]bool{}
-	for _, match := range matches {
-		absolute := absolutizeAssetOnlineURL(base, strings.TrimSpace(match))
-		if !isLikelyImageURL(absolute) || !isLikelyAssetEmbeddedProductImage(base, absolute) {
+	for _, script := range scripts {
+		if len(script) < 2 {
 			continue
 		}
-		key := strings.ToLower(absolute)
-		if seen[key] {
-			continue
+		for _, match := range pattern.FindAllString(script[1], -1) {
+			absolute := absolutizeAssetOnlineURL(base, strings.TrimSpace(match))
+			if !isLikelyImageURL(absolute) || !isLikelyAssetEmbeddedProductImage(base, absolute) {
+				continue
+			}
+			key := strings.ToLower(absolute)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			result = append(result, assetVisualHTMLImageCandidate{
+				URL:     absolute,
+				Context: embeddedAssetVisualImageContext(absolute),
+			})
 		}
-		seen[key] = true
-		result = append(result, assetVisualHTMLImageCandidate{
-			URL:     absolute,
-			Context: embeddedAssetVisualImageContext(absolute),
-		})
 	}
 	return result
 }
