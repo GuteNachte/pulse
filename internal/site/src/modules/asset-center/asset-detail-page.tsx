@@ -1912,12 +1912,14 @@ function buildAssetIdentityRows(asset: AssetRecord): AssetParameterRow[] {
 }
 
 function buildAssetParameterGroups(asset: AssetRecord): AssetParameterGroup[] {
-	const archiveGroups = buildArchiveDetailSections(asset).flatMap((section) =>
-		splitArchiveSectionIntoParameterGroups(section).map((group, index) => ({
-			...group,
-			id: `archive-${normalizeGroupId(group.title)}-${index}`,
-		}))
-	)
+	const archiveGroups = buildArchiveDetailSections(asset)
+		.filter((section) => !hiddenArchiveParameterGroupTitles.has(section.title))
+		.flatMap((section) =>
+			splitArchiveSectionIntoParameterGroups(section).map((group, index) => ({
+				...group,
+				id: `archive-${normalizeGroupId(group.title)}-${index}`,
+			}))
+		)
 	const hostGroups = HOST_ASSET_TYPES.includes(asset.type)
 		? buildHostHardwareProfileGroups(asset)
 				.filter((group) => group.rows.length > 0)
@@ -1937,6 +1939,8 @@ function buildAssetParameterGroups(asset: AssetRecord): AssetParameterGroup[] {
 		: []
 	return dedupeParameterGroups([...archiveGroups, ...hostGroups])
 }
+
+const hiddenArchiveParameterGroupTitles = new Set(["基础身份", "硬件识别", "固定地址", "接入信息", "生命周期", "备注"])
 
 function splitArchiveSectionIntoParameterGroups(section: ArchiveDetailSection): Omit<AssetParameterGroup, "id">[] {
 	if (section.title !== "系统与性能") {
