@@ -27,7 +27,7 @@ import {
 	Trash2Icon,
 	UploadIcon,
 } from "lucide-react"
-import { memo, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react"
+import { memo, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react"
 import { $router, Link } from "@/components/router"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -314,6 +314,12 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const [managementDialogOpen, setManagementDialogOpen] = useState(false)
 	const [recognitionStage, setRecognitionStage] = useState<"idle" | "blocked" | "running" | "ready" | "failed">("idle")
 	const [recognitionMessage, setRecognitionMessage] = useState("")
+	const [officialColorStage, setOfficialColorStage] = useState<"idle" | "blocked" | "running" | "ready" | "failed">(
+		"idle"
+	)
+	const [officialColorMessage, setOfficialColorMessage] = useState("")
+	const [visualGenerationStage, setVisualGenerationStage] = useState<"idle" | "running" | "ready" | "failed">("idle")
+	const [visualGenerationMessage, setVisualGenerationMessage] = useState("")
 	const [visualColor, setVisualColor] = useState("")
 	const [visualFrameCount, setVisualFrameCount] = useState(2)
 	const [fileToken, setFileToken] = useState("")
@@ -322,6 +328,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const [relationForm, setRelationForm] = useState<RelationFormState>(emptyRelationForm)
 	const [editingMaintenance, setEditingMaintenance] = useState<AssetMaintenanceRecord | null>(null)
 	const [saving, setSaving] = useState(false)
+	const secondaryLoadRef = useRef<Promise<void> | null>(null)
 	const readOnly = isReadOnlyUser()
 	const assetMap = useMemo(() => new Map(state.assets.map((asset) => [asset.id, asset])), [state.assets])
 	const asset = state.asset
@@ -336,6 +343,10 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		setVisualFrameCount(2)
 		setRecognitionStage("idle")
 		setRecognitionMessage("")
+		setOfficialColorStage("idle")
+		setOfficialColorMessage("")
+		setVisualGenerationStage("idle")
+		setVisualGenerationMessage("")
 	}, [asset?.id])
 
 	const selectedRelationGuide = useMemo(
@@ -367,25 +378,16 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	async function loadDetail(options?: { waitSecondary?: boolean }) {
 		setLoading(true)
 		try {
-			const [assetRecord, assets, interfaces, allInterfaces, relations, locations, systems] = await Promise.all([
+			const [assetRecord, interfaces, relations, systems] = await Promise.all([
 				pb.collection<AssetRecord>("assets").getOne(id, { requestKey: null }),
-				pb.collection<AssetRecord>("assets").getFullList({ sort: "type,name", requestKey: null }),
 				pb.collection<AssetInterfaceRecord>("asset_interfaces").getFullList({
 					filter: `asset="${id}"`,
 					sort: "-primary,kind,name",
 					requestKey: null,
 				}),
-				pb.collection<AssetInterfaceRecord>("asset_interfaces").getFullList({
-					sort: "asset,-primary,kind,name",
-					requestKey: null,
-				}),
 				pb.collection<AssetRelationRecord>("asset_relations").getFullList({
 					filter: `source_asset="${id}" || target_asset="${id}"`,
 					sort: "kind,created",
-					requestKey: null,
-				}),
-				pb.collection<AssetLocationRecord>("asset_locations").getFullList({
-					sort: "sort_order,name",
 					requestKey: null,
 				}),
 				pb.collection<SystemRecord>("systems").getFullList({
@@ -397,17 +399,21 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			setState({
 				...emptyState,
 				asset: assetRecord,
-				assets,
+				assets: [assetRecord],
 				interfaces,
-				allInterfaces,
+				allInterfaces: interfaces,
 				relations,
-				locations,
 				systems,
 			})
 			setFileToken("")
 			document.title = pageTitle(`${assetRecord.name} / 资产详情`)
 			setLoading(false)
-			const secondaryLoad = loadSecondaryDetailData({ assetId: id, assets, relations, systems })
+			const secondaryLoad = startSecondaryDetailDataLoad({
+				assetId: id,
+				fallbackAsset: assetRecord,
+				relations,
+				systems,
+			})
 			if (options?.waitSecondary) {
 				await secondaryLoad
 			} else {
@@ -424,57 +430,115 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		}
 	}
 
+	function startSecondaryDetailDataLoad(options: {
+		assetId: string
+		fallbackAsset: AssetRecord
+		relations: AssetRelationRecord[]
+		systems: SystemRecord[]
+	}) {
+		let secondaryLoad: Promise<void>
+		secondaryLoad = loadSecondaryDetailData(options).finally(() => {
+			if (secondaryLoadRef.current === secondaryLoad) {
+				secondaryLoadRef.current = null
+			}
+		})
+		secondaryLoadRef.current = secondaryLoad
+		return secondaryLoad
+	}
+
+	async function ensureSecondaryDetailDataLoaded() {
+		if (!asset) return
+		if (
+			state.assets.length > 1 &&
+			state.allInterfaces.length >= state.interfaces.length &&
+			state.locations.length > 0
+		) {
+			return
+		}
+		if (secondaryLoadRef.current) {
+			await secondaryLoadRef.current
+			return
+		}
+		await startSecondaryDetailDataLoad({
+			assetId: asset.id,
+			fallbackAsset: asset,
+			relations: state.relations,
+			systems: state.systems,
+		})
+	}
+
 	async function loadSecondaryDetailData({
 		assetId,
-		assets,
+		fallbackAsset,
 		relations,
 		systems,
 	}: {
 		assetId: string
-		assets: AssetRecord[]
+		fallbackAsset: AssetRecord
 		relations: AssetRelationRecord[]
 		systems: SystemRecord[]
 	}) {
 		try {
-			const [maintenance, attachments, visuals, aiTasks, changes, enrichmentReports, enrichmentSuggestions] =
-				await Promise.all([
-					pb.collection<AssetMaintenanceRecord>("asset_maintenance").getFullList({
-						filter: `asset="${assetId}"`,
-						sort: "-event_date,-created",
-						requestKey: null,
-					}),
-					pb.collection<AssetAttachmentRecord>("asset_attachments").getFullList({
-						filter: `asset="${assetId}"`,
-						sort: "kind,title",
-						requestKey: null,
-					}),
-					pb.collection<AssetVisualRecord>("asset_visuals").getFullList({
-						filter: `asset="${assetId}"`,
-						sort: "-primary,-created",
-						requestKey: null,
-					}),
-					pb.collection<AITaskRecord>("ai_tasks").getFullList({
-						filter: `asset="${assetId}"`,
-						sort: "-created",
-						requestKey: null,
-					}),
-					pb.collection<AssetChangeRecord>("asset_changes").getList(1, 20, {
-						filter: `asset="${assetId}"`,
-						sort: "-created",
-						requestKey: null,
-					}),
-					pb.collection<AssetEnrichmentReportRecord>("asset_enrichment_reports").getList(1, 10, {
-						filter: `asset="${assetId}"`,
-						sort: "-created",
-						requestKey: null,
-					}),
-					pb.collection<AssetEnrichmentSuggestionRecord>("asset_enrichment_suggestions").getFullList({
-						filter: `asset="${assetId}"`,
-						sort: "-created",
-						requestKey: null,
-					}),
-				])
-			const websiteAssetIds = getAssetWebsiteEndpointIds(assetId, assets, relations)
+			const [
+				assets,
+				allInterfaces,
+				locations,
+				maintenance,
+				attachments,
+				visuals,
+				aiTasks,
+				changes,
+				enrichmentReports,
+				enrichmentSuggestions,
+			] = await Promise.all([
+				pb.collection<AssetRecord>("assets").getFullList({ sort: "type,name", requestKey: null }),
+				pb.collection<AssetInterfaceRecord>("asset_interfaces").getFullList({
+					sort: "asset,-primary,kind,name",
+					requestKey: null,
+				}),
+				pb.collection<AssetLocationRecord>("asset_locations").getFullList({
+					sort: "sort_order,name",
+					requestKey: null,
+				}),
+				pb.collection<AssetMaintenanceRecord>("asset_maintenance").getFullList({
+					filter: `asset="${assetId}"`,
+					sort: "-event_date,-created",
+					requestKey: null,
+				}),
+				pb.collection<AssetAttachmentRecord>("asset_attachments").getFullList({
+					filter: `asset="${assetId}"`,
+					sort: "kind,title",
+					requestKey: null,
+				}),
+				pb.collection<AssetVisualRecord>("asset_visuals").getFullList({
+					filter: `asset="${assetId}"`,
+					sort: "-primary,-created",
+					requestKey: null,
+				}),
+				pb.collection<AITaskRecord>("ai_tasks").getFullList({
+					filter: `asset="${assetId}"`,
+					sort: "-created",
+					requestKey: null,
+				}),
+				pb.collection<AssetChangeRecord>("asset_changes").getList(1, 20, {
+					filter: `asset="${assetId}"`,
+					sort: "-created",
+					requestKey: null,
+				}),
+				pb.collection<AssetEnrichmentReportRecord>("asset_enrichment_reports").getList(1, 10, {
+					filter: `asset="${assetId}"`,
+					sort: "-created",
+					requestKey: null,
+				}),
+				pb.collection<AssetEnrichmentSuggestionRecord>("asset_enrichment_suggestions").getFullList({
+					filter: `asset="${assetId}"`,
+					sort: "-created",
+					requestKey: null,
+				}),
+			])
+			const assetsForDerivedData = assets.length > 0 ? assets : [fallbackAsset]
+			const allInterfacesForState = allInterfaces.length > 0 ? allInterfaces : []
+			const websiteAssetIds = getAssetWebsiteEndpointIds(assetId, assetsForDerivedData, relations)
 			const detailAssetIds = uniqueIds([assetId, ...websiteAssetIds])
 			const [websites, alerts, assetAlerts, notificationFailures, notificationStates, systemDetails, runtimeSummary] =
 				await Promise.all([
@@ -491,6 +555,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				if (current.asset?.id !== assetId) return current
 				return {
 					...current,
+					assets: assetsForDerivedData,
 					maintenance,
 					attachments,
 					visuals,
@@ -498,6 +563,8 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					changes: changes.items,
 					enrichmentReports: enrichmentReports.items,
 					enrichmentSuggestions,
+					allInterfaces: allInterfacesForState,
+					locations,
 					systems,
 					systemDetails,
 					smartDevices: runtimeSummary.smartDevices,
@@ -797,33 +864,45 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 
 	async function generateTurntableVisual(options?: { color?: string; frameCount?: number }) {
 		if (!asset || readOnly) return
-		const color =
-			options?.color ??
-			window.prompt(
-				"设备颜色 / 配色",
-				getMetadataString(asset.metadata, "color") || getMetadataString(asset.metadata, "device_color") || ""
-			)
-		if (color === null) return
+		const color = options?.color ?? getAssetVisualColor(asset)
+		setVisualGenerationStage("running")
+		setVisualGenerationMessage("正在收集官方 / 可追溯参考图，并调用 Agnes 图片模型生成白天 / 夜晚两张统一图。")
 		setSaving(true)
 		try {
-			const response = await pb.send<{ status?: string }>(`/api/pulse/assets/${asset.id}/visuals/turntable`, {
-				method: "POST",
-				body: { color: color.trim(), frame_count: options?.frameCount ?? 2 },
-			})
+			const response = await pb.send<{ status?: string; message?: string }>(
+				`/api/pulse/assets/${asset.id}/visuals/turntable`,
+				{
+					method: "POST",
+					body: { color: color.trim(), frame_count: options?.frameCount ?? 2 },
+				}
+			)
 			await loadDetail({ waitSecondary: true })
-			if (response.status === "no_sources") {
+			if (response.status === "blocked" || response.status === "failed") {
+				setVisualGenerationStage("failed")
+				setVisualGenerationMessage(response.message || "统一全貌图未生成，请检查官方配色、参考图来源或图片模型配置。")
+				toast({
+					title: "统一全貌图未生成",
+					description: response.message || "请先补齐官方配色、参考图来源或图片模型配置。",
+				})
+			} else if (response.status === "no_sources") {
+				setVisualGenerationStage("failed")
+				setVisualGenerationMessage("没有找到可追溯设备图片。请先补充厂家支持页、官方图片 URL，或运行资料补全 Agent。")
 				toast({
 					title: "未找到可用设备图片",
 					description: "请先补充厂家支持页、官方图片 URL，或运行资料补全 Agent 后再收集。",
 				})
 			} else {
-				toast({ title: "设备图片已收集", description: "已从可追溯来源整理为全貌图轮播。" })
+				setVisualGenerationStage("ready")
+				setVisualGenerationMessage("统一全貌图已生成。已基于参考图统一背景、比例和摆放。")
+				toast({ title: "统一全貌图已生成", description: "已基于参考图统一背景、比例和摆放。" })
 			}
 		} catch (error) {
 			console.error("collect asset visual images", error)
+			setVisualGenerationStage("failed")
+			setVisualGenerationMessage("统一全貌图生成失败。请检查官方配色、参考图来源、图片模型配置或 Hub 日志。")
 			toast({
-				title: "设备图片收集失败",
-				description: "请检查厂家支持页、官方图片 URL 或 Hub 日志。",
+				title: "统一全貌图生成失败",
+				description: "请检查官方配色、参考图来源、图片模型配置或 Hub 日志。",
 				variant: "destructive",
 			})
 		} finally {
@@ -866,6 +945,11 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		metadata.device_color = metadata.color
 		metadata.asset_tag = form.get("asset_tag")?.toString().trim() || ""
 		metadata.fixed_ipv4 = fixedIpv4
+		const colorsAvailable = form.get("colors_available")?.toString().trim()
+		if (colorsAvailable) {
+			metadata.colors_available = colorsAvailable
+			metadata.official_colors = colorsAvailable
+		}
 		metadata.support_url = form.get("support_url")?.toString().trim() || ""
 		metadata.management_url = form.get("management_url")?.toString().trim() || ""
 		if (isPhoneVariantSpecRequired(targetType)) {
@@ -925,6 +1009,45 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			setRecognitionStage("failed")
 			setRecognitionMessage("识别失败。请检查 Agnes 配置、资产参数或 Hub 日志。")
 			toast({ title: "智能匹配失败", description: "请检查 Agnes 配置、资产参数或 Hub 日志。", variant: "destructive" })
+		} finally {
+			setSaving(false)
+		}
+	}
+
+	async function fetchOfficialColors() {
+		if (!asset || readOnly || saving) return
+		const missing = getOfficialColorFetchRequirements(asset)
+		if (missing.length > 0) {
+			setOfficialColorStage("blocked")
+			setOfficialColorMessage(`缺少：${missing.join("、")}`)
+			toast({
+				title: "官方颜色获取缺少参数",
+				description: missing.join("、"),
+				variant: "destructive",
+			})
+			return
+		}
+		setOfficialColorStage("running")
+		setOfficialColorMessage("正在调用资料补全 Agent，从官网、支持页和官方图片来源提取官方配色。")
+		setSaving(true)
+		try {
+			await pb.send(`/api/pulse/assets/${asset.id}/enrichment-reports`, {
+				method: "POST",
+				body: { focus: "official_colors" },
+			})
+			await loadDetail({ waitSecondary: true })
+			setOfficialColorStage("ready")
+			setOfficialColorMessage("已生成官方配色候选，请在下拉框选择并保存主档。")
+			toast({ title: "官方颜色已获取", description: "请选择官方配色后保存主档，再生成统一全貌图。" })
+		} catch (error) {
+			console.error("fetch official asset colors", error)
+			setOfficialColorStage("failed")
+			setOfficialColorMessage("获取失败。请检查 Agnes 配置、厂家支持页、型号或 Hub 日志。")
+			toast({
+				title: "官方颜色获取失败",
+				description: "请检查 Agnes 配置、厂家支持页、型号或 Hub 日志。",
+				variant: "destructive",
+			})
 		} finally {
 			setSaving(false)
 		}
@@ -1333,7 +1456,14 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 						variant="outline"
 						size="sm"
 						className="h-7 shrink-0 gap-1.5 px-2 text-xs"
-						onClick={() => setManagementDialogOpen(true)}
+						onClick={() => {
+							setManagementDialogOpen(true)
+							ensureSecondaryDetailDataLoaded().catch((error) => {
+								if (!isPocketBaseAutoCancel(error)) {
+									console.warn("ensure asset edit catalog", error)
+								}
+							})
+						}}
 					>
 						<PencilIcon className="size-3.5" />
 						编辑
@@ -1351,6 +1481,10 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					saving={saving}
 					recognitionStage={recognitionStage}
 					recognitionMessage={recognitionMessage}
+					officialColorStage={officialColorStage}
+					officialColorMessage={officialColorMessage}
+					visualGenerationStage={visualGenerationStage}
+					visualGenerationMessage={visualGenerationMessage}
 					recognitionRequirements={recognitionRequirements}
 					latestReport={latestEnrichmentReport}
 					latestSuggestions={latestEnrichmentSuggestions}
@@ -1360,6 +1494,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					onVisualColorChange={setVisualColor}
 					onSaveProfile={saveAssetProfile}
 					onRunSmartRecognition={runSmartRecognition}
+					onFetchOfficialColors={fetchOfficialColors}
 					onAcceptSuggestion={(suggestion) => acceptEnrichmentSuggestionDirect(suggestion)}
 					onAcceptAllSuggestions={acceptAllActionableSuggestions}
 					onGenerateVisual={() =>
@@ -1729,11 +1864,22 @@ function AssetShowcaseTags({ asset }: { asset: AssetRecord }) {
 
 function AssetShowcaseWorkspace({ asset, visuals }: { asset: AssetRecord; visuals: AssetVisualRecord[] }) {
 	const parameterGroups = useMemo(() => buildAssetParameterGroups(asset), [asset])
-	const [selectedGroupId, setSelectedGroupId] = useState(() => parameterGroups[0]?.id ?? "")
-	const selectedGroup = parameterGroups.find((group) => group.id === selectedGroupId) ?? parameterGroups[0]
+	const expandableGroups = useMemo(() => parameterGroups.filter(isParameterGroupExpandable), [parameterGroups])
+	const [selectedGroupId, setSelectedGroupId] = useState(() => expandableGroups[0]?.id ?? "")
+	const selectedGroup = expandableGroups.find((group) => group.id === selectedGroupId) ?? expandableGroups[0]
+
+	useEffect(() => {
+		if (expandableGroups.length === 0) {
+			if (selectedGroupId) setSelectedGroupId("")
+			return
+		}
+		if (!expandableGroups.some((group) => group.id === selectedGroupId)) {
+			setSelectedGroupId(expandableGroups[0].id)
+		}
+	}, [expandableGroups, selectedGroupId])
 
 	return (
-		<section className="grid gap-4 xl:grid-cols-[minmax(14rem,0.48fr)_minmax(19rem,0.78fr)_minmax(24rem,1fr)] xl:items-start 2xl:grid-cols-[minmax(16rem,0.5fr)_minmax(20rem,0.78fr)_minmax(26rem,1fr)]">
+		<section className="grid gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(0,4fr)_minmax(0,3fr)] xl:items-start">
 			<AssetVisualCard visuals={visuals} />
 			<AssetOverviewColumn
 				asset={asset}
@@ -1774,11 +1920,14 @@ function AssetOverviewColumn({
 	onSelectGroup: (groupId: string) => void
 }) {
 	const identityRows = buildAssetIdentityRows(asset)
+	const assetTag = getMetadataString(asset.metadata, "asset_tag")
 	return (
 		<div className="grid gap-4">
 			<Card className="border-border/70 bg-card shadow-none">
 				<CardHeader className="border-b border-border/70 bg-surface-soft px-3 py-2.5">
-					<CardTitle className="text-base tracking-[-0.02em]">资产信息</CardTitle>
+					<CardTitle className="truncate text-base tracking-[-0.02em]">
+						资产信息{assetTag ? <span className="text-muted-foreground">（{assetTag}）</span> : null}
+					</CardTitle>
 				</CardHeader>
 				<CardContent className="grid gap-2 p-3 sm:grid-cols-2">
 					{identityRows.map((row) => (
@@ -1789,34 +1938,40 @@ function AssetOverviewColumn({
 
 			<Card className="border-border/70 bg-card shadow-none">
 				<CardHeader className="border-b border-border/70 bg-surface-soft px-3 py-2.5">
-					<CardTitle className="text-base tracking-[-0.02em]">软硬件参数</CardTitle>
+					<CardTitle className="text-base tracking-[-0.02em]">硬件参数</CardTitle>
 				</CardHeader>
 				<CardContent className="grid gap-2 p-3 sm:grid-cols-2">
 					{parameterGroups.length > 0 ? (
-						parameterGroups.map((group) => (
-							<button
-								type="button"
-								key={group.id}
-								onClick={() => onSelectGroup(group.id)}
-								className={cn(
-									"grid min-w-0 grid-cols-[1.75rem_minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-border/70 bg-surface-soft px-2 py-1.5 text-left transition-colors hover:border-blue-400/60 hover:bg-blue-50/60 dark:hover:bg-blue-950/20",
-									group.id === selectedGroupId &&
-										"border-blue-500/70 bg-blue-50 text-blue-950 dark:bg-blue-950/30 dark:text-blue-50"
-								)}
-							>
-								<span className="grid size-7 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
-									{group.icon}
-								</span>
-								<span className="min-w-0">
-									<span className="block truncate text-xs font-medium text-foreground">{group.title}</span>
-									<span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{group.summary}</span>
-								</span>
-								<ChevronRightIcon className="size-3.5 text-muted-foreground" />
-							</button>
-						))
+						parameterGroups.map((group) => {
+							const expandable = isParameterGroupExpandable(group)
+							if (!expandable) {
+								return <InlineParameterGroup key={group.id} group={group} />
+							}
+							return (
+								<button
+									type="button"
+									key={group.id}
+									onClick={() => onSelectGroup(group.id)}
+									className={cn(
+										"grid min-w-0 grid-cols-[1.75rem_minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-border/70 bg-surface-soft px-2 py-1.5 text-left transition-colors hover:border-blue-400/60 hover:bg-blue-50/60 dark:hover:bg-blue-950/20",
+										group.id === selectedGroupId &&
+											"border-blue-500/70 bg-blue-50 text-blue-950 dark:bg-blue-950/30 dark:text-blue-50"
+									)}
+								>
+									<span className="grid size-7 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
+										{group.icon}
+									</span>
+									<span className="min-w-0">
+										<span className="block truncate text-xs font-medium text-foreground">{group.title}</span>
+										<span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{group.summary}</span>
+									</span>
+									<ChevronRightIcon className="size-3.5 text-muted-foreground" />
+								</button>
+							)
+						})
 					) : (
 						<div className="sm:col-span-2">
-							<EmptyBlock icon={<ListChecksIcon className="size-5" />} text="暂无已确认的软硬件参数。" />
+							<EmptyBlock icon={<ListChecksIcon className="size-5" />} text="暂无已确认的硬件参数。" />
 						</div>
 					)}
 				</CardContent>
@@ -1852,10 +2007,34 @@ function AssetParameterDetailPanel({ group }: { group?: AssetParameterGroup }) {
 						</section>
 					))
 				) : (
-					<EmptyBlock icon={<ListChecksIcon className="size-5" />} text="选择左侧参数大项查看详情。" />
+					<EmptyBlock icon={<ListChecksIcon className="size-5" />} text="参数较少的硬件大项已在中间直接显示。" />
 				)}
 			</CardContent>
 		</Card>
+	)
+}
+
+function InlineParameterGroup({ group }: { group: AssetParameterGroup }) {
+	return (
+		<div className="grid min-w-0 gap-2 rounded-md border border-border/70 bg-surface-soft px-2 py-2">
+			<div className="flex min-w-0 items-center gap-2">
+				<span className="grid size-7 shrink-0 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
+					{group.icon}
+				</span>
+				<span className="min-w-0 truncate text-xs font-medium text-foreground">{group.title}</span>
+			</div>
+			<div className="grid gap-1">
+				{group.rows.map((row) => (
+					<div
+						key={`${group.id}-${row.label}`}
+						className="grid min-w-0 grid-cols-[4rem_minmax(0,1fr)] items-baseline gap-2"
+					>
+						<span className="truncate text-[11px] text-muted-foreground">{row.label}</span>
+						<span className="min-w-0 break-words text-xs font-medium text-foreground">{row.value}</span>
+					</div>
+				))}
+			</div>
+		</div>
 	)
 }
 
@@ -1871,6 +2050,12 @@ function groupRowsBySection(rows: AssetParameterRow[]) {
 		section.rows.push(row)
 	}
 	return sections
+}
+
+function isParameterGroupExpandable(group: AssetParameterGroup) {
+	const sections = groupRowsBySection(group.rows)
+	const meaningfulSectionCount = sections.filter((section) => section.title).length
+	return group.rows.length > 4 || (group.rows.length > 3 && meaningfulSectionCount > 1)
 }
 
 function CompactParameterRow({ row }: { row: AssetParameterRow }) {
@@ -1922,7 +2107,6 @@ function buildAssetIdentityRows(asset: AssetRecord): AssetParameterRow[] {
 			label: "颜色",
 			value: firstNonEmpty(getMetadataString(metadata, "color"), getMetadataString(metadata, "device_color")),
 		},
-		{ label: "资产编号", value: getMetadataString(metadata, "asset_tag") },
 		{ label: "位置", value: asset.location },
 		{ label: "用途", value: asset.role },
 	].filter((row) => row.value)
@@ -1960,7 +2144,7 @@ function buildAssetParameterGroups(asset: AssetRecord): AssetParameterGroup[] {
 const hiddenArchiveParameterGroupTitles = new Set(["基础身份", "硬件识别", "固定地址", "接入信息", "生命周期", "备注"])
 
 function splitArchiveSectionIntoParameterGroups(section: ArchiveDetailSection): Omit<AssetParameterGroup, "id">[] {
-	if (section.title !== "系统与性能") {
+	if (section.title !== "硬件性能") {
 		const rows = section.rows.map(archiveRowToParameterRow)
 		return [
 			{
@@ -1972,7 +2156,6 @@ function splitArchiveSectionIntoParameterGroups(section: ArchiveDetailSection): 
 		]
 	}
 	const buckets = [
-		{ title: "系统软件", keys: ["device_os"], icon: <MonitorIcon className="size-4" /> },
 		{
 			title: "处理器",
 			keys: [
@@ -2007,17 +2190,85 @@ function splitArchiveSectionIntoParameterGroups(section: ArchiveDetailSection): 
 
 function archiveRowToParameterRow(row: ArchiveDetailRow): AssetParameterRow {
 	const isUrl = row.field.type === "url" && /^https?:\/\//i.test(row.value)
+	const display = formatAssetParameterRowDisplay(row.field, row.value)
 	return {
-		label: row.field.label,
-		value: row.value,
+		label: display.label,
+		value: display.value,
 		href: isUrl ? row.value : undefined,
 		capture: row.field.capture,
 		section: getArchiveRowDetailSection(row.field.key),
 	}
 }
 
+const assetDisplayUnitByFieldKey = new Map<string, string>([
+	["battery_capacity_mah", "mAh"],
+	["capacity_w", "W"],
+	["charging_power_w", "W"],
+	["default_port_speed_mbps", "Mbps"],
+	["disk_gb", "GB"],
+	["down_mbps", "Mbps"],
+	["gpu_vram_gb", "GB"],
+	["memory_gb", "GB"],
+	["memory_speed_mhz", "MHz"],
+	["primary_nic_speed_mbps", "Mbps"],
+	["screen_refresh_rate", "Hz"],
+	["storage_gb", "GB"],
+	["touch_sampling_rate", "Hz"],
+	["up_mbps", "Mbps"],
+])
+
+const assetDisplayLabelUnits = [
+	"mAh",
+	"Mbps",
+	"MHz",
+	"GHz",
+	"Hz",
+	"GB",
+	"TB",
+	"MB",
+	"KB",
+	"VA",
+	"W",
+	"mm",
+	"cm",
+	"kg",
+	"g",
+]
+
+function formatAssetParameterRowDisplay(field: AssetFieldDefinition, value: string) {
+	const unit = getAssetParameterDisplayUnit(field)
+	if (!unit) return { label: field.label, value }
+	return {
+		label: stripAssetParameterLabelUnit(field.label, unit),
+		value: formatAssetParameterValueWithUnit(value, unit),
+	}
+}
+
+function getAssetParameterDisplayUnit(field: AssetFieldDefinition) {
+	const unitFromKey = assetDisplayUnitByFieldKey.get(field.key)
+	if (unitFromKey) return unitFromKey
+	return assetDisplayLabelUnits.find((unit) => new RegExp(`\\s${escapeRegExp(unit)}$`, "i").test(field.label))
+}
+
+function stripAssetParameterLabelUnit(label: string, unit: string) {
+	return label.replace(new RegExp(`\\s*${escapeRegExp(unit)}$`, "i"), "").trim()
+}
+
+function formatAssetParameterValueWithUnit(value: string, unit: string) {
+	const trimmed = value.trim()
+	if (!trimmed) return trimmed
+	const numericUnitPattern = new RegExp(`(\\d(?:[\\d.,]*))\\s*${escapeRegExp(unit)}(?=$|[\\s,/，、;；)])`, "gi")
+	const normalized = trimmed.replace(numericUnitPattern, (_match, number) => `${number} ${unit}`)
+	if (normalized !== trimmed) return normalized
+	if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return `${trimmed} ${unit}`
+	return trimmed
+}
+
+function escapeRegExp(value: string) {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
 const archiveParameterDetailSectionMap = new Map<string, string>([
-	["device_os", "系统"],
 	["cpu_model", "处理器"],
 	["cpu_vendor", "处理器"],
 	["cpu_process", "处理器"],
@@ -2170,6 +2421,10 @@ function AssetEditWorkbench({
 	saving,
 	recognitionStage,
 	recognitionMessage,
+	officialColorStage,
+	officialColorMessage,
+	visualGenerationStage,
+	visualGenerationMessage,
 	recognitionRequirements,
 	latestReport,
 	latestSuggestions,
@@ -2179,6 +2434,7 @@ function AssetEditWorkbench({
 	onVisualColorChange,
 	onSaveProfile,
 	onRunSmartRecognition,
+	onFetchOfficialColors,
 	onAcceptSuggestion,
 	onAcceptAllSuggestions,
 	onGenerateVisual,
@@ -2194,6 +2450,10 @@ function AssetEditWorkbench({
 	saving: boolean
 	recognitionStage: "idle" | "blocked" | "running" | "ready" | "failed"
 	recognitionMessage: string
+	officialColorStage: "idle" | "blocked" | "running" | "ready" | "failed"
+	officialColorMessage: string
+	visualGenerationStage: "idle" | "running" | "ready" | "failed"
+	visualGenerationMessage: string
 	recognitionRequirements: AssetRecognitionRequirement[]
 	latestReport?: AssetEnrichmentReportRecord
 	latestSuggestions: AssetEnrichmentSuggestionRecord[]
@@ -2203,6 +2463,7 @@ function AssetEditWorkbench({
 	onVisualColorChange: (value: string) => void
 	onSaveProfile: (event: React.FormEvent<HTMLFormElement>) => void
 	onRunSmartRecognition: () => void
+	onFetchOfficialColors: () => void
 	onAcceptSuggestion: (suggestion: AssetEnrichmentSuggestionRecord) => void
 	onAcceptAllSuggestions: () => void
 	onGenerateVisual: () => void
@@ -2216,6 +2477,12 @@ function AssetEditWorkbench({
 	const [selectedType, setSelectedType] = useState<AssetRecord["type"]>(asset.type)
 	const [locationValue, setLocationValue] = useState(asset.location || "")
 	const [assetTagValue, setAssetTagValue] = useState(getMetadataString(metadata, "asset_tag"))
+	const officialColorOptions = useMemo(
+		() => getAssetOfficialColorOptions(asset, state.enrichmentSuggestions),
+		[asset, state.enrichmentSuggestions]
+	)
+	const visualBlockReason = getAssetVisualGenerationBlockReason(asset, visualColor, officialColorOptions)
+	const visualGenerationRunning = visualGenerationStage === "running"
 	useEffect(() => {
 		setSelectedType(asset.type)
 		setLocationValue(asset.location || "")
@@ -2230,17 +2497,14 @@ function AssetEditWorkbench({
 		[state.assets]
 	)
 	const missingRequirements = recognitionRequirements.filter((item) => !item.ok)
-	const latestVisual =
-		state.visuals.find((item) => item.kind === "official_reference") ??
-		state.visuals.find((item) => item.kind === "ai_turntable") ??
-		state.visuals[0]
+	const latestVisual = getAssetDisplayVisual(state.visuals)
 	const latestVisualFrame = latestVisual?.frames?.find(isDisplayableAssetVisualFrame)
 	return (
 		<DialogContent className="flex max-h-[92vh] max-w-6xl flex-col overflow-hidden">
 			<DialogHeader className="shrink-0">
 				<DialogTitle>编辑资产</DialogTitle>
 				<DialogDescription>
-					主档、智能匹配、参数替换、设备图片收集和资产子档案都在这里处理；外层详情页只负责查看。
+					主档、智能匹配、参数替换、设备图片统一化和资产子档案都在这里处理；外层详情页只负责查看。
 				</DialogDescription>
 			</DialogHeader>
 			<div className="min-h-0 overflow-y-auto pr-1">
@@ -2274,7 +2538,17 @@ function AssetEditWorkbench({
 									required
 									defaultValue={getMetadataString(metadata, "internal_model")}
 								/>
-								<TextField name="color" label="外观颜色" required defaultValue={getAssetVisualColor(asset)} />
+								<OfficialColorField
+									name="color"
+									label="外观颜色"
+									defaultValue={getAssetVisualColor(asset)}
+									options={officialColorOptions}
+									requireOfficial={isOfficialColorRequiredForAssetType(selectedType)}
+									status={officialColorStage}
+									message={officialColorMessage}
+									disabled={readOnly || saving}
+									onFetch={onFetchOfficialColors}
+								/>
 								{isPhoneVariantSpecRequired(selectedType) && (
 									<>
 										<PhoneVariantSpecField
@@ -2441,37 +2715,61 @@ function AssetEditWorkbench({
 							<div className="mb-3 flex items-center justify-between gap-3">
 								<div className="min-w-0">
 									<div className="text-sm font-semibold text-foreground">全貌图</div>
-									<div className="mt-1 text-xs text-muted-foreground">收集设置和预览集中在编辑里。</div>
+									<div className="mt-1 text-xs text-muted-foreground">官方配色、参考图和统一化预览集中在编辑里。</div>
 								</div>
 								<Button
 									type="button"
 									size="sm"
 									variant="outline"
 									onClick={onGenerateVisual}
-									disabled={readOnly || saving}
+									disabled={readOnly || saving || Boolean(visualBlockReason) || visualGenerationRunning}
 									className="gap-2"
 								>
 									<ImageIcon className="size-3.5" />
-									收集
+									{visualGenerationRunning ? "生成中" : "生成统一图"}
 								</Button>
 							</div>
 							<div className="grid gap-3">
 								<div className="grid gap-3 sm:grid-cols-2">
+									<OfficialColorPicker
+										value={visualColor}
+										options={officialColorOptions}
+										requireOfficial={isOfficialColorRequiredForAssetType(asset.type)}
+										status={officialColorStage}
+										message={officialColorMessage}
+										disabled={readOnly || saving}
+										onFetch={onFetchOfficialColors}
+										onChange={onVisualColorChange}
+									/>
 									<div className="grid gap-2">
-										<Label htmlFor="asset-visual-color">配色</Label>
-										<Input
-											id="asset-visual-color"
-											value={visualColor}
-											onChange={(event) => onVisualColorChange(event.target.value)}
-											placeholder="例如 黑色 / 银色 / 白色"
-										/>
-									</div>
-									<div className="grid gap-2">
-										<Label htmlFor="asset-visual-frame-count">收集数量</Label>
+										<Label htmlFor="asset-visual-frame-count">输出数量</Label>
 										<Input id="asset-visual-frame-count" value={visualFrameCount} readOnly className="bg-card" />
-										<div className="text-xs text-muted-foreground">固定收集白天 / 夜晚两张可追溯设备图片。</div>
+										<div className="text-xs text-muted-foreground">固定生成白天 / 夜晚两张统一风格图片。</div>
 									</div>
 								</div>
+								{visualBlockReason ? (
+									<div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-amber-700 dark:text-amber-200">
+										{visualBlockReason}
+									</div>
+								) : (
+									<div className="rounded-md border border-border/70 bg-card px-3 py-2 text-xs leading-5 text-muted-foreground">
+										设备图片 Agent 会先使用官方 / 可追溯参考图，再调用 Agnes 图片模型统一背景、比例和摆放。
+									</div>
+								)}
+								{visualGenerationMessage && (
+									<div
+										className={cn(
+											"rounded-md border px-3 py-2 text-xs leading-5",
+											visualGenerationStage === "failed"
+												? "border-amber-500/25 bg-amber-500/5 text-amber-700 dark:text-amber-200"
+												: visualGenerationStage === "ready"
+													? "border-emerald-500/20 bg-emerald-500/5 text-emerald-700 dark:text-emerald-200"
+													: "border-border/70 bg-card text-muted-foreground"
+										)}
+									>
+										{visualGenerationMessage}
+									</div>
+								)}
 								<div className="relative grid aspect-[3/4] max-h-[30rem] min-h-[18rem] place-items-center overflow-hidden rounded-md border border-border/70 bg-card">
 									{latestVisualFrame?.url ? (
 										<img
@@ -2806,21 +3104,20 @@ type ArchiveDetailRow = {
 }
 
 const archivePersonalDeviceSectionMap = new Map<string, string>([
-	["device_os", "系统与性能"],
-	["cpu_model", "系统与性能"],
-	["cpu_vendor", "系统与性能"],
-	["cpu_process", "系统与性能"],
-	["cpu_architecture", "系统与性能"],
-	["cpu_cores", "系统与性能"],
-	["cpu_frequency", "系统与性能"],
-	["gpu_model", "系统与性能"],
-	["gpu_detail", "系统与性能"],
-	["memory_gb", "系统与性能"],
-	["memory_detail", "系统与性能"],
-	["memory_type", "系统与性能"],
-	["storage_gb", "系统与性能"],
-	["storage_detail", "系统与性能"],
-	["storage_options", "系统与性能"],
+	["cpu_model", "硬件性能"],
+	["cpu_vendor", "硬件性能"],
+	["cpu_process", "硬件性能"],
+	["cpu_architecture", "硬件性能"],
+	["cpu_cores", "硬件性能"],
+	["cpu_frequency", "硬件性能"],
+	["gpu_model", "硬件性能"],
+	["gpu_detail", "硬件性能"],
+	["memory_gb", "硬件性能"],
+	["memory_detail", "硬件性能"],
+	["memory_type", "硬件性能"],
+	["storage_gb", "硬件性能"],
+	["storage_detail", "硬件性能"],
+	["storage_options", "硬件性能"],
 	["screen_size", "屏幕"],
 	["display_type", "屏幕"],
 	["display_resolution", "屏幕"],
@@ -2867,7 +3164,13 @@ const archivePersonalDeviceSectionMap = new Map<string, string>([
 	["power_mode", "关联账号"],
 ])
 
-const hiddenArchiveDetailFieldKeys = new Set(["online_specs_summary"])
+const hiddenArchiveDetailFieldKeys = new Set([
+	"online_specs_summary",
+	"device_os",
+	"firmware_version",
+	"bios_version",
+	"bios_release_date",
+])
 
 function buildArchiveDetailSections(asset: AssetRecord): ArchiveDetailSection[] {
 	const sections = getAssetFormSections(asset.type)
@@ -3944,10 +4247,7 @@ function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 	const [systemTheme, setSystemTheme] = useState<"dark" | "light">(() =>
 		typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
 	)
-	const latestVisual =
-		visuals.find((item) => item.kind === "official_reference") ??
-		visuals.find((item) => item.kind === "ai_turntable") ??
-		visuals[0]
+	const latestVisual = getAssetDisplayVisual(visuals)
 	const frames = useMemo(() => latestVisual?.frames?.filter(isDisplayableAssetVisualFrame) ?? [], [latestVisual])
 	const [frameIndex, setFrameIndex] = useState(0)
 	const activeFrame = frames.length ? frames[((frameIndex % frames.length) + frames.length) % frames.length] : undefined
@@ -3988,7 +4288,7 @@ function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 			<CardContent className="p-2">
 				<div
 					className={cn(
-						"relative isolate grid aspect-[3/4] min-h-[24rem] w-full select-none place-items-center overflow-hidden rounded-md border border-border/70 bg-card sm:min-h-[30rem] xl:min-h-[34rem] dark:bg-background",
+						"relative isolate mx-auto grid aspect-square w-full max-w-[calc(100vh-13rem)] select-none place-items-center overflow-hidden rounded-md border border-border/70 bg-card dark:bg-background",
 						isDarkVisualStage &&
 							"border-white/10 bg-[#050506] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05),inset_0_-80px_120px_rgba(0,0,0,0.55)]"
 					)}
@@ -4099,6 +4399,25 @@ function isDisplayableAssetVisualFrame(frame: NonNullable<AssetVisualRecord["fra
 		"share",
 	]
 	return !rejected.some((marker) => lower.includes(marker))
+}
+
+function getAssetDisplayVisual(visuals: AssetVisualRecord[]) {
+	return (
+		visuals.find(isFinalUnifiedAssetVisual) ??
+		visuals.find((item) => item.kind === "manual" && item.status === "ready" && item.primary !== false) ??
+		visuals.find((item) => item.kind === "manual" && item.status === "ready")
+	)
+}
+
+function isFinalUnifiedAssetVisual(visual: AssetVisualRecord) {
+	const metadata = visual.metadata ?? {}
+	return (
+		visual.kind === "ai_turntable" &&
+		visual.status === "ready" &&
+		visual.primary === true &&
+		metadata.visual_role === "final_unified" &&
+		!metadata.superseded_by
+	)
 }
 
 function AssetEnrichmentReportDialog({
@@ -4997,7 +5316,7 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 		capture: AssetFieldDefinition["capture"] = "future_collectable"
 	): HostHardwareProfileRow | undefined => {
 		const value = getMetadataNumber(metadata, key)
-		return value ? { label, value: `${value}${unit}`, capture } : undefined
+		return value ? { label, value: `${value} ${unit}`, capture } : undefined
 	}
 	const directRow = (
 		label: string,
@@ -5036,8 +5355,6 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 				metadataRow("主板型号", "motherboard_model"),
 				urlRow("主板支持页", "motherboard_support_url"),
 				metadataRow("BIOS 厂商", "bios_vendor"),
-				metadataRow("BIOS / 固件版本", "bios_version"),
-				metadataRow("BIOS 日期", "bios_release_date"),
 			]),
 		},
 		{
@@ -5261,9 +5578,25 @@ function getAssetEnrichmentTaskMeta(tasks: AITaskRecord[], reports: AssetEnrichm
 function getAssetVisualTaskMeta(tasks: AITaskRecord[], visuals: AssetVisualRecord[]) {
 	const latestTask = tasks.find((task) => task.kind === "asset_visual")
 	if (latestTask) {
+		if (latestTask.status === "failed") {
+			return latestTask.error ? `图片失败：${latestTask.error}` : "图片失败"
+		}
+		const collected = numberFromUnknownRecord(latestTask.output_summary, "collected_images")
+		const generated = numberFromUnknownRecord(latestTask.output_summary, "generated_images")
+		if (latestTask.status === "ready" && (collected > 0 || generated > 0)) {
+			if (generated <= 0) {
+				return `参考图已收集：${collected} 张，未生成统一图`
+			}
+			return `图片成功：参考 ${collected} / 生成 ${generated}`
+		}
 		return `图片 ${getAITaskStatusLabel(latestTask.status)}`
 	}
 	return visuals.length ? `${visuals.length} 组图片` : "未收集"
+}
+
+function numberFromUnknownRecord(record: Record<string, unknown> | undefined, key: string) {
+	const value = record?.[key]
+	return typeof value === "number" && Number.isFinite(value) ? value : 0
 }
 
 function getEnrichmentSourceLabel(source?: AssetEnrichmentSuggestionRecord["source"]) {
@@ -5603,6 +5936,184 @@ function PhoneVariantSpecField({
 				options={options}
 				customPlaceholder={customPlaceholder}
 			/>
+		</div>
+	)
+}
+
+function OfficialColorField({
+	name,
+	label,
+	defaultValue,
+	options,
+	requireOfficial,
+	status,
+	message,
+	disabled,
+	onFetch,
+}: {
+	name: string
+	label: string
+	defaultValue?: string
+	options: string[]
+	requireOfficial: boolean
+	status: "idle" | "blocked" | "running" | "ready" | "failed"
+	message: string
+	disabled: boolean
+	onFetch: () => void
+}) {
+	const mergedOptions = requireOfficial ? options : mergeOfficialColorOptions(options, defaultValue)
+	if (!requireOfficial && options.length === 0) {
+		return (
+			<div className="grid gap-2">
+				<div className="flex items-center justify-between gap-2">
+					<Label htmlFor={name}>{label}</Label>
+					<OfficialColorFetchButton disabled={disabled} status={status} onFetch={onFetch} />
+				</div>
+				<Input id={name} name={name} defaultValue={defaultValue} placeholder="资料补全后可改为官方配色" />
+				<OfficialColorStatusMessage status={status} message={message} />
+			</div>
+		)
+	}
+	return (
+		<div className="grid gap-2">
+			<div className="flex items-center justify-between gap-2">
+				<Label htmlFor={name}>{label}</Label>
+				<OfficialColorFetchButton disabled={disabled} status={status} onFetch={onFetch} />
+			</div>
+			{mergedOptions.length > 0 && <input type="hidden" name="colors_available" value={mergedOptions.join(", ")} />}
+			<select
+				id={name}
+				name={name}
+				defaultValue={
+					requireOfficial &&
+					defaultValue &&
+					!options.some((option) => normalizeComparableText(option) === normalizeComparableText(defaultValue))
+						? ""
+						: defaultValue || ""
+				}
+				className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus:border-ring/70 focus:ring-2 focus:ring-ring/15"
+			>
+				<option value="">{options.length ? "请选择官方配色" : "请先获取官方颜色"}</option>
+				{mergedOptions.map((option) => (
+					<option key={option} value={option}>
+						{option}
+					</option>
+				))}
+			</select>
+			{requireOfficial && options.length === 0 && (
+				<div className="text-xs text-muted-foreground">手机等固定规格设备不再手输颜色，需要先获取官方颜色后选择。</div>
+			)}
+			<OfficialColorStatusMessage status={status} message={message} />
+		</div>
+	)
+}
+
+function OfficialColorPicker({
+	value,
+	options,
+	requireOfficial,
+	status,
+	message,
+	disabled,
+	onFetch,
+	onChange,
+}: {
+	value: string
+	options: string[]
+	requireOfficial: boolean
+	status: "idle" | "blocked" | "running" | "ready" | "failed"
+	message: string
+	disabled: boolean
+	onFetch: () => void
+	onChange: (value: string) => void
+}) {
+	const mergedOptions = requireOfficial ? options : mergeOfficialColorOptions(options, value)
+	if (!requireOfficial && options.length === 0) {
+		return (
+			<div className="grid gap-2">
+				<div className="flex items-center justify-between gap-2">
+					<Label htmlFor="asset-visual-color">配色</Label>
+					<OfficialColorFetchButton disabled={disabled} status={status} onFetch={onFetch} />
+				</div>
+				<Input
+					id="asset-visual-color"
+					value={value}
+					onChange={(event) => onChange(event.target.value)}
+					placeholder="资料补全后优先选择官方配色"
+				/>
+				<OfficialColorStatusMessage status={status} message={message} />
+			</div>
+		)
+	}
+	return (
+		<div className="grid gap-2">
+			<div className="flex items-center justify-between gap-2">
+				<Label htmlFor="asset-visual-color">官方配色</Label>
+				<OfficialColorFetchButton disabled={disabled} status={status} onFetch={onFetch} />
+			</div>
+			<select
+				id="asset-visual-color"
+				value={
+					requireOfficial &&
+					value &&
+					!options.some((option) => normalizeComparableText(option) === normalizeComparableText(value))
+						? ""
+						: value
+				}
+				onChange={(event) => onChange(event.target.value)}
+				className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus:border-ring/70 focus:ring-2 focus:ring-ring/15"
+			>
+				<option value="">{options.length ? "请选择官方配色" : "请先获取官方颜色"}</option>
+				{mergedOptions.map((option) => (
+					<option key={option} value={option}>
+						{option}
+					</option>
+				))}
+			</select>
+			<OfficialColorStatusMessage status={status} message={message} />
+		</div>
+	)
+}
+
+function OfficialColorFetchButton({
+	disabled,
+	status,
+	onFetch,
+}: {
+	disabled: boolean
+	status: "idle" | "blocked" | "running" | "ready" | "failed"
+	onFetch: () => void
+}) {
+	return (
+		<Button
+			type="button"
+			size="sm"
+			variant="outline"
+			onClick={onFetch}
+			disabled={disabled || status === "running"}
+			className="h-8 px-2 text-xs"
+		>
+			{status === "running" ? "获取中" : "获取官方颜色"}
+		</Button>
+	)
+}
+
+function OfficialColorStatusMessage({
+	status,
+	message,
+}: {
+	status: "idle" | "blocked" | "running" | "ready" | "failed"
+	message: string
+}) {
+	if (!message || status === "idle") return null
+	return (
+		<div
+			className={cn(
+				"text-xs leading-5",
+				status === "failed" || status === "blocked" ? "text-destructive" : "text-muted-foreground"
+			)}
+		>
+			{message}
 		</div>
 	)
 }
@@ -6402,6 +6913,89 @@ function getAssetVisualColor(asset: AssetRecord) {
 	return firstNonEmpty(getMetadataString(asset.metadata, "color"), getMetadataString(asset.metadata, "device_color"))
 }
 
+function getAssetOfficialColorOptions(asset: AssetRecord, suggestions: AssetEnrichmentSuggestionRecord[] = []) {
+	const metadata = asset.metadata ?? {}
+	return mergeAssetColorOptions([
+		...parseAssetColorOptions(
+			firstNonEmpty(getMetadataString(metadata, "colors_available"), getMetadataString(metadata, "official_colors"))
+		),
+		...suggestions.flatMap((suggestion) => getOfficialColorOptionsFromSuggestion(suggestion)),
+	])
+}
+
+function parseAssetColorOptions(raw: string) {
+	const normalized = raw
+		.replace(/[，、/／|；;\n]+/g, ",")
+		.split(",")
+		.map((item) => item.trim().replace(/^[[\]【】()（）"'“”]+|[[\]【】()（）"'“”]+$/g, ""))
+		.filter(Boolean)
+	const seen = new Set<string>()
+	const result: string[] = []
+	for (const item of normalized) {
+		const key = normalizeComparableText(item)
+		if (!key || seen.has(key)) continue
+		seen.add(key)
+		result.push(item)
+	}
+	return result
+}
+
+function mergeOfficialColorOptions(options: string[], current?: string) {
+	const result = [...options]
+	const value = current?.trim()
+	if (value && !options.some((option) => normalizeComparableText(option) === normalizeComparableText(value))) {
+		result.unshift(value)
+	}
+	return result
+}
+
+function mergeAssetColorOptions(options: string[]) {
+	const seen = new Set<string>()
+	const result: string[] = []
+	for (const option of options) {
+		const value = option.trim()
+		const key = normalizeComparableText(value)
+		if (!value || !key || seen.has(key)) continue
+		seen.add(key)
+		result.push(value)
+	}
+	return result
+}
+
+function getOfficialColorOptionsFromSuggestion(suggestion: AssetEnrichmentSuggestionRecord) {
+	if (suggestion.status !== "pending") return []
+	if (suggestion.target_collection !== "assets") return []
+	const field = suggestion.target_field.replace(/^metadata\./, "")
+	if (field !== "colors_available" && field !== "official_colors") return []
+	return parseAssetColorOptions(suggestion.recommended_value)
+}
+
+function getOfficialColorFetchRequirements(asset: AssetRecord) {
+	const missing: string[] = []
+	if (!asset.vendor?.trim()) missing.push("厂商 / 品牌")
+	if (!asset.model?.trim()) missing.push("型号 / 规格")
+	if (!getMetadataString(asset.metadata, "internal_model")) missing.push("内部型号 / 搜索代码")
+	return missing
+}
+
+function isOfficialColorRequiredForAssetType(type: AssetRecord["type"]) {
+	return ["phone", "tablet", "wearable", "handheld", "ebook", "game_console", "tv", "speaker"].includes(type)
+}
+
+function getAssetVisualGenerationBlockReason(asset: AssetRecord, color: string, officialColorOptions: string[]) {
+	if (!asset.model?.trim() || !getMetadataString(asset.metadata, "internal_model")) {
+		return "生成统一图需要先保存型号 / 规格和内部型号 / 搜索代码。"
+	}
+	if (!color.trim()) return "生成统一图前必须先选择设备配色。"
+	if (isOfficialColorRequiredForAssetType(asset.type)) {
+		if (officialColorOptions.length === 0) return "请先点击“获取官方颜色”，让资料补全 Agent 采集官方配色。"
+		if (!officialColorOptions.some((option) => normalizeComparableText(option) === normalizeComparableText(color))) {
+			return "当前配色不是已采集的官方配色，请从官方配色列表选择。"
+		}
+	}
+	return ""
+}
+
 function getAssetRecognitionRequirements(asset: AssetRecord): AssetRecognitionRequirement[] {
 	const metadata = asset.metadata ?? {}
 	const fixedIpv4 = firstNonEmpty(asset.management_ip, getMetadataString(metadata, "fixed_ipv4"))
@@ -6414,7 +7008,6 @@ function getAssetRecognitionRequirements(asset: AssetRecord): AssetRecognitionRe
 			value: getMetadataString(metadata, "internal_model"),
 			ok: Boolean(getMetadataString(metadata, "internal_model")),
 		},
-		{ label: "外观颜色", value: getAssetVisualColor(asset), ok: Boolean(getAssetVisualColor(asset)) },
 		{
 			label: "资产编号",
 			value: getMetadataString(metadata, "asset_tag"),
@@ -6427,8 +7020,8 @@ function getAssetRecognitionRequirements(asset: AssetRecord): AssetRecognitionRe
 		const memoryGb = getMetadataNumber(metadata, "memory_gb")
 		const storageGb = getMetadataNumber(metadata, "storage_gb")
 		requirements.push(
-			{ label: "运行内存", value: memoryGb ? `${memoryGb}GB` : "", ok: Boolean(memoryGb) },
-			{ label: "存储容量", value: storageGb ? `${storageGb}GB` : "", ok: Boolean(storageGb) }
+			{ label: "运行内存", value: memoryGb ? `${memoryGb} GB` : "", ok: Boolean(memoryGb) },
+			{ label: "存储容量", value: storageGb ? `${storageGb} GB` : "", ok: Boolean(storageGb) }
 		)
 	}
 	return requirements
@@ -6457,7 +7050,6 @@ function validateAssetProfileForm(values: {
 	if (!values.vendor.trim()) errors.push("厂商 / 品牌")
 	if (!values.model.trim()) errors.push("型号 / 规格")
 	if (!values.internalModel.trim()) errors.push("内部型号 / 搜索代码")
-	if (!values.color.trim()) errors.push("外观颜色")
 	if (!values.assetTag.trim()) errors.push("资产编号")
 	if (!values.location.trim()) errors.push("位置")
 	if (isPhoneVariantSpecRequired(values.type)) {

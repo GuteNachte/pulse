@@ -18,6 +18,10 @@ type assetEnrichmentActionRequest struct {
 	Reason string `json:"reason"`
 }
 
+type assetEnrichmentReportRequest struct {
+	Focus string `json:"focus"`
+}
+
 type assetEnrichmentSuggestionInput struct {
 	TargetCollection string
 	TargetRecord     string
@@ -43,6 +47,9 @@ func (h *Hub) generateAssetEnrichmentReport(e *core.RequestEvent) error {
 	if err != nil {
 		return e.NotFoundError("Asset not found.", err)
 	}
+	var req assetEnrichmentReportRequest
+	_ = json.NewDecoder(e.Request.Body).Decode(&req)
+	focus := normalizeAssetEnrichmentReportFocus(req.Focus)
 
 	systems, err := h.FindRecordsByFilter(
 		"systems",
@@ -75,10 +82,11 @@ func (h *Hub) generateAssetEnrichmentReport(e *core.RequestEvent) error {
 	}
 
 	localSuggestions := h.buildAssetEnrichmentSuggestions(asset, systems, details, interfaces)
-	onlineResult := h.collectAssetOnlineEnrichment(asset)
+	onlineResult := h.collectAssetOnlineEnrichment(asset, focus)
 	suggestions := append(localSuggestions, onlineResult.Suggestions...)
+	suggestions = filterAssetEnrichmentSuggestionsByFocus(suggestions, focus)
 	suggestions = dedupeEnrichmentSuggestions(suggestions)
-	reportRecord, err := h.createAssetEnrichmentReportRecord(e.Auth.Id, asset, systems, details, suggestions, onlineResult)
+	reportRecord, err := h.createAssetEnrichmentReportRecord(e.Auth.Id, asset, systems, details, suggestions, onlineResult, focus)
 	if err != nil {
 		return e.InternalServerError("Failed to create enrichment report.", err)
 	}
@@ -87,18 +95,23 @@ func (h *Hub) generateAssetEnrichmentReport(e *core.RequestEvent) error {
 			return e.InternalServerError("Failed to create enrichment suggestion.", err)
 		}
 	}
-	if err := h.createAssetEnrichmentAITask(e.Auth.Id, asset, reportRecord.Id, onlineResult, suggestions); err != nil {
+	if err := h.createAssetEnrichmentAITask(e.Auth.Id, asset, reportRecord.Id, onlineResult, suggestions, focus); err != nil {
 		return e.InternalServerError("Failed to create enrichment AI task.", err)
 	}
 
-	h.createOperationAudit(e, "", "asset_enrichment_report", asset.Id, "", "success", "资产补全报告已生成")
+	auditMessage := "资产补全报告已生成"
+	if focus == "official_colors" {
+		auditMessage = "资产官方配色补全报告已生成"
+	}
+	h.createOperationAudit(e, "", "asset_enrichment_report", asset.Id, "", "success", auditMessage)
 	return e.JSON(http.StatusOK, map[string]any{
 		"report":      reportRecord,
 		"suggestions": len(suggestions),
+		"focus":       focus,
 	})
 }
 
-func (h *Hub) createAssetEnrichmentAITask(userID string, asset *core.Record, reportID string, onlineResult assetOnlineEnrichmentResult, suggestions []assetEnrichmentSuggestionInput) error {
+func (h *Hub) createAssetEnrichmentAITask(userID string, asset *core.Record, reportID string, onlineResult assetOnlineEnrichmentResult, suggestions []assetEnrichmentSuggestionInput, focus string) error {
 	config := h.assetOnlineAIConfig()
 	if !config.Enabled {
 		return nil
@@ -130,18 +143,21 @@ func (h *Hub) createAssetEnrichmentAITask(userID string, asset *core.Record, rep
 		"source_count":   len(onlineResult.Sources),
 		"endpoint_host":  safeAssetOnlineEndpointHost(config.Endpoint),
 		"manual_trigger": true,
+		"focus":          focus,
 	})
 	record.Set("output_summary", map[string]any{
 		"ai_status":         firstNonEmpty(onlineResult.AI.Status, status),
 		"ai_suggestions":    onlineResult.AI.Suggestions,
 		"total_suggestions": len(suggestions),
 		"providers":         onlineResult.Providers,
+		"focus":             focus,
 	})
 	record.Set("error", errorMessage)
 	record.Set("metadata", map[string]any{
 		"report":         reportID,
 		"source":         "asset_center_enrichment",
 		"manual_trigger": true,
+		"focus":          focus,
 	})
 	return h.Save(record)
 }
@@ -251,7 +267,39 @@ func (h *Hub) loadSystemDetailRecords(systems []*core.Record) ([]*core.Record, e
 	return h.FindRecordsByFilter("system_details", strings.Join(parts, " || "), "system", -1, 0, params)
 }
 
-func (h *Hub) createAssetEnrichmentReportRecord(userID string, asset *core.Record, systems []*core.Record, details []*core.Record, suggestions []assetEnrichmentSuggestionInput, onlineResult assetOnlineEnrichmentResult) (*core.Record, error) {
+func normalizeAssetEnrichmentReportFocus(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "official_colors", "colors", "device_colors":
+		return "official_colors"
+	default:
+		return ""
+	}
+}
+
+func filterAssetEnrichmentSuggestionsByFocus(suggestions []assetEnrichmentSuggestionInput, focus string) []assetEnrichmentSuggestionInput {
+	if focus == "" {
+		return suggestions
+	}
+	result := make([]assetEnrichmentSuggestionInput, 0, len(suggestions))
+	for _, suggestion := range suggestions {
+		if assetEnrichmentSuggestionMatchesFocus(suggestion, focus) {
+			result = append(result, suggestion)
+		}
+	}
+	return result
+}
+
+func assetEnrichmentSuggestionMatchesFocus(suggestion assetEnrichmentSuggestionInput, focus string) bool {
+	field := strings.TrimPrefix(strings.TrimSpace(suggestion.TargetField), "metadata.")
+	switch focus {
+	case "official_colors":
+		return field == "colors_available" || field == "official_colors" || field == "official_image_url"
+	default:
+		return true
+	}
+}
+
+func (h *Hub) createAssetEnrichmentReportRecord(userID string, asset *core.Record, systems []*core.Record, details []*core.Record, suggestions []assetEnrichmentSuggestionInput, onlineResult assetOnlineEnrichmentResult, focus string) (*core.Record, error) {
 	collection, err := h.FindCachedCollectionByNameOrId("asset_enrichment_reports")
 	if err != nil {
 		return nil, err
@@ -259,6 +307,7 @@ func (h *Hub) createAssetEnrichmentReportRecord(userID string, asset *core.Recor
 	record := core.NewRecord(collection)
 	strategy := assetEnrichmentStrategy(asset.GetString("type"))
 	sourceSummary := map[string]any{
+		"focus": focus,
 		"strategy": map[string]any{
 			"id":     strategy.ID,
 			"label":  strategy.Label,
@@ -355,7 +404,6 @@ func (h *Hub) buildAssetEnrichmentSuggestions(asset *core.Record, systems []*cor
 			continue
 		}
 		suggestions = append(suggestions,
-			buildRecordSuggestion(asset, asset.Id, "metadata.os", "操作系统", recordMetadataString(asset, "os"), firstNonEmpty(detail.GetString("os_name"), stringFromMap(info, "o")), "local", 88, false, "来自 Agent 系统详情。", nil),
 			buildRecordSuggestion(asset, asset.Id, "metadata.cpu_vendor", "CPU 厂商", recordMetadataString(asset, "cpu_vendor"), detail.GetString("cpu_vendor"), "local", 86, false, "来自 Agent CPU 详情。", nil),
 			buildRecordSuggestion(asset, asset.Id, "metadata.cpu_model", "CPU 型号", recordMetadataString(asset, "cpu_model"), firstNonEmpty(detail.GetString("cpu"), stringFromMap(info, "m")), "local", 86, false, "来自 Agent CPU 详情。", nil),
 		)
@@ -554,8 +602,6 @@ var allowedAssetEnrichmentMetadataFields = map[string]bool{
 	"fixed_ipv6":                true,
 	"mac":                       true,
 	"support_url":               true,
-	"os":                        true,
-	"device_os":                 true,
 	"online_specs_summary":      true,
 	"internal_model":            true,
 	"cpu_process":               true,
@@ -587,6 +633,7 @@ var allowedAssetEnrichmentMetadataFields = map[string]bool{
 	"video_recording":           true,
 	"image_stabilization":       true,
 	"bluetooth_version":         true,
+	"wifi_standard":             true,
 	"mobile_network":            true,
 	"sim_detail":                true,
 	"positioning":               true,
@@ -617,8 +664,6 @@ var allowedAssetEnrichmentMetadataFields = map[string]bool{
 	"motherboard_model":         true,
 	"motherboard_support_url":   true,
 	"bios_vendor":               true,
-	"bios_version":              true,
-	"bios_release_date":         true,
 	"gpu_vendor":                true,
 	"gpu_detail":                true,
 	"memory_vendor":             true,

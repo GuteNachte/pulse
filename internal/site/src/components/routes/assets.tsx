@@ -1663,11 +1663,11 @@ function QuickAssetCreateFields({
 					placeholder="例如 22021211RC / 产品内部代号 / 硬件代码"
 				/>
 			</AssetFormField>
-			<AssetFormField label="外观颜色" required>
+			<AssetFormField label="外观颜色">
 				<Input
 					value={form.metadata.color ?? ""}
 					onChange={(event) => onMetadataValue("color", event.target.value)}
-					placeholder="例如 黑色 / 白色 / 蓝色 / 银色"
+					placeholder="资料补全后选择官方配色"
 				/>
 			</AssetFormField>
 			{isPhoneVariantSpecRequired(form.type) && (
@@ -1720,7 +1720,6 @@ function validateNewAssetRequiredFields(form: AssetFormState, existingAssets: As
 	if (!form.vendor.trim()) errors.push("厂商 / 品牌")
 	if (!form.model.trim()) errors.push("型号 / 规格")
 	if (!form.metadata.internal_model?.trim()) errors.push("内部型号 / 搜索代码")
-	if (!form.metadata.color?.trim() && !form.metadata.device_color?.trim()) errors.push("外观颜色")
 	if (isPhoneVariantSpecRequired(form.type)) {
 		if (!isPositiveNumberString(form.metadata.memory_gb)) errors.push("运行内存")
 		if (!isPositiveNumberString(form.metadata.storage_gb)) errors.push("存储容量")

@@ -106,14 +106,16 @@ func (result assetOnlineEnrichmentResult) ReportLine(fallback string) string {
 	}
 }
 
-func (h *Hub) collectAssetOnlineEnrichment(asset *core.Record) assetOnlineEnrichmentResult {
+func (h *Hub) collectAssetOnlineEnrichment(asset *core.Record, focus string) assetOnlineEnrichmentResult {
 	result := h.collectAssetOnlineReferenceEnrichment(asset)
 	if len(result.Sources) > 0 {
 		result.Suggestions = buildAssetOnlineSuggestions(asset, result.Sources, result.Query)
 	}
-	aiResult, aiSuggestions := h.collectAssetOnlineAIEnrichment(asset, result.Sources)
+	result.Suggestions = filterAssetEnrichmentSuggestionsByFocus(result.Suggestions, focus)
+	aiResult, aiSuggestions := h.collectAssetOnlineAIEnrichment(asset, result.Sources, focus)
 	result.AI = aiResult
 	if len(aiSuggestions) > 0 {
+		aiSuggestions = filterAssetEnrichmentSuggestionsByFocus(aiSuggestions, focus)
 		result.Suggestions = append(result.Suggestions, aiSuggestions...)
 		result.Providers = appendProvider(result.Providers, aiResult.Provider)
 	}
@@ -151,7 +153,7 @@ func (h *Hub) collectAssetOnlineReferenceEnrichment(asset *core.Record) assetOnl
 	return result
 }
 
-func (h *Hub) collectAssetOnlineAIEnrichment(asset *core.Record, sources []assetOnlineSource) (assetOnlineAIResult, []assetEnrichmentSuggestionInput) {
+func (h *Hub) collectAssetOnlineAIEnrichment(asset *core.Record, sources []assetOnlineSource, focus string) (assetOnlineAIResult, []assetEnrichmentSuggestionInput) {
 	config := h.assetOnlineAIConfig()
 	if !config.Enabled {
 		return assetOnlineAIResult{Status: "disabled"}, nil
@@ -161,7 +163,7 @@ func (h *Hub) collectAssetOnlineAIEnrichment(asset *core.Record, sources []asset
 		result.Error = "AI 识别未配置 endpoint/api key/model"
 		return result, nil
 	}
-	payload, err := buildAssetOnlineAIRequestPayload(asset, sources, config.Model)
+	payload, err := buildAssetOnlineAIRequestPayload(asset, sources, config.Model, focus)
 	if err != nil {
 		result.Error = "AI 识别请求构造失败"
 		return result, nil
@@ -197,7 +199,7 @@ func (h *Hub) collectAssetOnlineAIEnrichment(asset *core.Record, sources []asset
 		return result, nil
 	}
 	content := extractAssetOnlineAIContent(rawBody)
-	suggestions := parseAssetOnlineAISuggestions(asset, content, sources)
+	suggestions := h.parseAssetOnlineAISuggestions(asset, content, sources)
 	result.Status = "ready"
 	result.Suggestions = len(suggestions)
 	return result, suggestions
@@ -261,7 +263,7 @@ func safeAssetOnlineEndpointHost(raw string) string {
 	return parsed.Host
 }
 
-func buildAssetOnlineAIRequestPayload(asset *core.Record, sources []assetOnlineSource, model string) (map[string]any, error) {
+func buildAssetOnlineAIRequestPayload(asset *core.Record, sources []assetOnlineSource, model string, focus string) (map[string]any, error) {
 	excerpts := make([]map[string]any, 0, len(sources))
 	for _, source := range sources {
 		text := cleanOnlineText(firstNonEmpty(source.Text, source.Snippet))
@@ -276,9 +278,9 @@ func buildAssetOnlineAIRequestPayload(asset *core.Record, sources []assetOnlineS
 		})
 	}
 	allowedFields := []string{
-		"device_os", "cpu_model", "cpu_vendor", "cpu_process", "cpu_architecture", "cpu_cores", "cpu_frequency",
-		"gpu_model", "gpu_detail", "memory_gb", "memory_detail", "memory_type", "storage_gb", "storage_detail",
-		"storage_options", "screen_size", "display_type", "display_resolution", "screen_refresh_rate",
+		"cpu_model", "cpu_vendor", "cpu_process", "cpu_architecture", "cpu_cores", "cpu_frequency", "gpu_model",
+		"gpu_detail", "memory_gb", "memory_detail", "memory_type", "storage_gb", "storage_detail", "storage_options",
+		"screen_size", "display_type", "display_resolution", "screen_refresh_rate",
 		"touch_sampling_rate", "display_brightness", "display_color_depth", "hdr_support", "display_protection",
 		"battery_capacity_mah", "battery_type", "charging_power_w", "wireless_charging", "battery_life_note",
 		"camera_summary", "rear_camera_detail", "rear_main_camera", "rear_ultrawide_camera", "rear_macro_camera",
@@ -287,7 +289,11 @@ func buildAssetOnlineAIRequestPayload(asset *core.Record, sources []assetOnlineS
 		"dimensions", "weight", "body_material", "colors_available", "water_resistance", "speaker_detail",
 		"audio_detail", "biometrics", "sensor_detail", "cooling_system", "official_image_url", "online_specs_summary",
 	}
-	instruction := "你是 Pulse 资产中心的资料补全 Agent。目标是为家庭资产管理补全长期可信的设备主档。必须按可信来源优先级工作：1 厂商官网产品页、支持页、规格页、说明书、驱动页、官方图片或官方 CDN 图片；2 权威渠道或运营商资料；3 GSMArena、DeviceSpecifications、Kimovil 等规格库只做交叉验证；4 普通博客、电商、论坛只能作为低置信度线索，若已有官网来源则不要采用。若 sources 提供网页摘录，优先使用 sources；若 sources 为空且你的运行环境具备联网或检索能力，可以按厂商、型号、内部型号搜索上述可信来源。不要凭常识编造，不要把同系列其他变体写入当前设备。手机、平板等固定规格设备要尽量拆细处理器、GPU、内存、存储、屏幕、相机、电池、外观、网络、音频、传感器和官方图片。返回严格 JSON：{\"suggestions\":[{\"field\":\"cpu_model\",\"label\":\"芯片 / SoC\",\"value\":\"...\",\"confidence\":0-100,\"notes\":\"...\",\"source_urls\":[\"...\"]}]}。field 只能从 allowed_fields 选择；value 必须短且可直接写入资产档案；每条建议必须有可追溯 source_urls，没有来源就不要输出。"
+	instruction := "你是 Pulse 资产中心的资料补全 Agent。目标是为家庭资产管理补全长期可信的硬件主档。必须按可信来源优先级工作：1 厂商官网产品页、支持页、规格页、说明书、驱动页、官方图片或官方 CDN 图片；2 权威渠道或运营商资料；3 GSMArena、DeviceSpecifications、Kimovil 等规格库只做交叉验证；4 普通博客、电商、论坛只能作为低置信度线索，若已有官网来源则不要采用。若 sources 提供网页摘录，优先使用 sources；若 sources 为空且你的运行环境具备联网或检索能力，可以按厂商、型号、内部型号搜索上述可信来源。不要凭常识编造，不要把同系列其他变体写入当前设备。手机、平板等固定规格设备要尽量拆细处理器、GPU、内存、存储、屏幕、相机、电池、外观、网络、音频、传感器和官方图片。不要输出操作系统版本、固件版本、软件版本、APP 版本等会变动的软件参数。手机颜色必须提取完整官方配色列表，写入 colors_available，保留官方色名，不要改写成普通黑/白/蓝/银；如果无法确认全部官方配色，就不要输出 colors_available。official_image_url 必须尽量选择官网或官方 CDN 的真实设备图。返回严格 JSON：{\"suggestions\":[{\"field\":\"cpu_model\",\"label\":\"芯片 / SoC\",\"value\":\"...\",\"confidence\":0-100,\"notes\":\"...\",\"source_urls\":[\"...\"]}]}。field 只能从 allowed_fields 选择；value 必须短且可直接写入资产档案；每条建议必须有可追溯 source_urls，没有来源就不要输出。"
+	if focus == "official_colors" {
+		allowedFields = []string{"colors_available", "official_image_url"}
+		instruction = "你是 Pulse 资产中心的资料补全 Agent，这次任务只获取设备官方配色和官方设备图片，不补全其它规格。必须按可信来源优先级工作：1 厂商官网产品页、支持页、规格页、说明书、官方图片或官方 CDN 图片；2 权威渠道；3 规格库只做交叉验证；普通博客、电商、论坛不能作为官方配色依据。若 sources 提供网页摘录，优先使用 sources；若 sources 为空且运行环境具备联网或检索能力，可以按厂商、型号、内部型号搜索官网产品页和官方图片来源。必须输出完整官方配色列表到 colors_available，保留官方色名，不能改写成普通黑/白/蓝/银；如果无法确认完整官方配色列表，就不要输出 colors_available。official_image_url 必须是官网或官方 CDN 的真实设备图。返回严格 JSON：{\"suggestions\":[{\"field\":\"colors_available\",\"label\":\"官方配色\",\"value\":\"墨羽黑, 银迹, 幽芒\",\"confidence\":0-100,\"notes\":\"...\",\"source_urls\":[\"...\"]}]}。field 只能从 allowed_fields 选择；每条建议必须有可追溯 source_urls，没有来源就不要输出。"
+	}
 	return map[string]any{
 		"model":       model,
 		"temperature": 0.1,
@@ -304,6 +310,7 @@ func buildAssetOnlineAIRequestPayload(asset *core.Record, sources []assetOnlineS
 					"support_url":    recordMetadataString(asset, "support_url"),
 				},
 				"allowed_fields": allowedFields,
+				"focus":          focus,
 				"source_policy": map[string]any{
 					"trust_order":       []string{"manufacturer_official", "carrier_or_authoritative_channel", "trusted_spec_database_cross_check", "low_confidence_web_only_if_no_official_source"},
 					"preferred_sources": []string{"official product page", "official support page", "official specs page", "official manual", "official driver or firmware page", "official image or CDN image"},
@@ -344,7 +351,7 @@ func extractAssetOnlineAIContent(rawBody []byte) string {
 	return strings.TrimSpace(string(rawBody))
 }
 
-func parseAssetOnlineAISuggestions(asset *core.Record, content string, sources []assetOnlineSource) []assetEnrichmentSuggestionInput {
+func (h *Hub) parseAssetOnlineAISuggestions(asset *core.Record, content string, sources []assetOnlineSource) []assetEnrichmentSuggestionInput {
 	content = strings.TrimSpace(content)
 	content = strings.TrimPrefix(content, "```json")
 	content = strings.TrimPrefix(content, "```")
@@ -380,19 +387,97 @@ func parseAssetOnlineAISuggestions(asset *core.Record, content string, sources [
 		if confidence <= 0 || confidence > 100 {
 			confidence = 64
 		}
-		matchedSources := filterAssetOnlineSourcesByURLs(sources, item.SourceURLs)
-		if len(matchedSources) == 0 {
-			matchedSources = assetOnlineSourcesFromAIURLs(item.SourceURLs)
+		sourceURLs := normalizeAssetOnlineAISourceURLs(item.SourceURLs)
+		if len(sourceURLs) == 0 {
+			continue
 		}
+		matchedSources := filterAssetOnlineSourcesByURLs(sources, sourceURLs)
 		if len(matchedSources) == 0 {
-			matchedSources = sources
+			matchedSources = h.assetOnlineSourcesFromAIURLs(asset, sourceURLs)
 		}
 		if len(matchedSources) == 0 {
 			continue
 		}
+		if assetAIFieldRequiresOfficialSource(field) && !assetOnlineSourcesHaveOfficialAuthority(matchedSources) {
+			continue
+		}
+		confidence = capAssetAISuggestionConfidenceBySourceQuality(confidence, matchedSources)
 		result = append(result, buildOnlineRecordSuggestion(asset, "metadata."+field, label, metadataValueString(asset, field), value, firstNonEmpty(item.Notes, "AI 结构化提取的联网资料建议，需人工确认后写入。"), matchedSources, confidence))
 	}
 	return result
+}
+
+func assetAIFieldRequiresOfficialSource(field string) bool {
+	switch strings.TrimSpace(field) {
+	case "colors_available", "official_colors", "official_image_url":
+		return true
+	default:
+		return false
+	}
+}
+
+func assetOnlineSourcesHaveOfficialAuthority(sources []assetOnlineSource) bool {
+	for _, source := range sources {
+		if assetOnlineSourceHasOfficialAuthority(source) {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeAssetOnlineAISourceURLs(urls []string) []string {
+	result := make([]string, 0, len(urls))
+	seen := map[string]bool{}
+	for _, rawURL := range urls {
+		rawURL = strings.TrimSpace(rawURL)
+		if rawURL == "" {
+			continue
+		}
+		parsed, err := url.Parse(rawURL)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			continue
+		}
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			continue
+		}
+		parsed.Fragment = ""
+		normalized := parsed.String()
+		key := strings.ToLower(normalized)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, normalized)
+	}
+	return result
+}
+
+func capAssetAISuggestionConfidenceBySourceQuality(confidence int, sources []assetOnlineSource) int {
+	if len(sources) == 0 {
+		return 0
+	}
+	best := 0
+	for _, source := range sources {
+		capValue := 68
+		switch source.Type {
+		case "official_support", "official_product", "official_image":
+			capValue = 96
+		case "spec_database", "structured_profile":
+			capValue = 82
+		case "web_result":
+			capValue = 70
+		}
+		if capValue > best {
+			best = capValue
+		}
+	}
+	if confidence > best {
+		return best
+	}
+	if confidence <= 0 {
+		return 50
+	}
+	return confidence
 }
 
 func assetAISuggestionsVariantConflict(asset *core.Record, suggestions []struct {
@@ -436,23 +521,58 @@ func chipsetFamily(value string) string {
 	}
 }
 
-func assetOnlineSourcesFromAIURLs(urls []string) []assetOnlineSource {
+func (h *Hub) assetOnlineSourcesFromAIURLs(asset *core.Record, urls []string) []assetOnlineSource {
 	result := make([]assetOnlineSource, 0, len(urls))
 	for _, rawURL := range urls {
 		rawURL = strings.TrimSpace(rawURL)
 		if rawURL == "" {
 			continue
 		}
-		result = append(result, assetOnlineSource{
+		source := assetOnlineSource{
 			Provider:   "asset_agent",
 			Type:       classifyAssetOnlineURL(rawURL),
 			Title:      rawURL,
 			URL:        rawURL,
 			Snippet:    "资料补全 Agent 返回的可追溯来源。",
 			Confidence: 68,
-		})
+		}
+		if isLikelyImageURL(rawURL) {
+			source.ImageURL = rawURL
+			if source.Type == "official_image" {
+				source.Confidence = 86
+			}
+			result = append(result, source)
+			continue
+		}
+		body, err := h.fetchAssetOnlineURL(rawURL, 512*1024)
+		if err != nil {
+			continue
+		}
+		title := extractHTMLTitle(body)
+		if title != "" {
+			source.Title = title
+		}
+		source.Snippet = firstNonEmpty(extractMetaDescription(body), source.Snippet)
+		if imageURL := extractMetaImageURL(body); imageURL != "" {
+			if parsed, err := url.Parse(rawURL); err == nil {
+				source.ImageURL = absolutizeAssetOnlineURL(parsed, imageURL)
+			}
+		}
+		source.Text = extractAssetOnlinePageText(body)
+		if parsed, err := url.Parse(rawURL); err == nil {
+			if scriptText := h.extractAssetProductScriptText(parsed, body); scriptText != "" {
+				source.Text = cleanOnlineText(source.Text + " " + scriptText)
+				if len([]rune(source.Text)) > 18000 {
+					source.Text = string([]rune(source.Text)[:18000])
+				}
+			}
+		}
+		if assetOnlineSourceVariantConflicts(asset, source) {
+			continue
+		}
+		result = append(result, source)
 	}
-	return result
+	return dedupeAssetOnlineSources(result)
 }
 
 func filterAssetOnlineSourcesByURLs(sources []assetOnlineSource, urls []string) []assetOnlineSource {
@@ -520,16 +640,47 @@ func (h *Hub) fetchAssetSupportURLSource(rawURL string) (assetOnlineSource, erro
 			pageText = string([]rune(pageText)[:18000])
 		}
 	}
+	sourceType := classifyManualAssetSupportURL(parsed, title)
+	confidence := 95
+	snippet := firstNonEmpty(extractMetaDescription(body), "来自资产主档中手动填写的厂家官方支持页。")
+	if sourceType != "official_support" && sourceType != "official_product" {
+		confidence = 55
+		snippet = firstNonEmpty(extractMetaDescription(body), "来自资产主档中手动填写的资料页，需确认是否为厂家官方来源。")
+	}
 	return assetOnlineSource{
 		Provider:   "support_url",
-		Type:       "official_support",
+		Type:       sourceType,
 		Title:      title,
 		URL:        parsed.String(),
 		ImageURL:   absolutizeAssetOnlineURL(parsed, extractMetaImageURL(body)),
-		Snippet:    firstNonEmpty(extractMetaDescription(body), "来自资产主档中手动填写的厂家官方支持页。"),
-		Confidence: 95,
+		Snippet:    snippet,
+		Confidence: confidence,
 		Text:       pageText,
 	}, nil
+}
+
+func classifyManualAssetSupportURL(parsed *url.URL, title string) string {
+	host := strings.TrimPrefix(strings.ToLower(parsed.Hostname()), "www.")
+	lowerURL := strings.ToLower(parsed.String())
+	lowerTitle := strings.ToLower(strings.TrimSpace(title))
+	if isKnownOfficialAssetHost(host) {
+		if strings.Contains(lowerURL, "product") || strings.Contains(lowerURL, "spec") || strings.Contains(lowerURL, "manual") {
+			return "official_product"
+		}
+		return "official_support"
+	}
+	if strings.Contains(lowerURL, "support") || strings.Contains(lowerURL, "download") || strings.Contains(lowerURL, "driver") {
+		return "official_support"
+	}
+	if strings.Contains(lowerURL, "product") || strings.Contains(lowerURL, "spec") || strings.Contains(lowerURL, "manual") {
+		return "official_product"
+	}
+	for _, marker := range []string{"官方", "支持", "规格", "说明书", "support", "spec", "manual"} {
+		if strings.Contains(lowerTitle, marker) {
+			return "official_support"
+		}
+	}
+	return classifyAssetOnlineURL(parsed.String())
 }
 
 func (h *Hub) extractAssetProductScriptText(base *url.URL, body string) string {
@@ -738,9 +889,6 @@ func extractAssetOnlineSpecs(asset *core.Record, sources []assetOnlineSource) as
 		})
 	}
 
-	if value := firstRegexCapture(combined, `(?i)\b(Android\s*\d+(?:\.\d+)?)\b`); value != "" {
-		add("device_os", "系统 / 固件", value, 62, "联网资料提取到的系统版本线索。")
-	}
 	if value := firstRegexCapture(combined, `(?i)\b(Wi[- ]?Fi\s*(?:4|5|6E?|7|802\.11[a-z/]+))\b`); value != "" {
 		add("wifi_standard", "无线标准", value, 66, "联网资料提取到的无线规格。")
 	}
@@ -1030,16 +1178,20 @@ func chooseAssetSupportURL(sources []assetOnlineSource) string {
 
 func chooseAssetOfficialImageURL(sources []assetOnlineSource) string {
 	for _, source := range sources {
-		if source.ImageURL != "" && (source.Type == "official_support" || source.Type == "official_product") && isLikelyImageURL(source.ImageURL) {
-			return source.ImageURL
-		}
-	}
-	for _, source := range sources {
-		if source.ImageURL != "" && isLikelyImageURL(source.ImageURL) {
+		if source.ImageURL != "" && assetOnlineSourceHasOfficialAuthority(source) && isLikelyImageURL(source.ImageURL) {
 			return source.ImageURL
 		}
 	}
 	return ""
+}
+
+func assetOnlineSourceHasOfficialAuthority(source assetOnlineSource) bool {
+	switch source.Type {
+	case "official_support", "official_product", "official_image":
+		return true
+	default:
+		return false
+	}
 }
 
 func buildAssetOnlineMatchNote(sources []assetOnlineSource, query string) string {
@@ -1134,23 +1286,86 @@ func appendProvider(providers []string, provider string) []string {
 }
 
 func classifyAssetOnlineURL(rawURL string) string {
-	lower := strings.ToLower(rawURL)
+	lower := strings.ToLower(strings.TrimSpace(rawURL))
+	parsed, err := url.Parse(lower)
+	host := ""
+	if err == nil {
+		host = strings.TrimPrefix(parsed.Hostname(), "www.")
+	}
 	switch {
-	case strings.Contains(lower, "support") || strings.Contains(lower, "download") || strings.Contains(lower, "driver"):
-		return "official_support"
 	case strings.Contains(lower, "devicespecifications") || strings.Contains(lower, "kimovil") || strings.Contains(lower, "gsmarena"):
 		return "spec_database"
-	case strings.Contains(lower, "product") || strings.Contains(lower, "spec") || strings.Contains(lower, "manual"):
+	case isKnownOfficialAssetHost(host) && isLikelyImageURL(lower):
+		return "official_image"
+	case isKnownOfficialAssetHost(host) && (strings.Contains(lower, "support") || strings.Contains(lower, "download") || strings.Contains(lower, "driver")):
+		return "official_support"
+	case isKnownOfficialAssetHost(host) && (strings.Contains(lower, "product") || strings.Contains(lower, "spec") || strings.Contains(lower, "manual")):
 		return "official_product"
 	default:
 		return "web_result"
 	}
 }
 
+func isKnownOfficialAssetHost(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" {
+		return false
+	}
+	officialMarkers := []string{
+		"mi.com",
+		"mi-img.com",
+		"mifile.cn",
+		"xiaomi.com",
+		"redmi.com",
+		"apple.com",
+		"samsung.com",
+		"lenovo.com",
+		"asus.com",
+		"tp-link.com",
+		"tplinkcloud.com",
+		"synology.com",
+		"qnap.com",
+		"unraid.net",
+		"fnos.com",
+		"huawei.com",
+		"honor.com",
+		"oppo.com",
+		"vivo.com",
+		"iqoo.com",
+		"oneplus.com",
+		"realme.com",
+		"sony.com",
+		"dell.com",
+		"hp.com",
+		"acer.com",
+		"msi.com",
+		"intel.com",
+		"amd.com",
+		"nvidia.com",
+		"nintendo.com",
+		"playstation.com",
+		"xbox.com",
+		"aqara.com",
+		"yeelight.com",
+		"roborock.com",
+		"ecovacs.com",
+		"philips-hue.com",
+		"ikea.com",
+	}
+	for _, marker := range officialMarkers {
+		if host == marker || strings.HasSuffix(host, "."+marker) {
+			return true
+		}
+	}
+	return false
+}
+
 func sourceTypeBonus(sourceType string) int {
 	switch sourceType {
 	case "official_support":
 		return 22
+	case "official_image":
+		return 20
 	case "official_product":
 		return 18
 	case "spec_database":

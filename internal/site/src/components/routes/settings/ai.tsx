@@ -235,12 +235,12 @@ export default function AISettings() {
 							<SettingsPanel
 								icon={ImageIcon}
 								title="设备图片 Agent"
-								description="只配置这个 Agent 的任务行为。它优先收集官方 / 可追溯真实图片，图片模型只作为后续一致性整理预留。"
+								description="只配置这个 Agent 的任务行为。它先收集官方 / 可追溯真实图片，再调用图片模型生成统一风格最终图。"
 							>
 								<div className="grid gap-4">
 									<ToggleRow
 										label="启用设备图片 Agent"
-										description="关闭后不再收集新的设备图片；收集时优先使用已确认官方图片、厂家支持页和官网图片。"
+										description="关闭后不再生成新的设备图片；执行时优先使用已确认官方图片、厂家支持页和官网图片作为参考。"
 										checked={form.visualEnabled}
 										onCheckedChange={(value) => setForm((current) => ({ ...current, visualEnabled: value }))}
 									/>
@@ -256,7 +256,8 @@ export default function AISettings() {
 										</Label>
 										<Input id="visual-frame-count" type="number" min={2} max={2} value={2} readOnly className="mt-2" />
 										<p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-											固定收集白天 / 夜晚两张真实设备图片。当前不再生成 3D 或固定视角图。
+											固定生成白天 / 夜晚两张统一风格图片；参考图会先转成 Data URI 传给 Agnes，避免只靠不可访问 URL
+											凭空生成。
 										</p>
 									</div>
 								</div>
@@ -445,11 +446,18 @@ function getAITaskSummary(task: AITaskRecord) {
 	}
 	if (task.kind === "asset_visual") {
 		const collected = numberFromRecord(task.output_summary, "collected_images")
+		const generated = numberFromRecord(task.output_summary, "generated_images")
 		const legacyFrames = numberFromRecord(task.output_summary, "generated_frames")
-		if (collected > 0) {
-			return `设备图片 Agent · 收集 ${collected} 张`
+		if (collected > 0 || generated > 0) {
+			if (generated <= 0) {
+				return `设备图片 Agent · 参考图已收集 ${collected} 张，未生成统一图`
+			}
+			return `设备图片 Agent · 参考图 ${collected} 张 · 统一图 ${generated} 张`
 		}
-		return `${task.provider || "未知服务"} / ${task.model || "未知模型"} · 历史生成 ${legacyFrames} 帧`
+		if (legacyFrames > 0) {
+			return `${task.provider || "未知服务"} / ${task.model || "未知模型"} · 历史生成 ${legacyFrames} 帧`
+		}
+		return `${task.provider || "未知服务"} / ${task.model || "未知模型"} · 尚未产出图片`
 	}
 	return `${task.provider || "未知服务"} / ${task.model || "未知模型"}`
 }

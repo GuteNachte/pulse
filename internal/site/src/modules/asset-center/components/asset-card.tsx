@@ -68,26 +68,32 @@ export function AssetListItem({ asset, parent, monitored, maintenanceCount, acti
 	const ip = getAssetIpLabel(asset)
 	const network = getAssetNetworkLabel(asset)
 	const assetTag = getMetadataString(asset.metadata, "asset_tag")
+	const assetTagLabel = assetTag || "未编号"
 	const color = getMetadataString(asset.metadata, "color") || getMetadataString(asset.metadata, "device_color")
+	const detailHref = getPagePath($router, "asset", { id: asset.id })
 
 	return (
 		<div
 			className={cn(
-				"group border-b border-border/60 transition-colors last:border-b-0 hover:bg-surface-soft/70",
+				"group grid grid-cols-[minmax(0,1fr)_2.75rem] border-b border-border/60 transition-colors last:border-b-0 hover:bg-surface-soft/70",
 				active && "bg-primary/5"
 			)}
 		>
 			<button
 				type="button"
 				onClick={onActivate}
-				className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5 text-left md:grid-cols-[minmax(12rem,1.25fr)_minmax(7.5rem,.72fr)_minmax(8rem,.72fr)_minmax(8rem,.82fr)_minmax(5.5rem,.55fr)_auto]"
+				className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] items-center gap-3 px-3 py-2.5 text-left sm:grid-cols-[minmax(4.75rem,.42fr)_minmax(12rem,1.25fr)] md:grid-cols-[minmax(5rem,.42fr)_minmax(12rem,1.25fr)_minmax(7.5rem,.72fr)_minmax(8rem,.72fr)_minmax(8rem,.82fr)_minmax(5.5rem,.55fr)]"
 			>
+				<AssetLedgerCell className="hidden sm:grid" label="编号" value={assetTagLabel} mono={Boolean(assetTag)} />
 				<div className="flex min-w-0 items-center gap-2.5">
 					<span className="grid size-8 shrink-0 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
 						<Icon className="size-4" />
 					</span>
 					<span className="min-w-0">
 						<span className="flex min-w-0 items-center gap-2">
+							<span className="shrink-0 rounded-md border border-border/70 bg-card px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground sm:hidden">
+								{assetTagLabel}
+							</span>
 							<span className="truncate text-sm font-semibold text-foreground">{asset.name}</span>
 							<StatusDot status={asset.status || "active"} />
 						</span>
@@ -106,19 +112,18 @@ export function AssetListItem({ asset, parent, monitored, maintenanceCount, acti
 						<AssetCardMetaTag tone={completeness.tone}>{completeness.score}%</AssetCardMetaTag>
 					</div>
 					<div className="max-w-28 truncate text-[11px] text-muted-foreground">
-						{assetTag ||
-							color ||
+						{color ||
 							(parent ? `归属 ${parent.name}` : maintenanceCount > 0 ? `维护 ${maintenanceCount}` : warranty.label)}
 					</div>
 				</div>
-				<div className="grid justify-items-end gap-1">
-					<ChevronRightIcon className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
-					<div className="flex max-w-[9rem] gap-1 text-[11px] text-muted-foreground md:hidden">
-						<span className="truncate">{location}</span>
-						<span className="truncate">{ip}</span>
-					</div>
-				</div>
 			</button>
+			<Link
+				href={detailHref}
+				className="grid min-h-full place-items-center border-l border-border/60 text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20"
+				aria-label={`查看 ${asset.name} 详情`}
+			>
+				<ChevronRightIcon className="size-4 transition-transform group-hover:translate-x-0.5" />
+			</Link>
 		</div>
 	)
 }
