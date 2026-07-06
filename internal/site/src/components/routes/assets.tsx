@@ -20,6 +20,7 @@ import {
 	AssetFormField,
 	AssetLocationInput,
 	AssetFormSection,
+	AssetTagInput,
 	AssetInput,
 	AssetMetaTag,
 	PHONE_MEMORY_OPTIONS,
@@ -61,6 +62,13 @@ import {
 	getFocusedAssetFormSections,
 	shouldReplaceAssetNameWithSuggestion,
 } from "@/modules/asset-center/asset-form"
+import {
+	buildNextAssetTag,
+	loadAssetNumberingSettings,
+	normalizeAssetNumberingSettings,
+	saveAssetNumberingSettings,
+	type AssetNumberingSettings,
+} from "@/modules/asset-center/asset-numbering"
 import {
 	DEFAULT_ASSET_LOCATION_PRESETS,
 	buildArchivedLocationPayload,
@@ -117,16 +125,6 @@ import type {
 
 type AssetFormStep = "type" | "details"
 type AssetFormMode = "quick" | "full"
-type AssetNumberingSettings = {
-	prefix: string
-	digits: string
-	nextSequence: string
-}
-type NormalizedAssetNumberingSettings = {
-	prefix: string
-	digits: number
-	nextSequence: number
-}
 
 const monitorFilterValues: AssetMonitorFilter[] = ["all", "monitored", "unmonitored", "monitorable"]
 const profileFilterValues: AssetProfileFilter[] = ["all", "complete", "usable", "attention", "incomplete", "critical"]
@@ -142,14 +140,8 @@ const lifecycleFilterValues: AssetLifecycleFilter[] = [
 ]
 const assetTypeValues = ASSET_TYPE_OPTIONS.map((option) => option.value)
 const assetStatusValues = STATUS_OPTIONS.map((option) => option.value)
-const assetNumberingStorageKey = "pulse.asset-center.numbering"
 const customLocationOptionValue = "__custom__"
 const noSecondLocationOptionValue = "__none__"
-const defaultAssetNumberingSettings: AssetNumberingSettings = {
-	prefix: "ASSET-",
-	digits: "4",
-	nextSequence: "1",
-}
 
 export default memo(function AssetsPage() {
 	const [assets, setAssets] = useState<AssetRecord[]>([])
@@ -1141,6 +1133,7 @@ export default memo(function AssetsPage() {
 																		field={field}
 																		value={getAssetFormFieldValue(form, field)}
 																		locationOptions={formLocationOptions.values}
+																		nextAssetTagPreview={nextAssetTagPreview}
 																		onChange={(value) => setFieldValue(field, value)}
 																	/>
 																))}
@@ -1159,6 +1152,7 @@ export default memo(function AssetsPage() {
 														field={field}
 														value={getAssetFormFieldValue(form, field)}
 														locationOptions={formLocationOptions.values}
+														nextAssetTagPreview={nextAssetTagPreview}
 														onChange={(value) => setFieldValue(field, value)}
 													/>
 												))}
@@ -1697,10 +1691,10 @@ function QuickAssetCreateFields({
 				</>
 			)}
 			<AssetFormField label="资产编号">
-				<Input
+				<AssetTagInput
 					value={form.metadata.asset_tag ?? ""}
-					onChange={(event) => onMetadataValue("asset_tag", event.target.value)}
-					placeholder={`可选，留空自动生成 ${nextAssetTagPreview}`}
+					onChange={(value) => onMetadataValue("asset_tag", value)}
+					nextAssetTagPreview={nextAssetTagPreview}
 				/>
 			</AssetFormField>
 			<AssetFormField label="位置" required>
@@ -1768,71 +1762,6 @@ function isValidIpv4(value: string) {
 			return Number.isInteger(number) && number >= 0 && number <= 255
 		})
 	)
-}
-
-function loadAssetNumberingSettings(): AssetNumberingSettings {
-	if (typeof window === "undefined") return defaultAssetNumberingSettings
-	try {
-		const raw = window.localStorage.getItem(assetNumberingStorageKey)
-		if (!raw) return defaultAssetNumberingSettings
-		const parsed = JSON.parse(raw) as Partial<AssetNumberingSettings>
-		return {
-			prefix: typeof parsed.prefix === "string" ? parsed.prefix : defaultAssetNumberingSettings.prefix,
-			digits: typeof parsed.digits === "string" ? parsed.digits : defaultAssetNumberingSettings.digits,
-			nextSequence:
-				typeof parsed.nextSequence === "string" ? parsed.nextSequence : defaultAssetNumberingSettings.nextSequence,
-		}
-	} catch {
-		return defaultAssetNumberingSettings
-	}
-}
-
-function saveAssetNumberingSettings(settings: AssetNumberingSettings) {
-	if (typeof window === "undefined") return
-	window.localStorage.setItem(assetNumberingStorageKey, JSON.stringify(settings))
-}
-
-function normalizeAssetNumberingSettings(settings: AssetNumberingSettings): NormalizedAssetNumberingSettings {
-	return {
-		prefix: settings.prefix.trim() || defaultAssetNumberingSettings.prefix,
-		digits: clampInteger(settings.digits, 1, 12, Number(defaultAssetNumberingSettings.digits)),
-		nextSequence: clampInteger(settings.nextSequence, 1, 999999999, Number(defaultAssetNumberingSettings.nextSequence)),
-	}
-}
-
-function clampInteger(value: string, min: number, max: number, fallback: number) {
-	const number = Number(value)
-	if (!Number.isFinite(number)) return fallback
-	return Math.min(max, Math.max(min, Math.trunc(number)))
-}
-
-function buildNextAssetTag(assets: AssetRecord[], settings: NormalizedAssetNumberingSettings) {
-	const used = new Set<string>()
-	let next = settings.nextSequence
-	const pattern = new RegExp(`^${escapeRegExp(settings.prefix)}(\\d+)$`)
-	for (const asset of assets) {
-		const tag = getMetadataString(asset.metadata, "asset_tag")
-		if (!tag) continue
-		used.add(tag)
-		const match = tag.match(pattern)
-		if (match) {
-			next = Math.max(next, Number(match[1]) + 1)
-		}
-	}
-	let candidate = formatAssetTag(next, settings)
-	while (used.has(candidate)) {
-		next += 1
-		candidate = formatAssetTag(next, settings)
-	}
-	return candidate
-}
-
-function formatAssetTag(sequence: number, settings: NormalizedAssetNumberingSettings) {
-	return `${settings.prefix}${String(sequence).padStart(settings.digits, "0")}`
-}
-
-function escapeRegExp(value: string) {
-	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
 function SummaryPill({ label, value }: { label: string; value: number }) {

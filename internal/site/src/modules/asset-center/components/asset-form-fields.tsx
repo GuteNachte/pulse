@@ -37,11 +37,13 @@ export function AssetInput({
 	field,
 	value,
 	locationOptions,
+	nextAssetTagPreview,
 	onChange,
 }: {
 	field: AssetFieldDefinition
 	value: string
 	locationOptions?: string[]
+	nextAssetTagPreview?: string
 	onChange: (value: string) => void
 }) {
 	return (
@@ -74,6 +76,8 @@ export function AssetInput({
 					options={PHONE_STORAGE_OPTIONS}
 					customPlaceholder="例如 384"
 				/>
+			) : field.key === "asset_tag" ? (
+				<AssetTagInput value={value} onChange={onChange} nextAssetTagPreview={nextAssetTagPreview ?? ""} />
 			) : field.type === "select" ? (
 				<select
 					value={value}
@@ -96,6 +100,73 @@ export function AssetInput({
 				/>
 			)}
 		</AssetFormField>
+	)
+}
+
+export function AssetTagInput({
+	value,
+	onChange,
+	nextAssetTagPreview,
+	name,
+	id,
+	required,
+}: {
+	value: string
+	onChange: (value: string) => void
+	nextAssetTagPreview: string
+	name?: string
+	id?: string
+	required?: boolean
+}) {
+	const normalizedValue = value.trim()
+	const presetValue = nextAssetTagPreview.trim()
+	const isPreset = Boolean(presetValue && normalizedValue === presetValue)
+	const shouldShowCustom = Boolean(normalizedValue && !isPreset)
+	const [customMode, setCustomMode] = useState(shouldShowCustom)
+
+	useEffect(() => {
+		if (required && !normalizedValue && presetValue) {
+			onChange(presetValue)
+			return
+		}
+		if (shouldShowCustom) {
+			setCustomMode(true)
+		} else if (isPreset) {
+			setCustomMode(false)
+		}
+	}, [isPreset, normalizedValue, onChange, presetValue, required, shouldShowCustom])
+
+	const selectValue = customMode || shouldShowCustom ? "__custom__" : normalizedValue
+
+	return (
+		<div className="grid gap-2">
+			{name && <input type="hidden" name={name} value={normalizedValue} />}
+			<select
+				id={id}
+				value={selectValue}
+				onChange={(event) => {
+					const nextValue = event.target.value
+					if (nextValue === "__custom__") {
+						setCustomMode(true)
+						return
+					}
+					setCustomMode(false)
+					onChange(nextValue)
+				}}
+				className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus:border-ring/70 focus:ring-2 focus:ring-ring/15"
+			>
+				{!required && <option value="">{presetValue ? `自动编号：${presetValue}` : "自动编号"}</option>}
+				{presetValue && <option value={presetValue}>预设编号：{presetValue}</option>}
+				<option value="__custom__">自定义编号</option>
+			</select>
+			{(customMode || shouldShowCustom) && (
+				<Input
+					value={normalizedValue}
+					placeholder={presetValue ? `例如 ${presetValue}` : "输入资产编号"}
+					onChange={(event) => onChange(event.target.value)}
+				/>
+			)}
+		</div>
 	)
 }
 

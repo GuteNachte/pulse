@@ -67,10 +67,12 @@ import { getAssetIcon } from "./components/asset-card"
 import {
 	AssetFieldCaptureTag,
 	AssetLocationInput,
+	AssetTagInput,
 	PHONE_MEMORY_OPTIONS,
 	PHONE_STORAGE_OPTIONS,
 	PhoneVariantSpecInput,
 } from "./components/asset-form-fields"
+import { buildNextAssetTag, loadAssetNumberingSettings, normalizeAssetNumberingSettings } from "./asset-numbering"
 import { buildAssetLocationOptions } from "./asset-list"
 import {
 	HOST_ASSET_TYPES,
@@ -2213,13 +2215,19 @@ function AssetEditWorkbench({
 	const metadata = asset.metadata ?? {}
 	const [selectedType, setSelectedType] = useState<AssetRecord["type"]>(asset.type)
 	const [locationValue, setLocationValue] = useState(asset.location || "")
+	const [assetTagValue, setAssetTagValue] = useState(getMetadataString(metadata, "asset_tag"))
 	useEffect(() => {
 		setSelectedType(asset.type)
 		setLocationValue(asset.location || "")
-	}, [asset.id, asset.location, asset.type])
+		setAssetTagValue(getMetadataString(asset.metadata, "asset_tag"))
+	}, [asset.id, asset.location, asset.metadata, asset.type])
 	const locationOptions = useMemo(
 		() => buildAssetLocationOptions(state.assets, state.locations, { includePresets: true }).values,
 		[state.assets, state.locations]
+	)
+	const nextAssetTagPreview = useMemo(
+		() => buildNextAssetTag(state.assets, normalizeAssetNumberingSettings(loadAssetNumberingSettings())),
+		[state.assets]
 	)
 	const missingRequirements = recognitionRequirements.filter((item) => !item.ok)
 	const latestVisual =
@@ -2287,12 +2295,19 @@ function AssetEditWorkbench({
 										/>
 									</>
 								)}
-								<TextField
-									name="asset_tag"
-									label="资产编号"
-									required
-									defaultValue={getMetadataString(metadata, "asset_tag")}
-								/>
+								<div className="grid gap-2">
+									<Label htmlFor="asset-detail-edit-asset-tag">
+										资产编号<span className="ms-1 text-destructive">*</span>
+									</Label>
+									<AssetTagInput
+										id="asset-detail-edit-asset-tag"
+										name="asset_tag"
+										value={assetTagValue}
+										onChange={setAssetTagValue}
+										nextAssetTagPreview={nextAssetTagPreview}
+										required
+									/>
+								</div>
 								<div className="grid gap-2">
 									<Label>
 										位置<span className="ms-1 text-destructive">*</span>
