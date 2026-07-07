@@ -944,14 +944,22 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		setVisualGenerationMessage("正在收集官方 / 可追溯参考图，并调用 Agnes 图片模型生成白天 / 夜晚两张统一图。")
 		setSaving(true)
 		try {
-			const response = await pb.send<{ status?: string; message?: string }>(
+			const response = await pb.send<{ status?: string; message?: string; task?: AITaskRecord }>(
 				`/api/pulse/assets/${asset.id}/visuals/turntable`,
 				{
 					method: "POST",
-					body: { color: color.trim(), frame_count: options?.frameCount ?? 2 },
+					body: { async: true, color: color.trim(), frame_count: options?.frameCount ?? 2 },
 				}
 			)
 			await loadDetail({ waitSecondary: true })
+			if (response.status === "running" || response.status === "queued") {
+				setSaving(false)
+				setVisualGenerationMessage(
+					response.task ? formatAssetVisualTaskSummary(response.task) : "设备图片 Agent 已开始后台生成。"
+				)
+				await pollAssetVisualGeneration(response.task?.id)
+				return
+			}
 			if (response.status === "blocked" || response.status === "failed") {
 				setVisualGenerationStage("failed")
 				setVisualGenerationMessage(response.message || "统一全貌图未生成，请检查官方配色、参考图来源或图片模型配置。")
@@ -982,6 +990,52 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			})
 		} finally {
 			setSaving(false)
+		}
+	}
+
+	async function pollAssetVisualGeneration(taskId?: string) {
+		if (!asset) return
+		for (let attempt = 0; attempt < 90; attempt++) {
+			await wait(2000)
+			const task = await loadAssetVisualTask(taskId, asset.id)
+			if (task) {
+				setVisualGenerationMessage(formatAssetVisualTaskSummary(task))
+				if (task.status === "ready") {
+					setVisualGenerationStage("ready")
+					await loadDetail({ waitSecondary: true })
+					toast({ title: "统一全貌图已生成", description: "已基于参考图统一背景、比例和摆放。" })
+					return
+				}
+				if (task.status === "failed") {
+					setVisualGenerationStage("failed")
+					await loadDetail({ waitSecondary: true })
+					toast({
+						title: "统一全貌图生成失败",
+						description: task.error || "请检查官方配色、参考图来源、图片模型配置或 Hub 日志。",
+						variant: "destructive",
+					})
+					return
+				}
+			}
+			if (attempt % 3 === 2) {
+				await loadDetail({ waitSecondary: true })
+			}
+		}
+		setVisualGenerationMessage("设备图片 Agent 仍在后台运行，可以稍后回到编辑窗口查看最新进度。")
+	}
+
+	async function loadAssetVisualTask(taskId: string | undefined, assetId: string) {
+		try {
+			if (taskId) {
+				return await pb.collection<AITaskRecord>("ai_tasks").getOne(taskId, { requestKey: null })
+			}
+			const tasks = await loadLatestAITasksByKind(pb.collection<AITaskRecord>("ai_tasks"), { assetId })
+			return tasks.find((task) => task.kind === "asset_visual")
+		} catch (error) {
+			if (!isPocketBaseAutoCancel(error)) {
+				console.warn("load asset visual task", error)
+			}
+			return undefined
 		}
 	}
 
@@ -6936,6 +6990,10 @@ function findCollectedInterface(
 
 function firstNonEmpty(...values: (string | undefined)[]) {
 	return values.find((value) => value?.trim())?.trim() ?? ""
+}
+
+function wait(ms: number) {
+	return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
 function getAssetVisualColor(asset: AssetRecord) {

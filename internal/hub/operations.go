@@ -567,7 +567,15 @@ func (h *Hub) createOperationAudit(e *core.RequestEvent, systemID string, action
 }
 
 func (h *Hub) createOperationAuditForUser(e *core.RequestEvent, userID string, systemID string, action string, target string, operationID string, result string, detail string, failureCode ...string) {
-	collection, err := e.App.FindCachedCollectionByNameOrId("operation_audit")
+	ip := ""
+	if e != nil && e.Request != nil {
+		ip = getRealIP(e.Request)
+	}
+	h.createOperationAuditRecord(userID, systemID, action, target, operationID, result, detail, ip, failureCode...)
+}
+
+func (h *Hub) createOperationAuditRecord(userID string, systemID string, action string, target string, operationID string, result string, detail string, ip string, failureCode ...string) {
+	collection, err := h.FindCachedCollectionByNameOrId("operation_audit")
 	if err != nil {
 		return
 	}
@@ -586,8 +594,8 @@ func (h *Hub) createOperationAuditForUser(e *core.RequestEvent, userID string, s
 	if len(failureCode) > 0 {
 		record.Set("failure_code", strings.TrimSpace(failureCode[0]))
 	}
-	record.Set("ip", getRealIP(e.Request))
-	_ = e.App.SaveNoValidate(record)
+	record.Set("ip", strings.TrimSpace(ip))
+	_ = h.SaveNoValidate(record)
 }
 
 type operationFailure struct {

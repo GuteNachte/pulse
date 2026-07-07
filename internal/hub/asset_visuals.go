@@ -23,12 +23,15 @@ import (
 
 const defaultAssetTurntableFrameCount = 2
 const assetVisualImageModelMaxAttempts = 3
+const defaultAssetVisualImageModelRequestTimeout = 45 * time.Second
+const assetVisualRunningTaskStaleAfter = 15 * time.Minute
 const assetVisualReferenceImageMaxBytes = 2 * 1024 * 1024
 const assetVisualGeneratedImageMaxBytes = 4 * 1024 * 1024
 
 type assetTurntableVisualRequest struct {
 	Color      string `json:"color"`
 	FrameCount int    `json:"frame_count"`
+	Async      bool   `json:"async"`
 }
 
 type assetVisualAIConfig struct {
@@ -84,6 +87,8 @@ type assetVisualImageModelOutputMaterializeResult struct {
 	Reason string
 }
 
+type assetVisualGenerationProgress func(map[string]any)
+
 type assetVisualReferenceInputError struct {
 	message string
 	skipped []assetVisualReferenceSkip
@@ -127,6 +132,7 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 		}
 		return e.JSON(http.StatusOK, map[string]any{"task": task, "visual": visual, "status": "blocked", "message": message})
 	}
+	h.failStaleAssetVisualTasks(e.Auth.Id, asset.Id)
 	references := h.collectAssetVisualReferenceSources(asset)
 	prompt := buildAssetVisualUnificationPrompt(asset, color, references)
 
@@ -144,7 +150,13 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 		message := "没有找到可追溯设备图片。请先补充厂家支持页、官方图片 URL，或运行资料补全 Agent 后再收集。"
 		task.Set("status", "failed")
 		task.Set("error", message)
-		task.Set("output_summary", map[string]any{"collected_images": 0, "reason": "no_traceable_images"})
+		_ = mergeAssetVisualTaskSummary(task, map[string]any{
+			"phase":            "failed",
+			"phase_label":      "生成失败",
+			"progress_percent": 100,
+			"collected_images": 0,
+			"reason":           "no_traceable_images",
+		})
 		referenceVisual.Set("status", "failed")
 		referenceVisual.Set("metadata", map[string]any{
 			"collection_status": "no_sources",
@@ -170,31 +182,95 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 	if err := h.Save(referenceVisual); err != nil {
 		return e.InternalServerError("Failed to update asset visual.", err)
 	}
+	if err := h.updateAssetVisualTaskProgress(task, map[string]any{
+		"phase":            "references_ready",
+		"phase_label":      "已收集参考图",
+		"progress_percent": 30,
+		"collected_images": len(frames),
+		"reference_visual": referenceVisual.Id,
+	}); err != nil {
+		return e.InternalServerError("Failed to update AI task.", err)
+	}
 
-	generationResult, generationErr := h.generateUnifiedAssetVisualFrames(config, asset, color, references, prompt)
+	if req.Async {
+		go h.runAssetVisualGenerationInBackground(e.Auth.Id, asset.Id, task.Id, referenceVisual.Id, color, references, prompt, frames, config)
+		return e.JSON(http.StatusOK, map[string]any{"task": task, "visual": referenceVisual, "status": "running"})
+	}
+
+	visual, status, message, err := h.finishAssetVisualGeneration(e.Auth.Id, asset, task, referenceVisual, color, references, prompt, frames, config)
+	if err != nil {
+		return e.InternalServerError("Failed to update asset visual task.", err)
+	}
+	if status == "ready" {
+		h.createOperationAudit(e, "", "asset_visual_generate", asset.Id, "", "success", "资产设备统一全貌图已生成")
+	}
+	return e.JSON(http.StatusOK, map[string]any{"task": task, "visual": firstNonNilRecord(visual, referenceVisual), "status": status, "message": message})
+}
+
+func (h *Hub) runAssetVisualGenerationInBackground(userID string, assetID string, taskID string, referenceVisualID string, color string, references []map[string]any, prompt string, frames []map[string]any, config assetVisualAIConfig) {
+	asset, err := h.findUserAssetRecord(assetID, userID)
+	if err != nil {
+		h.failAssetVisualTaskByID(taskID, "资产不存在或无权访问。", map[string]any{"reason": "asset_not_found"})
+		return
+	}
+	task, err := h.FindRecordById("ai_tasks", taskID)
+	if err != nil || task.GetString("user") != userID {
+		return
+	}
+	referenceVisual, err := h.FindRecordById("asset_visuals", referenceVisualID)
+	if err != nil || referenceVisual.GetString("user") != userID {
+		h.failAssetVisualTaskByID(taskID, "设备参考图记录不存在或无权访问。", map[string]any{"reason": "reference_visual_not_found"})
+		return
+	}
+	_, status, _, _ := h.finishAssetVisualGeneration(userID, asset, task, referenceVisual, color, references, prompt, frames, config)
+	if status == "ready" {
+		h.createOperationAuditRecord(userID, "", "asset_visual_generate", asset.Id, "", "success", "资产设备统一全貌图已生成", "")
+	}
+}
+
+func (h *Hub) finishAssetVisualGeneration(userID string, asset *core.Record, task *core.Record, referenceVisual *core.Record, color string, references []map[string]any, prompt string, frames []map[string]any, config assetVisualAIConfig) (*core.Record, string, string, error) {
+	progress := func(update map[string]any) {
+		_ = h.updateAssetVisualTaskProgress(task, update)
+	}
+	generationResult, generationErr := h.generateUnifiedAssetVisualFrames(config, asset, color, references, prompt, progress)
 	if generationErr != nil {
 		message := generationErr.Error()
-		outputSummary := map[string]any{"collected_images": len(frames), "reason": "image_generation_failed"}
+		outputSummary := map[string]any{
+			"phase":            "failed",
+			"phase_label":      "生成失败",
+			"progress_percent": 100,
+			"collected_images": len(frames),
+			"reason":           "image_generation_failed",
+		}
 		var referenceInputErr *assetVisualReferenceInputError
 		if errors.As(generationErr, &referenceInputErr) {
 			outputSummary["reason"] = "reference_images_unreadable"
 			outputSummary["reference_skip_reasons"] = referenceInputErr.SkipSummaries()
 		}
 		applyAssetVisualImageModelDiagnosticsToSummary(outputSummary, generationResult.ImageModelOutputDiagnostics)
+		if err := mergeAssetVisualTaskSummary(task, outputSummary); err != nil {
+			return nil, "failed", message, err
+		}
 		task.Set("status", "failed")
 		task.Set("error", message)
-		task.Set("output_summary", outputSummary)
 		if err := h.Save(task); err != nil {
-			return e.InternalServerError("Failed to update AI task.", err)
+			return nil, "failed", message, err
 		}
-		return e.JSON(http.StatusOK, map[string]any{"task": task, "visual": referenceVisual, "status": "failed", "message": message})
+		return nil, "failed", message, nil
 	}
 
-	visual, err := h.createGeneratedAssetVisualRecord(e.Auth.Id, asset, task.Id, color, generationResult.Frames, references, prompt)
+	visual, err := h.createGeneratedAssetVisualRecord(userID, asset, task.Id, color, generationResult.Frames, references, prompt)
 	if err != nil {
-		return e.InternalServerError("Failed to create generated asset visual.", err)
+		message := "生成图记录保存失败。"
+		if saveErr := h.failAssetVisualTask(task, message, map[string]any{"reason": "generated_visual_save_failed"}); saveErr != nil {
+			return nil, "failed", message, saveErr
+		}
+		return nil, "failed", message, err
 	}
 	outputSummary := map[string]any{
+		"phase":                 "ready",
+		"phase_label":           "生成完成",
+		"progress_percent":      100,
 		"collected_images":      len(frames),
 		"generated_images":      len(generationResult.Frames),
 		"mode":                  "reference_image_unification",
@@ -210,13 +286,128 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 		outputSummary["reference_skip_reasons"] = assetVisualReferenceSkipSummaries(generationResult.SkippedReferences)
 	}
 	applyAssetVisualImageModelDiagnosticsToSummary(outputSummary, generationResult.ImageModelOutputDiagnostics)
-	task.Set("status", "ready")
-	task.Set("output_summary", outputSummary)
-	if err := h.Save(task); err != nil {
-		return e.InternalServerError("Failed to update AI task.", err)
+	if err := mergeAssetVisualTaskSummary(task, outputSummary); err != nil {
+		return nil, "ready", "", err
 	}
-	h.createOperationAudit(e, "", "asset_visual_generate", asset.Id, "", "success", "资产设备统一全貌图已生成")
-	return e.JSON(http.StatusOK, map[string]any{"task": task, "visual": visual, "status": "ready"})
+	task.Set("status", "ready")
+	task.Set("error", "")
+	if err := h.Save(task); err != nil {
+		return nil, "ready", "", err
+	}
+	return visual, "ready", "统一全貌图已生成。", nil
+}
+
+func (h *Hub) updateAssetVisualTaskProgress(task *core.Record, update map[string]any) error {
+	if task == nil {
+		return nil
+	}
+	if err := mergeAssetVisualTaskSummary(task, update); err != nil {
+		return err
+	}
+	return h.Save(task)
+}
+
+func (h *Hub) failAssetVisualTaskByID(taskID string, message string, summary map[string]any) {
+	task, err := h.FindRecordById("ai_tasks", taskID)
+	if err != nil {
+		return
+	}
+	_ = h.failAssetVisualTask(task, message, summary)
+}
+
+func (h *Hub) failStaleAssetVisualTasks(userID string, assetID string) {
+	records, err := h.FindRecordsByFilter(
+		"ai_tasks",
+		"user = {:user} && asset = {:asset} && kind = 'asset_visual' && (status = 'running' || status = 'queued')",
+		"-created",
+		-1,
+		0,
+		map[string]any{
+			"user":  userID,
+			"asset": assetID,
+		},
+	)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().UTC().Add(-assetVisualRunningTaskStaleAfter)
+	for _, record := range records {
+		created := record.GetDateTime("created")
+		if !created.IsZero() && created.Time().UTC().After(cutoff) {
+			continue
+		}
+		_ = h.failAssetVisualTask(record, "设备图片 Agent 任务超时，已停止等待。请重新触发生成。", map[string]any{"reason": "stale_running_task"})
+	}
+}
+
+func (h *Hub) failAssetVisualTask(task *core.Record, message string, summary map[string]any) error {
+	if summary == nil {
+		summary = map[string]any{}
+	}
+	summary["phase"] = "failed"
+	summary["phase_label"] = "生成失败"
+	summary["progress_percent"] = 100
+	if err := mergeAssetVisualTaskSummary(task, summary); err != nil {
+		return err
+	}
+	task.Set("status", "failed")
+	task.Set("error", message)
+	return h.Save(task)
+}
+
+func mergeAssetVisualTaskSummary(task *core.Record, update map[string]any) error {
+	if task == nil {
+		return nil
+	}
+	summary := map[string]any{}
+	_ = task.UnmarshalJSONField("output_summary", &summary)
+	if summary == nil {
+		summary = map[string]any{}
+	}
+	for key, value := range update {
+		summary[key] = value
+	}
+	phase := stringFromAny(update["phase"])
+	if phase != "" {
+		label := firstNonEmpty(stringFromAny(update["phase_label"]), phase)
+		history := normalizeAssetVisualPhaseHistory(summary["phase_history"])
+		if len(history) == 0 || stringFromAny(history[len(history)-1]["phase"]) != phase {
+			history = append(history, map[string]any{
+				"phase": phase,
+				"label": label,
+				"at":    time.Now().UTC().Format(time.RFC3339),
+			})
+		}
+		summary["phase_history"] = history
+	}
+	task.Set("output_summary", summary)
+	return nil
+}
+
+func normalizeAssetVisualPhaseHistory(value any) []map[string]any {
+	switch typed := value.(type) {
+	case []map[string]any:
+		return append([]map[string]any{}, typed...)
+	case []any:
+		result := make([]map[string]any, 0, len(typed))
+		for _, item := range typed {
+			if record, ok := item.(map[string]any); ok {
+				result = append(result, record)
+			}
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
+func firstNonNilRecord(records ...*core.Record) *core.Record {
+	for _, record := range records {
+		if record != nil {
+			return record
+		}
+	}
+	return nil
 }
 
 func (config assetVisualAIConfig) Ready() bool {
@@ -278,6 +469,18 @@ func (h *Hub) createAssetAITask(userID string, assetID string, config assetVisua
 		"reference_sources": references,
 		"mode":              "reference_image_unification",
 		"style":             "unified_catalog_day_night",
+	})
+	record.Set("output_summary", map[string]any{
+		"phase":            "reference_collecting",
+		"phase_label":      "正在收集参考图",
+		"progress_percent": 10,
+		"phase_history": []map[string]any{
+			{
+				"phase": "reference_collecting",
+				"label": "正在收集参考图",
+				"at":    time.Now().UTC().Format(time.RFC3339),
+			},
+		},
 	})
 	record.Set("metadata", map[string]any{"manual_trigger": true})
 	if err := h.Save(record); err != nil {
@@ -1074,7 +1277,7 @@ func assetColorInOptions(color string, options []string) bool {
 	return false
 }
 
-func (h *Hub) generateUnifiedAssetVisualFrames(config assetVisualAIConfig, asset *core.Record, color string, referenceSources []map[string]any, basePrompt string) (assetVisualGenerationResult, error) {
+func (h *Hub) generateUnifiedAssetVisualFrames(config assetVisualAIConfig, asset *core.Record, color string, referenceSources []map[string]any, basePrompt string, progress assetVisualGenerationProgress) (assetVisualGenerationResult, error) {
 	referenceURLs := assetVisualModelReferenceURLs(referenceSources)
 	if len(referenceURLs) == 0 {
 		return assetVisualGenerationResult{}, fmt.Errorf("没有可用于图片编辑的参考图。")
@@ -1088,6 +1291,15 @@ func (h *Hub) generateUnifiedAssetVisualFrames(config assetVisualAIConfig, asset
 		ReferenceInputCount: len(referenceInputResult.Inputs),
 		ReferenceInputURLs:  referenceInputResult.URLs,
 	}
+	if progress != nil {
+		progress(map[string]any{
+			"phase":                 "reference_input_ready",
+			"phase_label":           "已准备模型参考图",
+			"progress_percent":      45,
+			"reference_input_count": len(referenceInputResult.Inputs),
+			"reference_input_urls":  referenceInputResult.URLs,
+		})
+	}
 
 	themes := []struct {
 		id     string
@@ -1100,6 +1312,14 @@ func (h *Hub) generateUnifiedAssetVisualFrames(config assetVisualAIConfig, asset
 	frames := make([]map[string]any, 0, len(themes))
 	outputProbeCache := assetVisualImageModelOutputProbeCache{}
 	for index, theme := range themes {
+		if progress != nil {
+			progress(map[string]any{
+				"phase":            "image_model_" + theme.id,
+				"phase_label":      "正在生成" + theme.label + "图",
+				"progress_percent": 55 + index*20,
+				"generated_images": len(frames),
+			})
+		}
 		modelResult, err := h.callAssetVisualImageModel(config, basePrompt+"\n"+theme.prompt, referenceInputResult.Inputs, outputProbeCache)
 		result.ImageModelOutputDiagnostics = mergeAssetVisualImageModelDiagnostics(result.ImageModelOutputDiagnostics, modelResult.Diagnostics)
 		if err != nil {
@@ -1118,6 +1338,14 @@ func (h *Hub) generateUnifiedAssetVisualFrames(config assetVisualAIConfig, asset
 			"reference_urls": referenceInputResult.URLs,
 			"color":          color,
 		})
+		if progress != nil {
+			progress(map[string]any{
+				"phase":            "image_model_" + theme.id + "_ready",
+				"phase_label":      theme.label + "图已生成",
+				"progress_percent": 70 + index*20,
+				"generated_images": len(frames),
+			})
+		}
 	}
 	result.Frames = frames
 	return result, nil
@@ -1386,7 +1614,7 @@ func (h *Hub) callAssetVisualImageModel(config assetVisualAIConfig, prompt strin
 	if err != nil {
 		return assetVisualImageModelCallResult{}, fmt.Errorf("图片模型请求编码失败。")
 	}
-	client := &http.Client{Timeout: 120 * time.Second}
+	client := &http.Client{Timeout: assetVisualImageModelRequestTimeout()}
 	var lastErr error
 	for attempt := 1; attempt <= assetVisualImageModelMaxAttempts; attempt++ {
 		req, err := http.NewRequest(http.MethodPost, config.Endpoint, bytes.NewReader(body))
@@ -1452,6 +1680,30 @@ func (h *Hub) callAssetVisualImageModel(config assetVisualAIConfig, prompt strin
 
 func isTransientAssetVisualImageModelStatus(status int) bool {
 	return status == http.StatusTooManyRequests || status >= 500
+}
+
+func assetVisualImageModelRequestTimeout() time.Duration {
+	if milliseconds, err := strconv.Atoi(strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_AI_REQUEST_TIMEOUT_MS"))); err == nil && milliseconds > 0 {
+		timeout := time.Duration(milliseconds) * time.Millisecond
+		if timeout < 100*time.Millisecond {
+			return 100 * time.Millisecond
+		}
+		if timeout > 120*time.Second {
+			return 120 * time.Second
+		}
+		return timeout
+	}
+	if seconds, err := strconv.Atoi(strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_AI_REQUEST_TIMEOUT_SECONDS"))); err == nil && seconds > 0 {
+		timeout := time.Duration(seconds) * time.Second
+		if timeout < time.Second {
+			return time.Second
+		}
+		if timeout > 120*time.Second {
+			return 120 * time.Second
+		}
+		return timeout
+	}
+	return defaultAssetVisualImageModelRequestTimeout
 }
 
 func assetVisualRetryDelay(attempt int, retryAfter string) time.Duration {

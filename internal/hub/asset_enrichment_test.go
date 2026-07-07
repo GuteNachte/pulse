@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/stretchr/testify/require"
@@ -2114,6 +2115,147 @@ func TestAssetVisualRetriesTransientImageModelFailure(t *testing.T) {
 	require.Equal(t, http.StatusOK, response.Status, response.Body)
 	require.Contains(t, response.Body, `"status":"ready"`)
 	require.GreaterOrEqual(t, imageRequestCount, 3)
+}
+
+func TestAssetVisualAsyncRequestReturnsBeforeImageModelFinishes(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-async@example.com")
+	var imageRequestCount int
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		imageRequestCount++
+		time.Sleep(250 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"iVBORw0KGgo="}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".jpg") {
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title></head><body>
+			<img src="/redmi-k50-front.jpg" alt="Redmi K50 墨羽黑 正面" width="800" height="1200">
+		</body></html>`))
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["support_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"async": true, "color": "墨羽黑"})
+	require.NoError(t, err)
+	started := time.Now()
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"running"`)
+	require.Less(t, time.Since(started), 200*time.Millisecond)
+
+	require.Eventually(t, func() bool {
+		tasks, err := fixture.hub.FindRecordsByFilter("ai_tasks", "asset = {:asset} && kind = 'asset_visual'", "-created", -1, 0, map[string]any{
+			"asset": asset.Id,
+		})
+		if err != nil || len(tasks) == 0 {
+			return false
+		}
+		return tasks[0].GetString("status") == "ready"
+	}, 3*time.Second, 50*time.Millisecond)
+	require.Equal(t, 2, imageRequestCount)
+
+	audits, err := fixture.hub.FindRecordsByFilter(
+		"operation_audit",
+		"user = {:user} && action = 'asset_visual_generate' && target = {:target}",
+		"",
+		1,
+		0,
+		map[string]any{"user": fixture.user.Id, "target": asset.Id},
+	)
+	require.NoError(t, err)
+	require.Len(t, audits, 1)
+	require.Equal(t, "success", audits[0].GetString("result"))
+}
+
+func TestAssetVisualRecordsProgressSummaryWhenImageModelFails(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-progress-failed@example.com")
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		http.Error(w, `{"error":"invalid image request"}`, http.StatusBadRequest)
+	}))
+	t.Cleanup(imageServer.Close)
+	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".jpg") {
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title></head><body>
+			<img src="/redmi-k50-front.jpg" alt="Redmi K50 墨羽黑 正面" width="800" height="1200">
+		</body></html>`))
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["support_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"failed"`)
+
+	tasks, err := fixture.hub.FindRecordsByFilter("ai_tasks", "asset = {:asset} && kind = 'asset_visual'", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, tasks)
+	summary := recordJSONField(t, tasks[0], "output_summary")
+	require.Equal(t, "failed", summary["phase"])
+	require.Equal(t, "生成失败", summary["phase_label"])
+	require.Equal(t, float64(2), summary["collected_images"])
+	require.Contains(t, fmt.Sprint(summary["phase_history"]), "已收集参考图")
+	require.Contains(t, fmt.Sprint(summary["phase_history"]), "正在生成白天图")
 }
 
 func TestAssetVisualCollectsUnquotedOfficialPageImages(t *testing.T) {
