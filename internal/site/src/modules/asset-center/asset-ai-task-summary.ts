@@ -181,6 +181,7 @@ function formatAssetVisualDiagnosticsText(record: Record<string, unknown> | unde
 
 function getImageModelRequestSummary(record: Record<string, unknown> | undefined) {
 	const responseFormat = stringFromUnknown(record?.image_model_response_format).trim()
+	const fallbackResponseFormat = stringFromUnknown(record?.image_model_fallback_response_format).trim()
 	const timeoutSeconds = numberFromRecord(record, "image_model_timeout_seconds")
 	const inputCount = firstPositiveNumber(
 		numberFromRecord(record, "image_model_reference_input_count"),
@@ -194,6 +195,7 @@ function getImageModelRequestSummary(record: Record<string, unknown> | undefined
 	if (inputCount > 0) parts.push(`输入 ${inputCount} 张`)
 	if (payloadBytes > 0) parts.push(`请求 ${formatBytes(payloadBytes)}`)
 	if (responseFormat) parts.push(`输出 ${responseFormat}`)
+	if (fallbackResponseFormat) parts.push(`备用 ${fallbackResponseFormat}`)
 	if (timeoutSeconds > 0) parts.push(`超时 ${Math.round(timeoutSeconds)} 秒`)
 	return { text: `模型请求：${parts.join(" / ")}` }
 }

@@ -92,6 +92,7 @@ const runningVisualTask = {
 		image_model_reference_input_count: 2,
 		image_model_reference_payload_bytes: 3145728,
 		image_model_response_format: "b64_json",
+		image_model_fallback_response_format: "url",
 		image_model_timeout_seconds: 120,
 	},
 } as unknown as AITaskRecord
@@ -164,12 +165,12 @@ assertEqual(
 
 assertEqual(
 	formatAITaskSummary(runningVisualTask),
-	"设备图片 Agent · 正在生成白天图 · 55% · 模型请求：输入 2 张 / 请求 3 MB / 输出 b64_json / 超时 120 秒"
+	"设备图片 Agent · 正在生成白天图 · 55% · 模型请求：输入 2 张 / 请求 3 MB / 输出 b64_json / 备用 url / 超时 120 秒"
 )
 
 assertEqual(
 	formatAssetVisualTaskMeta(runningVisualTask),
-	"图片生成中：正在生成白天图 55%，模型请求：输入 2 张 / 请求 3 MB / 输出 b64_json / 超时 120 秒"
+	"图片生成中：正在生成白天图 55%，模型请求：输入 2 张 / 请求 3 MB / 输出 b64_json / 备用 url / 超时 120 秒"
 )
 
 assertEqual(

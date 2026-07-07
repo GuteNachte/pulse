@@ -4487,6 +4487,7 @@ function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 function isDisplayableAssetVisualFrame(frame: NonNullable<AssetVisualRecord["frames"]>[number] | undefined) {
 	if (!frame?.url) return false
 	const lower = frame.url.toLowerCase()
+	if (lower.startsWith("data:image/") && lower.includes(";base64,")) return true
 	const rejected = [
 		"appdownload",
 		"download.png",

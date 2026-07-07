@@ -7,6 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"net/http"
 	"net/url"
@@ -17,7 +20,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/disintegration/imaging"
 	"github.com/pocketbase/pocketbase/core"
+	_ "golang.org/x/image/webp"
 	nethtml "golang.org/x/net/html"
 )
 
@@ -28,6 +33,8 @@ const maxAssetVisualImageModelRequestTimeout = 360 * time.Second
 const assetVisualImageModelMaxReferenceInputs = 2
 const assetVisualRunningTaskStaleAfter = 15 * time.Minute
 const assetVisualReferenceImageMaxBytes = 2 * 1024 * 1024
+const assetVisualReferenceImageFetchMaxBytes = 12 * 1024 * 1024
+const assetVisualReferenceImageMaxLongEdge = 1024
 const assetVisualGeneratedImageMaxBytes = 4 * 1024 * 1024
 
 type assetTurntableVisualRequest struct {
@@ -81,9 +88,10 @@ type assetVisualImageModelOutputRejection struct {
 }
 
 type assetVisualImageModelCallResult struct {
-	URL           string
-	RevisedPrompt string
-	Diagnostics   assetVisualImageModelDiagnostics
+	URL            string
+	RevisedPrompt  string
+	Diagnostics    assetVisualImageModelDiagnostics
+	ResponseFormat string
 }
 
 type assetVisualImageModelOutputProbeCache map[string]assetVisualImageModelOutputMaterializeResult
@@ -1350,16 +1358,17 @@ func (h *Hub) generateUnifiedAssetVisualFrames(config assetVisualAIConfig, asset
 			return result, err
 		}
 		frames = append(frames, map[string]any{
-			"index":          index,
-			"view":           "unified",
-			"theme":          theme.id,
-			"label":          theme.label,
-			"url":            modelResult.URL,
-			"source_title":   "设备图片 Agent 统一化输出",
-			"source_url":     "",
-			"revised_prompt": modelResult.RevisedPrompt,
-			"reference_urls": referenceInputResult.URLs,
-			"color":          color,
+			"index":           index,
+			"view":            "unified",
+			"theme":           theme.id,
+			"label":           theme.label,
+			"url":             modelResult.URL,
+			"source_title":    "设备图片 Agent 统一化输出",
+			"source_url":      "",
+			"revised_prompt":  modelResult.RevisedPrompt,
+			"reference_urls":  referenceInputResult.URLs,
+			"color":           color,
+			"response_format": modelResult.ResponseFormat,
 		})
 		if progress != nil {
 			progress(map[string]any{
@@ -1475,15 +1484,16 @@ func (h *Hub) buildAssetVisualImageModelInputs(referenceURLs []string) assetVisu
 func assetVisualImageModelRequestSummary(config assetVisualAIConfig, inputs assetVisualImageModelInputResult) map[string]any {
 	endpointHost, endpointPath := safeEndpointHostAndPath(config.Endpoint)
 	summary := map[string]any{
-		"image_model_endpoint_host":           endpointHost,
-		"image_model_endpoint_path":           endpointPath,
-		"image_model_size":                    "768x1024",
-		"image_model_response_format":         "b64_json",
-		"image_model_max_attempts":            assetVisualImageModelMaxAttempts,
-		"image_model_timeout_seconds":         int(assetVisualImageModelRequestTimeout().Seconds()),
-		"image_model_reference_input_limit":   assetVisualImageModelMaxReferenceInputs,
-		"image_model_reference_input_count":   len(inputs.Inputs),
-		"image_model_reference_payload_bytes": inputs.TotalPayloadBytes,
+		"image_model_endpoint_host":            endpointHost,
+		"image_model_endpoint_path":            endpointPath,
+		"image_model_size":                     "768x1024",
+		"image_model_response_format":          "b64_json",
+		"image_model_fallback_response_format": "url",
+		"image_model_max_attempts":             assetVisualImageModelMaxAttempts,
+		"image_model_timeout_seconds":          int(assetVisualImageModelRequestTimeout().Seconds()),
+		"image_model_reference_input_limit":    assetVisualImageModelMaxReferenceInputs,
+		"image_model_reference_input_count":    len(inputs.Inputs),
+		"image_model_reference_payload_bytes":  inputs.TotalPayloadBytes,
 	}
 	if len(inputs.InputPayloadBytes) > 0 {
 		values := make([]int, len(inputs.InputPayloadBytes))
@@ -1616,25 +1626,80 @@ func (h *Hub) fetchAssetVisualReferenceDataURI(rawURL string) (string, error) {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", fmt.Errorf("参考图下载失败：%s", strconvItoa(resp.StatusCode))
 	}
-	if resp.ContentLength > assetVisualReferenceImageMaxBytes {
-		return "", fmt.Errorf("参考图大小超过模型输入上限。")
+	if resp.ContentLength > assetVisualReferenceImageFetchMaxBytes {
+		return "", fmt.Errorf("参考图大小超过可处理上限。")
 	}
-	rawBody, err := io.ReadAll(io.LimitReader(resp.Body, assetVisualReferenceImageMaxBytes+1))
+	rawBody, err := io.ReadAll(io.LimitReader(resp.Body, assetVisualReferenceImageFetchMaxBytes+1))
 	if err != nil {
 		return "", err
 	}
-	if len(rawBody) == 0 || len(rawBody) > assetVisualReferenceImageMaxBytes {
+	if len(rawBody) == 0 {
 		return "", fmt.Errorf("参考图大小不符合要求。")
+	}
+	if len(rawBody) > assetVisualReferenceImageFetchMaxBytes {
+		return "", fmt.Errorf("参考图大小超过可处理上限。")
 	}
 	mimeType := assetVisualReferenceImageMimeType(rawBody)
 	if mimeType == "" {
 		return "", fmt.Errorf("参考图不是可用图片。")
+	}
+	if len(rawBody) > assetVisualReferenceImageMaxBytes {
+		normalized, normalizedMime, err := normalizeAssetVisualReferenceImage(rawBody)
+		if err != nil {
+			return "", fmt.Errorf("参考图大小超过模型输入上限，且无法压缩处理。")
+		}
+		rawBody = normalized
+		mimeType = normalizedMime
+	}
+	if len(rawBody) > assetVisualReferenceImageMaxBytes {
+		return "", fmt.Errorf("参考图大小超过模型输入上限。")
 	}
 	return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(rawBody), nil
 }
 
 func assetVisualReferenceImageMimeType(rawBody []byte) string {
 	return assetVisualImageMimeTypeFromBytes(rawBody)
+}
+
+func normalizeAssetVisualReferenceImage(rawBody []byte) ([]byte, string, error) {
+	img, _, err := image.Decode(bytes.NewReader(rawBody))
+	if err != nil {
+		return nil, "", err
+	}
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return nil, "", fmt.Errorf("invalid image bounds")
+	}
+	longEdge := assetVisualReferenceImageMaxLongEdge
+	for _, quality := range []int{82, 74, 66, 58} {
+		normalized := resizeAssetVisualReferenceImage(img, width, height, longEdge)
+		var output bytes.Buffer
+		if err := imaging.Encode(&output, normalized, imaging.JPEG, imaging.JPEGQuality(quality)); err != nil {
+			return nil, "", err
+		}
+		if output.Len() > 0 && output.Len() <= assetVisualReferenceImageMaxBytes {
+			return output.Bytes(), "image/jpeg", nil
+		}
+		if longEdge > 768 {
+			longEdge -= 128
+		}
+	}
+	return nil, "", fmt.Errorf("normalized reference image exceeds limit")
+}
+
+func resizeAssetVisualReferenceImage(img image.Image, width int, height int, longEdge int) image.Image {
+	if longEdge <= 0 {
+		longEdge = assetVisualReferenceImageMaxLongEdge
+	}
+	if width <= longEdge && height <= longEdge {
+		return img
+	}
+	if width >= height {
+		return imaging.Resize(img, longEdge, 0, imaging.Lanczos)
+	}
+	return imaging.Resize(img, 0, longEdge, imaging.Lanczos)
 }
 
 func normalizeAssetVisualImageMimeType(value string) string {
@@ -1667,6 +1732,28 @@ func assetVisualMimeTypeFromURL(rawURL string) string {
 }
 
 func (h *Hub) callAssetVisualImageModel(config assetVisualAIConfig, prompt string, referenceInputs []string, outputProbeCache assetVisualImageModelOutputProbeCache) (assetVisualImageModelCallResult, error) {
+	var combinedDiagnostics assetVisualImageModelDiagnostics
+	var lastErr error
+	for _, responseFormat := range []string{"b64_json", "url"} {
+		result, err := h.callAssetVisualImageModelWithResponseFormat(config, prompt, referenceInputs, responseFormat, outputProbeCache)
+		combinedDiagnostics = mergeAssetVisualImageModelDiagnostics(combinedDiagnostics, result.Diagnostics)
+		if err == nil {
+			result.Diagnostics = combinedDiagnostics
+			result.ResponseFormat = responseFormat
+			return result, nil
+		}
+		lastErr = err
+		if responseFormat == "b64_json" && !assetVisualImageModelShouldFallbackToURL(err) {
+			return assetVisualImageModelCallResult{Diagnostics: combinedDiagnostics}, err
+		}
+	}
+	if lastErr != nil {
+		return assetVisualImageModelCallResult{Diagnostics: combinedDiagnostics}, lastErr
+	}
+	return assetVisualImageModelCallResult{Diagnostics: combinedDiagnostics}, fmt.Errorf("图片模型请求失败。")
+}
+
+func (h *Hub) callAssetVisualImageModelWithResponseFormat(config assetVisualAIConfig, prompt string, referenceInputs []string, responseFormat string, outputProbeCache assetVisualImageModelOutputProbeCache) (assetVisualImageModelCallResult, error) {
 	payload := map[string]any{
 		"model":  config.Model,
 		"prompt": prompt,
@@ -1674,7 +1761,7 @@ func (h *Hub) callAssetVisualImageModel(config assetVisualAIConfig, prompt strin
 		"size":   "768x1024",
 		"extra_body": map[string]any{
 			"image":           referenceInputs,
-			"response_format": "b64_json",
+			"response_format": responseFormat,
 		},
 	}
 	body, err := json.Marshal(payload)
@@ -1732,9 +1819,10 @@ func (h *Hub) callAssetVisualImageModel(config assetVisualAIConfig, prompt strin
 			}
 			diagnostics.Selected++
 			return assetVisualImageModelCallResult{
-				URL:           stableURL,
-				RevisedPrompt: output.RevisedPrompt,
-				Diagnostics:   diagnostics,
+				URL:            stableURL,
+				RevisedPrompt:  output.RevisedPrompt,
+				Diagnostics:    diagnostics,
+				ResponseFormat: responseFormat,
 			}, nil
 		}
 		return assetVisualImageModelCallResult{Diagnostics: diagnostics}, fmt.Errorf("图片模型没有返回可显示图片。")
@@ -1743,6 +1831,39 @@ func (h *Hub) callAssetVisualImageModel(config assetVisualAIConfig, prompt strin
 		return assetVisualImageModelCallResult{}, lastErr
 	}
 	return assetVisualImageModelCallResult{}, fmt.Errorf("图片模型请求失败。")
+}
+
+func assetVisualImageModelShouldFallbackToURL(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(err.Error())
+	for _, marker := range []string{"401", "403", "unauthorized", "forbidden"} {
+		if strings.Contains(text, marker) {
+			return false
+		}
+	}
+	for _, marker := range []string{
+		"unexpected eof",
+		"context deadline exceeded",
+		"client.timeout",
+		"connection reset",
+		"connection refused",
+		"timeout",
+		"429",
+		"500",
+		"502",
+		"503",
+		"504",
+		"response_format",
+		"b64_json",
+		"unsupported",
+	} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func isTransientAssetVisualImageModelStatus(status int) bool {
