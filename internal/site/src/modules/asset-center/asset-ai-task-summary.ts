@@ -56,8 +56,9 @@ export function formatAITaskSummary(task: AITaskRecord) {
 		if (task.status === "running" || task.status === "queued") {
 			const phaseLabel = stringFromUnknown(task.output_summary?.phase_label).trim()
 			const progress = numberFromRecord(task.output_summary, "progress_percent")
+			const suffix = formatAssetVisualDiagnosticsSuffix(task.output_summary, " · ")
 			if (phaseLabel) {
-				return `设备图片 Agent · ${phaseLabel}${progress > 0 ? ` · ${Math.round(progress)}%` : ""}`
+				return `设备图片 Agent · ${phaseLabel}${progress > 0 ? ` · ${Math.round(progress)}%` : ""}${suffix}`
 			}
 		}
 		const collected = numberFromRecord(task.output_summary, "collected_images")
@@ -94,7 +95,7 @@ export function formatAssetVisualTaskMeta(task?: AITaskRecord) {
 	if (task.status === "running" || task.status === "queued") {
 		const phaseLabel = stringFromUnknown(task.output_summary?.phase_label).trim()
 		const progress = numberFromRecord(task.output_summary, "progress_percent")
-		if (phaseLabel) return `图片生成中：${phaseLabel}${progress > 0 ? ` ${Math.round(progress)}%` : ""}`
+		if (phaseLabel) return `图片生成中：${phaseLabel}${progress > 0 ? ` ${Math.round(progress)}%` : ""}${suffix}`
 	}
 	if (task.status === "ready" && (collected > 0 || generated > 0)) {
 		if (generated <= 0) {
@@ -169,9 +170,44 @@ function formatAssetVisualDiagnosticsSuffix(record: Record<string, unknown> | un
 }
 
 function formatAssetVisualDiagnosticsText(record: Record<string, unknown> | undefined, separator: string) {
-	return [getReferenceSkipReasonSummary(record).text, getImageModelOutputRejectionSummary(record).text]
+	return [
+		getReferenceSkipReasonSummary(record).text,
+		getImageModelOutputRejectionSummary(record).text,
+		getImageModelRequestSummary(record).text,
+	]
 		.filter(Boolean)
 		.join(separator)
+}
+
+function getImageModelRequestSummary(record: Record<string, unknown> | undefined) {
+	const responseFormat = stringFromUnknown(record?.image_model_response_format).trim()
+	const timeoutSeconds = numberFromRecord(record, "image_model_timeout_seconds")
+	const inputCount = firstPositiveNumber(
+		numberFromRecord(record, "image_model_reference_input_count"),
+		numberFromRecord(record, "reference_input_count")
+	)
+	const payloadBytes = numberFromRecord(record, "image_model_reference_payload_bytes")
+	if (!responseFormat && timeoutSeconds <= 0 && payloadBytes <= 0) {
+		return { text: "" }
+	}
+	const parts: string[] = []
+	if (inputCount > 0) parts.push(`输入 ${inputCount} 张`)
+	if (payloadBytes > 0) parts.push(`请求 ${formatBytes(payloadBytes)}`)
+	if (responseFormat) parts.push(`输出 ${responseFormat}`)
+	if (timeoutSeconds > 0) parts.push(`超时 ${Math.round(timeoutSeconds)} 秒`)
+	return { text: `模型请求：${parts.join(" / ")}` }
+}
+
+function formatBytes(value: number) {
+	if (!Number.isFinite(value) || value <= 0) return "0 B"
+	if (value >= 1024 * 1024) return `${formatOneDecimal(value / 1024 / 1024)} MB`
+	if (value >= 1024) return `${formatOneDecimal(value / 1024)} KB`
+	return `${Math.round(value)} B`
+}
+
+function formatOneDecimal(value: number) {
+	const rounded = Math.round(value * 10) / 10
+	return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
 }
 
 function numberFromRecord(record: Record<string, unknown> | undefined, key: string) {
