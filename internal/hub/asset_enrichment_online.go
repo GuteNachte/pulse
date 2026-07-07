@@ -3,8 +3,10 @@ package hub
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"html"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
@@ -18,7 +20,16 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 )
 
-const assetOnlineSearchLimit = 5
+const (
+	assetOnlineSearchLimit        = 5
+	assetOnlineAIModelMaxAttempts = 3
+	assetOnlineAIExcerptMaxRunes  = 2200
+	assetOnlineAIExcerptHeadRunes = 180
+	assetOnlineAIExcerptMinRunes  = 600
+	assetOnlineAIExcerptBudget    = 4800
+)
+
+var errAssetOnlineResponseTooLarge = errors.New("资料页超过抓取大小上限")
 
 type assetOnlineEnrichmentResult struct {
 	Query       string
@@ -26,6 +37,7 @@ type assetOnlineEnrichmentResult struct {
 	Providers   []string
 	Sources     []assetOnlineSource
 	Suggestions []assetEnrichmentSuggestionInput
+	Discovery   assetOnlineAIResult
 	AI          assetOnlineAIResult
 	Errors      []string
 }
@@ -34,6 +46,7 @@ type assetOnlineAIResult struct {
 	Status      string
 	Provider    string
 	Model       string
+	Attempts    int
 	Suggestions int
 	Error       string
 }
@@ -76,13 +89,24 @@ func (result assetOnlineEnrichmentResult) SourceSummary(detail string, asset *co
 			"model":          asset.GetString("model"),
 			"internal_model": recordMetadataString(asset, "internal_model"),
 			"support_url":    recordMetadataString(asset, "support_url"),
+			"product_url":    recordMetadataString(asset, "product_url"),
+			"official_url":   recordMetadataString(asset, "official_url"),
 		},
 		"ai_extractor": map[string]any{
 			"status":      result.AI.Status,
 			"provider":    result.AI.Provider,
 			"model":       result.AI.Model,
+			"attempts":    result.AI.Attempts,
 			"suggestions": result.AI.Suggestions,
 			"error":       result.AI.Error,
+		},
+		"ai_source_discovery": map[string]any{
+			"status":      result.Discovery.Status,
+			"provider":    result.Discovery.Provider,
+			"model":       result.Discovery.Model,
+			"attempts":    result.Discovery.Attempts,
+			"suggestions": result.Discovery.Suggestions,
+			"error":       result.Discovery.Error,
 		},
 	}
 }
@@ -108,6 +132,18 @@ func (result assetOnlineEnrichmentResult) ReportLine(fallback string) string {
 
 func (h *Hub) collectAssetOnlineEnrichment(asset *core.Record, focus string) assetOnlineEnrichmentResult {
 	result := h.collectAssetOnlineReferenceEnrichment(asset)
+	if len(result.Sources) == 0 {
+		discovery, discoveredSources, discoveryErrors := h.collectAssetOnlineAISourceDiscovery(asset, focus)
+		result.Discovery = discovery
+		result.Errors = append(result.Errors, discoveryErrors...)
+		if len(discoveredSources) > 0 {
+			result.Sources = discoveredSources
+			result.Status = "ready"
+			for _, source := range discoveredSources {
+				result.Providers = appendProvider(result.Providers, source.Provider)
+			}
+		}
+	}
 	if len(result.Sources) > 0 {
 		result.Suggestions = buildAssetOnlineSuggestions(asset, result.Sources, result.Query)
 	}
@@ -122,6 +158,57 @@ func (h *Hub) collectAssetOnlineEnrichment(asset *core.Record, focus string) ass
 	return result
 }
 
+func (h *Hub) collectAssetOnlineAISourceDiscovery(asset *core.Record, focus string) (assetOnlineAIResult, []assetOnlineSource, []string) {
+	config := h.assetOnlineAIConfig()
+	if !config.Enabled {
+		return assetOnlineAIResult{Status: "disabled"}, nil, nil
+	}
+	result := assetOnlineAIResult{Status: "failed", Provider: config.Provider, Model: config.Model}
+	if config.Endpoint == "" || config.APIKey == "" || config.Model == "" {
+		result.Error = "AI 识别未配置 endpoint/api key/model"
+		return result, nil, nil
+	}
+	query := buildAssetOnlineSearchQuery(asset)
+	if strings.TrimSpace(query) == "" {
+		result.Error = "资产缺少厂商、型号或内部型号，无法发现可信来源"
+		return result, nil, nil
+	}
+	payload, err := buildAssetOnlineAISourceDiscoveryPayload(asset, config.Model, focus)
+	if err != nil {
+		result.Error = "AI 来源发现请求构造失败"
+		return result, nil, nil
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		result.Error = "AI 来源发现请求编码失败"
+		return result, nil, nil
+	}
+	rawBody, attempts, errMessage := callAssetOnlineAIModel(config, body)
+	result.Attempts = attempts
+	if errMessage != "" {
+		result.Error = errMessage
+		return result, nil, nil
+	}
+	sourceURLs := extractAssetOnlineAISourceURLs(extractAssetOnlineAIContent(rawBody))
+	if len(sourceURLs) == 0 {
+		result.Error = "AI 未返回可用来源 URL"
+		return result, nil, nil
+	}
+	sources := h.assetOnlineSourcesFromAIURLs(asset, sourceURLs)
+	sources = rankAssetOnlineSources(filterAssetOnlineSourcesByVariant(dedupeAssetOnlineSources(sources), asset), asset)
+	if len(sources) > assetOnlineSearchLimit {
+		sources = sources[:assetOnlineSearchLimit]
+	}
+	sources = h.enrichAssetOnlineSources(sources)
+	if len(sources) == 0 {
+		result.Error = "AI 返回的来源无法读取或与当前资产不匹配"
+		return result, nil, []string{result.Error}
+	}
+	result.Status = "ready"
+	result.Suggestions = len(sources)
+	return result, sources, nil
+}
+
 func (h *Hub) collectAssetOnlineReferenceEnrichment(asset *core.Record) assetOnlineEnrichmentResult {
 	query := buildAssetOnlineSearchQuery(asset)
 	result := assetOnlineEnrichmentResult{
@@ -130,10 +217,10 @@ func (h *Hub) collectAssetOnlineReferenceEnrichment(asset *core.Record) assetOnl
 		Providers: []string{},
 	}
 
-	if supportURL := recordMetadataString(asset, "support_url"); supportURL != "" {
-		source, err := h.fetchAssetSupportURLSource(supportURL)
+	for _, input := range assetOnlineReferenceURLInputs(asset) {
+		source, err := h.fetchAssetReferenceURLSource(input.URL, input.Provider)
 		if err != nil {
-			result.Errors = append(result.Errors, "官方支持页读取失败")
+			result.Errors = append(result.Errors, input.Label+"读取失败："+err.Error())
 		} else if source.URL != "" {
 			result.Sources = append(result.Sources, source)
 			result.Providers = appendProvider(result.Providers, source.Provider)
@@ -173,29 +260,10 @@ func (h *Hub) collectAssetOnlineAIEnrichment(asset *core.Record, sources []asset
 		result.Error = "AI 识别请求编码失败"
 		return result, nil
 	}
-	req, err := http.NewRequest(http.MethodPost, config.Endpoint, bytes.NewReader(body))
-	if err != nil {
-		result.Error = "AI 识别请求创建失败"
-		return result, nil
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+config.APIKey)
-
-	client := &http.Client{Timeout: 75 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		result.Error = "AI 识别请求失败：" + err.Error()
-		return result, nil
-	}
-	defer resp.Body.Close()
-	rawBody, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024))
-	if err != nil {
-		result.Error = "AI 识别响应读取失败"
-		return result, nil
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		result.Error = "AI 识别返回非成功状态：" + strconvItoa(resp.StatusCode) + formatRemoteErrorBody(rawBody)
+	rawBody, attempts, errMessage := callAssetOnlineAIModel(config, body)
+	result.Attempts = attempts
+	if errMessage != "" {
+		result.Error = errMessage
 		return result, nil
 	}
 	content := extractAssetOnlineAIContent(rawBody)
@@ -203,6 +271,71 @@ func (h *Hub) collectAssetOnlineAIEnrichment(asset *core.Record, sources []asset
 	result.Status = "ready"
 	result.Suggestions = len(suggestions)
 	return result, suggestions
+}
+
+func callAssetOnlineAIModel(config assetOnlineAIConfig, body []byte) ([]byte, int, string) {
+	client := &http.Client{Timeout: 75 * time.Second}
+	var rawBody []byte
+	var lastError string
+	attempts := 0
+	for attempt := 1; attempt <= assetOnlineAIModelMaxAttempts; attempt++ {
+		attempts = attempt
+		req, err := http.NewRequest(http.MethodPost, config.Endpoint, bytes.NewReader(body))
+		if err != nil {
+			return nil, attempts, "AI 识别请求创建失败"
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Authorization", "Bearer "+config.APIKey)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			lastError = "AI 识别请求失败：" + err.Error()
+			if attempt < assetOnlineAIModelMaxAttempts {
+				time.Sleep(assetOnlineAIRetryDelay(attempt, ""))
+				continue
+			}
+			return nil, attempts, lastError
+		}
+		rawBody, err = io.ReadAll(io.LimitReader(resp.Body, 1024*1024))
+		_ = resp.Body.Close()
+		if err != nil {
+			lastError = "AI 识别响应读取失败"
+			if attempt < assetOnlineAIModelMaxAttempts {
+				time.Sleep(assetOnlineAIRetryDelay(attempt, ""))
+				continue
+			}
+			return nil, attempts, lastError
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			lastError = "AI 识别返回非成功状态：" + strconvItoa(resp.StatusCode) + formatRemoteErrorBody(rawBody)
+			if attempt < assetOnlineAIModelMaxAttempts && isTransientAssetOnlineAIModelStatus(resp.StatusCode) {
+				time.Sleep(assetOnlineAIRetryDelay(attempt, resp.Header.Get("Retry-After")))
+				continue
+			}
+			return nil, attempts, lastError
+		}
+		return rawBody, attempts, ""
+	}
+	return rawBody, attempts, firstNonEmpty(lastError, "AI 识别请求失败")
+}
+
+func isTransientAssetOnlineAIModelStatus(status int) bool {
+	return status == http.StatusTooManyRequests || status >= 500
+}
+
+func assetOnlineAIRetryDelay(attempt int, retryAfter string) time.Duration {
+	if seconds, err := strconv.Atoi(strings.TrimSpace(retryAfter)); err == nil && seconds > 0 {
+		delay := time.Duration(seconds) * time.Second
+		if delay > 2*time.Second {
+			return 2 * time.Second
+		}
+		return delay
+	}
+	if attempt <= 1 {
+		return 150 * time.Millisecond
+	}
+	return 300 * time.Millisecond
 }
 
 type assetOnlineAIConfig struct {
@@ -263,18 +396,52 @@ func safeAssetOnlineEndpointHost(raw string) string {
 	return parsed.Host
 }
 
+func buildAssetOnlineAISourceDiscoveryPayload(asset *core.Record, model string, focus string) (map[string]any, error) {
+	instruction := "你是 Pulse 资产中心的可信来源发现 Agent。你这一步只负责找到可追溯资料来源 URL，不要输出任何资产字段建议。优先级：1 厂商官网产品页、支持页、规格页、说明书、官方图片或官方 CDN；2 权威渠道；3 GSMArena、DeviceSpecifications、Kimovil 等规格库只做交叉验证；4 普通博客、电商、论坛只能作为低置信度线索。必须避免同系列不同型号、Pro/Ultra/电竞版等变体混入。返回严格 JSON：{\"source_urls\":[\"https://...\"]}，最多 5 个 URL。"
+	if focus == "official_colors" {
+		instruction = "你是 Pulse 资产中心的可信来源发现 Agent。你这一步只负责找到设备官方配色和官方外观图片相关的可追溯来源 URL，不要输出任何资产字段建议。优先级：1 厂商官网产品页、规格页、官方图片或官方 CDN；2 厂商支持页或说明书；3 权威规格库仅作交叉验证。普通博客、电商、论坛不能作为官方配色依据。必须避免同系列不同型号、Pro/Ultra/电竞版等变体混入。返回严格 JSON：{\"source_urls\":[\"https://...\"]}，最多 5 个 URL。"
+	}
+	return map[string]any{
+		"model":       model,
+		"temperature": 0,
+		"messages": []map[string]string{
+			{"role": "system", "content": instruction},
+			{"role": "user", "content": mustJSON(map[string]any{
+				"asset": map[string]any{
+					"name":           asset.GetString("name"),
+					"type":           asset.GetString("type"),
+					"vendor":         asset.GetString("vendor"),
+					"model":          asset.GetString("model"),
+					"internal_model": recordMetadataString(asset, "internal_model"),
+					"color":          firstNonEmpty(recordMetadataString(asset, "color"), recordMetadataString(asset, "device_color")),
+				},
+				"query": buildAssetOnlineSearchQuery(asset),
+				"source_policy": map[string]any{
+					"return_only_urls":  true,
+					"max_urls":          assetOnlineSearchLimit,
+					"preferred_sources": []string{"official product page", "official support page", "official specs page", "official manual", "official image or CDN image"},
+					"reject":            []string{"untraceable content", "same-series but different variant", "blog or ecommerce claims when official source exists"},
+				},
+				"focus": focus,
+			})},
+		},
+		"response_format": map[string]string{"type": "json_object"},
+	}, nil
+}
+
 func buildAssetOnlineAIRequestPayload(asset *core.Record, sources []assetOnlineSource, model string, focus string) (map[string]any, error) {
 	excerpts := make([]map[string]any, 0, len(sources))
+	perSourceBudget := assetOnlineAIExcerptBudgetForSourceCount(len(sources))
 	for _, source := range sources {
-		text := cleanOnlineText(firstNonEmpty(source.Text, source.Snippet))
-		if len([]rune(text)) > 1800 {
-			text = string([]rune(text)[:1800])
-		}
+		text := buildAssetOnlineAIExcerpt(asset, source, focus, perSourceBudget)
 		excerpts = append(excerpts, map[string]any{
-			"title":   source.Title,
-			"url":     source.URL,
-			"type":    source.Type,
-			"excerpt": text,
+			"title":      source.Title,
+			"url":        source.URL,
+			"type":       source.Type,
+			"provider":   source.Provider,
+			"confidence": source.Confidence,
+			"image_url":  source.ImageURL,
+			"excerpt":    text,
 		})
 	}
 	allowedFields := []string{
@@ -288,6 +455,7 @@ func buildAssetOnlineAIRequestPayload(asset *core.Record, sources []assetOnlineS
 		"sim_detail", "wifi_standard", "bluetooth_version", "positioning", "usb_detail", "nfc", "infrared",
 		"dimensions", "weight", "body_material", "colors_available", "water_resistance", "speaker_detail",
 		"audio_detail", "biometrics", "sensor_detail", "cooling_system", "official_image_url", "online_specs_summary",
+		"support_url", "product_url", "official_url",
 	}
 	instruction := "你是 Pulse 资产中心的资料补全 Agent。目标是为家庭资产管理补全长期可信的硬件主档。必须按可信来源优先级工作：1 厂商官网产品页、支持页、规格页、说明书、驱动页、官方图片或官方 CDN 图片；2 权威渠道或运营商资料；3 GSMArena、DeviceSpecifications、Kimovil 等规格库只做交叉验证；4 普通博客、电商、论坛只能作为低置信度线索，若已有官网来源则不要采用。若 sources 提供网页摘录，优先使用 sources；若 sources 为空且你的运行环境具备联网或检索能力，可以按厂商、型号、内部型号搜索上述可信来源。不要凭常识编造，不要把同系列其他变体写入当前设备。手机、平板等固定规格设备要尽量拆细处理器、GPU、内存、存储、屏幕、相机、电池、外观、网络、音频、传感器和官方图片。不要输出操作系统版本、固件版本、软件版本、APP 版本等会变动的软件参数。手机颜色必须提取完整官方配色列表，写入 colors_available，保留官方色名，不要改写成普通黑/白/蓝/银；如果无法确认全部官方配色，就不要输出 colors_available。official_image_url 必须尽量选择官网或官方 CDN 的真实设备图。返回严格 JSON：{\"suggestions\":[{\"field\":\"cpu_model\",\"label\":\"芯片 / SoC\",\"value\":\"...\",\"confidence\":0-100,\"notes\":\"...\",\"source_urls\":[\"...\"]}]}。field 只能从 allowed_fields 选择；value 必须短且可直接写入资产档案；每条建议必须有可追溯 source_urls，没有来源就不要输出。"
 	if focus == "official_colors" {
@@ -308,6 +476,8 @@ func buildAssetOnlineAIRequestPayload(asset *core.Record, sources []assetOnlineS
 					"internal_model": recordMetadataString(asset, "internal_model"),
 					"color":          firstNonEmpty(recordMetadataString(asset, "color"), recordMetadataString(asset, "device_color")),
 					"support_url":    recordMetadataString(asset, "support_url"),
+					"product_url":    recordMetadataString(asset, "product_url"),
+					"official_url":   recordMetadataString(asset, "official_url"),
 				},
 				"allowed_fields": allowedFields,
 				"focus":          focus,
@@ -321,6 +491,131 @@ func buildAssetOnlineAIRequestPayload(asset *core.Record, sources []assetOnlineS
 		},
 		"response_format": map[string]string{"type": "json_object"},
 	}, nil
+}
+
+func assetOnlineAIExcerptBudgetForSourceCount(sourceCount int) int {
+	if sourceCount <= 1 {
+		return assetOnlineAIExcerptMaxRunes
+	}
+	budget := assetOnlineAIExcerptBudget / sourceCount
+	if budget < assetOnlineAIExcerptMinRunes {
+		return assetOnlineAIExcerptMinRunes
+	}
+	if budget > assetOnlineAIExcerptMaxRunes {
+		return assetOnlineAIExcerptMaxRunes
+	}
+	return budget
+}
+
+func buildAssetOnlineAIExcerpt(asset *core.Record, source assetOnlineSource, focus string, maxExcerptRunes int) string {
+	if maxExcerptRunes <= 0 {
+		maxExcerptRunes = assetOnlineAIExcerptMaxRunes
+	}
+	text := cleanOnlineText(firstNonEmpty(source.Text, source.Snippet))
+	if len([]rune(text)) <= maxExcerptRunes {
+		return text
+	}
+	keywords := assetOnlineAIExcerptKeywords(asset, focus)
+	headRunes := assetOnlineAIExcerptHeadRunes
+	if headRunes > maxExcerptRunes/2 {
+		headRunes = maxExcerptRunes / 2
+	}
+	segments := []string{truncateRunes(text, headRunes)}
+	for _, window := range assetOnlineKeywordWindows(text, keywords) {
+		segments = append(segments, window.Text)
+		combined := cleanOnlineText(strings.Join(dedupeStrings(segments), " "))
+		if len([]rune(combined)) >= maxExcerptRunes {
+			return truncateRunes(combined, maxExcerptRunes)
+		}
+	}
+	combined := cleanOnlineText(strings.Join(dedupeStrings(segments), " "))
+	if len([]rune(combined)) > 520 {
+		return truncateRunes(combined, maxExcerptRunes)
+	}
+	return truncateRunes(text, maxExcerptRunes)
+}
+
+type assetOnlineIndexedText struct {
+	Index int
+	Text  string
+}
+
+func assetOnlineAIExcerptKeywords(asset *core.Record, focus string) []string {
+	keywords := []string{
+		"官方", "官网", "芯片", "soc", "cpu", "gpu", "处理器", "内存", "ram", "存储", "rom", "ufs",
+		"屏幕", "显示", "分辨率", "刷新率", "亮度", "触控", "电池", "mah", "充电", "w", "相机", "摄像", "影像",
+		"后置", "前置", "视频", "网络", "5g", "lte", "wi-fi", "wifi", "蓝牙", "nfc", "红外", "usb", "尺寸",
+		"重量", "防水", "防尘", "ip", "扬声器", "音频", "传感器", "散热", "配色", "颜色", "color", "colour",
+		"图片", "image", "cdn",
+	}
+	if focus == "official_colors" {
+		keywords = []string{"官方", "官网", "配色", "颜色", "色", "color", "colour", "图片", "image", "cdn", "渲染图", "外观"}
+	}
+	for _, value := range []string{
+		asset.GetString("vendor"),
+		asset.GetString("model"),
+		recordMetadataString(asset, "internal_model"),
+		recordMetadataString(asset, "color"),
+		recordMetadataString(asset, "device_color"),
+	} {
+		for _, token := range strings.Fields(strings.ToLower(value)) {
+			if len([]rune(token)) >= 2 {
+				keywords = append(keywords, token)
+			}
+		}
+	}
+	return dedupeStrings(keywords)
+}
+
+func assetOnlineKeywordWindows(text string, keywords []string) []assetOnlineIndexedText {
+	lower := strings.ToLower(text)
+	windows := make([]assetOnlineIndexedText, 0, len(keywords))
+	seenBuckets := map[int]bool{}
+	for _, keyword := range keywords {
+		keyword = strings.ToLower(strings.TrimSpace(keyword))
+		if keyword == "" {
+			continue
+		}
+		byteIndex := strings.Index(lower, keyword)
+		if byteIndex < 0 {
+			continue
+		}
+		runeIndex := len([]rune(text[:byteIndex]))
+		bucket := runeIndex / 120
+		if seenBuckets[bucket] {
+			continue
+		}
+		seenBuckets[bucket] = true
+		windows = append(windows, assetOnlineIndexedText{
+			Index: runeIndex,
+			Text:  assetOnlineRuneWindow(text, runeIndex, 80, 260),
+		})
+	}
+	sort.Slice(windows, func(i, j int) bool {
+		return windows[i].Index < windows[j].Index
+	})
+	return windows
+}
+
+func assetOnlineRuneWindow(text string, center int, before int, after int) string {
+	runes := []rune(text)
+	start := center - before
+	if start < 0 {
+		start = 0
+	}
+	end := center + after
+	if end > len(runes) {
+		end = len(runes)
+	}
+	return cleanOnlineText(string(runes[start:end]))
+}
+
+func truncateRunes(value string, maxRunes int) string {
+	runes := []rune(value)
+	if maxRunes <= 0 || len(runes) <= maxRunes {
+		return value
+	}
+	return string(runes[:maxRunes])
 }
 
 func mustJSON(value any) string {
@@ -349,6 +644,28 @@ func extractAssetOnlineAIContent(rawBody []byte) string {
 		}
 	}
 	return strings.TrimSpace(string(rawBody))
+}
+
+func extractAssetOnlineAISourceURLs(content string) []string {
+	content = strings.TrimSpace(content)
+	content = strings.TrimPrefix(content, "```json")
+	content = strings.TrimPrefix(content, "```")
+	content = strings.TrimSuffix(content, "```")
+	var parsed struct {
+		SourceURLs []string `json:"source_urls"`
+		Sources    []struct {
+			URL string `json:"url"`
+		} `json:"sources"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(content)), &parsed); err != nil {
+		return nil
+	}
+	urls := make([]string, 0, len(parsed.SourceURLs)+len(parsed.Sources))
+	urls = append(urls, parsed.SourceURLs...)
+	for _, source := range parsed.Sources {
+		urls = append(urls, source.URL)
+	}
+	return normalizeAssetOnlineAISourceURLs(urls)
 }
 
 func (h *Hub) parseAssetOnlineAISuggestions(asset *core.Record, content string, sources []assetOnlineSource) []assetEnrichmentSuggestionInput {
@@ -382,6 +699,9 @@ func (h *Hub) parseAssetOnlineAISuggestions(asset *core.Record, content string, 
 		if value == "" {
 			continue
 		}
+		if field == "official_image_url" && !isLikelyImageURL(value) {
+			continue
+		}
 		label := firstNonEmpty(strings.TrimSpace(item.Label), field)
 		confidence := item.Confidence
 		if confidence <= 0 || confidence > 100 {
@@ -401,6 +721,9 @@ func (h *Hub) parseAssetOnlineAISuggestions(asset *core.Record, content string, 
 		if assetAIFieldRequiresOfficialSource(field) && !assetOnlineSourcesHaveOfficialAuthority(matchedSources) {
 			continue
 		}
+		if field == "official_image_url" && !assetOfficialImageSuggestionValueAllowed(value, matchedSources) {
+			continue
+		}
 		confidence = capAssetAISuggestionConfidenceBySourceQuality(confidence, matchedSources)
 		result = append(result, buildOnlineRecordSuggestion(asset, "metadata."+field, label, metadataValueString(asset, field), value, firstNonEmpty(item.Notes, "AI 结构化提取的联网资料建议，需人工确认后写入。"), matchedSources, confidence))
 	}
@@ -409,7 +732,7 @@ func (h *Hub) parseAssetOnlineAISuggestions(asset *core.Record, content string, 
 
 func assetAIFieldRequiresOfficialSource(field string) bool {
 	switch strings.TrimSpace(field) {
-	case "colors_available", "official_colors", "official_image_url":
+	case "colors_available", "official_colors", "official_image_url", "support_url", "product_url", "official_url":
 		return true
 	default:
 		return false
@@ -423,6 +746,42 @@ func assetOnlineSourcesHaveOfficialAuthority(sources []assetOnlineSource) bool {
 		}
 	}
 	return false
+}
+
+func assetOfficialImageSuggestionValueAllowed(value string, sources []assetOnlineSource) bool {
+	if !isLikelyImageURL(value) {
+		return false
+	}
+	if classifyAssetOnlineURL(value) == "official_image" {
+		return true
+	}
+	normalizedValue := normalizeAssetOnlineURLForComparison(value)
+	for _, source := range sources {
+		if !assetOnlineSourceHasOfficialAuthority(source) {
+			continue
+		}
+		for _, candidate := range []string{source.ImageURL, source.URL} {
+			if isLikelyImageURL(candidate) && normalizeAssetOnlineURLForComparison(candidate) == normalizedValue {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func normalizeAssetOnlineURLForComparison(rawURL string) string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return strings.ToLower(rawURL)
+	}
+	parsed.Fragment = ""
+	parsed.Host = strings.ToLower(parsed.Host)
+	parsed.Scheme = strings.ToLower(parsed.Scheme)
+	return strings.ToLower(parsed.String())
 }
 
 func normalizeAssetOnlineAISourceURLs(urls []string) []string {
@@ -522,6 +881,7 @@ func chipsetFamily(value string) string {
 }
 
 func (h *Hub) assetOnlineSourcesFromAIURLs(asset *core.Record, urls []string) []assetOnlineSource {
+	urls = normalizeAssetOnlineAISourceURLs(urls)
 	result := make([]assetOnlineSource, 0, len(urls))
 	for _, rawURL := range urls {
 		rawURL = strings.TrimSpace(rawURL)
@@ -552,6 +912,9 @@ func (h *Hub) assetOnlineSourcesFromAIURLs(asset *core.Record, urls []string) []
 		if title != "" {
 			source.Title = title
 		}
+		if parsed, err := url.Parse(rawURL); err == nil {
+			source.Type = classifyFetchedAssetOnlineAIURL(parsed, source.Title)
+		}
 		source.Snippet = firstNonEmpty(extractMetaDescription(body), source.Snippet)
 		if imageURL := extractMetaImageURL(body); imageURL != "" {
 			if parsed, err := url.Parse(rawURL); err == nil {
@@ -573,6 +936,40 @@ func (h *Hub) assetOnlineSourcesFromAIURLs(asset *core.Record, urls []string) []
 		result = append(result, source)
 	}
 	return dedupeAssetOnlineSources(result)
+}
+
+func classifyFetchedAssetOnlineAIURL(parsed *url.URL, title string) string {
+	sourceType := classifyAssetOnlineURL(parsed.String())
+	if sourceType != "web_result" {
+		return sourceType
+	}
+	host := strings.ToLower(strings.TrimSpace(parsed.Hostname()))
+	if !isLocalAssetOnlineHost(host) {
+		return sourceType
+	}
+	lowerTitle := strings.ToLower(strings.TrimSpace(title))
+	if !assetOnlineTitleHasStrongOfficialSignal(lowerTitle) {
+		return sourceType
+	}
+	lowerURL := strings.ToLower(parsed.String())
+	if strings.Contains(lowerURL, "product") || strings.Contains(lowerURL, "spec") || strings.Contains(lowerURL, "manual") {
+		return "official_product"
+	}
+	return "official_support"
+}
+
+func assetOnlineTitleHasStrongOfficialSignal(lowerTitle string) bool {
+	for _, marker := range []string{"官方", "官网", "official"} {
+		if strings.Contains(lowerTitle, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func isLocalAssetOnlineHost(host string) bool {
+	host = strings.Trim(strings.ToLower(strings.TrimSpace(host)), "[]")
+	return host == "localhost" || host == "127.0.0.1" || host == "::1"
 }
 
 func filterAssetOnlineSourcesByURLs(sources []assetOnlineSource, urls []string) []assetOnlineSource {
@@ -620,10 +1017,53 @@ func buildAssetOnlineSearchQuery(asset *core.Record) string {
 	return strings.Join(append(parts, keywords...), " ")
 }
 
+type assetOnlineReferenceURLInput struct {
+	Provider string
+	Label    string
+	URL      string
+}
+
+func assetOnlineReferenceURLInputs(asset *core.Record) []assetOnlineReferenceURLInput {
+	candidates := []assetOnlineReferenceURLInput{
+		{Provider: "support_url", Label: "厂家支持页", URL: recordMetadataString(asset, "support_url")},
+		{Provider: "product_url", Label: "厂家产品页", URL: recordMetadataString(asset, "product_url")},
+		{Provider: "official_url", Label: "厂家官网页", URL: recordMetadataString(asset, "official_url")},
+	}
+	result := make([]assetOnlineReferenceURLInput, 0, len(candidates))
+	seen := map[string]bool{}
+	for _, candidate := range candidates {
+		rawURL := strings.TrimSpace(candidate.URL)
+		if rawURL == "" {
+			continue
+		}
+		parsed, err := url.Parse(rawURL)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			continue
+		}
+		parsed.Fragment = ""
+		key := strings.ToLower(parsed.String())
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		candidate.URL = parsed.String()
+		result = append(result, candidate)
+	}
+	return result
+}
+
 func (h *Hub) fetchAssetSupportURLSource(rawURL string) (assetOnlineSource, error) {
+	return h.fetchAssetReferenceURLSource(rawURL, "support_url")
+}
+
+func (h *Hub) fetchAssetReferenceURLSource(rawURL string, provider string) (assetOnlineSource, error) {
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return assetOnlineSource{}, err
+	}
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		provider = "asset_master"
 	}
 	body, err := h.fetchAssetOnlineURL(parsed.String(), 512*1024)
 	if err != nil {
@@ -642,13 +1082,13 @@ func (h *Hub) fetchAssetSupportURLSource(rawURL string) (assetOnlineSource, erro
 	}
 	sourceType := classifyManualAssetSupportURL(parsed, title)
 	confidence := 95
-	snippet := firstNonEmpty(extractMetaDescription(body), "来自资产主档中手动填写的厂家官方支持页。")
+	snippet := firstNonEmpty(extractMetaDescription(body), "来自资产主档中手动填写的厂家资料页。")
 	if sourceType != "official_support" && sourceType != "official_product" {
 		confidence = 55
 		snippet = firstNonEmpty(extractMetaDescription(body), "来自资产主档中手动填写的资料页，需确认是否为厂家官方来源。")
 	}
 	return assetOnlineSource{
-		Provider:   "support_url",
+		Provider:   provider,
 		Type:       sourceType,
 		Title:      title,
 		URL:        parsed.String(),
@@ -663,24 +1103,58 @@ func classifyManualAssetSupportURL(parsed *url.URL, title string) string {
 	host := strings.TrimPrefix(strings.ToLower(parsed.Hostname()), "www.")
 	lowerURL := strings.ToLower(parsed.String())
 	lowerTitle := strings.ToLower(strings.TrimSpace(title))
+	if assetOnlineLooksLowTrustManualReference(lowerURL + " " + lowerTitle) {
+		return classifyAssetOnlineURL(parsed.String())
+	}
 	if isKnownOfficialAssetHost(host) {
 		if strings.Contains(lowerURL, "product") || strings.Contains(lowerURL, "spec") || strings.Contains(lowerURL, "manual") {
 			return "official_product"
 		}
 		return "official_support"
 	}
-	if strings.Contains(lowerURL, "support") || strings.Contains(lowerURL, "download") || strings.Contains(lowerURL, "driver") {
+	if assetOnlineTitleHasManualReferenceSignal(lowerTitle) {
+		if strings.Contains(lowerURL, "product") || strings.Contains(lowerURL, "spec") || strings.Contains(lowerURL, "manual") {
+			return "official_product"
+		}
 		return "official_support"
 	}
-	if strings.Contains(lowerURL, "product") || strings.Contains(lowerURL, "spec") || strings.Contains(lowerURL, "manual") {
-		return "official_product"
-	}
-	for _, marker := range []string{"官方", "支持", "规格", "说明书", "support", "spec", "manual"} {
+	return classifyAssetOnlineURL(parsed.String())
+}
+
+func assetOnlineTitleHasManualReferenceSignal(lowerTitle string) bool {
+	for _, marker := range []string{"官方", "官网", "official", "产品", "规格", "支持", "说明书", "驱动"} {
 		if strings.Contains(lowerTitle, marker) {
-			return "official_support"
+			return true
 		}
 	}
-	return classifyAssetOnlineURL(parsed.String())
+	return false
+}
+
+func assetOnlineLooksLowTrustManualReference(text string) bool {
+	for _, marker := range []string{
+		"个人博客",
+		"第三方",
+		"普通网页",
+		"普通博客",
+		"评测",
+		"论坛",
+		"电商",
+		"非官方",
+		"blog",
+		"review",
+		"forum",
+		"bbs",
+		"mall",
+		"shop",
+		"store",
+		"taobao",
+		"jd.com",
+	} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Hub) extractAssetProductScriptText(base *url.URL, body string) string {
@@ -766,12 +1240,44 @@ func (h *Hub) doAssetOnlineRequest(req *http.Request, maxBytes int64) (string, e
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", http.ErrNotSupported
 	}
-	reader := io.LimitReader(resp.Body, maxBytes)
+	if contentType := strings.TrimSpace(resp.Header.Get("Content-Type")); contentType != "" && !isSupportedAssetOnlineContentType(contentType) {
+		return "", errors.New("资料页类型不支持：" + contentType)
+	}
+	if maxBytes > 0 && resp.ContentLength > maxBytes {
+		return "", errAssetOnlineResponseTooLarge
+	}
+	var reader io.Reader = resp.Body
+	if maxBytes > 0 {
+		reader = io.LimitReader(resp.Body, maxBytes+1)
+	}
 	body, err := io.ReadAll(reader)
 	if err != nil {
 		return "", err
 	}
+	if maxBytes > 0 && int64(len(body)) > maxBytes {
+		return "", errAssetOnlineResponseTooLarge
+	}
 	return string(body), nil
+}
+
+func isSupportedAssetOnlineContentType(contentType string) bool {
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		mediaType = strings.TrimSpace(strings.Split(contentType, ";")[0])
+	}
+	mediaType = strings.ToLower(mediaType)
+	if mediaType == "" {
+		return true
+	}
+	if strings.HasPrefix(mediaType, "text/") {
+		return true
+	}
+	switch mediaType {
+	case "application/json", "application/ld+json", "application/javascript", "application/x-javascript", "application/ecmascript", "application/xhtml+xml":
+		return true
+	default:
+		return strings.HasSuffix(mediaType, "+json")
+	}
 }
 
 func (h *Hub) enrichAssetOnlineSources(sources []assetOnlineSource) []assetOnlineSource {
@@ -829,8 +1335,8 @@ func buildAssetOnlineSuggestions(asset *core.Record, sources []assetOnlineSource
 	if model := inferAssetModelFromOnlineSources(asset, sources); model != "" {
 		suggestions = append(suggestions, buildOnlineRecordSuggestion(asset, "model", "型号 / 规格", asset.GetString("model"), model, "联网来源和建档线索共同指向该型号。", sources, 72))
 	}
-	if supportURL := chooseAssetSupportURL(sources); supportURL != "" {
-		suggestions = append(suggestions, buildOnlineRecordSuggestion(asset, "metadata.support_url", "厂家官方支持页", recordMetadataString(asset, "support_url"), supportURL, "优先选择官网、支持、规格或说明书页面；写入前请确认页面确实对应这台资产。", sources, 82))
+	if reference := chooseAssetReferenceURLSuggestion(sources); reference.URL != "" {
+		suggestions = append(suggestions, buildOnlineRecordSuggestion(asset, "metadata."+reference.Field, reference.Label, recordMetadataString(asset, reference.Field), reference.URL, reference.Notes, sources, 82))
 	}
 	if imageURL := chooseAssetOfficialImageURL(sources); imageURL != "" {
 		suggestions = append(suggestions, buildOnlineRecordSuggestion(asset, "metadata.official_image_url", "官方图片", recordMetadataString(asset, "official_image_url"), imageURL, "优先选择官网或官方 CDN 暴露的设备图片，后续设备图片收集会优先使用该图片。", sources, 82))
@@ -1101,10 +1607,13 @@ func buildOnlineRecordSuggestion(asset *core.Record, field string, label string,
 		Conflict:         current != "",
 		Notes:            notes,
 		Metadata: map[string]any{
-			"field_scope":     metadataFieldScope(field),
-			"source_urls":     assetOnlineSourceURLs(sources),
-			"source_titles":   assetOnlineSourceTitles(sources),
-			"source_provider": assetOnlineSourceProviders(sources),
+			"field_scope":       metadataFieldScope(field),
+			"sources":           assetOnlineSourceMetadataRows(sources),
+			"source_urls":       assetOnlineSourceURLs(sources),
+			"source_titles":     assetOnlineSourceTitles(sources),
+			"source_types":      assetOnlineSourceTypes(sources),
+			"source_image_urls": assetOnlineSourceImageURLs(sources),
+			"source_provider":   assetOnlineSourceProviders(sources),
 		},
 	}
 }
@@ -1176,6 +1685,52 @@ func chooseAssetSupportURL(sources []assetOnlineSource) string {
 	return ""
 }
 
+type assetOnlineReferenceURLSuggestion struct {
+	Field string
+	Label string
+	URL   string
+	Notes string
+}
+
+func chooseAssetReferenceURLSuggestion(sources []assetOnlineSource) assetOnlineReferenceURLSuggestion {
+	for _, source := range sources {
+		if source.URL == "" || (source.Type != "official_support" && source.Type != "official_product") {
+			continue
+		}
+		field, label := assetReferenceFieldForProvider(source.Provider)
+		return assetOnlineReferenceURLSuggestion{
+			Field: field,
+			Label: label,
+			URL:   source.URL,
+			Notes: "优先选择官网、支持、规格、产品或说明书页面；写入前请确认页面确实对应这台资产。",
+		}
+	}
+	for _, source := range sources {
+		if source.URL == "" {
+			continue
+		}
+		field, label := assetReferenceFieldForProvider(source.Provider)
+		return assetOnlineReferenceURLSuggestion{
+			Field: field,
+			Label: label,
+			URL:   source.URL,
+			Notes: "该资料页可信度较低，只作为人工核对入口；写入前请确认页面确实对应这台资产。",
+		}
+	}
+	return assetOnlineReferenceURLSuggestion{}
+}
+
+func assetReferenceFieldForProvider(provider string) (string, string) {
+	switch strings.TrimSpace(provider) {
+	case "product_url":
+		return "product_url", "厂家官方产品页"
+	case "official_url":
+		return "official_url", "厂家官网资料页"
+	default:
+		return "support_url", "厂家官方支持页"
+	}
+}
+
 func chooseAssetOfficialImageURL(sources []assetOnlineSource) string {
 	for _, source := range sources {
 		if source.ImageURL != "" && assetOnlineSourceHasOfficialAuthority(source) && isLikelyImageURL(source.ImageURL) {
@@ -1245,7 +1800,29 @@ func assetOnlineSourceVariantConflicts(asset *core.Record, source assetOnlineSou
 	text := strings.ToLower(source.Title + " " + source.Snippet + " " + source.URL)
 	variants := []string{"ultra", "gaming", "game edition", "extreme", "pro", "至尊", "电竞", "冠军"}
 	for _, variant := range variants {
-		if strings.Contains(text, variant) && !strings.Contains(expected, variant) {
+		if assetOnlineTextHasVariant(text, variant) && !assetOnlineTextHasVariant(expected, variant) {
+			return true
+		}
+	}
+	return false
+}
+
+func assetOnlineTextHasVariant(text string, variant string) bool {
+	text = strings.ToLower(strings.TrimSpace(text))
+	variant = strings.ToLower(strings.TrimSpace(variant))
+	if text == "" || variant == "" {
+		return false
+	}
+	if hasChineseRune(variant) {
+		return strings.Contains(text, variant)
+	}
+	pattern := regexp.MustCompile(`(^|[^a-z0-9])` + regexp.QuoteMeta(variant) + `([^a-z0-9]|$)`)
+	return pattern.MatchString(text)
+}
+
+func hasChineseRune(value string) bool {
+	for _, r := range value {
+		if unicode.Is(unicode.Han, r) {
 			return true
 		}
 	}
@@ -1630,6 +2207,55 @@ func assetOnlineSourceTitles(sources []assetOnlineSource) []string {
 		}
 	}
 	return values
+}
+
+func assetOnlineSourceTypes(sources []assetOnlineSource) []string {
+	values := make([]string, 0, len(sources))
+	for _, source := range sources {
+		if source.Type != "" {
+			values = append(values, source.Type)
+		}
+	}
+	return values
+}
+
+func assetOnlineSourceImageURLs(sources []assetOnlineSource) []string {
+	values := make([]string, 0, len(sources))
+	for _, source := range sources {
+		if source.ImageURL != "" {
+			values = append(values, source.ImageURL)
+		}
+	}
+	return values
+}
+
+func assetOnlineSourceMetadataRows(sources []assetOnlineSource) []map[string]any {
+	rows := make([]map[string]any, 0, len(sources))
+	for _, source := range sources {
+		row := map[string]any{}
+		if value := strings.TrimSpace(source.Provider); value != "" {
+			row["provider"] = value
+		}
+		if value := strings.TrimSpace(source.Type); value != "" {
+			row["type"] = value
+		}
+		if value := strings.TrimSpace(source.Title); value != "" {
+			row["title"] = value
+		}
+		if value := strings.TrimSpace(source.URL); value != "" {
+			row["url"] = value
+		}
+		if value := strings.TrimSpace(source.ImageURL); value != "" {
+			row["image_url"] = value
+		}
+		if source.Confidence > 0 {
+			row["confidence"] = source.Confidence
+		}
+		if len(row) > 0 {
+			rows = append(rows, row)
+		}
+	}
+	return rows
 }
 
 func assetOnlineSourceProviders(sources []assetOnlineSource) []string {

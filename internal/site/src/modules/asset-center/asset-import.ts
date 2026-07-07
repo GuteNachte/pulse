@@ -378,7 +378,6 @@ const importMetadataAliases: Record<string, string[]> = {
 	port_count: ["port_count", "端口数量"],
 	default_port_speed_mbps: ["default_port_speed_mbps", "默认端口速率Mbps", "默认端口速率 Mbps"],
 	primary_nic_speed_mbps: ["primary_nic_speed_mbps", "主网卡速率Mbps", "主网卡速率 Mbps"],
-	os: ["os", "操作系统"],
 	purchase_date: ["purchase_date", "购买日期"],
 	online_date: ["online_date", "上线日期"],
 	warranty_until: ["warranty_until", "保修到期"],

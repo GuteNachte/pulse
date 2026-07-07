@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +23,8 @@ import (
 
 const defaultAssetTurntableFrameCount = 2
 const assetVisualImageModelMaxAttempts = 3
+const assetVisualReferenceImageMaxBytes = 2 * 1024 * 1024
+const assetVisualGeneratedImageMaxBytes = 4 * 1024 * 1024
 
 type assetTurntableVisualRequest struct {
 	Color      string `json:"color"`
@@ -34,6 +38,71 @@ type assetVisualAIConfig struct {
 	APIKey     string
 	Model      string
 	FrameCount int
+}
+
+type assetVisualReferenceSkip struct {
+	URL    string
+	Reason string
+}
+
+type assetVisualImageModelInputResult struct {
+	Inputs  []string
+	URLs    []string
+	Skipped []assetVisualReferenceSkip
+}
+
+type assetVisualGenerationResult struct {
+	Frames                      []map[string]any
+	SkippedReferences           []assetVisualReferenceSkip
+	ReferenceInputCount         int
+	ReferenceInputURLs          []string
+	ImageModelOutputDiagnostics assetVisualImageModelDiagnostics
+}
+
+type assetVisualImageModelDiagnostics struct {
+	Candidates int
+	Selected   int
+	Rejections []assetVisualImageModelOutputRejection
+}
+
+type assetVisualImageModelOutputRejection struct {
+	Source string
+	URL    string
+	Reason string
+}
+
+type assetVisualImageModelCallResult struct {
+	URL           string
+	RevisedPrompt string
+	Diagnostics   assetVisualImageModelDiagnostics
+}
+
+type assetVisualImageModelOutputProbeCache map[string]assetVisualImageModelOutputMaterializeResult
+
+type assetVisualImageModelOutputMaterializeResult struct {
+	URL    string
+	Reason string
+}
+
+type assetVisualReferenceInputError struct {
+	message string
+	skipped []assetVisualReferenceSkip
+}
+
+func (err *assetVisualReferenceInputError) Error() string {
+	return err.message
+}
+
+func (err *assetVisualReferenceInputError) SkipSummaries() []map[string]any {
+	return assetVisualReferenceSkipSummaries(err.skipped)
+}
+
+func newAssetVisualReferenceInputError(skipped []assetVisualReferenceSkip) *assetVisualReferenceInputError {
+	message := "没有可用于图片编辑的可读取参考图。"
+	if reason := summarizeAssetVisualReferenceSkipReasons(skipped); reason != "" {
+		message = "没有可用于图片编辑的可读取参考图：" + reason
+	}
+	return &assetVisualReferenceInputError{message: message, skipped: skipped}
 }
 
 func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
@@ -102,33 +171,47 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 		return e.InternalServerError("Failed to update asset visual.", err)
 	}
 
-	generatedFrames, generationErr := h.generateUnifiedAssetVisualFrames(config, asset, color, frames, prompt)
+	generationResult, generationErr := h.generateUnifiedAssetVisualFrames(config, asset, color, references, prompt)
 	if generationErr != nil {
 		message := generationErr.Error()
+		outputSummary := map[string]any{"collected_images": len(frames), "reason": "image_generation_failed"}
+		var referenceInputErr *assetVisualReferenceInputError
+		if errors.As(generationErr, &referenceInputErr) {
+			outputSummary["reason"] = "reference_images_unreadable"
+			outputSummary["reference_skip_reasons"] = referenceInputErr.SkipSummaries()
+		}
+		applyAssetVisualImageModelDiagnosticsToSummary(outputSummary, generationResult.ImageModelOutputDiagnostics)
 		task.Set("status", "failed")
 		task.Set("error", message)
-		task.Set("output_summary", map[string]any{"collected_images": len(frames), "reason": "image_generation_failed"})
+		task.Set("output_summary", outputSummary)
 		if err := h.Save(task); err != nil {
 			return e.InternalServerError("Failed to update AI task.", err)
 		}
 		return e.JSON(http.StatusOK, map[string]any{"task": task, "visual": referenceVisual, "status": "failed", "message": message})
 	}
 
-	visual, err := h.createGeneratedAssetVisualRecord(e.Auth.Id, asset, task.Id, color, generatedFrames, references, prompt)
+	visual, err := h.createGeneratedAssetVisualRecord(e.Auth.Id, asset, task.Id, color, generationResult.Frames, references, prompt)
 	if err != nil {
 		return e.InternalServerError("Failed to create generated asset visual.", err)
 	}
+	outputSummary := map[string]any{
+		"collected_images":      len(frames),
+		"generated_images":      len(generationResult.Frames),
+		"mode":                  "reference_image_unification",
+		"style":                 "unified_catalog_day_night",
+		"reference_input":       "data_uri",
+		"reference_input_count": generationResult.ReferenceInputCount,
+		"reference_input_urls":  generationResult.ReferenceInputURLs,
+		"selected_color":        color,
+		"reference_visual":      referenceVisual.Id,
+		"generated_visual":      visual.Id,
+	}
+	if len(generationResult.SkippedReferences) > 0 {
+		outputSummary["reference_skip_reasons"] = assetVisualReferenceSkipSummaries(generationResult.SkippedReferences)
+	}
+	applyAssetVisualImageModelDiagnosticsToSummary(outputSummary, generationResult.ImageModelOutputDiagnostics)
 	task.Set("status", "ready")
-	task.Set("output_summary", map[string]any{
-		"collected_images": len(frames),
-		"generated_images": len(generatedFrames),
-		"mode":             "reference_image_unification",
-		"style":            "unified_catalog_day_night",
-		"reference_input":  "data_uri_or_https_url",
-		"selected_color":   color,
-		"reference_visual": referenceVisual.Id,
-		"generated_visual": visual.Id,
-	})
+	task.Set("output_summary", outputSummary)
 	if err := h.Save(task); err != nil {
 		return e.InternalServerError("Failed to update AI task.", err)
 	}
@@ -273,7 +356,7 @@ func (h *Hub) createGeneratedAssetVisualRecord(userID string, asset *core.Record
 	record.Set("prompt", prompt)
 	record.Set("metadata", map[string]any{
 		"generation_status": "ready",
-		"reference_input":   "data_uri_or_https_url",
+		"reference_input":   "data_uri",
 		"visual_role":       "final_unified",
 		"style":             "统一背景、统一摆放、统一资产展示图",
 	})
@@ -289,7 +372,7 @@ func (h *Hub) createGeneratedAssetVisualRecord(userID string, asset *core.Record
 func (h *Hub) demotePreviousGeneratedAssetVisuals(userID string, assetID string, activeVisualID string) error {
 	records, err := h.FindRecordsByFilter(
 		"asset_visuals",
-		"user = {:user} && asset = {:asset} && kind = 'ai_turntable' && id != {:active}",
+		"user = {:user} && asset = {:asset} && kind = 'ai_turntable' && primary = true && id != {:active}",
 		"-created",
 		-1,
 		0,
@@ -320,8 +403,7 @@ func (h *Hub) demotePreviousGeneratedAssetVisuals(userID string, assetID string,
 }
 
 func (h *Hub) collectAssetVisualReferenceSources(asset *core.Record) []map[string]any {
-	online := h.collectAssetOnlineReferenceEnrichment(asset)
-	result := make([]map[string]any, 0, len(online.Sources))
+	result := make([]map[string]any, 0, defaultAssetTurntableFrameCount*6)
 	seen := map[string]bool{}
 	candidateLimit := defaultAssetTurntableFrameCount * 6
 	if officialImageURL := recordMetadataString(asset, "official_image_url"); isLikelyImageURL(officialImageURL) {
@@ -337,6 +419,10 @@ func (h *Hub) collectAssetVisualReferenceSources(asset *core.Record) []map[strin
 	if len(result) < candidateLimit {
 		result = h.collectAssetVisualPageImageSources(asset, result, seen, candidateLimit)
 	}
+	if len(result) >= candidateLimit {
+		return result
+	}
+	online := h.collectAssetOnlineReferenceEnrichment(asset)
 	for _, source := range online.Sources {
 		if source.URL == "" {
 			continue
@@ -379,17 +465,12 @@ func appendAssetVisualReferenceSource(result []map[string]any, seen map[string]b
 }
 
 func (h *Hub) collectAssetVisualPageImageSources(asset *core.Record, result []map[string]any, seen map[string]bool, limit int) []map[string]any {
-	pageURLs := dedupeStrings(nonEmptyStrings(
-		recordMetadataString(asset, "support_url"),
-		recordMetadataString(asset, "product_url"),
-		recordMetadataString(asset, "official_url"),
-	))
-	pageURLs = dedupeStrings(append(pageURLs, assetVisualRelatedProductPageURLs(pageURLs)...))
-	for _, rawURL := range pageURLs {
+	pageInputs := assetVisualReferencePageInputs(asset)
+	for _, page := range pageInputs {
 		if len(result) >= limit {
 			break
 		}
-		parsed, err := url.Parse(strings.TrimSpace(rawURL))
+		parsed, err := url.Parse(strings.TrimSpace(page.URL))
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 			continue
 		}
@@ -398,7 +479,11 @@ func (h *Hub) collectAssetVisualPageImageSources(asset *core.Record, result []ma
 			continue
 		}
 		title := firstNonEmpty(extractHTMLTitle(body), parsed.Host)
-		result = h.collectAssetVisualBundleImageSources(parsed, body, result, seen, limit)
+		sourceType := assetVisualReferencePageSourceType(parsed, title, body)
+		if !assetOnlineSourceHasOfficialAuthority(assetOnlineSource{Type: sourceType}) {
+			continue
+		}
+		result = h.collectAssetVisualBundleImageSources(parsed, body, page.Provider, result, seen, limit)
 		if len(result) >= limit {
 			break
 		}
@@ -411,7 +496,7 @@ func (h *Hub) collectAssetVisualPageImageSources(asset *core.Record, result []ma
 				"url":        parsed.String(),
 				"image_url":  candidate.URL,
 				"type":       "official_page_image",
-				"provider":   "support_url",
+				"provider":   page.Provider,
 				"confidence": 90,
 			})
 			if len(result) >= limit {
@@ -422,6 +507,53 @@ func (h *Hub) collectAssetVisualPageImageSources(asset *core.Record, result []ma
 	return result
 }
 
+func assetVisualReferencePageSourceType(parsed *url.URL, title string, body string) string {
+	signals := cleanOnlineText(strings.Join(nonEmptyStrings(
+		title,
+		extractMetaDescription(body),
+		extractAssetOnlinePageText(body),
+	), " "))
+	if len([]rune(signals)) > 5000 {
+		signals = string([]rune(signals)[:5000])
+	}
+	return classifyManualAssetSupportURL(parsed, signals)
+}
+
+type assetVisualReferencePageInput struct {
+	Provider string
+	URL      string
+}
+
+func assetVisualReferencePageInputs(asset *core.Record) []assetVisualReferencePageInput {
+	result := make([]assetVisualReferencePageInput, 0, 6)
+	seen := map[string]bool{}
+	for _, input := range []assetVisualReferencePageInput{
+		{Provider: "support_url", URL: recordMetadataString(asset, "support_url")},
+		{Provider: "product_url", URL: recordMetadataString(asset, "product_url")},
+		{Provider: "official_url", URL: recordMetadataString(asset, "official_url")},
+	} {
+		if related, ok := assetVisualRelatedProductPageInput(input); ok {
+			result = appendAssetVisualReferencePageInput(result, seen, related.Provider, related.URL)
+		}
+		result = appendAssetVisualReferencePageInput(result, seen, input.Provider, input.URL)
+	}
+	return result
+}
+
+func appendAssetVisualReferencePageInput(result []assetVisualReferencePageInput, seen map[string]bool, provider string, rawURL string) []assetVisualReferencePageInput {
+	provider = strings.TrimSpace(provider)
+	rawURL = strings.TrimSpace(rawURL)
+	if provider == "" || rawURL == "" {
+		return result
+	}
+	key := strings.ToLower(rawURL)
+	if seen[key] {
+		return result
+	}
+	seen[key] = true
+	return append(result, assetVisualReferencePageInput{Provider: provider, URL: rawURL})
+}
+
 type assetVisualHTMLImageCandidate struct {
 	URL     string
 	Context string
@@ -429,7 +561,7 @@ type assetVisualHTMLImageCandidate struct {
 	Height  int
 }
 
-func (h *Hub) collectAssetVisualBundleImageSources(pageURL *url.URL, body string, result []map[string]any, seen map[string]bool, limit int) []map[string]any {
+func (h *Hub) collectAssetVisualBundleImageSources(pageURL *url.URL, body string, provider string, result []map[string]any, seen map[string]bool, limit int) []map[string]any {
 	for _, scriptURL := range extractAssetVisualProductScriptURLs(pageURL, body) {
 		if len(result) >= limit {
 			break
@@ -444,7 +576,7 @@ func (h *Hub) collectAssetVisualBundleImageSources(pageURL *url.URL, body string
 				"url":        scriptURL,
 				"image_url":  imageURL,
 				"type":       "official_product_bundle_image",
-				"provider":   "support_url",
+				"provider":   provider,
 				"confidence": 94,
 			})
 			if len(result) >= limit {
@@ -455,23 +587,19 @@ func (h *Hub) collectAssetVisualBundleImageSources(pageURL *url.URL, body string
 	return result
 }
 
-func assetVisualRelatedProductPageURLs(pageURLs []string) []string {
-	result := make([]string, 0, len(pageURLs))
-	for _, rawURL := range pageURLs {
-		parsed, err := url.Parse(strings.TrimSpace(rawURL))
-		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-			continue
-		}
-		path := strings.TrimRight(parsed.Path, "/")
-		if !strings.HasSuffix(path, "/specs") {
-			continue
-		}
-		parsed.Path = strings.TrimSuffix(path, "/specs")
-		parsed.RawQuery = ""
-		parsed.Fragment = ""
-		result = append(result, parsed.String())
+func assetVisualRelatedProductPageInput(page assetVisualReferencePageInput) (assetVisualReferencePageInput, bool) {
+	parsed, err := url.Parse(strings.TrimSpace(page.URL))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return assetVisualReferencePageInput{}, false
 	}
-	return result
+	path := strings.TrimRight(parsed.Path, "/")
+	if !strings.HasSuffix(path, "/specs") {
+		return assetVisualReferencePageInput{}, false
+	}
+	parsed.Path = strings.TrimSuffix(path, "/specs")
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return assetVisualReferencePageInput{Provider: page.Provider, URL: parsed.String()}, true
 }
 
 func extractAssetVisualProductScriptURLs(base *url.URL, body string) []string {
@@ -564,7 +692,22 @@ func isLikelyAssetProductBundleImageName(fileName string) bool {
 		"antenna",
 		"icon",
 		"add",
+		"banner",
 		"banner-title",
+		"hero",
+		"kv",
+		"marketing",
+		"poster",
+		"promo",
+		"sample",
+		"spec-color",
+		"color-spec",
+		"colour-spec",
+		"color-overview",
+		"colors-overview",
+		"colour-overview",
+		"overview-color",
+		"overview-colors",
 		"sw1-",
 		"sw3-",
 	}
@@ -573,7 +716,7 @@ func isLikelyAssetProductBundleImageName(fileName string) bool {
 			return false
 		}
 	}
-	preferred := []string{"sw2-", "color", "product", "phone", "appearance", "overview", "front", "back", "side", "gallery", "main", "spec-color"}
+	preferred := []string{"sw2-", "product", "phone", "appearance", "front", "back", "side", "gallery", "main"}
 	for _, marker := range preferred {
 		if strings.Contains(lower, marker) {
 			return true
@@ -931,23 +1074,19 @@ func assetColorInOptions(color string, options []string) bool {
 	return false
 }
 
-func (h *Hub) generateUnifiedAssetVisualFrames(config assetVisualAIConfig, asset *core.Record, color string, referenceFrames []map[string]any, basePrompt string) ([]map[string]any, error) {
-	referenceURLs := make([]string, 0, len(referenceFrames))
-	for _, frame := range referenceFrames {
-		if url := stringFromAny(frame["url"]); url != "" {
-			referenceURLs = append(referenceURLs, url)
-		}
-	}
-	referenceURLs = dedupeStrings(referenceURLs)
+func (h *Hub) generateUnifiedAssetVisualFrames(config assetVisualAIConfig, asset *core.Record, color string, referenceSources []map[string]any, basePrompt string) (assetVisualGenerationResult, error) {
+	referenceURLs := assetVisualModelReferenceURLs(referenceSources)
 	if len(referenceURLs) == 0 {
-		return nil, fmt.Errorf("没有可用于图片编辑的参考图。")
+		return assetVisualGenerationResult{}, fmt.Errorf("没有可用于图片编辑的参考图。")
 	}
-	if len(referenceURLs) > 4 {
-		referenceURLs = referenceURLs[:4]
+	referenceInputResult := h.buildAssetVisualImageModelInputs(referenceURLs)
+	if len(referenceInputResult.Inputs) == 0 {
+		return assetVisualGenerationResult{}, newAssetVisualReferenceInputError(referenceInputResult.Skipped)
 	}
-	referenceInputs := h.buildAssetVisualImageModelInputs(referenceURLs)
-	if len(referenceInputs) == 0 {
-		return nil, fmt.Errorf("没有可用于图片编辑的可读取参考图。")
+	result := assetVisualGenerationResult{
+		SkippedReferences:   referenceInputResult.Skipped,
+		ReferenceInputCount: len(referenceInputResult.Inputs),
+		ReferenceInputURLs:  referenceInputResult.URLs,
 	}
 
 	themes := []struct {
@@ -959,42 +1098,207 @@ func (h *Hub) generateUnifiedAssetVisualFrames(config assetVisualAIConfig, asset
 		{id: "night", label: "夜晚", prompt: "Generate the night version with a dark immersive neutral catalog background. Keep the device centered, large, fully visible, clearly lit, and in the selected official color. Do not change the device model."},
 	}
 	frames := make([]map[string]any, 0, len(themes))
+	outputProbeCache := assetVisualImageModelOutputProbeCache{}
 	for index, theme := range themes {
-		imageURL, revisedPrompt, err := h.callAssetVisualImageModel(config, basePrompt+"\n"+theme.prompt, referenceInputs)
+		modelResult, err := h.callAssetVisualImageModel(config, basePrompt+"\n"+theme.prompt, referenceInputResult.Inputs, outputProbeCache)
+		result.ImageModelOutputDiagnostics = mergeAssetVisualImageModelDiagnostics(result.ImageModelOutputDiagnostics, modelResult.Diagnostics)
 		if err != nil {
-			return nil, err
+			result.Frames = frames
+			return result, err
 		}
 		frames = append(frames, map[string]any{
 			"index":          index,
 			"view":           "unified",
 			"theme":          theme.id,
 			"label":          theme.label,
-			"url":            imageURL,
+			"url":            modelResult.URL,
 			"source_title":   "设备图片 Agent 统一化输出",
 			"source_url":     "",
-			"revised_prompt": revisedPrompt,
-			"reference_urls": referenceURLs,
+			"revised_prompt": modelResult.RevisedPrompt,
+			"reference_urls": referenceInputResult.URLs,
 			"color":          color,
 		})
 	}
-	return frames, nil
+	result.Frames = frames
+	return result, nil
 }
 
-func (h *Hub) buildAssetVisualImageModelInputs(referenceURLs []string) []string {
-	result := make([]string, 0, len(referenceURLs))
-	for _, rawURL := range referenceURLs {
-		if len(result) >= 4 {
-			break
-		}
-		if dataURI, err := h.fetchAssetVisualReferenceDataURI(rawURL); err == nil && dataURI != "" {
-			result = append(result, dataURI)
+func assetVisualReferenceImageURL(source map[string]any) string {
+	return firstNonEmpty(stringFromAny(source["image_url"]), stringFromAny(source["url"]))
+}
+
+func assetVisualModelReferenceURLs(sources []map[string]any) []string {
+	candidates := make([]map[string]any, 0, len(sources))
+	for _, source := range sources {
+		imageURL := assetVisualReferenceImageURL(source)
+		if imageURL == "" || assetVisualReferenceLooksLikeNonDeviceImage(source) {
 			continue
 		}
-		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(rawURL)), "https://") {
-			result = append(result, rawURL)
+		candidates = append(candidates, map[string]any{
+			"url":          imageURL,
+			"source_title": source["title"],
+			"image_url":    imageURL,
+			"type":         source["type"],
+			"provider":     source["provider"],
+			"visual_score": scoreAssetVisualDisplayCandidate(source),
+		})
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return intFromAny(candidates[i]["visual_score"]) > intFromAny(candidates[j]["visual_score"])
+	})
+	urls := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		urls = append(urls, stringFromAny(candidate["url"]))
+	}
+	return dedupeStrings(urls)
+}
+
+func assetVisualReferenceLooksLikeNonDeviceImage(source map[string]any) bool {
+	text := strings.ToLower(strings.Join(nonEmptyStrings(
+		stringFromAny(source["image_url"]),
+		stringFromAny(source["url"]),
+		stringFromAny(source["title"]),
+		stringFromAny(source["type"]),
+	), " "))
+	for _, marker := range []string{"spec-color", "color-spec", "colour-spec"} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	for _, marker := range []string{
+		"banner",
+		"hero",
+		"/kv",
+		"-kv",
+		"_kv",
+		"marketing",
+		"poster",
+		"promo",
+		"sample",
+		"样张",
+		"color-overview",
+		"colors-overview",
+		"colour-overview",
+		"overview-color",
+		"overview-colors",
+	} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *Hub) buildAssetVisualImageModelInputs(referenceURLs []string) assetVisualImageModelInputResult {
+	result := assetVisualImageModelInputResult{
+		Inputs:  make([]string, 0, len(referenceURLs)),
+		URLs:    make([]string, 0, len(referenceURLs)),
+		Skipped: []assetVisualReferenceSkip{},
+	}
+	for _, rawURL := range referenceURLs {
+		if len(result.Inputs) >= 4 {
+			break
+		}
+		dataURI, err := h.fetchAssetVisualReferenceDataURI(rawURL)
+		if err != nil {
+			result.Skipped = append(result.Skipped, assetVisualReferenceSkip{
+				URL:    rawURL,
+				Reason: strings.TrimSpace(err.Error()),
+			})
+			continue
+		}
+		if dataURI != "" {
+			result.Inputs = append(result.Inputs, dataURI)
+			result.URLs = append(result.URLs, rawURL)
 		}
 	}
 	return result
+}
+
+func summarizeAssetVisualReferenceSkipReasons(skipped []assetVisualReferenceSkip) string {
+	reasons := make([]string, 0, len(skipped))
+	seen := map[string]bool{}
+	for _, item := range skipped {
+		reason := strings.TrimSpace(item.Reason)
+		if reason == "" || seen[reason] {
+			continue
+		}
+		seen[reason] = true
+		reasons = append(reasons, reason)
+		if len(reasons) >= 3 {
+			break
+		}
+	}
+	return strings.Join(reasons, "；")
+}
+
+func assetVisualReferenceSkipSummaries(skipped []assetVisualReferenceSkip) []map[string]any {
+	result := make([]map[string]any, 0, len(skipped))
+	for _, item := range skipped {
+		reason := strings.TrimSpace(item.Reason)
+		if reason == "" {
+			continue
+		}
+		result = append(result, map[string]any{
+			"url":    strings.TrimSpace(item.URL),
+			"reason": reason,
+		})
+	}
+	return result
+}
+
+func mergeAssetVisualImageModelDiagnostics(left assetVisualImageModelDiagnostics, right assetVisualImageModelDiagnostics) assetVisualImageModelDiagnostics {
+	left.Candidates += right.Candidates
+	left.Selected += right.Selected
+	if len(right.Rejections) > 0 {
+		left.Rejections = append(left.Rejections, right.Rejections...)
+	}
+	return left
+}
+
+func applyAssetVisualImageModelDiagnosticsToSummary(summary map[string]any, diagnostics assetVisualImageModelDiagnostics) {
+	if diagnostics.Candidates <= 0 && diagnostics.Selected <= 0 && len(diagnostics.Rejections) == 0 {
+		return
+	}
+	summary["image_model_output_candidates"] = diagnostics.Candidates
+	summary["image_model_output_selected"] = diagnostics.Selected
+	summary["image_model_output_rejected"] = len(diagnostics.Rejections)
+	if len(diagnostics.Rejections) > 0 {
+		summary["image_model_output_rejections"] = assetVisualImageModelOutputRejectionSummaries(diagnostics.Rejections)
+	}
+}
+
+func assetVisualImageModelOutputRejectionSummaries(rejections []assetVisualImageModelOutputRejection) []map[string]any {
+	result := make([]map[string]any, 0, len(rejections))
+	for _, item := range rejections {
+		reason := strings.TrimSpace(item.Reason)
+		if reason == "" {
+			continue
+		}
+		result = append(result, map[string]any{
+			"source": strings.TrimSpace(item.Source),
+			"url":    summarizeAssetVisualImageModelOutputURL(item.URL),
+			"reason": reason,
+		})
+	}
+	return result
+}
+
+func summarizeAssetVisualImageModelOutputURL(rawURL string) string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return ""
+	}
+	if strings.HasPrefix(strings.ToLower(rawURL), "data:") {
+		return "data-uri"
+	}
+	if len(rawURL) > 240 {
+		return rawURL[:240] + "..."
+	}
+	return rawURL
 }
 
 func (h *Hub) fetchAssetVisualReferenceDataURI(rawURL string) (string, error) {
@@ -1017,21 +1321,25 @@ func (h *Hub) fetchAssetVisualReferenceDataURI(rawURL string) (string, error) {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", fmt.Errorf("参考图下载失败：%s", strconvItoa(resp.StatusCode))
 	}
-	rawBody, err := io.ReadAll(io.LimitReader(resp.Body, 6*1024*1024+1))
+	if resp.ContentLength > assetVisualReferenceImageMaxBytes {
+		return "", fmt.Errorf("参考图大小超过模型输入上限。")
+	}
+	rawBody, err := io.ReadAll(io.LimitReader(resp.Body, assetVisualReferenceImageMaxBytes+1))
 	if err != nil {
 		return "", err
 	}
-	if len(rawBody) == 0 || len(rawBody) > 6*1024*1024 {
+	if len(rawBody) == 0 || len(rawBody) > assetVisualReferenceImageMaxBytes {
 		return "", fmt.Errorf("参考图大小不符合要求。")
 	}
-	mimeType := normalizeAssetVisualImageMimeType(firstNonEmpty(resp.Header.Get("Content-Type"), http.DetectContentType(rawBody)))
-	if mimeType == "" {
-		mimeType = assetVisualMimeTypeFromURL(rawURL)
-	}
+	mimeType := assetVisualReferenceImageMimeType(rawBody)
 	if mimeType == "" {
 		return "", fmt.Errorf("参考图不是可用图片。")
 	}
 	return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(rawBody), nil
+}
+
+func assetVisualReferenceImageMimeType(rawBody []byte) string {
+	return assetVisualImageMimeTypeFromBytes(rawBody)
 }
 
 func normalizeAssetVisualImageMimeType(value string) string {
@@ -1063,7 +1371,7 @@ func assetVisualMimeTypeFromURL(rawURL string) string {
 	}
 }
 
-func (h *Hub) callAssetVisualImageModel(config assetVisualAIConfig, prompt string, referenceInputs []string) (string, string, error) {
+func (h *Hub) callAssetVisualImageModel(config assetVisualAIConfig, prompt string, referenceInputs []string, outputProbeCache assetVisualImageModelOutputProbeCache) (assetVisualImageModelCallResult, error) {
 	payload := map[string]any{
 		"model":  config.Model,
 		"prompt": prompt,
@@ -1076,14 +1384,14 @@ func (h *Hub) callAssetVisualImageModel(config assetVisualAIConfig, prompt strin
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return "", "", fmt.Errorf("图片模型请求编码失败。")
+		return assetVisualImageModelCallResult{}, fmt.Errorf("图片模型请求编码失败。")
 	}
 	client := &http.Client{Timeout: 120 * time.Second}
 	var lastErr error
 	for attempt := 1; attempt <= assetVisualImageModelMaxAttempts; attempt++ {
 		req, err := http.NewRequest(http.MethodPost, config.Endpoint, bytes.NewReader(body))
 		if err != nil {
-			return "", "", fmt.Errorf("图片模型请求创建失败。")
+			return assetVisualImageModelCallResult{}, fmt.Errorf("图片模型请求创建失败。")
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json")
@@ -1095,7 +1403,7 @@ func (h *Hub) callAssetVisualImageModel(config assetVisualAIConfig, prompt strin
 				time.Sleep(assetVisualRetryDelay(attempt, ""))
 				continue
 			}
-			return "", "", lastErr
+			return assetVisualImageModelCallResult{}, lastErr
 		}
 		rawBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
 		_ = resp.Body.Close()
@@ -1105,7 +1413,7 @@ func (h *Hub) callAssetVisualImageModel(config assetVisualAIConfig, prompt strin
 				time.Sleep(assetVisualRetryDelay(attempt, ""))
 				continue
 			}
-			return "", "", lastErr
+			return assetVisualImageModelCallResult{}, lastErr
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			lastErr = fmt.Errorf("图片模型返回非成功状态：%s%s", strconvItoa(resp.StatusCode), formatRemoteErrorBody(rawBody))
@@ -1113,18 +1421,33 @@ func (h *Hub) callAssetVisualImageModel(config assetVisualAIConfig, prompt strin
 				time.Sleep(assetVisualRetryDelay(attempt, resp.Header.Get("Retry-After")))
 				continue
 			}
-			return "", "", lastErr
+			return assetVisualImageModelCallResult{}, lastErr
 		}
-		imageURL, revisedPrompt := extractAssetVisualImageModelOutput(rawBody)
-		if imageURL == "" {
-			return "", "", fmt.Errorf("图片模型没有返回可显示图片。")
+		diagnostics := assetVisualImageModelDiagnostics{}
+		for _, output := range extractAssetVisualImageModelOutputs(rawBody) {
+			diagnostics.Candidates++
+			stableURL, reason := h.materializeAssetVisualImageModelOutput(output, outputProbeCache)
+			if reason != "" {
+				diagnostics.Rejections = append(diagnostics.Rejections, assetVisualImageModelOutputRejection{
+					Source: output.Source,
+					URL:    output.URL,
+					Reason: reason,
+				})
+				continue
+			}
+			diagnostics.Selected++
+			return assetVisualImageModelCallResult{
+				URL:           stableURL,
+				RevisedPrompt: output.RevisedPrompt,
+				Diagnostics:   diagnostics,
+			}, nil
 		}
-		return imageURL, revisedPrompt, nil
+		return assetVisualImageModelCallResult{Diagnostics: diagnostics}, fmt.Errorf("图片模型没有返回可显示图片。")
 	}
 	if lastErr != nil {
-		return "", "", lastErr
+		return assetVisualImageModelCallResult{}, lastErr
 	}
-	return "", "", fmt.Errorf("图片模型请求失败。")
+	return assetVisualImageModelCallResult{}, fmt.Errorf("图片模型请求失败。")
 }
 
 func isTransientAssetVisualImageModelStatus(status int) bool {
@@ -1145,7 +1468,14 @@ func assetVisualRetryDelay(attempt int, retryAfter string) time.Duration {
 	return 300 * time.Millisecond
 }
 
-func extractAssetVisualImageModelOutput(rawBody []byte) (string, string) {
+type assetVisualImageModelOutput struct {
+	URL           string
+	RevisedPrompt string
+	Source        string
+	RejectReason  string
+}
+
+func extractAssetVisualImageModelOutputs(rawBody []byte) []assetVisualImageModelOutput {
 	var response struct {
 		Data []struct {
 			URL           string `json:"url"`
@@ -1154,16 +1484,174 @@ func extractAssetVisualImageModelOutput(rawBody []byte) (string, string) {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(rawBody, &response); err != nil || len(response.Data) == 0 {
-		return "", ""
+		return nil
 	}
-	item := response.Data[0]
-	if strings.TrimSpace(item.URL) != "" {
-		return strings.TrimSpace(item.URL), strings.TrimSpace(item.RevisedPrompt)
+	outputs := make([]assetVisualImageModelOutput, 0, len(response.Data))
+	for _, item := range response.Data {
+		revisedPrompt := strings.TrimSpace(item.RevisedPrompt)
+		if strings.TrimSpace(item.URL) != "" {
+			outputs = append(outputs, assetVisualImageModelOutput{
+				URL:           strings.TrimSpace(item.URL),
+				RevisedPrompt: revisedPrompt,
+				Source:        "url",
+			})
+			continue
+		}
+		if strings.TrimSpace(item.B64JSON) != "" {
+			dataURI, rejectReason := assetVisualImageModelDataURIFromBase64WithReason(item.B64JSON)
+			outputs = append(outputs, assetVisualImageModelOutput{
+				URL:           dataURI,
+				RevisedPrompt: revisedPrompt,
+				Source:        "b64_json",
+				RejectReason:  rejectReason,
+			})
+			continue
+		}
+		outputs = append(outputs, assetVisualImageModelOutput{
+			RevisedPrompt: revisedPrompt,
+			Source:        "empty",
+			RejectReason:  "模型候选为空。",
+		})
 	}
-	if strings.TrimSpace(item.B64JSON) != "" {
-		return "data:image/png;base64," + strings.TrimSpace(item.B64JSON), strings.TrimSpace(item.RevisedPrompt)
+	return outputs
+}
+
+func assetVisualImageModelDataURIFromBase64(value string) string {
+	dataURI, _ := assetVisualImageModelDataURIFromBase64WithReason(value)
+	return dataURI
+}
+
+func assetVisualImageModelDataURIFromBase64WithReason(value string) (string, string) {
+	payload := strings.TrimSpace(value)
+	if payload == "" {
+		return "", "模型返回的 Base64 为空。"
 	}
-	return "", ""
+	decoded, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil || len(decoded) == 0 {
+		return "", "模型返回的 Base64 不是可识别图片。"
+	}
+	mimeType := assetVisualImageMimeTypeFromBytes(decoded)
+	if mimeType == "" {
+		return "", "模型返回的 Base64 不是可识别图片。"
+	}
+	return "data:" + mimeType + ";base64," + payload, ""
+}
+
+func (h *Hub) materializeAssetVisualImageModelOutput(output assetVisualImageModelOutput, outputProbeCache assetVisualImageModelOutputProbeCache) (string, string) {
+	if strings.TrimSpace(output.RejectReason) != "" {
+		return "", strings.TrimSpace(output.RejectReason)
+	}
+	return h.materializeAssetVisualGeneratedImageOutput(output.URL, outputProbeCache)
+}
+
+func (h *Hub) materializeAssetVisualGeneratedImageOutput(rawURL string, outputProbeCache assetVisualImageModelOutputProbeCache) (string, string) {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return "", "模型候选为空。"
+	}
+	if assetVisualGeneratedImageDataURIIsUsable(rawURL) {
+		return rawURL, ""
+	}
+	if strings.HasPrefix(strings.ToLower(rawURL), "data:") {
+		return "", "模型返回的 Data URI 不是可识别图片。"
+	}
+	if outputProbeCache != nil {
+		if cached, ok := outputProbeCache[rawURL]; ok {
+			return cached.URL, cached.Reason
+		}
+	}
+	stableURL, reason := h.fetchAssetVisualGeneratedImageDataURI(rawURL)
+	if outputProbeCache != nil {
+		outputProbeCache[rawURL] = assetVisualImageModelOutputMaterializeResult{
+			URL:    stableURL,
+			Reason: reason,
+		}
+	}
+	return stableURL, reason
+}
+
+func assetVisualGeneratedImageDataURIIsUsable(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	commaIndex := strings.Index(trimmed, ",")
+	if commaIndex <= 0 {
+		return false
+	}
+	header := strings.ToLower(strings.TrimSpace(trimmed[:commaIndex]))
+	if !strings.HasPrefix(header, "data:") || !strings.Contains(header, ";base64") {
+		return false
+	}
+	mimeType := strings.TrimPrefix(strings.Split(header, ";")[0], "data:")
+	if normalizeAssetVisualImageMimeType(mimeType) == "" {
+		return false
+	}
+	payload := strings.TrimSpace(trimmed[commaIndex+1:])
+	if payload == "" {
+		return false
+	}
+	decoded, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil || len(decoded) == 0 {
+		return false
+	}
+	return assetVisualImageMimeTypeFromBytes(decoded) != ""
+}
+
+func (h *Hub) fetchAssetVisualGeneratedImageDataURI(rawURL string) (string, string) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed.Host == "" {
+		return "", "模型返回的 URL 不是可验证图片。"
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", "模型返回的 URL 不是可验证图片。"
+	}
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		return "", "模型返回的 URL 不是可验证图片。"
+	}
+	req.Header.Set("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*;q=0.8")
+	req.Header.Set("User-Agent", "PulseAssetVisualAgent/1.0")
+	client := &http.Client{Timeout: 20 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "模型返回的 URL 不是可验证图片。"
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", "模型返回的 URL 不是可验证图片。"
+	}
+	if resp.ContentLength > assetVisualGeneratedImageMaxBytes {
+		return "", "模型返回的图片超过保存上限。"
+	}
+	rawBody, err := io.ReadAll(io.LimitReader(resp.Body, assetVisualGeneratedImageMaxBytes+1))
+	if err != nil || len(rawBody) == 0 {
+		return "", "模型返回的 URL 不是可验证图片。"
+	}
+	if len(rawBody) > assetVisualGeneratedImageMaxBytes {
+		return "", "模型返回的图片超过保存上限。"
+	}
+	mimeType := assetVisualImageMimeTypeFromBytes(rawBody)
+	if mimeType == "" {
+		return "", "模型返回的 URL 不是可验证图片。"
+	}
+	return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(rawBody), ""
+}
+
+func assetVisualImageMimeTypeFromBytes(rawBody []byte) string {
+	if len(rawBody) == 0 {
+		return ""
+	}
+	if detectedMime := normalizeAssetVisualImageMimeType(http.DetectContentType(rawBody)); detectedMime != "" {
+		return detectedMime
+	}
+	if len(rawBody) >= 12 && string(rawBody[0:4]) == "RIFF" && string(rawBody[8:12]) == "WEBP" {
+		return "image/webp"
+	}
+	if len(rawBody) >= 12 && string(rawBody[4:8]) == "ftyp" {
+		brand := string(rawBody[8:12])
+		if brand == "avif" || brand == "avis" {
+			return "image/avif"
+		}
+	}
+	return ""
 }
 
 func buildCollectedAssetVisualFrames(references []map[string]any, limit int) []map[string]any {
@@ -1299,12 +1787,12 @@ func scoreAssetVisualDisplayCandidate(source map[string]any) int {
 			score += 20
 		}
 	}
-	for _, marker := range []string{"spec-color", "specs", "overview", "参数", "规格"} {
+	for _, marker := range []string{"spec-color", "color-overview", "colors-overview", "specs", "overview", "参数", "规格"} {
 		if strings.Contains(text, marker) {
 			score -= 18
 		}
 	}
-	for _, marker := range []string{"logo", "screen", "cpu", "chip", "soc", "battery", "charge", "camera", "sample", "样张"} {
+	for _, marker := range []string{"logo", "screen", "cpu", "chip", "soc", "battery", "charge", "camera", "sample", "样张", "banner", "hero", "marketing", "poster", "promo"} {
 		if strings.Contains(text, marker) {
 			score -= 30
 		}

@@ -147,6 +147,22 @@ const hardwareIdentityFields: AssetFieldDefinition[] = [
 		placeholder: "该型号支持 / 下载 / 保修页面 URL，不填厂家首页",
 		capture: "manual",
 	},
+	{
+		key: "product_url",
+		label: "厂家官方产品页",
+		source: "metadata",
+		type: "url",
+		placeholder: "该型号官网产品 / 规格页面 URL",
+		capture: "manual",
+	},
+	{
+		key: "official_url",
+		label: "厂家官网资料页",
+		source: "metadata",
+		type: "url",
+		placeholder: "官网资料、说明书或品牌资料页面 URL",
+		capture: "manual",
+	},
 	{ key: "asset_tag", label: "资产编号", source: "metadata", placeholder: "自定义编号，可选" },
 ]
 
@@ -199,13 +215,6 @@ const agentConnectionFields: AssetFieldDefinition[] = [
 ]
 
 const hostSpecFields: AssetFieldDefinition[] = [
-	{
-		key: "os",
-		label: "操作系统",
-		source: "metadata",
-		placeholder: "Agent 接入后可采集，也可先手动填写",
-		capture: "agent_collectable",
-	},
 	{
 		key: "cpu_model",
 		label: "CPU 型号",
@@ -286,24 +295,10 @@ const hostHardwareDetailFields: AssetFieldDefinition[] = [
 		capture: "future_collectable",
 	},
 	{
-		key: "bios_version",
-		label: "BIOS / 固件版本",
-		source: "metadata",
-		placeholder: "后续专项 Agent 可识别",
-		capture: "future_collectable",
-	},
-	{
 		key: "bios_vendor",
 		label: "BIOS 厂商",
 		source: "metadata",
 		placeholder: "例如 American Megatrends / Phoenix",
-		capture: "future_collectable",
-	},
-	{
-		key: "bios_release_date",
-		label: "BIOS 日期",
-		source: "metadata",
-		type: "date",
 		capture: "future_collectable",
 	},
 	{
@@ -577,7 +572,6 @@ const networkDeviceFields: AssetFieldDefinition[] = [
 		type: "number",
 		placeholder: "2500",
 	},
-	{ key: "firmware_version", label: "固件版本", source: "metadata", placeholder: "可选" },
 	{ key: "power_mode", label: "供电方式", source: "metadata", placeholder: "AC / PoE / USB-C" },
 	{ key: "wifi_standard", label: "无线标准", source: "metadata", placeholder: "Wi-Fi 6 / Wi-Fi 7" },
 	{ key: "ssid_note", label: "SSID 备注", source: "metadata", placeholder: "主 Wi-Fi / IoT Wi-Fi", span: "full" },
@@ -602,7 +596,6 @@ const vmFields: AssetFieldDefinition[] = [
 	{ key: "vcpu", label: "vCPU", source: "metadata", type: "number", placeholder: "4" },
 	{ key: "memory_gb", label: "内存 GB", source: "metadata", type: "number", placeholder: "8" },
 	{ key: "disk_gb", label: "磁盘 GB", source: "metadata", type: "number", placeholder: "128" },
-	{ key: "os", label: "操作系统", source: "metadata", placeholder: "Ubuntu / Windows Server" },
 	{
 		key: "planned_agent",
 		label: "计划接入 Agent",
@@ -626,7 +619,6 @@ const endpointFields: AssetFieldDefinition[] = [
 ]
 
 const personalDeviceFields: AssetFieldDefinition[] = [
-	{ key: "device_os", label: "系统 / 固件", source: "metadata", placeholder: "iOS / Android / SteamOS / Kindle OS" },
 	{ key: "cpu_model", label: "芯片 / SoC", source: "metadata", placeholder: "Snapdragon / Dimensity / Apple A 系列" },
 	{ key: "cpu_vendor", label: "芯片厂商", source: "metadata", placeholder: "MediaTek / Qualcomm / Apple" },
 	{ key: "cpu_process", label: "制程 / 架构", source: "metadata", placeholder: "5nm / 4nm / big.LITTLE" },
@@ -1082,14 +1074,12 @@ export function getAssetSummaryRows(asset: AssetRecord): { label: string; value:
 	}
 	if (HOST_ASSET_TYPES.includes(asset.type) || asset.type === "vm") {
 		pushRow(rows, "固定 IP", getMetadataString(metadata, "fixed_ipv4") || asset.management_ip, true)
-		pushRow(rows, "系统", getMetadataString(metadata, "os"))
 		pushRow(rows, "规格", formatHostSpec(metadata))
 		pushRow(rows, "网卡", formatSpeed(getMetadataNumber(metadata, "primary_nic_speed_mbps")), true)
 		return rows
 	}
 	if (PERSONAL_ASSET_TYPES.includes(asset.type)) {
 		pushRow(rows, "固定 IP", getMetadataString(metadata, "fixed_ipv4") || asset.management_ip, true)
-		pushRow(rows, "系统", getMetadataString(metadata, "device_os"))
 		pushRow(rows, "容量", formatStorageGb(getMetadataNumber(metadata, "storage_gb")), true)
 		pushRow(rows, "连接", getMetadataString(metadata, "wifi_standard"))
 		return rows
@@ -1170,6 +1160,11 @@ function pushRow(
 
 function getAssetCompletenessChecks(asset: AssetRecord) {
 	const metadata = asset.metadata
+	const hasOfficialReference = Boolean(
+		getMetadataString(metadata, "support_url") ||
+			getMetadataString(metadata, "product_url") ||
+			getMetadataString(metadata, "official_url")
+	)
 	const checks: { label: string; ok: boolean }[] = [
 		{ label: "资产名称", ok: Boolean(asset.name?.trim()) },
 		{ label: "资产位置", ok: Boolean(asset.location?.trim() || getMetadataString(metadata, "room")) },
@@ -1188,7 +1183,7 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 		checks.push(
 			{ label: "厂商 / 品牌", ok: Boolean(asset.vendor?.trim()) },
 			{ label: "型号", ok: Boolean(asset.model?.trim()) },
-			{ label: "厂家支持页", ok: Boolean(getMetadataString(metadata, "support_url")) },
+			{ label: "厂家资料页", ok: hasOfficialReference },
 			{ label: "管理 IP", ok: Boolean(asset.management_ip?.trim()) },
 			{ label: "管理 MAC", ok: Boolean(getMetadataString(metadata, "mac")) },
 			{ label: "端口数量", ok: Boolean(getMetadataNumber(metadata, "port_count")) },
@@ -1200,7 +1195,7 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 		checks.push(
 			{ label: "厂商 / 品牌", ok: Boolean(asset.vendor?.trim()) },
 			{ label: "型号", ok: Boolean(asset.model?.trim()) },
-			{ label: "厂家支持页", ok: Boolean(getMetadataString(metadata, "support_url")) },
+			{ label: "厂家资料页", ok: hasOfficialReference },
 			{ label: "固定 IPv4", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) },
 			{ label: "计划接入 Agent", ok: Boolean(getMetadataString(metadata, "planned_agent")) },
 			{ label: "CPU 型号", ok: Boolean(getMetadataString(metadata, "cpu_model")) },
@@ -1247,7 +1242,7 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 		checks.push(
 			{ label: "厂商 / 品牌", ok: Boolean(asset.vendor?.trim()) },
 			{ label: "型号", ok: Boolean(asset.model?.trim()) },
-			{ label: "厂家支持页", ok: Boolean(getMetadataString(metadata, "support_url")) },
+			{ label: "厂家资料页", ok: hasOfficialReference },
 			{ label: "协议", ok: Boolean(getMetadataString(metadata, "protocol")) },
 			{ label: "网关", ok: Boolean(getMetadataString(metadata, "gateway_name")) },
 			{ label: "实体 ID", ok: Boolean(getMetadataString(metadata, "entity_id")) },
@@ -1259,10 +1254,9 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 		checks.push(
 			{ label: "厂商 / 品牌", ok: Boolean(asset.vendor?.trim()) },
 			{ label: "型号", ok: Boolean(asset.model?.trim()) },
-			{ label: "厂家支持页", ok: Boolean(getMetadataString(metadata, "support_url")) },
+			{ label: "厂家资料页", ok: hasOfficialReference },
 			{ label: "固定 IP", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) },
 			{ label: "主 MAC", ok: Boolean(getMetadataString(metadata, "mac")) },
-			{ label: "系统 / 固件", ok: Boolean(getMetadataString(metadata, "device_os")) },
 			{ label: "供电方式", ok: Boolean(getMetadataString(metadata, "power_mode")) }
 		)
 		if (isPhoneVariantSpecRequired(asset.type)) {
@@ -1277,7 +1271,7 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 		checks.push(
 			{ label: "厂商 / 品牌", ok: Boolean(asset.vendor?.trim()) },
 			{ label: "型号", ok: Boolean(asset.model?.trim()) },
-			{ label: "厂家支持页", ok: Boolean(getMetadataString(metadata, "support_url")) },
+			{ label: "厂家资料页", ok: hasOfficialReference },
 			{ label: "固定 IP", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) },
 			{ label: "主 MAC", ok: Boolean(getMetadataString(metadata, "mac")) }
 		)

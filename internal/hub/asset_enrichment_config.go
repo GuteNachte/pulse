@@ -116,11 +116,12 @@ func (h *Hub) updateAssetEnrichmentConfig(e *core.RequestEvent) error {
 }
 
 func (h *Hub) assetEnrichmentConfigResponse() map[string]any {
-	aiConfig := h.assetOnlineAIConfig()
-	visualConfig := h.assetVisualAIConfig()
-	baseURL := h.assetAIBaseURL()
+	settings := h.loadAssetEnrichmentStoredSettings()
+	aiConfig := h.assetOnlineAIConfigFromSettings(settings)
+	visualConfig := h.assetVisualAIConfigFromSettings(settings)
+	baseURL := assetAIBaseURLFromSettings(settings)
 	apiKey := firstNonEmpty(
-		strings.TrimSpace(configString(anyMap(h.loadAssetEnrichmentStoredSettings()), "api_key")),
+		strings.TrimSpace(configString(settings, "api_key")),
 		aiConfig.APIKey,
 		visualConfig.APIKey,
 	)
@@ -156,9 +157,13 @@ func (h *Hub) assetEnrichmentConfigResponse() map[string]any {
 }
 
 func (h *Hub) assetOnlineAIConfig() assetOnlineAIConfig {
+	return h.assetOnlineAIConfigFromSettings(h.loadAssetEnrichmentStoredSettings())
+}
+
+func (h *Hub) assetOnlineAIConfigFromSettings(settings map[string]any) assetOnlineAIConfig {
 	config := assetOnlineAIConfigFromEnv()
-	baseURL := h.assetAIBaseURL()
-	section := anyMap(h.loadAssetEnrichmentStoredSettings()["ai"])
+	baseURL := assetAIBaseURLFromSettings(settings)
+	section := anyMap(settings["ai"])
 	if value, ok := configBoolFromMap(section, "enabled"); ok {
 		config.Enabled = value
 	}
@@ -168,7 +173,7 @@ func (h *Hub) assetOnlineAIConfig() assetOnlineAIConfig {
 	if value, ok := configStringFromMap(section, "api_key"); ok && value != "" {
 		config.APIKey = value
 	}
-	if value := configString(h.loadAssetEnrichmentStoredSettings(), "api_key"); value != "" {
+	if value := configString(settings, "api_key"); value != "" {
 		config.APIKey = value
 	}
 	if value, ok := configStringFromMap(section, "model"); ok {
@@ -184,9 +189,13 @@ func (h *Hub) assetOnlineAIConfig() assetOnlineAIConfig {
 }
 
 func (h *Hub) assetVisualAIConfig() assetVisualAIConfig {
+	return h.assetVisualAIConfigFromSettings(h.loadAssetEnrichmentStoredSettings())
+}
+
+func (h *Hub) assetVisualAIConfigFromSettings(settings map[string]any) assetVisualAIConfig {
 	config := assetVisualAIConfigFromEnv()
-	baseURL := h.assetAIBaseURL()
-	section := anyMap(h.loadAssetEnrichmentStoredSettings()["visual_ai"])
+	baseURL := assetAIBaseURLFromSettings(settings)
+	section := anyMap(settings["visual_ai"])
 	if value, ok := configBoolFromMap(section, "enabled"); ok {
 		config.Enabled = value
 	}
@@ -196,7 +205,7 @@ func (h *Hub) assetVisualAIConfig() assetVisualAIConfig {
 	if value, ok := configStringFromMap(section, "api_key"); ok && value != "" {
 		config.APIKey = value
 	}
-	if value := configString(h.loadAssetEnrichmentStoredSettings(), "api_key"); value != "" {
+	if value := configString(settings, "api_key"); value != "" {
 		config.APIKey = value
 	}
 	if value, ok := configStringFromMap(section, "model"); ok {
@@ -215,7 +224,10 @@ func (h *Hub) assetVisualAIConfig() assetVisualAIConfig {
 }
 
 func (h *Hub) assetAIBaseURL() string {
-	settings := h.loadAssetEnrichmentStoredSettings()
+	return assetAIBaseURLFromSettings(h.loadAssetEnrichmentStoredSettings())
+}
+
+func assetAIBaseURLFromSettings(settings map[string]any) string {
 	if value := configString(settings, "base_url"); value != "" {
 		if normalized, err := normalizeConfigBaseURL(value); err == nil {
 			return normalized

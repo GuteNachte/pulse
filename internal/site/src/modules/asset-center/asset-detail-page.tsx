@@ -91,6 +91,15 @@ import {
 	type AssetLifecycleTone,
 	isPhoneVariantSpecRequired,
 } from "./asset-schema"
+import {
+	formatAssetDetailTaskStatusLabel,
+	formatAssetVisualTaskMeta as formatAssetVisualTaskSummary,
+} from "./asset-ai-task-summary"
+import { loadLatestAITasksByKind } from "./asset-ai-task-query"
+import { loadLatestReportSuggestions, loadPendingOfficialColorSuggestions } from "./asset-enrichment-suggestion-query"
+import { formatAssetParameterRowDisplay } from "./asset-parameter-display"
+import { escapePocketBaseFilterValue } from "./asset-query"
+import { loadDisplayAssetVisuals } from "./asset-visual-query"
 import { getAssetSourceProfile } from "./asset-source-profile"
 import type {
 	AssetChangeAction,
@@ -131,6 +140,7 @@ type AssetDetailState = {
 	assets: AssetRecord[]
 	interfaces: AssetInterfaceRecord[]
 	allInterfaces: AssetInterfaceRecord[]
+	editCatalogLoaded: boolean
 	relations: AssetRelationRecord[]
 	locations: AssetLocationRecord[]
 	maintenance: AssetMaintenanceRecord[]
@@ -140,6 +150,7 @@ type AssetDetailState = {
 	changes: AssetChangeRecord[]
 	enrichmentReports: AssetEnrichmentReportRecord[]
 	enrichmentSuggestions: AssetEnrichmentSuggestionRecord[]
+	officialColorSuggestions: AssetEnrichmentSuggestionRecord[]
 	systems: SystemRecord[]
 	systemDetails: SystemDetailsRecord[]
 	smartDevices: SmartDeviceRecord[]
@@ -165,6 +176,7 @@ const emptyState: AssetDetailState = {
 	assets: [],
 	interfaces: [],
 	allInterfaces: [],
+	editCatalogLoaded: false,
 	relations: [],
 	locations: [],
 	maintenance: [],
@@ -174,6 +186,7 @@ const emptyState: AssetDetailState = {
 	changes: [],
 	enrichmentReports: [],
 	enrichmentSuggestions: [],
+	officialColorSuggestions: [],
 	systems: [],
 	systemDetails: [],
 	smartDevices: [],
@@ -329,6 +342,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const [editingMaintenance, setEditingMaintenance] = useState<AssetMaintenanceRecord | null>(null)
 	const [saving, setSaving] = useState(false)
 	const secondaryLoadRef = useRef<Promise<void> | null>(null)
+	const editCatalogLoadRef = useRef<Promise<void> | null>(null)
 	const readOnly = isReadOnlyUser()
 	const assetMap = useMemo(() => new Map(state.assets.map((asset) => [asset.id, asset])), [state.assets])
 	const asset = state.asset
@@ -375,7 +389,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	)
 	const recognitionRequirements = useMemo(() => (asset ? getAssetRecognitionRequirements(asset) : []), [asset])
 
-	async function loadDetail(options?: { waitSecondary?: boolean }) {
+	async function loadDetail(options?: { waitSecondary?: boolean; waitEditCatalog?: boolean }) {
 		setLoading(true)
 		try {
 			const [assetRecord, interfaces, relations, systems] = await Promise.all([
@@ -421,6 +435,13 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					console.error("load secondary asset detail", error)
 				})
 			}
+			if (options?.waitEditCatalog || managementDialogOpen) {
+				await startAssetEditCatalogDataLoad({
+					assetId: assetRecord.id,
+					fallbackAsset: assetRecord,
+					interfaces,
+				})
+			}
 		} catch (error) {
 			if (!isPocketBaseAutoCancel(error)) {
 				console.error("load asset detail", error)
@@ -446,25 +467,72 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		return secondaryLoad
 	}
 
-	async function ensureSecondaryDetailDataLoaded() {
-		if (!asset) return
-		if (
-			state.assets.length > 1 &&
-			state.allInterfaces.length >= state.interfaces.length &&
-			state.locations.length > 0
-		) {
+	function startAssetEditCatalogDataLoad(options: {
+		assetId: string
+		fallbackAsset: AssetRecord
+		interfaces: AssetInterfaceRecord[]
+	}) {
+		let catalogLoad: Promise<void>
+		catalogLoad = loadAssetEditCatalogData(options).finally(() => {
+			if (editCatalogLoadRef.current === catalogLoad) {
+				editCatalogLoadRef.current = null
+			}
+		})
+		editCatalogLoadRef.current = catalogLoad
+		return catalogLoad
+	}
+
+	async function ensureAssetEditCatalogLoaded() {
+		if (!asset || state.editCatalogLoaded) return
+		if (editCatalogLoadRef.current) {
+			await editCatalogLoadRef.current
 			return
 		}
-		if (secondaryLoadRef.current) {
-			await secondaryLoadRef.current
-			return
-		}
-		await startSecondaryDetailDataLoad({
+		await startAssetEditCatalogDataLoad({
 			assetId: asset.id,
 			fallbackAsset: asset,
-			relations: state.relations,
-			systems: state.systems,
+			interfaces: state.interfaces,
 		})
+	}
+
+	async function loadAssetEditCatalogData({
+		assetId,
+		fallbackAsset,
+		interfaces,
+	}: {
+		assetId: string
+		fallbackAsset: AssetRecord
+		interfaces: AssetInterfaceRecord[]
+	}) {
+		try {
+			const [assets, allInterfaces, locations] = await Promise.all([
+				pb.collection<AssetRecord>("assets").getFullList({ sort: "type,name", requestKey: null }),
+				pb.collection<AssetInterfaceRecord>("asset_interfaces").getFullList({
+					sort: "asset,-primary,kind,name",
+					requestKey: null,
+				}),
+				pb.collection<AssetLocationRecord>("asset_locations").getFullList({
+					sort: "sort_order,name",
+					requestKey: null,
+				}),
+			])
+			setState((current) => {
+				if (current.asset?.id !== assetId) return current
+				const catalogAssets = assets.some((item) => item.id === assetId) ? assets : [fallbackAsset, ...assets]
+				const catalogInterfaces = allInterfaces.length > 0 ? allInterfaces : interfaces
+				return {
+					...current,
+					assets: catalogAssets,
+					allInterfaces: catalogInterfaces,
+					locations,
+					editCatalogLoaded: true,
+				}
+			})
+		} catch (error) {
+			if (!isPocketBaseAutoCancel(error)) {
+				console.warn("load asset edit catalog", error)
+			}
+		}
 	}
 
 	async function loadSecondaryDetailData({
@@ -479,65 +547,43 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		systems: SystemRecord[]
 	}) {
 		try {
-			const [
-				assets,
-				allInterfaces,
-				locations,
-				maintenance,
-				attachments,
-				visuals,
-				aiTasks,
-				changes,
-				enrichmentReports,
-				enrichmentSuggestions,
-			] = await Promise.all([
-				pb.collection<AssetRecord>("assets").getFullList({ sort: "type,name", requestKey: null }),
-				pb.collection<AssetInterfaceRecord>("asset_interfaces").getFullList({
-					sort: "asset,-primary,kind,name",
-					requestKey: null,
-				}),
-				pb.collection<AssetLocationRecord>("asset_locations").getFullList({
-					sort: "sort_order,name",
-					requestKey: null,
-				}),
-				pb.collection<AssetMaintenanceRecord>("asset_maintenance").getFullList({
-					filter: `asset="${assetId}"`,
-					sort: "-event_date,-created",
-					requestKey: null,
-				}),
-				pb.collection<AssetAttachmentRecord>("asset_attachments").getFullList({
-					filter: `asset="${assetId}"`,
-					sort: "kind,title",
-					requestKey: null,
-				}),
-				pb.collection<AssetVisualRecord>("asset_visuals").getFullList({
-					filter: `asset="${assetId}"`,
-					sort: "-primary,-created",
-					requestKey: null,
-				}),
-				pb.collection<AITaskRecord>("ai_tasks").getFullList({
-					filter: `asset="${assetId}"`,
-					sort: "-created",
-					requestKey: null,
-				}),
-				pb.collection<AssetChangeRecord>("asset_changes").getList(1, 20, {
-					filter: `asset="${assetId}"`,
-					sort: "-created",
-					requestKey: null,
-				}),
-				pb.collection<AssetEnrichmentReportRecord>("asset_enrichment_reports").getList(1, 10, {
-					filter: `asset="${assetId}"`,
-					sort: "-created",
-					requestKey: null,
-				}),
-				pb.collection<AssetEnrichmentSuggestionRecord>("asset_enrichment_suggestions").getFullList({
-					filter: `asset="${assetId}"`,
-					sort: "-created",
-					requestKey: null,
-				}),
+			const [relatedWebsiteAssets, maintenance, attachments, visuals, aiTasks, changes, enrichmentReports] =
+				await Promise.all([
+					loadRelatedWebsiteEndpointAssets(assetId, fallbackAsset, relations),
+					pb.collection<AssetMaintenanceRecord>("asset_maintenance").getFullList({
+						filter: `asset="${assetId}"`,
+						sort: "-event_date,-created",
+						requestKey: null,
+					}),
+					pb.collection<AssetAttachmentRecord>("asset_attachments").getFullList({
+						filter: `asset="${assetId}"`,
+						sort: "kind,title",
+						requestKey: null,
+					}),
+					loadDisplayAssetVisuals(pb.collection<AssetVisualRecord>("asset_visuals"), assetId),
+					loadLatestAITasksByKind(pb.collection<AITaskRecord>("ai_tasks"), { assetId }),
+					pb.collection<AssetChangeRecord>("asset_changes").getList(1, 20, {
+						filter: `asset="${assetId}"`,
+						sort: "-created",
+						requestKey: null,
+					}),
+					pb.collection<AssetEnrichmentReportRecord>("asset_enrichment_reports").getList(1, 10, {
+						filter: `asset="${assetId}"`,
+						sort: "-created",
+						requestKey: null,
+					}),
+				])
+			const [enrichmentSuggestions, officialColorSuggestions] = await Promise.all([
+				loadLatestReportSuggestions(
+					pb.collection<AssetEnrichmentSuggestionRecord>("asset_enrichment_suggestions"),
+					enrichmentReports.items[0]?.id
+				),
+				loadPendingOfficialColorSuggestions(
+					pb.collection<AssetEnrichmentSuggestionRecord>("asset_enrichment_suggestions"),
+					assetId
+				),
 			])
-			const assetsForDerivedData = assets.length > 0 ? assets : [fallbackAsset]
-			const allInterfacesForState = allInterfaces.length > 0 ? allInterfaces : []
+			const assetsForDerivedData = uniqueAssetRecords([fallbackAsset, ...relatedWebsiteAssets])
 			const websiteAssetIds = getAssetWebsiteEndpointIds(assetId, assetsForDerivedData, relations)
 			const detailAssetIds = uniqueIds([assetId, ...websiteAssetIds])
 			const [websites, alerts, assetAlerts, notificationFailures, notificationStates, systemDetails, runtimeSummary] =
@@ -555,7 +601,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				if (current.asset?.id !== assetId) return current
 				return {
 					...current,
-					assets: assetsForDerivedData,
 					maintenance,
 					attachments,
 					visuals,
@@ -563,8 +608,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					changes: changes.items,
 					enrichmentReports: enrichmentReports.items,
 					enrichmentSuggestions,
-					allInterfaces: allInterfacesForState,
-					locations,
+					officialColorSuggestions,
 					systems,
 					systemDetails,
 					smartDevices: runtimeSummary.smartDevices,
@@ -627,6 +671,37 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			})
 		} catch {
 			return []
+		}
+	}
+
+	async function loadRelatedWebsiteEndpointAssets(
+		assetId: string,
+		fallbackAsset: AssetRecord,
+		relations: AssetRelationRecord[]
+	) {
+		const relationPeerIds = relations
+			.map((relation) =>
+				relation.source_asset === assetId
+					? relation.target_asset
+					: relation.target_asset === assetId
+						? relation.source_asset
+						: ""
+			)
+			.filter(Boolean)
+		const candidateIds = uniqueIds([assetId, ...relationPeerIds])
+		const idFilter = candidateIds.map((id) => `id="${escapePocketBaseFilterValue(id)}"`).join(" || ")
+		const filter = `type="web_endpoint" && (parent_asset="${escapePocketBaseFilterValue(assetId)}"${
+			idFilter ? ` || ${idFilter}` : ""
+		})`
+		try {
+			const records = await pb.collection<AssetRecord>("assets").getFullList({
+				filter,
+				sort: "name",
+				requestKey: null,
+			})
+			return fallbackAsset.type === "web_endpoint" ? uniqueAssetRecords([fallbackAsset, ...records]) : records
+		} catch {
+			return fallbackAsset.type === "web_endpoint" ? [fallbackAsset] : []
 		}
 	}
 
@@ -886,10 +961,10 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				})
 			} else if (response.status === "no_sources") {
 				setVisualGenerationStage("failed")
-				setVisualGenerationMessage("没有找到可追溯设备图片。请先补充厂家支持页、官方图片 URL，或运行资料补全 Agent。")
+				setVisualGenerationMessage("没有找到可追溯设备图片。请先补充厂家资料页、官方图片 URL，或运行资料补全 Agent。")
 				toast({
 					title: "未找到可用设备图片",
-					description: "请先补充厂家支持页、官方图片 URL，或运行资料补全 Agent 后再收集。",
+					description: "请先补充厂家资料页、官方图片 URL，或运行资料补全 Agent 后再收集。",
 				})
 			} else {
 				setVisualGenerationStage("ready")
@@ -951,6 +1026,8 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			metadata.official_colors = colorsAvailable
 		}
 		metadata.support_url = form.get("support_url")?.toString().trim() || ""
+		metadata.product_url = form.get("product_url")?.toString().trim() || ""
+		metadata.official_url = form.get("official_url")?.toString().trim() || ""
 		metadata.management_url = form.get("management_url")?.toString().trim() || ""
 		if (isPhoneVariantSpecRequired(targetType)) {
 			metadata.memory_gb = Number(form.get("memory_gb")?.toString().trim())
@@ -1042,10 +1119,10 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		} catch (error) {
 			console.error("fetch official asset colors", error)
 			setOfficialColorStage("failed")
-			setOfficialColorMessage("获取失败。请检查 Agnes 配置、厂家支持页、型号或 Hub 日志。")
+			setOfficialColorMessage("获取失败。请检查 Agnes 配置、厂家资料页、型号或 Hub 日志。")
 			toast({
 				title: "官方颜色获取失败",
-				description: "请检查 Agnes 配置、厂家支持页、型号或 Hub 日志。",
+				description: "请检查 Agnes 配置、厂家资料页、型号或 Hub 日志。",
 				variant: "destructive",
 			})
 		} finally {
@@ -1080,19 +1157,24 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	async function acceptAllActionableSuggestions() {
 		if (readOnly || saving || actionableEnrichmentSuggestions.length === 0) return
 		const confirmed = window.confirm(
-			`确认一键替换 ${actionableEnrichmentSuggestions.length} 个参数？\n\n这会把当前待确认建议全部覆盖写入资产主档或对应子档案，并进入变更历史。`
+			`确认一键替换 ${actionableEnrichmentSuggestions.length} 个参数？\n\nHub 会先校验全部建议。任一建议过期、字段不允许或违反主数据重复约束时，不会写入任何参数。`
 		)
 		if (!confirmed) return
 		setSaving(true)
 		try {
-			for (const suggestion of actionableEnrichmentSuggestions) {
-				await pb.send(`/api/pulse/asset-enrichment-suggestions/${suggestion.id}/accept`, { method: "POST" })
-			}
+			await pb.send("/api/pulse/asset-enrichment-suggestions/accept-batch", {
+				method: "POST",
+				body: { suggestion_ids: actionableEnrichmentSuggestions.map((suggestion) => suggestion.id) },
+			})
 			await loadDetail({ waitSecondary: true })
 			toast({ title: "一键替换完成", description: `已处理 ${actionableEnrichmentSuggestions.length} 个参数。` })
 		} catch (error) {
 			console.error("accept all asset enrichment suggestions", error)
-			toast({ title: "一键替换失败", description: "部分参数可能已写入，请刷新后核对。", variant: "destructive" })
+			toast({
+				title: "一键替换失败",
+				description: "未写入任何参数，请重新生成报告或检查主数据重复约束。",
+				variant: "destructive",
+			})
 		} finally {
 			setSaving(false)
 		}
@@ -1138,6 +1220,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	async function saveRelation(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault()
 		if (!asset) return
+		await ensureAssetEditCatalogLoaded()
 		const form = new FormData(event.currentTarget)
 		const target = form.get("target_asset")?.toString() || ""
 		if (!target) {
@@ -1315,18 +1398,33 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	}
 
 	function openAddRelationDialog() {
+		ensureAssetEditCatalogLoaded().catch((error) => {
+			if (!isPocketBaseAutoCancel(error)) {
+				console.warn("ensure asset relation catalog", error)
+			}
+		})
 		setEditingRelation(null)
 		setRelationForm(getEmptyRelationFormForGuide())
 		setRelationDialogOpen(true)
 	}
 
 	function openGuidedRelationDialog(guideId: RelationGuideId) {
+		ensureAssetEditCatalogLoaded().catch((error) => {
+			if (!isPocketBaseAutoCancel(error)) {
+				console.warn("ensure asset relation catalog", error)
+			}
+		})
 		setEditingRelation(null)
 		setRelationForm(getEmptyRelationFormForGuide(guideId))
 		setRelationDialogOpen(true)
 	}
 
 	function openEditRelationDialog(record: AssetRelationRecord) {
+		ensureAssetEditCatalogLoaded().catch((error) => {
+			if (!isPocketBaseAutoCancel(error)) {
+				console.warn("ensure asset relation catalog", error)
+			}
+		})
 		setEditingRelation(record)
 		setRelationForm(getRelationFormFromRecord(record, asset?.id ?? id))
 		setRelationDialogOpen(true)
@@ -1458,7 +1556,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 						className="h-7 shrink-0 gap-1.5 px-2 text-xs"
 						onClick={() => {
 							setManagementDialogOpen(true)
-							ensureSecondaryDetailDataLoaded().catch((error) => {
+							ensureAssetEditCatalogLoaded().catch((error) => {
 								if (!isPocketBaseAutoCancel(error)) {
 									console.warn("ensure asset edit catalog", error)
 								}
@@ -2200,74 +2298,6 @@ function archiveRowToParameterRow(row: ArchiveDetailRow): AssetParameterRow {
 	}
 }
 
-const assetDisplayUnitByFieldKey = new Map<string, string>([
-	["battery_capacity_mah", "mAh"],
-	["capacity_w", "W"],
-	["charging_power_w", "W"],
-	["default_port_speed_mbps", "Mbps"],
-	["disk_gb", "GB"],
-	["down_mbps", "Mbps"],
-	["gpu_vram_gb", "GB"],
-	["memory_gb", "GB"],
-	["memory_speed_mhz", "MHz"],
-	["primary_nic_speed_mbps", "Mbps"],
-	["screen_refresh_rate", "Hz"],
-	["storage_gb", "GB"],
-	["touch_sampling_rate", "Hz"],
-	["up_mbps", "Mbps"],
-])
-
-const assetDisplayLabelUnits = [
-	"mAh",
-	"Mbps",
-	"MHz",
-	"GHz",
-	"Hz",
-	"GB",
-	"TB",
-	"MB",
-	"KB",
-	"VA",
-	"W",
-	"mm",
-	"cm",
-	"kg",
-	"g",
-]
-
-function formatAssetParameterRowDisplay(field: AssetFieldDefinition, value: string) {
-	const unit = getAssetParameterDisplayUnit(field)
-	if (!unit) return { label: field.label, value }
-	return {
-		label: stripAssetParameterLabelUnit(field.label, unit),
-		value: formatAssetParameterValueWithUnit(value, unit),
-	}
-}
-
-function getAssetParameterDisplayUnit(field: AssetFieldDefinition) {
-	const unitFromKey = assetDisplayUnitByFieldKey.get(field.key)
-	if (unitFromKey) return unitFromKey
-	return assetDisplayLabelUnits.find((unit) => new RegExp(`\\s${escapeRegExp(unit)}$`, "i").test(field.label))
-}
-
-function stripAssetParameterLabelUnit(label: string, unit: string) {
-	return label.replace(new RegExp(`\\s*${escapeRegExp(unit)}$`, "i"), "").trim()
-}
-
-function formatAssetParameterValueWithUnit(value: string, unit: string) {
-	const trimmed = value.trim()
-	if (!trimmed) return trimmed
-	const numericUnitPattern = new RegExp(`(\\d(?:[\\d.,]*))\\s*${escapeRegExp(unit)}(?=$|[\\s,/，、;；)])`, "gi")
-	const normalized = trimmed.replace(numericUnitPattern, (_match, number) => `${number} ${unit}`)
-	if (normalized !== trimmed) return normalized
-	if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return `${trimmed} ${unit}`
-	return trimmed
-}
-
-function escapeRegExp(value: string) {
-	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-}
-
 const archiveParameterDetailSectionMap = new Map<string, string>([
 	["cpu_model", "处理器"],
 	["cpu_vendor", "处理器"],
@@ -2325,6 +2355,9 @@ const archiveParameterDetailSectionMap = new Map<string, string>([
 	["sensor_detail", "传感器"],
 	["cooling_system", "散热"],
 	["official_image_url", "资料来源"],
+	["support_url", "资料来源"],
+	["product_url", "资料来源"],
+	["official_url", "资料来源"],
 	["account_note", "归属"],
 	["power_mode", "供电"],
 ])
@@ -2478,8 +2511,8 @@ function AssetEditWorkbench({
 	const [locationValue, setLocationValue] = useState(asset.location || "")
 	const [assetTagValue, setAssetTagValue] = useState(getMetadataString(metadata, "asset_tag"))
 	const officialColorOptions = useMemo(
-		() => getAssetOfficialColorOptions(asset, state.enrichmentSuggestions),
-		[asset, state.enrichmentSuggestions]
+		() => getAssetOfficialColorOptions(asset, state.officialColorSuggestions),
+		[asset, state.officialColorSuggestions]
 	)
 	const visualBlockReason = getAssetVisualGenerationBlockReason(asset, visualColor, officialColorOptions)
 	const visualGenerationRunning = visualGenerationStage === "running"
@@ -2619,6 +2652,20 @@ function AssetEditWorkbench({
 									label="厂家支持页"
 									type="url"
 									defaultValue={getMetadataString(metadata, "support_url")}
+									className="sm:col-span-2"
+								/>
+								<TextField
+									name="product_url"
+									label="厂家产品页"
+									type="url"
+									defaultValue={getMetadataString(metadata, "product_url")}
+									className="sm:col-span-2"
+								/>
+								<TextField
+									name="official_url"
+									label="厂家官网资料页"
+									type="url"
+									defaultValue={getMetadataString(metadata, "official_url")}
 									className="sm:col-span-2"
 								/>
 								<TextField
@@ -3965,6 +4012,15 @@ function uniqueIds(ids: string[]) {
 	return [...new Set(ids.filter(Boolean))]
 }
 
+function uniqueAssetRecords(records: AssetRecord[]) {
+	const seen = new Set<string>()
+	return records.filter((record) => {
+		if (!record.id || seen.has(record.id)) return false
+		seen.add(record.id)
+		return true
+	})
+}
+
 function getAssetIdsFilter(assetIds: string[]) {
 	return uniqueIds(assetIds)
 		.map((assetId) => `asset="${escapePocketBaseFilterValue(assetId)}"`)
@@ -5198,7 +5254,7 @@ function NotificationStateBadge({ status }: { status: AlertNotificationStateReco
 function QuickActionButtons({ asset }: { asset: AssetRecord }) {
 	const canConnectAgent = canConnectAgentMonitoring(asset)
 	const canConnectWebsite = canConnectWebsiteMonitoring(asset)
-	const supportUrl = getMetadataString(asset.metadata, "support_url")
+	const officialReference = getAssetOfficialReferenceLink(asset)
 	const managementUrl = getMetadataString(asset.metadata, "management_url")
 
 	return (
@@ -5233,16 +5289,26 @@ function QuickActionButtons({ asset }: { asset: AssetRecord }) {
 					</a>
 				</Button>
 			)}
-			{supportUrl && (
+			{officialReference && (
 				<Button asChild variant="outline" size="sm" className="gap-2">
-					<a href={supportUrl} target="_blank" rel="noreferrer">
+					<a href={officialReference.url} target="_blank" rel="noreferrer">
 						<ExternalLinkIcon className="size-4" />
-						支持页
+						{officialReference.label}
 					</a>
 				</Button>
 			)}
 		</>
 	)
+}
+
+function getAssetOfficialReferenceLink(asset: AssetRecord) {
+	const supportUrl = getMetadataString(asset.metadata, "support_url")
+	if (supportUrl) return { label: "支持页", url: supportUrl }
+	const productUrl = getMetadataString(asset.metadata, "product_url")
+	if (productUrl) return { label: "产品页", url: productUrl }
+	const officialUrl = getMetadataString(asset.metadata, "official_url")
+	if (officialUrl) return { label: "资料页", url: officialUrl }
+	return undefined
 }
 
 function SummaryPill({ label, value }: { label: string; value: number | string }) {
@@ -5265,6 +5331,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 
 function ArchiveDetailRow({ field, value }: { field: AssetFieldDefinition; value: string }) {
 	const isUrl = field.type === "url" && /^https?:\/\//i.test(value)
+	const display = formatAssetParameterRowDisplay(field, value)
 	return (
 		<div
 			className={cn(
@@ -5272,7 +5339,7 @@ function ArchiveDetailRow({ field, value }: { field: AssetFieldDefinition; value
 				field.span === "full" && "md:col-span-2 2xl:col-span-3"
 			)}
 		>
-			<div className="min-w-0 truncate text-xs text-muted-foreground">{field.label}</div>
+			<div className="min-w-0 truncate text-xs text-muted-foreground">{display.label}</div>
 			{isUrl ? (
 				<a
 					href={value}
@@ -5280,11 +5347,11 @@ function ArchiveDetailRow({ field, value }: { field: AssetFieldDefinition; value
 					rel="noreferrer"
 					className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
 				>
-					<span className="min-w-0 truncate">{value}</span>
+					<span className="min-w-0 truncate">{display.value}</span>
 					<ExternalLinkIcon className="size-3.5 shrink-0" />
 				</a>
 			) : (
-				<div className="min-w-0 break-words text-sm font-medium text-foreground">{value}</div>
+				<div className="min-w-0 break-words text-sm font-medium text-foreground">{display.value}</div>
 			)}
 		</div>
 	)
@@ -5334,6 +5401,8 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 				directRow("型号 / 规格", asset.model),
 				directRow("序列号", asset.serial_number),
 				urlRow("厂家官方支持页", "support_url", "manual"),
+				urlRow("厂家官方产品页", "product_url", "manual"),
+				urlRow("厂家官网资料页", "official_url", "manual"),
 				metadataRow("专项识别依据", "hardware_fingerprint_note"),
 				metadataRow("专项识别匹配备注", "hardware_match_note"),
 			]),
@@ -5550,27 +5619,10 @@ function getAssetVisualStatusLabel(status?: AssetVisualRecord["status"]) {
 	}
 }
 
-function getAITaskStatusLabel(status?: AITaskRecord["status"]) {
-	switch (status) {
-		case "queued":
-			return "排队中"
-		case "running":
-			return "生成中"
-		case "ready":
-			return "已完成"
-		case "failed":
-			return "失败"
-		case "applied":
-			return "已应用"
-		default:
-			return "未开始"
-	}
-}
-
 function getAssetEnrichmentTaskMeta(tasks: AITaskRecord[], reports: AssetEnrichmentReportRecord[]) {
 	const latestTask = tasks.find((task) => task.kind === "asset_enrichment")
 	if (latestTask) {
-		return `Agent ${getAITaskStatusLabel(latestTask.status)}`
+		return `Agent ${formatAssetDetailTaskStatusLabel(latestTask.status)}`
 	}
 	return reports.length ? `${reports.length} 份报告` : "未生成"
 }
@@ -5578,25 +5630,9 @@ function getAssetEnrichmentTaskMeta(tasks: AITaskRecord[], reports: AssetEnrichm
 function getAssetVisualTaskMeta(tasks: AITaskRecord[], visuals: AssetVisualRecord[]) {
 	const latestTask = tasks.find((task) => task.kind === "asset_visual")
 	if (latestTask) {
-		if (latestTask.status === "failed") {
-			return latestTask.error ? `图片失败：${latestTask.error}` : "图片失败"
-		}
-		const collected = numberFromUnknownRecord(latestTask.output_summary, "collected_images")
-		const generated = numberFromUnknownRecord(latestTask.output_summary, "generated_images")
-		if (latestTask.status === "ready" && (collected > 0 || generated > 0)) {
-			if (generated <= 0) {
-				return `参考图已收集：${collected} 张，未生成统一图`
-			}
-			return `图片成功：参考 ${collected} / 生成 ${generated}`
-		}
-		return `图片 ${getAITaskStatusLabel(latestTask.status)}`
+		return formatAssetVisualTaskSummary(latestTask)
 	}
 	return visuals.length ? `${visuals.length} 组图片` : "未收集"
-}
-
-function numberFromUnknownRecord(record: Record<string, unknown> | undefined, key: string) {
-	const value = record?.[key]
-	return typeof value === "number" && Number.isFinite(value) ? value : 0
 }
 
 function getEnrichmentSourceLabel(source?: AssetEnrichmentSuggestionRecord["source"]) {
@@ -5661,9 +5697,9 @@ function getEnrichmentOnlineStatusLabel(status?: string) {
 
 function getEnrichmentOnlineEmptyText(summary?: EnrichmentOnlineSummary) {
 	if (!summary) return "本报告没有资料来源摘要。"
-	if (summary.status === "not_configured") return "资料补全 Agent 未获得可追溯来源，也没有可用的官方支持页。"
+	if (summary.status === "not_configured") return "资料补全 Agent 未获得可追溯来源，也没有可用的官方资料页。"
 	if (summary.status === "no_match")
-		return "没有命中可追溯资料。可补充更准确的详细型号、内部型号或厂家支持页后重新收集。"
+		return "没有命中可追溯资料。可补充更准确的详细型号、内部型号或厂家资料页后重新收集。"
 	return "本次没有可展示的资料来源。"
 }
 
@@ -5671,6 +5707,10 @@ function getOnlineProviderLabel(provider?: string) {
 	switch (provider) {
 		case "support_url":
 			return "支持页"
+		case "product_url":
+			return "产品页"
+		case "official_url":
+			return "官网资料"
 		case "wikidata":
 			return "Wikidata"
 		case "duckduckgo":
@@ -6355,9 +6395,6 @@ function buildCollectedHardwareRows(system: SystemRecord, detail?: SystemDetails
 	const systemLabel = firstNonEmpty(detail?.hostname, system.info?.h, system.name)
 	if (systemLabel) rows.push({ label: "识别主机名", value: systemLabel })
 
-	const osLabel = firstNonEmpty(detail?.os_name, system.info?.o)
-	if (osLabel) rows.push({ label: "操作系统", value: osLabel })
-
 	const cpuParts = [detail?.cpu, formatCoreThreadSummary(detail), formatCpuFrequency(detail?.cpu_frequency_mhz)].filter(
 		Boolean
 	)
@@ -6582,14 +6619,6 @@ function buildCollectionDiffs(
 		}
 		if ((HOST_ASSET_TYPES.includes(asset.type) || asset.type === "vm") && detail) {
 			const source = getSystemDisplayName(system)
-			addMetadataCollectionDiff(diffs, asset, {
-				field: "os",
-				label: "操作系统",
-				collectedValue: firstNonEmpty(detail.os_name, detail.os),
-				source,
-				confidence: 90,
-				recommendation: "Agent 已采集到操作系统信息。确认这台资产绑定正确后，可写入资产硬件主档作为长期系统档案。",
-			})
 			addMetadataCollectionDiff(diffs, asset, {
 				field: "cpu_vendor",
 				label: "CPU 厂商",
@@ -7468,8 +7497,4 @@ function normalizeDateInput(value?: string) {
 	const trimmed = value?.trim()
 	if (!trimmed) return undefined
 	return `${trimmed} 00:00:00.000Z`
-}
-
-function escapePocketBaseFilterValue(value: string) {
-	return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')
 }

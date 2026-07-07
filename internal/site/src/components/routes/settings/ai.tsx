@@ -18,6 +18,8 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "@/components/ui/use-toast"
 import { pb } from "@/lib/api"
+import { loadLatestAITasksByKind } from "@/modules/asset-center/asset-ai-task-query"
+import { formatAITaskStatusLabel, formatAITaskSummary } from "@/modules/asset-center/asset-ai-task-summary"
 import type { AITaskRecord } from "@/types"
 
 type AssetEnrichmentConfig = {
@@ -290,11 +292,7 @@ export default function AISettings() {
 
 async function loadRecentAITasks() {
 	try {
-		const records = await pb.collection<AITaskRecord>("ai_tasks").getFullList({
-			sort: "-created",
-			requestKey: null,
-		})
-		return records
+		return await loadLatestAITasksByKind(pb.collection<AITaskRecord>("ai_tasks"))
 	} catch {
 		return []
 	}
@@ -384,10 +382,10 @@ function AgentTaskStatusCard({ title, task }: { title: string; task?: AITaskReco
 							failed ? "mt-0.5 text-sm font-semibold text-red-700" : "mt-0.5 text-sm font-semibold text-foreground"
 						}
 					>
-						{task ? getAITaskStatusLabel(task.status) : "暂无任务"}
+						{task ? formatAITaskStatusLabel(task.status) : "暂无任务"}
 					</div>
 					<div className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-						{task ? getAITaskSummary(task) : "还没有手动触发过这个 Agent。"}
+						{task ? formatAITaskSummary(task) : "还没有手动触发过这个 Agent。"}
 					</div>
 					{task?.created ? (
 						<div className="mt-1 text-xs text-muted-foreground">{formatTaskTime(task.created)}</div>
@@ -405,55 +403,6 @@ function StatusChip({ label, value, active }: { label: string; value: string; ac
 			<span className={active ? "text-emerald-700" : "text-foreground"}>{value}</span>
 		</div>
 	)
-}
-
-function getAITaskStatusLabel(status?: AITaskRecord["status"]) {
-	switch (status) {
-		case "ready":
-			return "成功"
-		case "applied":
-			return "已处理"
-		case "failed":
-			return "失败"
-		case "running":
-			return "运行中"
-		case "queued":
-			return "排队中"
-		default:
-			return "未知"
-	}
-}
-
-function getAITaskSummary(task: AITaskRecord) {
-	if (task.status === "failed") {
-		return task.error || "任务失败，未返回具体错误。"
-	}
-	if (task.kind === "asset_enrichment") {
-		const suggestions = numberFromRecord(task.output_summary, "ai_suggestions")
-		const total = numberFromRecord(task.output_summary, "total_suggestions")
-		return `${task.provider || "未知服务"} / ${task.model || "未知模型"} · AI 建议 ${suggestions} 条 · 总建议 ${total} 条`
-	}
-	if (task.kind === "asset_visual") {
-		const collected = numberFromRecord(task.output_summary, "collected_images")
-		const generated = numberFromRecord(task.output_summary, "generated_images")
-		const legacyFrames = numberFromRecord(task.output_summary, "generated_frames")
-		if (collected > 0 || generated > 0) {
-			if (generated <= 0) {
-				return `设备图片 Agent · 参考图已收集 ${collected} 张，未生成统一图`
-			}
-			return `设备图片 Agent · 参考图 ${collected} 张 · 统一图 ${generated} 张`
-		}
-		if (legacyFrames > 0) {
-			return `${task.provider || "未知服务"} / ${task.model || "未知模型"} · 历史生成 ${legacyFrames} 帧`
-		}
-		return `${task.provider || "未知服务"} / ${task.model || "未知模型"} · 尚未产出图片`
-	}
-	return `${task.provider || "未知服务"} / ${task.model || "未知模型"}`
-}
-
-function numberFromRecord(record: Record<string, unknown> | undefined, key: string) {
-	const value = record?.[key]
-	return typeof value === "number" && Number.isFinite(value) ? value : 0
 }
 
 function formatTaskTime(value: string) {

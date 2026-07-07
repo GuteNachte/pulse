@@ -18,6 +18,10 @@ type assetEnrichmentActionRequest struct {
 	Reason string `json:"reason"`
 }
 
+type assetEnrichmentBatchAcceptRequest struct {
+	SuggestionIDs []string `json:"suggestion_ids"`
+}
+
 type assetEnrichmentReportRequest struct {
 	Focus string `json:"focus"`
 }
@@ -36,6 +40,14 @@ type assetEnrichmentSuggestionInput struct {
 	Conflict         bool
 	Notes            string
 	Metadata         map[string]any
+}
+
+type assetEnrichmentSuggestionApplication struct {
+	Suggestion       *core.Record
+	Record           *core.Record
+	TargetCollection string
+	TargetField      string
+	AssetID          string
 }
 
 func (h *Hub) generateAssetEnrichmentReport(e *core.RequestEvent) error {
@@ -146,11 +158,16 @@ func (h *Hub) createAssetEnrichmentAITask(userID string, asset *core.Record, rep
 		"focus":          focus,
 	})
 	record.Set("output_summary", map[string]any{
-		"ai_status":         firstNonEmpty(onlineResult.AI.Status, status),
-		"ai_suggestions":    onlineResult.AI.Suggestions,
-		"total_suggestions": len(suggestions),
-		"providers":         onlineResult.Providers,
-		"focus":             focus,
+		"ai_status":                     firstNonEmpty(onlineResult.AI.Status, status),
+		"ai_attempts":                   onlineResult.AI.Attempts,
+		"ai_suggestions":                onlineResult.AI.Suggestions,
+		"source_discovery_status":       onlineResult.Discovery.Status,
+		"source_discovery_attempts":     onlineResult.Discovery.Attempts,
+		"source_discovery_source_count": onlineResult.Discovery.Suggestions,
+		"source_discovery_error":        onlineResult.Discovery.Error,
+		"total_suggestions":             len(suggestions),
+		"providers":                     onlineResult.Providers,
+		"focus":                         focus,
 	})
 	record.Set("error", errorMessage)
 	record.Set("metadata", map[string]any{
@@ -174,7 +191,8 @@ func (h *Hub) acceptAssetEnrichmentSuggestion(e *core.RequestEvent) error {
 	if suggestion.GetString("status") != "pending" {
 		return e.BadRequestError("Suggestion is not pending.", nil)
 	}
-	if err := h.applyAssetEnrichmentSuggestion(e.Auth.Id, suggestion); err != nil {
+	applications, records, err := h.prepareAssetEnrichmentBatchApplications(e.Auth.Id, []*core.Record{suggestion})
+	if err != nil {
 		if errors.Is(err, errAssetEnrichmentStale) {
 			suggestion.Set("status", "stale")
 			_ = h.Save(suggestion)
@@ -183,15 +201,48 @@ func (h *Hub) acceptAssetEnrichmentSuggestion(e *core.RequestEvent) error {
 		}
 		return e.BadRequestError(err.Error(), err)
 	}
-	suggestion.Set("status", "accepted")
-	if err := h.Save(suggestion); err != nil {
-		return e.InternalServerError("Failed to update suggestion status.", err)
-	}
-	if err := h.updateAssetEnrichmentReportStatus(suggestion.GetString("report")); err != nil {
-		return e.InternalServerError("Failed to update report status.", err)
+	if err := h.saveAssetEnrichmentBatchApplications(e.Auth.Id, applications, records); err != nil {
+		return e.InternalServerError("Failed to accept enrichment suggestion.", err)
 	}
 	h.createOperationAudit(e, "", "asset_enrichment_accept", suggestion.GetString("asset"), "", "success", "资产补全建议已写入")
 	return e.JSON(http.StatusOK, map[string]string{"status": "accepted"})
+}
+
+func (h *Hub) acceptAssetEnrichmentSuggestionsBatch(e *core.RequestEvent) error {
+	var req assetEnrichmentBatchAcceptRequest
+	if err := json.NewDecoder(e.Request.Body).Decode(&req); err != nil {
+		return e.BadRequestError("Invalid request body.", err)
+	}
+	suggestionIDs := uniqueNonEmptyStrings(req.SuggestionIDs)
+	if len(suggestionIDs) == 0 {
+		return e.BadRequestError("Missing suggestion ids.", nil)
+	}
+	if len(suggestionIDs) > 50 {
+		return e.BadRequestError("一次最多确认 50 条补全建议。", nil)
+	}
+	suggestions := make([]*core.Record, 0, len(suggestionIDs))
+	for _, suggestionID := range suggestionIDs {
+		suggestion, err := h.findUserEnrichmentSuggestion(suggestionID, e.Auth.Id)
+		if err != nil {
+			return e.NotFoundError("Suggestion not found.", err)
+		}
+		if suggestion.GetString("status") != "pending" {
+			return e.BadRequestError("Suggestion is not pending.", nil)
+		}
+		suggestions = append(suggestions, suggestion)
+	}
+	applications, records, err := h.prepareAssetEnrichmentBatchApplications(e.Auth.Id, suggestions)
+	if err != nil {
+		if errors.Is(err, errAssetEnrichmentStale) {
+			return e.BadRequestError("资产主档当前值已变化，请重新生成补全报告。", err)
+		}
+		return e.BadRequestError(err.Error(), err)
+	}
+	if err := h.saveAssetEnrichmentBatchApplications(e.Auth.Id, applications, records); err != nil {
+		return e.InternalServerError("Failed to accept enrichment suggestions.", err)
+	}
+	h.createOperationAudit(e, "", "asset_enrichment_accept_batch", firstNonEmpty(suggestions[0].GetString("asset"), ""), "", "success", fmt.Sprintf("资产补全建议已批量写入 %d 条", len(applications)))
+	return e.JSON(http.StatusOK, map[string]any{"status": "accepted", "accepted": len(applications)})
 }
 
 func (h *Hub) rejectAssetEnrichmentSuggestion(e *core.RequestEvent) error {
@@ -321,6 +372,8 @@ func (h *Hub) createAssetEnrichmentReportRecord(userID string, asset *core.Recor
 			"vendor":        asset.GetString("vendor"),
 			"location":      asset.GetString("location"),
 			"support_url":   recordMetadataString(asset, "support_url"),
+			"product_url":   recordMetadataString(asset, "product_url"),
+			"official_url":  recordMetadataString(asset, "official_url"),
 			"metadata_keys": sortedMapKeys(recordJSONMap(asset, "metadata")),
 		},
 		"local_collection": map[string]any{
@@ -505,28 +558,63 @@ func buildInterfaceSuggestion(record *core.Record, field string, label string, c
 
 var errAssetEnrichmentStale = errors.New("asset enrichment suggestion stale")
 
-func (h *Hub) applyAssetEnrichmentSuggestion(userID string, suggestion *core.Record) error {
+func (h *Hub) prepareAssetEnrichmentBatchApplications(userID string, suggestions []*core.Record) ([]assetEnrichmentSuggestionApplication, map[string]*core.Record, error) {
+	records := map[string]*core.Record{}
+	fieldSeen := map[string]bool{}
+	applications := make([]assetEnrichmentSuggestionApplication, 0, len(suggestions))
+	for _, suggestion := range suggestions {
+		application, err := h.prepareAssetEnrichmentSuggestionApplication(userID, suggestion, records)
+		if err != nil {
+			return nil, nil, err
+		}
+		fieldKey := strings.Join([]string{application.TargetCollection, application.Record.Id, application.TargetField}, "\x00")
+		if fieldSeen[fieldKey] {
+			return nil, nil, fmt.Errorf("同一批次里存在重复目标字段：%s.%s", application.TargetCollection, application.TargetField)
+		}
+		fieldSeen[fieldKey] = true
+		applications = append(applications, application)
+	}
+	recordKeys := sortedStringKeys(records)
+	for _, key := range recordKeys {
+		record := records[key]
+		if err := h.validateAssetEnrichmentDuplicateBeforeSave(userID, record.Collection().Name, record); err != nil {
+			return nil, nil, err
+		}
+	}
+	return applications, records, nil
+}
+
+func (h *Hub) prepareAssetEnrichmentSuggestionApplication(userID string, suggestion *core.Record, records map[string]*core.Record) (assetEnrichmentSuggestionApplication, error) {
 	targetCollection := suggestion.GetString("target_collection")
 	targetField := suggestion.GetString("target_field")
 	targetRecordID := firstNonEmpty(suggestion.GetString("target_record"), suggestion.GetString("asset"))
 	if !isAllowedAssetEnrichmentField(targetCollection, targetField) {
-		return fmt.Errorf("字段不允许通过补全建议写入：%s.%s", targetCollection, targetField)
+		return assetEnrichmentSuggestionApplication{}, fmt.Errorf("字段不允许通过补全建议写入：%s.%s", targetCollection, targetField)
 	}
-	record, err := h.FindRecordById(targetCollection, targetRecordID)
-	if err != nil {
-		return fmt.Errorf("目标记录不存在")
+	recordKey := targetCollection + ":" + targetRecordID
+	record := records[recordKey]
+	if record == nil {
+		loaded, err := h.FindRecordById(targetCollection, targetRecordID)
+		if err != nil {
+			return assetEnrichmentSuggestionApplication{}, fmt.Errorf("目标记录不存在")
+		}
+		record = loaded.Clone()
+		records[recordKey] = record
 	}
 	assetID := suggestion.GetString("asset")
 	if err := h.validateAssetEnrichmentTargetOwnership(userID, assetID, targetCollection, record); err != nil {
-		return err
+		return assetEnrichmentSuggestionApplication{}, err
 	}
 	current := currentAssetEnrichmentFieldValue(record, targetField)
 	if strings.TrimSpace(current) != strings.TrimSpace(suggestion.GetString("current_value")) {
-		return errAssetEnrichmentStale
+		return assetEnrichmentSuggestionApplication{}, errAssetEnrichmentStale
 	}
 	value, err := h.parseAssetEnrichmentRecommendedValue(suggestion)
 	if err != nil {
-		return err
+		return assetEnrichmentSuggestionApplication{}, err
+	}
+	if err := validateAssetEnrichmentRecommendedValue(targetCollection, targetField, value, suggestion); err != nil {
+		return assetEnrichmentSuggestionApplication{}, err
 	}
 	if strings.HasPrefix(targetField, "metadata.") {
 		metadata := recordJSONMap(record, "metadata")
@@ -535,29 +623,60 @@ func (h *Hub) applyAssetEnrichmentSuggestion(userID string, suggestion *core.Rec
 	} else {
 		record.Set(targetField, value)
 	}
-	if err := h.validateAssetEnrichmentDuplicateBeforeSave(userID, targetCollection, record); err != nil {
-		return err
-	}
-	if err := h.Save(record); err != nil {
-		return err
-	}
-	return h.createAssetChange(
-		userID,
-		assetID,
-		targetCollection,
-		record.Id,
-		"update",
-		"确认补全建议："+suggestion.GetString("target_label"),
-		map[string]any{
-			"source_collection": "asset_enrichment_suggestions",
-			"source_record":     suggestion.Id,
-			"field":             targetField,
-			"previous":          suggestion.GetString("current_value"),
-			"recommended":       suggestion.GetString("recommended_value"),
-			"source":            suggestion.GetString("source"),
-			"confidence":        suggestion.GetInt("confidence"),
-		},
-	)
+	return assetEnrichmentSuggestionApplication{
+		Suggestion:       suggestion,
+		Record:           record,
+		TargetCollection: targetCollection,
+		TargetField:      targetField,
+		AssetID:          assetID,
+	}, nil
+}
+
+func (h *Hub) saveAssetEnrichmentBatchApplications(userID string, applications []assetEnrichmentSuggestionApplication, records map[string]*core.Record) error {
+	reportIDs := map[string]bool{}
+	return h.RunInTransaction(func(txApp core.App) error {
+		for _, key := range sortedStringKeys(records) {
+			if err := txApp.Save(records[key]); err != nil {
+				return err
+			}
+		}
+		for _, application := range applications {
+			suggestion := application.Suggestion
+			if err := createAssetChangeWithApp(
+				txApp,
+				userID,
+				application.AssetID,
+				application.TargetCollection,
+				application.Record.Id,
+				"update",
+				"确认补全建议："+suggestion.GetString("target_label"),
+				map[string]any{
+					"source_collection": "asset_enrichment_suggestions",
+					"source_record":     suggestion.Id,
+					"field":             application.TargetField,
+					"previous":          suggestion.GetString("current_value"),
+					"recommended":       suggestion.GetString("recommended_value"),
+					"source":            suggestion.GetString("source"),
+					"confidence":        suggestion.GetInt("confidence"),
+				},
+			); err != nil {
+				return err
+			}
+			suggestion.Set("status", "accepted")
+			if err := txApp.Save(suggestion); err != nil {
+				return err
+			}
+			if reportID := strings.TrimSpace(suggestion.GetString("report")); reportID != "" {
+				reportIDs[reportID] = true
+			}
+		}
+		for _, reportID := range sortedBoolMapKeys(reportIDs) {
+			if err := updateAssetEnrichmentReportStatusWithApp(txApp, reportID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (h *Hub) validateAssetEnrichmentTargetOwnership(userID string, assetID string, targetCollection string, record *core.Record) error {
@@ -586,6 +705,9 @@ func isAllowedAssetEnrichmentField(collection string, field string) bool {
 		case "name", "vendor", "model", "serial_number", "management_ip", "location", "role":
 			return true
 		default:
+			if !strings.HasPrefix(field, "metadata.") {
+				return false
+			}
 			return allowedAssetEnrichmentMetadataFields[strings.TrimPrefix(field, "metadata.")]
 		}
 	case "asset_interfaces":
@@ -602,6 +724,8 @@ var allowedAssetEnrichmentMetadataFields = map[string]bool{
 	"fixed_ipv6":                true,
 	"mac":                       true,
 	"support_url":               true,
+	"product_url":               true,
+	"official_url":              true,
 	"online_specs_summary":      true,
 	"internal_model":            true,
 	"cpu_process":               true,
@@ -698,9 +822,140 @@ func (h *Hub) parseAssetEnrichmentRecommendedValue(suggestion *core.Record) (any
 	return value, nil
 }
 
+func validateAssetEnrichmentRecommendedValue(collection string, field string, value any, suggestion *core.Record) error {
+	if collection == "assets" && field == "metadata.official_image_url" {
+		text := strings.TrimSpace(fmt.Sprint(value))
+		if text != "" && !isLikelyImageURL(text) {
+			return fmt.Errorf("官方图片必须是可识别的图片 URL")
+		}
+		if text != "" && !assetEnrichmentOfficialImageWritebackAllowed(text, suggestion) {
+			return fmt.Errorf("官方图片必须来自官方图片来源")
+		}
+	}
+	return nil
+}
+
+func assetEnrichmentOfficialImageWritebackAllowed(value string, suggestion *core.Record) bool {
+	if classifyAssetOnlineURL(value) == "official_image" {
+		return true
+	}
+	metadata := recordJSONMap(suggestion, "metadata")
+	sources := assetEnrichmentSourcesFromSuggestionMetadata(metadata)
+	if len(sources) == 0 {
+		return false
+	}
+	return assetOfficialImageSuggestionValueAllowed(value, sources)
+}
+
+func assetEnrichmentSourcesFromSuggestionMetadata(metadata map[string]any) []assetOnlineSource {
+	if sources := assetEnrichmentSourceRowsFromSuggestionMetadata(metadata); len(sources) > 0 {
+		return sources
+	}
+	sourceURLs := stringSliceFromMap(metadata, "source_urls")
+	sourceTypes := stringSliceFromMap(metadata, "source_types")
+	sourceTitles := stringSliceFromMap(metadata, "source_titles")
+	maxLen := maxInt(len(sourceURLs), len(sourceTypes), len(sourceTitles))
+	result := make([]assetOnlineSource, 0, maxLen)
+	for index := 0; index < maxLen; index++ {
+		source := assetOnlineSource{
+			URL:   stringAt(sourceURLs, index),
+			Type:  stringAt(sourceTypes, index),
+			Title: stringAt(sourceTitles, index),
+		}
+		if source.Type == "" && source.URL != "" {
+			source.Type = classifyAssetOnlineURL(source.URL)
+		}
+		if source.ImageURL == "" && isLikelyImageURL(source.URL) {
+			source.ImageURL = source.URL
+		}
+		if source.URL == "" && source.ImageURL == "" {
+			continue
+		}
+		result = append(result, source)
+	}
+	return result
+}
+
+func assetEnrichmentSourceRowsFromSuggestionMetadata(metadata map[string]any) []assetOnlineSource {
+	raw, ok := metadata["sources"]
+	if !ok || raw == nil {
+		return nil
+	}
+	switch typed := raw.(type) {
+	case []assetOnlineSource:
+		return normalizeAssetEnrichmentSources(typed)
+	case []map[string]any:
+		result := make([]assetOnlineSource, 0, len(typed))
+		for _, row := range typed {
+			if source, ok := assetEnrichmentSourceFromMetadataMap(row); ok {
+				result = append(result, source)
+			}
+		}
+		return result
+	case []any:
+		result := make([]assetOnlineSource, 0, len(typed))
+		for _, item := range typed {
+			if row, ok := item.(map[string]any); ok {
+				if source, ok := assetEnrichmentSourceFromMetadataMap(row); ok {
+					result = append(result, source)
+				}
+			}
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
+func normalizeAssetEnrichmentSources(sources []assetOnlineSource) []assetOnlineSource {
+	result := make([]assetOnlineSource, 0, len(sources))
+	for _, source := range sources {
+		source.Provider = strings.TrimSpace(source.Provider)
+		source.Type = strings.TrimSpace(source.Type)
+		source.Title = strings.TrimSpace(source.Title)
+		source.URL = strings.TrimSpace(source.URL)
+		source.ImageURL = strings.TrimSpace(source.ImageURL)
+		if source.Type == "" && source.URL != "" {
+			source.Type = classifyAssetOnlineURL(source.URL)
+		}
+		if source.ImageURL == "" && isLikelyImageURL(source.URL) {
+			source.ImageURL = source.URL
+		}
+		if source.URL == "" && source.ImageURL == "" {
+			continue
+		}
+		result = append(result, source)
+	}
+	return result
+}
+
+func assetEnrichmentSourceFromMetadataMap(row map[string]any) (assetOnlineSource, bool) {
+	source := assetOnlineSource{
+		Provider:   stringFromMap(row, "provider"),
+		Type:       stringFromMap(row, "type"),
+		Title:      stringFromMap(row, "title"),
+		URL:        stringFromMap(row, "url"),
+		ImageURL:   stringFromMap(row, "image_url"),
+		Confidence: intFromMap(row, "confidence"),
+	}
+	if source.Type == "" && source.URL != "" {
+		source.Type = classifyAssetOnlineURL(source.URL)
+	}
+	if source.ImageURL == "" && isLikelyImageURL(source.URL) {
+		source.ImageURL = source.URL
+	}
+	if source.URL == "" && source.ImageURL == "" {
+		return assetOnlineSource{}, false
+	}
+	return source, true
+}
+
 func (h *Hub) validateAssetEnrichmentDuplicateBeforeSave(userID string, collection string, record *core.Record) error {
 	switch collection {
 	case "assets":
+		currentName := normalizeAssetText(record.GetString("name"))
+		currentType := strings.TrimSpace(record.GetString("type"))
+		currentSerial := normalizeAssetText(record.GetString("serial_number"))
 		currentIPs := recordAssetIPValues(record)
 		currentMAC := normalizeAssetMAC(recordMetadataString(record, "mac"))
 		assets, err := h.FindRecordsByFilter("assets", "user = {:user} && id != {:id}", "", -1, 0, dbx.Params{"user": userID, "id": record.Id})
@@ -708,6 +963,13 @@ func (h *Hub) validateAssetEnrichmentDuplicateBeforeSave(userID string, collecti
 			return err
 		}
 		for _, existing := range assets {
+			existingName := normalizeAssetText(existing.GetString("name"))
+			if currentName != "" && currentType != "" && currentType == strings.TrimSpace(existing.GetString("type")) && currentName == existingName {
+				return fmt.Errorf("同类型同名资产已存在，请不要重复添加")
+			}
+			if currentSerial != "" && currentSerial == normalizeAssetText(existing.GetString("serial_number")) {
+				return fmt.Errorf("资产序列号已存在，请不要重复添加")
+			}
 			if duplicateLabel := duplicateAssetIPLabel(currentIPs, recordAssetIPValues(existing)); duplicateLabel != "" {
 				return fmt.Errorf("%s 已被其他资产使用", duplicateLabel)
 			}
@@ -762,20 +1024,24 @@ func (h *Hub) validateAssetEnrichmentDuplicateBeforeSave(userID string, collecti
 }
 
 func (h *Hub) updateAssetEnrichmentReportStatus(reportID string) error {
+	return updateAssetEnrichmentReportStatusWithApp(h.App, reportID)
+}
+
+func updateAssetEnrichmentReportStatusWithApp(app core.App, reportID string) error {
 	if strings.TrimSpace(reportID) == "" {
 		return nil
 	}
-	report, err := h.FindRecordById("asset_enrichment_reports", reportID)
+	report, err := app.FindRecordById("asset_enrichment_reports", reportID)
 	if err != nil {
 		return err
 	}
-	suggestions, err := h.FindRecordsByFilter("asset_enrichment_suggestions", "report = {:report}", "", -1, 0, dbx.Params{"report": reportID})
+	suggestions, err := app.FindRecordsByFilter("asset_enrichment_suggestions", "report = {:report}", "", -1, 0, dbx.Params{"report": reportID})
 	if err != nil {
 		return err
 	}
 	if len(suggestions) == 0 {
 		report.Set("status", "ready")
-		return h.Save(report)
+		return app.Save(report)
 	}
 	counts := map[string]int{}
 	for _, suggestion := range suggestions {
@@ -800,7 +1066,7 @@ func (h *Hub) updateAssetEnrichmentReportStatus(reportID string) error {
 	metadata["rejected_suggestions"] = counts["rejected"]
 	metadata["stale_suggestions"] = counts["stale"]
 	report.Set("metadata", metadata)
-	return h.Save(report)
+	return app.Save(report)
 }
 
 func currentAssetEnrichmentFieldValue(record *core.Record, field string) string {
@@ -988,6 +1254,53 @@ func stringFromMap(values map[string]any, key string) string {
 		return strings.TrimSpace(text)
 	}
 	return strings.TrimSpace(fmt.Sprint(value))
+}
+
+func stringSliceFromMap(values map[string]any, key string) []string {
+	value, ok := values[key]
+	if !ok || value == nil {
+		return nil
+	}
+	switch typed := value.(type) {
+	case []string:
+		result := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if trimmed := strings.TrimSpace(item); trimmed != "" {
+				result = append(result, trimmed)
+			}
+		}
+		return result
+	case []any:
+		result := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if trimmed := strings.TrimSpace(fmt.Sprint(item)); trimmed != "" {
+				result = append(result, trimmed)
+			}
+		}
+		return result
+	case string:
+		if trimmed := strings.TrimSpace(typed); trimmed != "" {
+			return []string{trimmed}
+		}
+	}
+	return nil
+}
+
+func stringAt(values []string, index int) string {
+	if index < 0 || index >= len(values) {
+		return ""
+	}
+	return strings.TrimSpace(values[index])
+}
+
+func maxInt(values ...int) int {
+	maximum := 0
+	for _, value := range values {
+		if value > maximum {
+			maximum = value
+		}
+	}
+	return maximum
 }
 
 func intFromMap(values map[string]any, key string) int {
@@ -1190,6 +1503,19 @@ func sortedMapKeys(values map[string]any) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func sortedStringKeys[T any](values map[string]T) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedBoolMapKeys(values map[string]bool) []string {
+	return sortedStringKeys(values)
 }
 
 func isFiniteNumber(value float64) bool {

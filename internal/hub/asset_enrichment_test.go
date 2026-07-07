@@ -87,6 +87,189 @@ func TestAssetEnrichmentReportIncludesOnlineSupportSource(t *testing.T) {
 	require.Contains(t, onlineNote.GetString("online_value"), server.URL)
 }
 
+func TestAssetEnrichmentDiscoversOfficialSourcesWithAIWhenNoReferenceURL(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-ai-source-discovery@example.com")
+	sourceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/redmik50/specs" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方规格</title><meta property="og:image" content="/redmi-k50.png"></head><body>Redmi K50 官方规格，天玑 8100，墨羽黑，银迹，幽芒。</body></html>`))
+	}))
+	t.Cleanup(sourceServer.Close)
+
+	aiCalls := 0
+	aiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		aiCalls++
+		w.Header().Set("Content-Type", "application/json")
+		switch aiCalls {
+		case 1:
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"source_urls\":[\"` + sourceServer.URL + `/redmik50/specs\"]}"}}]}`))
+		default:
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"suggestions\":[{\"field\":\"colors_available\",\"label\":\"官方配色\",\"value\":\"墨羽黑, 银迹, 幽芒\",\"confidence\":92,\"notes\":\"来自官方规格页。\",\"source_urls\":[\"` + sourceServer.URL + `/redmik50/specs\"]}]}"}}]}`))
+		}
+	}))
+	t.Cleanup(aiServer.Close)
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENDPOINT", aiServer.URL+"/v1/chat/completions")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_API_KEY", "test-key")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_MODEL", "test-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	delete(metadata, "support_url")
+	delete(metadata, "product_url")
+	delete(metadata, "official_url")
+	metadata["internal_model"] = "22041211AC"
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.GreaterOrEqual(t, aiCalls, 2, "expected source discovery and extraction calls")
+
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+	sourceSummary := recordJSONField(t, reports[0], "source_summary")
+	onlineMatch, ok := sourceSummary["online_match"].(map[string]any)
+	require.True(t, ok, "source_summary: %v", sourceSummary)
+	require.Equal(t, "ready", onlineMatch["status"], "online_match: %v", onlineMatch)
+	require.Contains(t, fmt.Sprint(onlineMatch["providers"]), "asset_agent")
+	require.Contains(t, fmt.Sprint(onlineMatch["sources"]), sourceServer.URL+"/redmik50/specs")
+	require.Contains(t, fmt.Sprint(onlineMatch["sources"]), "official")
+
+	suggestions := fixture.findSuggestions(t)
+	requireSuggestionValue(t, suggestions, "metadata.colors_available", "墨羽黑, 银迹, 幽芒")
+}
+
+func TestAssetEnrichmentSkipsOversizedReferencePageBeforeParsing(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-oversized-reference-page@example.com")
+	body := `<html><head><title>Redmi K50 官方支持</title></head><body>` + strings.Repeat("Redmi K50 规格资料。", 40*1024) + `</body></html>`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Length", fmt.Sprint(len([]byte(body))))
+		_, _ = io.WriteString(w, body)
+	}))
+	t.Cleanup(server.Close)
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["support_url"] = server.URL + "/support/redmi-k50"
+	metadata["internal_model"] = "22021211RC"
+	asset.Set("vendor", "Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+	sourceSummary := recordJSONField(t, reports[0], "source_summary")
+	onlineMatch, ok := sourceSummary["online_match"].(map[string]any)
+	require.True(t, ok, "source_summary: %v", sourceSummary)
+	require.NotEqual(t, "ready", onlineMatch["status"], "online_match: %v", onlineMatch)
+	require.Empty(t, onlineMatch["sources"], "oversized page should not be parsed as a usable source: %v", onlineMatch)
+	require.Contains(t, fmt.Sprint(onlineMatch["errors"]), "读取失败")
+	require.Contains(t, fmt.Sprint(onlineMatch["errors"]), "超过抓取大小上限")
+
+	suggestions := fixture.findSuggestions(t)
+	require.Nil(t, findSuggestionByField(suggestions, "metadata.hardware_match_note"), "fields: %v", suggestionFields(suggestions))
+}
+
+func TestAssetEnrichmentSkipsUnsupportedReferencePageContentType(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-unsupported-reference-page-type@example.com")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/pdf")
+		_, _ = w.Write([]byte("%PDF-1.7 Redmi K50 官方支持资料"))
+	}))
+	t.Cleanup(server.Close)
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["support_url"] = server.URL + "/support/redmi-k50.pdf"
+	metadata["internal_model"] = "22021211RC"
+	asset.Set("vendor", "Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+	sourceSummary := recordJSONField(t, reports[0], "source_summary")
+	onlineMatch, ok := sourceSummary["online_match"].(map[string]any)
+	require.True(t, ok, "source_summary: %v", sourceSummary)
+	require.NotEqual(t, "ready", onlineMatch["status"], "online_match: %v", onlineMatch)
+	require.Empty(t, onlineMatch["sources"], "binary page should not be parsed as a usable source: %v", onlineMatch)
+	require.Contains(t, fmt.Sprint(onlineMatch["errors"]), "读取失败")
+	require.Contains(t, fmt.Sprint(onlineMatch["errors"]), "资料页类型不支持")
+	require.Contains(t, fmt.Sprint(onlineMatch["errors"]), "application/pdf")
+
+	suggestions := fixture.findSuggestions(t)
+	require.Nil(t, findSuggestionByField(suggestions, "metadata.hardware_match_note"), "fields: %v", suggestionFields(suggestions))
+}
+
+func TestAssetEnrichmentReportUsesProductURLSource(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-product-url@example.com")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 产品规格</title><meta property="og:image" content="/redmi-k50-product.png"></head><body>
+			<h1>Redmi K50</h1>
+			<p>天玑 8100，OLED 直屏，5500 mAh 电池，67W 快充。</p>
+		</body></html>`))
+	}))
+	t.Cleanup(server.Close)
+
+	phoneAsset, err := pulseTests.CreateRecord(fixture.hub, "assets", map[string]any{
+		"user":   fixture.user.Id,
+		"name":   "RedmiK50",
+		"type":   "phone",
+		"status": "active",
+		"vendor": "小米 / Redmi",
+		"model":  "Redmi K50",
+	})
+	require.NoError(t, err)
+	metadata := recordMetadata(t, phoneAsset)
+	metadata["internal_model"] = "22041211AC"
+	metadata["product_url"] = server.URL + "/product/redmik50/specs"
+	phoneAsset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(phoneAsset))
+	fixture.asset = phoneAsset
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+	sourceSummary := recordJSONField(t, reports[0], "source_summary")
+	onlineMatch, ok := sourceSummary["online_match"].(map[string]any)
+	require.True(t, ok, "source_summary: %v", sourceSummary)
+	require.Equalf(t, "ready", onlineMatch["status"], "online_match: %v", onlineMatch)
+
+	sources, ok := onlineMatch["sources"].([]any)
+	require.True(t, ok, "online_match: %v", onlineMatch)
+	require.NotEmpty(t, sources)
+	firstSource, ok := sources[0].(map[string]any)
+	require.True(t, ok, "sources: %v", sources)
+	require.Equal(t, "product_url", firstSource["provider"])
+	require.Equal(t, "official_product", firstSource["type"])
+
+	suggestions := fixture.findSuggestions(t)
+	requireSuggestionValue(t, suggestions, "metadata.cpu_model", "天玑 8100")
+	requireSuggestionValue(t, suggestions, "metadata.official_image_url", server.URL+"/redmi-k50-product.png")
+}
+
 func TestAssetEnrichmentOnlineDetailedSpecsFromSupportPage(t *testing.T) {
 	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-phone-specs@example.com")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -198,6 +381,86 @@ func TestAssetEnrichmentDoesNotSuggestOfficialImageFromLowTrustSupportURL(t *tes
 	require.Nil(t, findSuggestionByField(suggestions, "metadata.official_image_url"), "fields: %v", suggestionFields(suggestions))
 }
 
+func TestAssetEnrichmentDoesNotTreatSupportPathOnUnknownHostAsOfficial(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-unknown-host-support-path@example.com")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>第三方资料 Redmi K50</title><meta property="og:image" content="/third-party-redmi-k50.jpg"></head><body>
+			<h1>Redmi K50 第三方资料页</h1>
+			<p>这个页面路径虽然包含 support，但域名不是厂家官网。</p>
+		</body></html>`))
+	}))
+	t.Cleanup(server.Close)
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["support_url"] = server.URL + "/support/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+	sourceSummary := recordJSONField(t, reports[0], "source_summary")
+	onlineMatch, ok := sourceSummary["online_match"].(map[string]any)
+	require.True(t, ok, "source_summary: %v", sourceSummary)
+	sources, ok := onlineMatch["sources"].([]any)
+	require.True(t, ok, "online_match: %v", onlineMatch)
+	require.NotEmpty(t, sources)
+	firstSource, ok := sources[0].(map[string]any)
+	require.True(t, ok, "sources: %v", sources)
+	require.Equal(t, "web_result", firstSource["type"])
+
+	suggestions := fixture.findSuggestions(t)
+	require.Nil(t, findSuggestionByField(suggestions, "metadata.official_image_url"), "fields: %v", suggestionFields(suggestions))
+}
+
+func TestAssetEnrichmentDoesNotPromoteUnknownSupportPathWithoutOfficialSignal(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-unknown-support-neutral-title@example.com")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 Support Specs</title><meta property="og:image" content="/redmi-k50.jpg"></head><body>
+			<h1>Redmi K50 Support Specs</h1>
+			<p>这个页面没有厂家域名，也没有明确官方语义。</p>
+		</body></html>`))
+	}))
+	t.Cleanup(server.Close)
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["support_url"] = server.URL + "/support/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+	sourceSummary := recordJSONField(t, reports[0], "source_summary")
+	onlineMatch, ok := sourceSummary["online_match"].(map[string]any)
+	require.True(t, ok, "source_summary: %v", sourceSummary)
+	sources, ok := onlineMatch["sources"].([]any)
+	require.True(t, ok, "online_match: %v", onlineMatch)
+	require.NotEmpty(t, sources)
+	firstSource, ok := sources[0].(map[string]any)
+	require.True(t, ok, "sources: %v", sources)
+	require.Equal(t, "web_result", firstSource["type"])
+
+	suggestions := fixture.findSuggestions(t)
+	require.Nil(t, findSuggestionByField(suggestions, "metadata.official_image_url"), "fields: %v", suggestionFields(suggestions))
+}
+
 func TestAssetEnrichmentRejectsOfficialAIFieldsFromLowTrustSupportURL(t *testing.T) {
 	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-low-trust-support-ai@example.com")
 	supportServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -300,6 +563,268 @@ func TestAssetEnrichmentOnlineAIExtractorCreatesSuggestions(t *testing.T) {
 	require.True(t, ok, "online_match: %v", onlineMatch)
 	require.Equal(t, "ready", aiExtractor["status"])
 	require.Equal(t, "test-model", aiExtractor["model"])
+}
+
+func TestAssetEnrichmentAIRetriesTransientModelFailure(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-ai-retry@example.com")
+	supportServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方规格</title></head><body>Redmi K50 官方规格资料，芯片为天玑 8100。</body></html>`))
+	}))
+	t.Cleanup(supportServer.Close)
+
+	aiRequests := 0
+	aiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		require.Equal(t, "Bearer test-key", r.Header.Get("Authorization"))
+		aiRequests += 1
+		if aiRequests == 1 {
+			w.Header().Set("Retry-After", "0")
+			http.Error(w, "temporary rate limit", http.StatusTooManyRequests)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"suggestions\":[{\"field\":\"cpu_model\",\"label\":\"芯片 / SoC\",\"value\":\"天玑 8100\",\"confidence\":95,\"notes\":\"来自官方规格页。\",\"source_urls\":[\"` + supportServer.URL + `/redmik50/specs\"]}]}"}}]}`))
+	}))
+	t.Cleanup(aiServer.Close)
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENDPOINT", aiServer.URL+"/v1/chat/completions")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_API_KEY", "test-key")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_MODEL", "test-model")
+
+	phoneAsset, err := pulseTests.CreateRecord(fixture.hub, "assets", map[string]any{
+		"user":   fixture.user.Id,
+		"name":   "RedmiK50",
+		"type":   "phone",
+		"status": "active",
+		"vendor": "小米 / Redmi",
+		"model":  "Redmi K50",
+		"metadata": map[string]any{
+			"internal_model": "22041211AC",
+			"support_url":    supportServer.URL + "/redmik50/specs",
+		},
+	})
+	require.NoError(t, err)
+	fixture.asset = phoneAsset
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Equal(t, 2, aiRequests)
+
+	requireSuggestionValue(t, fixture.findSuggestions(t), "metadata.cpu_model", "天玑 8100")
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+	sourceSummary := recordJSONField(t, reports[0], "source_summary")
+	onlineMatch, ok := sourceSummary["online_match"].(map[string]any)
+	require.True(t, ok, "source_summary: %v", sourceSummary)
+	aiExtractor, ok := onlineMatch["ai_extractor"].(map[string]any)
+	require.True(t, ok, "online_match: %v", onlineMatch)
+	require.Equal(t, "ready", aiExtractor["status"])
+	require.Equal(t, float64(2), aiExtractor["attempts"])
+
+	tasks, err := fixture.hub.FindRecordsByFilter("ai_tasks", "asset = {:asset} && kind = 'asset_enrichment'", "-created", -1, 0, map[string]any{
+		"asset": phoneAsset.Id,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, tasks)
+	outputSummary := recordJSONField(t, tasks[0], "output_summary")
+	require.Equal(t, float64(2), outputSummary["ai_attempts"])
+}
+
+func TestAssetEnrichmentAIDoesNotRetryNonTransientModelFailure(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-ai-no-retry@example.com")
+	supportServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方规格</title></head><body>Redmi K50 官方规格资料。</body></html>`))
+	}))
+	t.Cleanup(supportServer.Close)
+
+	aiRequests := 0
+	aiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		aiRequests += 1
+		http.Error(w, "bad request", http.StatusBadRequest)
+	}))
+	t.Cleanup(aiServer.Close)
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENDPOINT", aiServer.URL+"/v1/chat/completions")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_API_KEY", "test-key")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_MODEL", "test-model")
+
+	phoneAsset, err := pulseTests.CreateRecord(fixture.hub, "assets", map[string]any{
+		"user":   fixture.user.Id,
+		"name":   "RedmiK50",
+		"type":   "phone",
+		"status": "active",
+		"vendor": "小米 / Redmi",
+		"model":  "Redmi K50",
+		"metadata": map[string]any{
+			"internal_model": "22041211AC",
+			"support_url":    supportServer.URL + "/redmik50/specs",
+		},
+	})
+	require.NoError(t, err)
+	fixture.asset = phoneAsset
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Equal(t, 1, aiRequests)
+	require.Nil(t, findSuggestionByField(fixture.findSuggestions(t), "metadata.cpu_model"), "fields: %v", suggestionFields(fixture.findSuggestions(t)))
+
+	tasks, err := fixture.hub.FindRecordsByFilter("ai_tasks", "asset = {:asset} && kind = 'asset_enrichment'", "-created", -1, 0, map[string]any{
+		"asset": phoneAsset.Id,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, tasks)
+	require.Equal(t, "failed", tasks[0].GetString("status"))
+	require.Contains(t, tasks[0].GetString("error"), "400")
+	outputSummary := recordJSONField(t, tasks[0], "output_summary")
+	require.Equal(t, float64(1), outputSummary["ai_attempts"])
+}
+
+func TestAssetEnrichmentOnlineAIExtractorKeepsLateRelevantSpecsInPayload(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-ai-late-specs@example.com")
+	filler := strings.Repeat("首页 导航 参数 总览 购买 链接。", 260)
+	supportServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方规格</title></head><body>
+			<p>` + filler + `</p>
+			<section>官方配色：墨羽黑、银迹、幽芒。</section>
+			<section>后置 4800 万像素三摄，5500 mAh 电池，67W 快充。</section>
+		</body></html>`))
+	}))
+	t.Cleanup(supportServer.Close)
+	aiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		rawBody, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		var payload struct {
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		require.NoError(t, json.Unmarshal(rawBody, &payload))
+		require.Len(t, payload.Messages, 2)
+		require.Contains(t, payload.Messages[1].Content, "官方配色：墨羽黑、银迹、幽芒")
+		require.Contains(t, payload.Messages[1].Content, "后置 4800 万像素三摄")
+		require.LessOrEqual(t, len([]rune(payload.Messages[1].Content)), 7000)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"suggestions\":[{\"field\":\"colors_available\",\"label\":\"官方配色\",\"value\":\"墨羽黑, 银迹, 幽芒\",\"confidence\":92,\"notes\":\"来自官方规格页。\",\"source_urls\":[\"` + supportServer.URL + `/redmik50/specs\"]},{\"field\":\"rear_camera_detail\",\"label\":\"后置影像\",\"value\":\"后置 4800 万像素三摄\",\"confidence\":90,\"notes\":\"来自官方规格页。\",\"source_urls\":[\"` + supportServer.URL + `/redmik50/specs\"]}]}"}}]}`))
+	}))
+	t.Cleanup(aiServer.Close)
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENDPOINT", aiServer.URL+"/v1/chat/completions")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_API_KEY", "test-key")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_MODEL", "test-model")
+
+	phoneAsset, err := pulseTests.CreateRecord(fixture.hub, "assets", map[string]any{
+		"user":   fixture.user.Id,
+		"name":   "RedmiK50",
+		"type":   "phone",
+		"status": "active",
+		"vendor": "小米 / Redmi",
+		"model":  "Redmi K50",
+		"metadata": map[string]any{
+			"internal_model": "22041211AC",
+			"support_url":    supportServer.URL + "/redmik50/specs",
+		},
+	})
+	require.NoError(t, err)
+	fixture.asset = phoneAsset
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	suggestions := fixture.findSuggestions(t)
+	requireSuggestionValue(t, suggestions, "metadata.colors_available", "墨羽黑, 银迹, 幽芒")
+	requireSuggestionValue(t, suggestions, "metadata.rear_camera_detail", "后置 4800 万像素三摄")
+}
+
+func TestAssetEnrichmentOnlineAIExtractorCapsMultiSourceExcerptBudget(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-ai-source-budget@example.com")
+	filler := strings.Repeat("首页 导航 参数 总览 购买 链接。", 260)
+	supportServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		switch r.URL.Path {
+		case "/support/redmik50":
+			_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方支持</title></head><body>
+				<p>` + filler + `</p>
+				<section>官方配色：墨羽黑、银迹、幽芒。</section>
+			</body></html>`))
+		case "/product/redmik50":
+			_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title></head><body>
+				<p>` + filler + `</p>
+				<section>存储规格：UFS 3.1，存储容量 256 GB。</section>
+			</body></html>`))
+		case "/official/redmik50":
+			_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官网资料页</title></head><body>
+				<p>` + filler + `</p>
+				<section>后置 4800 万像素光学防抖相机，5500 mAh 电池。</section>
+			</body></html>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(supportServer.Close)
+	aiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		rawBody, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		var payload struct {
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		require.NoError(t, json.Unmarshal(rawBody, &payload))
+		require.Len(t, payload.Messages, 2)
+		var userMessage struct {
+			Sources []struct {
+				URL     string `json:"url"`
+				Excerpt string `json:"excerpt"`
+			} `json:"sources"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(payload.Messages[1].Content), &userMessage))
+		require.Len(t, userMessage.Sources, 3)
+		totalExcerptRunes := 0
+		combinedExcerpts := ""
+		for _, source := range userMessage.Sources {
+			totalExcerptRunes += len([]rune(source.Excerpt))
+			combinedExcerpts += source.Excerpt + "\n"
+		}
+		require.LessOrEqual(t, totalExcerptRunes, 1800)
+		require.Contains(t, combinedExcerpts, "官方配色：墨羽黑、银迹、幽芒")
+		require.Contains(t, combinedExcerpts, "UFS 3.1")
+		require.Contains(t, combinedExcerpts, "4800 万像素")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"suggestions\":[]}"}}]}`))
+	}))
+	t.Cleanup(aiServer.Close)
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENDPOINT", aiServer.URL+"/v1/chat/completions")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_API_KEY", "test-key")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_MODEL", "test-model")
+
+	phoneAsset, err := pulseTests.CreateRecord(fixture.hub, "assets", map[string]any{
+		"user":   fixture.user.Id,
+		"name":   "RedmiK50",
+		"type":   "phone",
+		"status": "active",
+		"vendor": "小米 / Redmi",
+		"model":  "Redmi K50",
+		"metadata": map[string]any{
+			"internal_model": "22041211AC",
+			"support_url":    supportServer.URL + "/support/redmik50",
+			"product_url":    supportServer.URL + "/product/redmik50",
+			"official_url":   supportServer.URL + "/official/redmik50",
+		},
+	})
+	require.NoError(t, err)
+	fixture.asset = phoneAsset
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
 }
 
 func TestAssetEnrichmentOfficialColorFocusOnlyCreatesColorSuggestions(t *testing.T) {
@@ -514,6 +1039,179 @@ func TestAssetEnrichmentCapsLowTrustAISuggestionConfidence(t *testing.T) {
 	metadata := recordMetadata(t, suggestion)
 	require.Contains(t, fmt.Sprint(metadata["source_urls"]), sourceURL)
 	require.Contains(t, fmt.Sprint(metadata["source_titles"]), "普通规格页 Redmi K50")
+}
+
+func TestAssetEnrichmentRejectsOfficialReferenceURLFromLowTrustAISource(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-reference-url-source-quality@example.com")
+	sourceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>普通评测 Redmi K50</title></head><body>
+			<p>这个普通网页提到一个 Redmi K50 产品页链接，但不是厂家官网。</p>
+		</body></html>`))
+	}))
+	t.Cleanup(sourceServer.Close)
+	sourceURL := sourceServer.URL + "/redmi-k50-review"
+	aiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"suggestions\":[{\"field\":\"product_url\",\"label\":\"厂家产品页\",\"value\":\"https://blog.example.test/redmi-k50-product\",\"confidence\":92,\"notes\":\"低可信网页提到的产品页。\",\"source_urls\":[\"` + sourceURL + `\"]}]}"}}]}`))
+	}))
+	t.Cleanup(aiServer.Close)
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENDPOINT", aiServer.URL+"/v1/chat/completions")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_API_KEY", "test-key")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_MODEL", "test-model")
+
+	phoneAsset, err := pulseTests.CreateRecord(fixture.hub, "assets", map[string]any{
+		"user":   fixture.user.Id,
+		"name":   "RedmiK50",
+		"type":   "phone",
+		"status": "active",
+		"vendor": "小米 / Redmi",
+		"model":  "Redmi K50",
+		"metadata": map[string]any{
+			"internal_model": "22041211AC",
+		},
+	})
+	require.NoError(t, err)
+	fixture.asset = phoneAsset
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	suggestions := fixture.findSuggestions(t)
+	require.Nil(t, findSuggestionByField(suggestions, "metadata.product_url"), "fields: %v", suggestionFields(suggestions))
+}
+
+func TestAssetEnrichmentAcceptsOfficialReferenceURLFromOfficialAISource(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-reference-url-official-source@example.com")
+	sourceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方支持页</title></head><body>
+			<h1>Redmi K50</h1><p>官方支持、规格与产品资料。</p>
+		</body></html>`))
+	}))
+	t.Cleanup(sourceServer.Close)
+	sourceURL := sourceServer.URL + "/support/redmik50"
+	productURL := sourceServer.URL + "/product/redmik50"
+	aiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"suggestions\":[{\"field\":\"product_url\",\"label\":\"厂家产品页\",\"value\":\"` + productURL + `\",\"confidence\":92,\"notes\":\"来自厂家官方支持页。\",\"source_urls\":[\"` + sourceURL + `\"]}]}"}}]}`))
+	}))
+	t.Cleanup(aiServer.Close)
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENDPOINT", aiServer.URL+"/v1/chat/completions")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_API_KEY", "test-key")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_MODEL", "test-model")
+
+	phoneAsset, err := pulseTests.CreateRecord(fixture.hub, "assets", map[string]any{
+		"user":   fixture.user.Id,
+		"name":   "RedmiK50",
+		"type":   "phone",
+		"status": "active",
+		"vendor": "小米 / Redmi",
+		"model":  "Redmi K50",
+		"metadata": map[string]any{
+			"internal_model": "22041211AC",
+			"support_url":    sourceURL,
+		},
+	})
+	require.NoError(t, err)
+	fixture.asset = phoneAsset
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	requireSuggestionValue(t, fixture.findSuggestions(t), "metadata.product_url", productURL)
+}
+
+func TestAssetEnrichmentRejectsOfficialImageURLWhenAIValueIsNotImage(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-ai-official-image-non-image@example.com")
+	sourceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方支持页</title></head><body>
+			<h1>Redmi K50</h1><p>官方支持、规格与产品资料。</p>
+		</body></html>`))
+	}))
+	t.Cleanup(sourceServer.Close)
+	sourceURL := sourceServer.URL + "/support/redmik50"
+	productURL := sourceServer.URL + "/product/redmik50"
+	aiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"suggestions\":[{\"field\":\"official_image_url\",\"label\":\"官方图片\",\"value\":\"` + productURL + `\",\"confidence\":92,\"notes\":\"AI 把产品页误当成了图片。\",\"source_urls\":[\"` + sourceURL + `\"]}]}"}}]}`))
+	}))
+	t.Cleanup(aiServer.Close)
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENDPOINT", aiServer.URL+"/v1/chat/completions")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_API_KEY", "test-key")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_MODEL", "test-model")
+
+	phoneAsset, err := pulseTests.CreateRecord(fixture.hub, "assets", map[string]any{
+		"user":   fixture.user.Id,
+		"name":   "RedmiK50",
+		"type":   "phone",
+		"status": "active",
+		"vendor": "小米 / Redmi",
+		"model":  "Redmi K50",
+		"metadata": map[string]any{
+			"internal_model": "22041211AC",
+			"support_url":    sourceURL,
+		},
+	})
+	require.NoError(t, err)
+	fixture.asset = phoneAsset
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	suggestions := fixture.findSuggestions(t)
+	require.Nil(t, findSuggestionByField(suggestions, "metadata.official_image_url"), "fields: %v", suggestionFields(suggestions))
+}
+
+func TestAssetEnrichmentRejectsOfficialImageURLWhenAIImageValueIsNotOfficial(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-ai-official-image-third-party@example.com")
+	sourceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方支持页</title></head><body>
+			<h1>Redmi K50</h1><p>官方支持、规格与产品资料。</p>
+		</body></html>`))
+	}))
+	t.Cleanup(sourceServer.Close)
+	sourceURL := sourceServer.URL + "/support/redmik50"
+	thirdPartyImageURL := "https://cdn.blog.example.test/redmi-k50.jpg"
+	aiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"suggestions\":[{\"field\":\"official_image_url\",\"label\":\"官方图片\",\"value\":\"` + thirdPartyImageURL + `\",\"confidence\":92,\"notes\":\"AI 把第三方图片搭配官方来源页返回。\",\"source_urls\":[\"` + sourceURL + `\"]}]}"}}]}`))
+	}))
+	t.Cleanup(aiServer.Close)
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENDPOINT", aiServer.URL+"/v1/chat/completions")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_API_KEY", "test-key")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_MODEL", "test-model")
+
+	phoneAsset, err := pulseTests.CreateRecord(fixture.hub, "assets", map[string]any{
+		"user":   fixture.user.Id,
+		"name":   "RedmiK50",
+		"type":   "phone",
+		"status": "active",
+		"vendor": "小米 / Redmi",
+		"model":  "Redmi K50",
+		"metadata": map[string]any{
+			"internal_model": "22041211AC",
+			"support_url":    sourceURL,
+		},
+	})
+	require.NoError(t, err)
+	fixture.asset = phoneAsset
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	suggestions := fixture.findSuggestions(t)
+	require.Nil(t, findSuggestionByField(suggestions, "metadata.official_image_url"), "fields: %v", suggestionFields(suggestions))
 }
 
 func TestAssetEnrichmentRejectsAISuggestionWithUnreachableSourceURL(t *testing.T) {
@@ -739,7 +1437,7 @@ func TestAssetVisualGeneratesUnifiedImagesFromTraceableReferences(t *testing.T) 
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 		imageRequests = append(imageRequests, payload)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":[{"url":"https://example.test/redmi-k50-frame.png"}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"iVBORw0KGgo="}]}`))
 	}))
 	t.Cleanup(imageServer.Close)
 	var referenceServer *httptest.Server
@@ -817,8 +1515,8 @@ func TestAssetVisualGeneratesUnifiedImagesFromTraceableReferences(t *testing.T) 
 	require.Equal(t, "白天", frames[0]["label"])
 	require.Equal(t, "night", frames[1]["theme"])
 	require.Equal(t, "夜晚", frames[1]["label"])
-	require.Equal(t, "https://example.test/redmi-k50-frame.png", frames[0]["url"])
-	require.Equal(t, "https://example.test/redmi-k50-frame.png", frames[1]["url"])
+	require.True(t, strings.HasPrefix(fmt.Sprint(frames[0]["url"]), "data:image/png;base64,"))
+	require.True(t, strings.HasPrefix(fmt.Sprint(frames[1]["url"]), "data:image/png;base64,"))
 	require.Contains(t, fmt.Sprint(frames), "theme:day")
 	require.Contains(t, fmt.Sprint(frames), "theme:night")
 	require.NotContains(t, fmt.Sprint(frames), "xiaomi-17-ultra")
@@ -835,7 +1533,7 @@ func TestAssetVisualPrefersConfirmedOfficialImageURLAsModelReference(t *testing.
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 		imageRequests = append(imageRequests, payload)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":[{"url":"https://example.test/generated-redmi-k50.png"}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"iVBORw0KGgo="}]}`))
 	}))
 	t.Cleanup(imageServer.Close)
 
@@ -902,6 +1600,464 @@ func TestAssetVisualPrefersConfirmedOfficialImageURLAsModelReference(t *testing.
 	require.Equal(t, referenceServer.URL+"/official-redmi-k50.png", referenceURLs[0])
 }
 
+func TestAssetVisualOnlyDemotesPreviousPrimaryGeneratedVisuals(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-demote-primary-only@example.com")
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"iVBORw0KGgo="}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["official_image_url"] = referenceServer.URL + "/official-redmi-k50.jpg"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	oldPrimary, err := pulseTests.CreateRecord(fixture.hub, "asset_visuals", map[string]any{
+		"user":        fixture.user.Id,
+		"asset":       asset.Id,
+		"kind":        "ai_turntable",
+		"status":      "ready",
+		"title":       "旧主图",
+		"color":       "墨羽黑",
+		"frame_count": 2,
+		"primary":     true,
+		"metadata":    map[string]any{"generation_status": "ready"},
+	})
+	require.NoError(t, err)
+	archivedVisual, err := pulseTests.CreateRecord(fixture.hub, "asset_visuals", map[string]any{
+		"user":        fixture.user.Id,
+		"asset":       asset.Id,
+		"kind":        "ai_turntable",
+		"status":      "ready",
+		"title":       "已归档历史图",
+		"color":       "墨羽黑",
+		"frame_count": 2,
+		"primary":     false,
+		"metadata":    map[string]any{"generation_status": "ready", "archive_marker": "keep"},
+	})
+	require.NoError(t, err)
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"ready"`)
+
+	updatedOldPrimary, err := fixture.hub.FindRecordById("asset_visuals", oldPrimary.Id)
+	require.NoError(t, err)
+	require.False(t, updatedOldPrimary.GetBool("primary"))
+	oldPrimaryMetadata := recordMetadata(t, updatedOldPrimary)
+	require.NotEmpty(t, oldPrimaryMetadata["superseded_by"])
+
+	updatedArchivedVisual, err := fixture.hub.FindRecordById("asset_visuals", archivedVisual.Id)
+	require.NoError(t, err)
+	require.False(t, updatedArchivedVisual.GetBool("primary"))
+	archivedMetadata := recordMetadata(t, updatedArchivedVisual)
+	require.Equal(t, "keep", archivedMetadata["archive_marker"])
+	require.NotContains(t, archivedMetadata, "superseded_by")
+	require.NotContains(t, archivedMetadata, "superseded_at")
+}
+
+func TestAssetVisualDoesNotSendUnreadableHTTPSReferenceURLToImageModel(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-unreadable-reference@example.com")
+	var imageRequestCount int
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		imageRequestCount++
+		http.Error(w, `{"error":"should not be called"}`, http.StatusInternalServerError)
+	}))
+	t.Cleanup(imageServer.Close)
+	referenceServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["official_image_url"] = referenceServer.URL + "/official-redmi-k50.jpg"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"failed"`)
+	require.Contains(t, response.Body, "没有可用于图片编辑的可读取参考图")
+	require.Zero(t, imageRequestCount)
+}
+
+func TestAssetVisualDoesNotSendHTMLDisguisedAsImageReferenceToModel(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-html-reference@example.com")
+	var imageRequestCount int
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		imageRequestCount++
+		http.Error(w, `{"error":"should not receive html reference"}`, http.StatusInternalServerError)
+	}))
+	t.Cleanup(imageServer.Close)
+	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><body>not an image</body></html>`))
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["official_image_url"] = referenceServer.URL + "/official-redmi-k50.jpg"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"failed"`)
+	require.Contains(t, response.Body, "没有可用于图片编辑的可读取参考图")
+	require.Zero(t, imageRequestCount)
+}
+
+func TestAssetVisualDoesNotSendHeaderClaimedButInvalidReferenceBytesToModel(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-invalid-reference-bytes@example.com")
+	var imageRequestCount int
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		imageRequestCount++
+		http.Error(w, `{"error":"should not receive invalid image bytes"}`, http.StatusInternalServerError)
+	}))
+	t.Cleanup(imageServer.Close)
+	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		_, _ = w.Write([]byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05})
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["official_image_url"] = referenceServer.URL + "/official-redmi-k50.jpg"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"failed"`)
+	require.Contains(t, response.Body, "没有可用于图片编辑的可读取参考图")
+	require.Zero(t, imageRequestCount)
+}
+
+func TestAssetVisualSkipsOversizedReferenceImageBeforeCallingModel(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-oversized-reference@example.com")
+	var imageRequestCount int
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		imageRequestCount++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"url":"https://example.test/should-not-be-generated.png"}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+	oversizedImage := append(
+		[]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01},
+		bytes.Repeat([]byte{0x00}, 2*1024*1024)...,
+	)
+	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.Header().Set("Content-Length", fmt.Sprint(len(oversizedImage)))
+		_, _ = w.Write(oversizedImage)
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["official_image_url"] = referenceServer.URL + "/official-redmi-k50.jpg"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"failed"`)
+	require.Contains(t, response.Body, "没有可用于图片编辑的可读取参考图")
+	require.Contains(t, response.Body, "参考图大小超过模型输入上限")
+	require.Zero(t, imageRequestCount)
+
+	tasks, err := fixture.hub.FindRecordsByFilter("ai_tasks", "asset = {:asset} && kind = 'asset_visual'", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, tasks)
+	require.Contains(t, tasks[0].GetString("error"), "参考图大小超过模型输入上限")
+	summary := recordJSONField(t, tasks[0], "output_summary")
+	require.Contains(t, fmt.Sprint(summary["reference_skip_reasons"]), "参考图大小超过模型输入上限")
+}
+
+func TestAssetVisualRecordsSkippedReferenceReasonsWhenGenerationSucceeds(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-partial-reference-skip@example.com")
+	var imageRequests []map[string]any
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		var payload map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		imageRequests = append(imageRequests, payload)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"iVBORw0KGgo="}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+
+	oversizedImage := append(
+		[]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01},
+		bytes.Repeat([]byte{0x00}, 2*1024*1024)...,
+	)
+	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/official-redmi-k50-large.jpg":
+			w.Header().Set("Content-Type", "image/jpeg")
+			w.Header().Set("Content-Length", fmt.Sprint(len(oversizedImage)))
+			_, _ = w.Write(oversizedImage)
+		case "/images/redmi-k50-front.jpg":
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+		default:
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title></head><body>
+				<img src="/images/redmi-k50-front.jpg" alt="Redmi K50 墨羽黑 正面" width="800" height="1200">
+			</body></html>`))
+		}
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["official_image_url"] = referenceServer.URL + "/official-redmi-k50-large.jpg"
+	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"ready"`)
+	require.Len(t, imageRequests, 2)
+	require.Contains(t, fmt.Sprint(imageRequests[0]["extra_body"]), "data:image/jpeg;base64,")
+	require.NotContains(t, fmt.Sprint(imageRequests[0]["extra_body"]), "official-redmi-k50-large.jpg")
+
+	tasks, err := fixture.hub.FindRecordsByFilter("ai_tasks", "asset = {:asset} && kind = 'asset_visual'", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, tasks)
+	require.Equal(t, "ready", tasks[0].GetString("status"))
+	summary := recordJSONField(t, tasks[0], "output_summary")
+	require.Contains(t, fmt.Sprint(summary["reference_skip_reasons"]), "参考图大小超过模型输入上限")
+	require.Contains(t, fmt.Sprint(summary["reference_skip_reasons"]), "official-redmi-k50-large.jpg")
+}
+
+func TestAssetVisualUsesFallbackReferenceBeyondDisplayedFrames(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-reference-fallback@example.com")
+	var imageRequests []map[string]any
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		var payload map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		imageRequests = append(imageRequests, payload)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"iVBORw0KGgo="}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+
+	oversizedImage := append(
+		[]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01},
+		bytes.Repeat([]byte{0x00}, 2*1024*1024)...,
+	)
+	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/official-redmi-k50-large.jpg", "/images/redmi-k50-front-large.jpg":
+			w.Header().Set("Content-Type", "image/jpeg")
+			w.Header().Set("Content-Length", fmt.Sprint(len(oversizedImage)))
+			_, _ = w.Write(oversizedImage)
+		case "/images/redmi-k50-back-good.jpg":
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x47, 0x4f, 0x4f, 0x44, 0xff, 0xd9})
+		default:
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title></head><body>
+				<img src="/images/redmi-k50-front-large.jpg" alt="Redmi K50 墨羽黑 正面" width="900" height="1200">
+				<img src="/images/redmi-k50-back-good.jpg" alt="Redmi K50 墨羽黑 背面" width="900" height="1200">
+			</body></html>`))
+		}
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["official_image_url"] = referenceServer.URL + "/official-redmi-k50-large.jpg"
+	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"ready"`)
+	require.Len(t, imageRequests, 2)
+	require.Contains(t, fmt.Sprint(imageRequests[0]["extra_body"]), "data:image/jpeg;base64,")
+	require.NotContains(t, fmt.Sprint(imageRequests[0]["extra_body"]), "official-redmi-k50-large.jpg")
+	require.NotContains(t, fmt.Sprint(imageRequests[0]["extra_body"]), "redmi-k50-front-large.jpg")
+
+	tasks, err := fixture.hub.FindRecordsByFilter("ai_tasks", "asset = {:asset} && kind = 'asset_visual'", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, tasks)
+	require.Equal(t, "ready", tasks[0].GetString("status"))
+	summary := recordJSONField(t, tasks[0], "output_summary")
+	require.Contains(t, fmt.Sprint(summary["reference_skip_reasons"]), "official-redmi-k50-large.jpg")
+	require.Contains(t, fmt.Sprint(summary["reference_skip_reasons"]), "redmi-k50-front-large.jpg")
+	require.Equal(t, float64(1), summary["reference_input_count"])
+	require.Equal(t, []any{referenceServer.URL + "/images/redmi-k50-back-good.jpg"}, summary["reference_input_urls"])
+	require.NotContains(t, fmt.Sprint(summary["reference_input_urls"]), "official-redmi-k50-large.jpg")
+	require.NotContains(t, fmt.Sprint(summary["reference_input_urls"]), "redmi-k50-front-large.jpg")
+
+	visuals, err := fixture.hub.FindRecordsByFilter("asset_visuals", "asset = {:asset} && kind = 'ai_turntable'", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	require.Len(t, visuals, 1)
+	frames := recordJSONArrayField(t, visuals[0], "frames")
+	require.NotEmpty(t, frames)
+	require.Equal(t, []any{referenceServer.URL + "/images/redmi-k50-back-good.jpg"}, frames[0]["reference_urls"])
+	require.NotContains(t, fmt.Sprint(frames[0]["reference_urls"]), "official-redmi-k50-large.jpg")
+	require.NotContains(t, fmt.Sprint(frames[0]["reference_urls"]), "redmi-k50-front-large.jpg")
+}
+
 func TestAssetVisualRetriesTransientImageModelFailure(t *testing.T) {
 	fixture := newAssetEnrichmentFixture(t, "asset-visual-retry@example.com")
 	var imageRequestCount int
@@ -913,7 +2069,7 @@ func TestAssetVisualRetriesTransientImageModelFailure(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":[{"url":"https://example.test/redmi-k50-frame.png"}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"iVBORw0KGgo="}]}`))
 	}))
 	t.Cleanup(imageServer.Close)
 	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -969,7 +2125,7 @@ func TestAssetVisualCollectsUnquotedOfficialPageImages(t *testing.T) {
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 		imageRequests = append(imageRequests, payload)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":[{"url":"https://example.test/redmi-k50-frame.png"}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"iVBORw0KGgo="}]}`))
 	}))
 	t.Cleanup(imageServer.Close)
 	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1021,6 +2177,345 @@ func TestAssetVisualCollectsUnquotedOfficialPageImages(t *testing.T) {
 	require.Contains(t, fmt.Sprint(imageRequests[0]["prompt"]), "redmi-k50-front.jpg")
 	require.Contains(t, fmt.Sprint(imageRequests[0]["prompt"]), "redmi-k50-back.webp")
 	require.Contains(t, fmt.Sprint(imageRequests[0]["extra_body"]), "data:image/jpeg;base64,")
+}
+
+func TestAssetVisualPreservesProductURLProviderForReferenceImages(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-product-url-provider@example.com")
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"iVBORw0KGgo="}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+	var referenceServer *httptest.Server
+	referenceServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/product/redmik50/index.js":
+			w.Header().Set("Content-Type", "application/javascript")
+			_, _ = w.Write([]byte(`const imgPath="/redmik50/";const site={productFileSite:"` + referenceServer.URL + `"};
+				imgPath+"sw2-1.jpg";imgPath+"front-product.jpg";
+				const pic={imgPath:"".concat(site.productFileSite,"/redmik50/")};`))
+		case "/redmik50/sw2-1.jpg", "/redmik50/front-product.jpg", "/images/redmi-k50-front.jpg":
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+		case "/products/redmi-k50/specs":
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方规格页</title></head><body>Redmi K50 规格参数。</body></html>`))
+		default:
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title><script src="/product/redmik50/index.js"></script></head><body>
+				<img src="/images/redmi-k50-front.jpg" alt="Redmi K50 墨羽黑 正面" width="900" height="1200">
+			</body></html>`))
+		}
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50/specs"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	visuals, err := fixture.hub.FindRecordsByFilter("asset_visuals", "asset = {:asset}", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	referenceVisual := findVisualByKind(visuals, "official_reference")
+	require.NotNil(t, referenceVisual)
+	sources := recordJSONArrayField(t, referenceVisual, "sources")
+	require.NotEmpty(t, sources)
+	sawPageImage := false
+	sawBundleImage := false
+	for _, source := range sources {
+		sourceType, _ := source["type"].(string)
+		switch sourceType {
+		case "official_page_image":
+			sawPageImage = true
+			require.Equal(t, "product_url", source["provider"], "source: %v", source)
+		case "official_product_bundle_image":
+			sawBundleImage = true
+			require.Equal(t, "product_url", source["provider"], "source: %v", source)
+		}
+	}
+	require.True(t, sawPageImage, "sources: %v", sources)
+	require.True(t, sawBundleImage, "sources: %v", sources)
+}
+
+func TestAssetVisualPrioritizesDerivedProductPageBeforeSpecsImages(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-product-page-priority@example.com")
+	var imageRequests []map[string]any
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		var payload map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		imageRequests = append(imageRequests, payload)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"iVBORw0KGgo="}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+	var referenceServer *httptest.Server
+	referenceServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/product/redmik50/index.js":
+			w.Header().Set("Content-Type", "application/javascript")
+			_, _ = w.Write([]byte(`const imgPath="/redmik50/";const site={productFileSite:"` + referenceServer.URL + `"};
+				imgPath+"sw2-1.jpg";imgPath+"sw2-2.jpg";
+				const pic={imgPath:"".concat(site.productFileSite,"/redmik50/")};`))
+		case "/redmik50/sw2-1.jpg", "/redmik50/sw2-2.jpg":
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+		case "/products/redmi-k50/specs":
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			var body strings.Builder
+			body.WriteString(`<html><head><title>Redmi K50 规格页</title></head><body>`)
+			for index := 0; index < 12; index++ {
+				body.WriteString(fmt.Sprintf(`<img src="/images/redmi-k50-specs-%02d.jpg" alt="Redmi K50 规格参数图" width="900" height="1200">`, index))
+			}
+			body.WriteString(`</body></html>`)
+			_, _ = w.Write([]byte(body.String()))
+		case "/products/redmi-k50":
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(`<html><head><title>Redmi K50 产品主页</title><script src="/product/redmik50/index.js"></script></head><body>Redmi K50 产品主页</body></html>`))
+		default:
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+		}
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50/specs"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Len(t, imageRequests, 2)
+	require.Contains(t, fmt.Sprint(imageRequests[0]["prompt"]), "sw2-1.jpg")
+}
+
+func TestAssetVisualExcludesMarketingBundleImagesFromModelReferences(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-marketing-filter@example.com")
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"iVBORw0KGgo="}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+	var referenceServer *httptest.Server
+	referenceServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/product/redmik50/index.js":
+			w.Header().Set("Content-Type", "application/javascript")
+			_, _ = w.Write([]byte(`const imgPath="/redmik50/";const site={productFileSite:"` + referenceServer.URL + `"};
+				imgPath+"main-hero.jpg";imgPath+"gallery-promo.jpg";imgPath+"color-overview.jpg";imgPath+"product-poster.jpg";imgPath+"sw2-1.jpg";imgPath+"sw2-2.jpg";
+				const pic={imgPath:"".concat(site.productFileSite,"/redmik50/")};`))
+		case "/products/redmi-k50":
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title><script src="/product/redmik50/index.js"></script></head><body>Redmi K50 产品主页</body></html>`))
+		default:
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+		}
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	tasks, err := fixture.hub.FindRecordsByFilter("ai_tasks", "asset = {:asset} && kind = 'asset_visual'", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, tasks)
+	summary := recordJSONField(t, tasks[0], "output_summary")
+	referenceInputURLs := fmt.Sprint(summary["reference_input_urls"])
+	require.Contains(t, referenceInputURLs, "sw2-1.jpg")
+	require.Contains(t, referenceInputURLs, "sw2-2.jpg")
+	require.NotContains(t, referenceInputURLs, "main-hero.jpg")
+	require.NotContains(t, referenceInputURLs, "gallery-promo.jpg")
+	require.NotContains(t, referenceInputURLs, "color-overview.jpg")
+	require.NotContains(t, referenceInputURLs, "product-poster.jpg")
+}
+
+func TestAssetVisualAvoidsDuplicateProductPageFetchWhenImagesAreEnough(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-fetch-once@example.com")
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"iVBORw0KGgo="}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+	productPageRequests := 0
+	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/products/redmi-k50":
+			productPageRequests++
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			var body strings.Builder
+			body.WriteString(`<html><head><title>Redmi K50 产品主页</title></head><body>`)
+			for index := 0; index < 12; index++ {
+				body.WriteString(fmt.Sprintf(`<img src="/images/redmi-k50-gallery-%02d.jpg" alt="Redmi K50 墨羽黑 外观图" width="900" height="1200">`, index))
+			}
+			body.WriteString(`</body></html>`)
+			_, _ = w.Write([]byte(body.String()))
+		case strings.HasPrefix(r.URL.Path, "/images/redmi-k50-gallery-"):
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Equal(t, 1, productPageRequests)
+}
+
+func TestAssetVisualRejectsLowTrustPageImages(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-low-trust-page@example.com")
+	var imageRequestCount int
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		imageRequestCount++
+		http.Error(w, `{"error":"should not be called"}`, http.StatusInternalServerError)
+	}))
+	t.Cleanup(imageServer.Close)
+	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/images/"):
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+		default:
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(`<html><head><title>第三方 Redmi K50 支持资料</title></head><body>
+				<p>这个页面路径像 support，但它是第三方非官方资料页。</p>
+				<img src="/images/redmi-k50-front.jpg" alt="Redmi K50 外观图" width="900" height="1200">
+			</body></html>`))
+		}
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["support_url"] = referenceServer.URL + "/support/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"no_sources"`)
+	require.Zero(t, imageRequestCount)
 }
 
 func TestAssetVisualBlocksPhoneImageGenerationUntilOfficialColorsAreCollected(t *testing.T) {
@@ -1156,6 +2651,718 @@ func TestAssetVisualDoesNotRetryNonTransientImageModelFailure(t *testing.T) {
 	require.Equal(t, 1, imageRequestCount)
 }
 
+func TestAssetVisualRejectsNonImageModelOutputURL(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-non-image-output@example.com")
+	var referenceServer *httptest.Server
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"url":"` + referenceServer.URL + `/products/redmi-k50"}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+	referenceServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".jpg") {
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title></head><body>
+			<img src="/redmi-k50-front.jpg" alt="Redmi K50 墨羽黑 正面" width="800" height="1200">
+		</body></html>`))
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"failed"`)
+	require.Contains(t, response.Body, "没有返回可显示图片")
+
+	visuals, err := fixture.hub.FindRecordsByFilter("asset_visuals", "asset = {:asset}", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	require.Nil(t, findVisualByKind(visuals, "ai_turntable"))
+}
+
+func TestAssetVisualRejectsImageSuffixModelOutputWhenContentIsNotImage(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-fake-image-output@example.com")
+	var referenceServer *httptest.Server
+	var generatedProbeCount int
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"url":"` + referenceServer.URL + `/generated-redmi-k50.png"}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+	referenceServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/generated-redmi-k50.png" {
+			generatedProbeCount++
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`<html><body>not an image</body></html>`))
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, ".jpg") {
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title></head><body>
+			<img src="/redmi-k50-front.jpg" alt="Redmi K50 墨羽黑 正面" width="800" height="1200">
+		</body></html>`))
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"failed"`)
+	require.Contains(t, response.Body, "没有返回可显示图片")
+	require.NotZero(t, generatedProbeCount)
+
+	visuals, err := fixture.hub.FindRecordsByFilter("asset_visuals", "asset = {:asset}", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	require.Nil(t, findVisualByKind(visuals, "ai_turntable"))
+}
+
+func TestAssetVisualRejectsModelOutputWhenHeaderClaimsImageButBytesAreNotImage(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-fake-image-bytes-output@example.com")
+	var referenceServer *httptest.Server
+	var generatedHeadCount int
+	var generatedGetCount int
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"url":"` + referenceServer.URL + `/generated-redmi-k50.png"}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+	referenceServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/generated-redmi-k50.png" {
+			w.Header().Set("Content-Type", "image/png")
+			w.WriteHeader(http.StatusOK)
+			if r.Method == http.MethodHead {
+				generatedHeadCount++
+				return
+			}
+			generatedGetCount++
+			_, _ = w.Write([]byte(`<html><body>not an image</body></html>`))
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, ".jpg") {
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title></head><body>
+			<img src="/redmi-k50-front.jpg" alt="Redmi K50 墨羽黑 正面" width="800" height="1200">
+		</body></html>`))
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"failed"`)
+	require.Contains(t, response.Body, "没有返回可显示图片")
+	require.Zero(t, generatedHeadCount)
+	require.NotZero(t, generatedGetCount)
+
+	visuals, err := fixture.hub.FindRecordsByFilter("asset_visuals", "asset = {:asset}", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	require.Nil(t, findVisualByKind(visuals, "ai_turntable"))
+}
+
+func TestAssetVisualRejectsNonImageBase64ModelOutput(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-non-image-base64@example.com")
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"bm90IGFuIGltYWdl"}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".jpg") {
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title></head><body>
+			<img src="/redmi-k50-front.jpg" alt="Redmi K50 墨羽黑 正面" width="800" height="1200">
+		</body></html>`))
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"failed"`)
+	require.Contains(t, response.Body, "没有返回可显示图片")
+
+	visuals, err := fixture.hub.FindRecordsByFilter("asset_visuals", "asset = {:asset}", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	require.Nil(t, findVisualByKind(visuals, "ai_turntable"))
+
+	tasks, err := fixture.hub.FindRecordsByFilter("ai_tasks", "asset = {:asset} && kind = 'asset_visual'", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, tasks)
+	summary := recordJSONField(t, tasks[0], "output_summary")
+	require.Equal(t, "1", fmt.Sprint(summary["image_model_output_candidates"]))
+	require.Equal(t, "1", fmt.Sprint(summary["image_model_output_rejected"]))
+	require.Contains(t, fmt.Sprint(summary["image_model_output_rejections"]), "模型返回的 Base64 不是可识别图片")
+}
+
+func TestAssetVisualRejectsModelDataURIWhenBytesAreNotImage(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-non-image-data-uri@example.com")
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"url":"data:image/png;base64,AAAAAA=="}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".jpg") {
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title></head><body>
+			<img src="/redmi-k50-front.jpg" alt="Redmi K50 墨羽黑 正面" width="800" height="1200">
+		</body></html>`))
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"failed"`)
+	require.Contains(t, response.Body, "没有返回可显示图片")
+
+	visuals, err := fixture.hub.FindRecordsByFilter("asset_visuals", "asset = {:asset}", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	require.Nil(t, findVisualByKind(visuals, "ai_turntable"))
+
+	tasks, err := fixture.hub.FindRecordsByFilter("ai_tasks", "asset = {:asset} && kind = 'asset_visual'", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, tasks)
+	summary := recordJSONField(t, tasks[0], "output_summary")
+	require.Equal(t, "1", fmt.Sprint(summary["image_model_output_candidates"]))
+	require.Equal(t, "1", fmt.Sprint(summary["image_model_output_rejected"]))
+	require.Contains(t, fmt.Sprint(summary["image_model_output_rejections"]), "模型返回的 Data URI 不是可识别图片")
+}
+
+func TestAssetVisualUsesLaterValidModelOutputWhenFirstCandidateIsInvalid(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-later-valid-output@example.com")
+	var referenceServer *httptest.Server
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"url":"` + referenceServer.URL + `/products/redmi-k50"},{"b64_json":"iVBORw0KGgo="}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+	referenceServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".jpg") {
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title></head><body>
+			<img src="/redmi-k50-front.jpg" alt="Redmi K50 墨羽黑 正面" width="800" height="1200">
+		</body></html>`))
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"ready"`)
+
+	visuals, err := fixture.hub.FindRecordsByFilter("asset_visuals", "asset = {:asset}", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	generated := findVisualByKind(visuals, "ai_turntable")
+	require.NotNil(t, generated)
+	frames := recordJSONArrayField(t, generated, "frames")
+	require.Len(t, frames, 2)
+	require.True(t, strings.HasPrefix(fmt.Sprint(frames[0]["url"]), "data:image/png;base64,"))
+	require.True(t, strings.HasPrefix(fmt.Sprint(frames[1]["url"]), "data:image/png;base64,"))
+
+	tasks, err := fixture.hub.FindRecordsByFilter("ai_tasks", "asset = {:asset} && kind = 'asset_visual'", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, tasks)
+	summary := recordJSONField(t, tasks[0], "output_summary")
+	require.Equal(t, "4", fmt.Sprint(summary["image_model_output_candidates"]))
+	require.Equal(t, "2", fmt.Sprint(summary["image_model_output_selected"]))
+	require.Equal(t, "2", fmt.Sprint(summary["image_model_output_rejected"]))
+	require.Contains(t, fmt.Sprint(summary["image_model_output_rejections"]), "模型返回的 URL 不是可验证图片")
+}
+
+func TestAssetVisualReusesImageModelOutputURLProbeWithinTask(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-output-probe-cache@example.com")
+	var referenceServer *httptest.Server
+	var generatedHeadCount int
+	var generatedGetCount int
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"url":"` + referenceServer.URL + `/generated-redmi-k50.png"}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+	referenceServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/generated-redmi-k50.png" {
+			w.Header().Set("Content-Type", "image/png")
+			w.WriteHeader(http.StatusOK)
+			if r.Method == http.MethodHead {
+				generatedHeadCount++
+				return
+			}
+			generatedGetCount++
+			_, _ = w.Write([]byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a})
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, ".jpg") {
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title></head><body>
+			<img src="/redmi-k50-front.jpg" alt="Redmi K50 墨羽黑 正面" width="800" height="1200">
+		</body></html>`))
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"ready"`)
+	require.Equal(t, 0, generatedHeadCount)
+	require.Equal(t, 1, generatedGetCount)
+}
+
+func TestAssetVisualStoresRemoteModelOutputAsStableDataURI(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-output-data-uri@example.com")
+	var referenceServer *httptest.Server
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"url":"` + referenceServer.URL + `/generated-redmi-k50.png"}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+	referenceServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/generated-redmi-k50.png" {
+			w.Header().Set("Content-Type", "image/png")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a})
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, ".jpg") {
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title></head><body>
+			<img src="/redmi-k50-front.jpg" alt="Redmi K50 墨羽黑 正面" width="800" height="1200">
+		</body></html>`))
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"ready"`)
+
+	visuals, err := fixture.hub.FindRecordsByFilter("asset_visuals", "asset = {:asset}", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	generated := findVisualByKind(visuals, "ai_turntable")
+	require.NotNil(t, generated)
+	frames := recordJSONArrayField(t, generated, "frames")
+	require.Len(t, frames, 2)
+	for _, frame := range frames {
+		frameURL := fmt.Sprint(frame["url"])
+		require.True(t, strings.HasPrefix(frameURL, "data:image/png;base64,"), "frame url should be stable data URI: %s", frameURL)
+		require.NotContains(t, frameURL, referenceServer.URL)
+	}
+}
+
+func TestAssetVisualPreservesDetectedMimeForBase64ModelOutput(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-base64-mime@example.com")
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"/9j/4AAQSkZJRgAB/9k="}]}`))
+	}))
+	t.Cleanup(imageServer.Close)
+	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".jpg") {
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title></head><body>
+			<img src="/redmi-k50-front.jpg" alt="Redmi K50 墨羽黑 正面" width="800" height="1200">
+		</body></html>`))
+	}))
+	t.Cleanup(referenceServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", imageServer.URL+"/v1/images/generations")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "test-image-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"ready"`)
+
+	visuals, err := fixture.hub.FindRecordsByFilter("asset_visuals", "asset = {:asset}", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	generated := findVisualByKind(visuals, "ai_turntable")
+	require.NotNil(t, generated)
+	frames := recordJSONArrayField(t, generated, "frames")
+	require.Len(t, frames, 2)
+	require.True(t, strings.HasPrefix(fmt.Sprint(frames[0]["url"]), "data:image/jpeg;base64,"))
+	require.True(t, strings.HasPrefix(fmt.Sprint(frames[1]["url"]), "data:image/jpeg;base64,"))
+}
+
+func TestAssetEnrichmentAcceptBatchWritesSuggestionsAndChanges(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-accept-batch@example.com")
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	suggestions := fixture.findSuggestions(t)
+	cpuSuggestion := findSuggestionByField(suggestions, "metadata.cpu_model")
+	memorySuggestion := findSuggestionByField(suggestions, "metadata.memory_gb")
+	require.NotNil(t, cpuSuggestion, "fields: %v", suggestionFields(suggestions))
+	require.NotNil(t, memorySuggestion, "fields: %v", suggestionFields(suggestions))
+
+	requestBody, err := json.Marshal(map[string]any{
+		"suggestion_ids": []string{cpuSuggestion.Id, memorySuggestion.Id},
+	})
+	require.NoError(t, err)
+	acceptResponse := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		"/api/pulse/asset-enrichment-suggestions/accept-batch",
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, acceptResponse.Status, acceptResponse.Body)
+	require.Contains(t, acceptResponse.Body, `"accepted":2`)
+
+	updatedAsset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, updatedAsset)
+	require.Equal(t, "13th Gen Intel(R) Core(TM) i7-13700K", metadata["cpu_model"])
+	require.Equal(t, float64(32), metadata["memory_gb"])
+
+	updatedCPUSuggestion, err := fixture.hub.FindRecordById("asset_enrichment_suggestions", cpuSuggestion.Id)
+	require.NoError(t, err)
+	require.Equal(t, "accepted", updatedCPUSuggestion.GetString("status"))
+	updatedMemorySuggestion, err := fixture.hub.FindRecordById("asset_enrichment_suggestions", memorySuggestion.Id)
+	require.NoError(t, err)
+	require.Equal(t, "accepted", updatedMemorySuggestion.GetString("status"))
+
+	changes, err := fixture.hub.FindRecordsByFilter("asset_changes", "asset = {:asset} && source_collection = 'assets'", "-created", -1, 0, map[string]any{
+		"asset": fixture.asset.Id,
+	})
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(changes), 2)
+}
+
+func TestAssetEnrichmentAcceptBatchRejectsAtomicallyWhenSuggestionIsStale(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-accept-batch-stale@example.com")
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	suggestions := fixture.findSuggestions(t)
+	cpuSuggestion := findSuggestionByField(suggestions, "metadata.cpu_model")
+	memorySuggestion := findSuggestionByField(suggestions, "metadata.memory_gb")
+	require.NotNil(t, cpuSuggestion, "fields: %v", suggestionFields(suggestions))
+	require.NotNil(t, memorySuggestion, "fields: %v", suggestionFields(suggestions))
+	require.Empty(t, cpuSuggestion.GetString("current_value"))
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["cpu_model"] = "Manual CPU"
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{
+		"suggestion_ids": []string{memorySuggestion.Id, cpuSuggestion.Id},
+	})
+	require.NoError(t, err)
+	acceptResponse := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		"/api/pulse/asset-enrichment-suggestions/accept-batch",
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusBadRequest, acceptResponse.Status, acceptResponse.Body)
+	require.Contains(t, acceptResponse.Body, "资产主档当前值已变化")
+
+	updatedAsset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata = recordMetadata(t, updatedAsset)
+	require.Equal(t, "Manual CPU", metadata["cpu_model"])
+	require.Empty(t, metadata["memory_gb"])
+
+	updatedCPUSuggestion, err := fixture.hub.FindRecordById("asset_enrichment_suggestions", cpuSuggestion.Id)
+	require.NoError(t, err)
+	require.Equal(t, "pending", updatedCPUSuggestion.GetString("status"))
+	updatedMemorySuggestion, err := fixture.hub.FindRecordById("asset_enrichment_suggestions", memorySuggestion.Id)
+	require.NoError(t, err)
+	require.Equal(t, "pending", updatedMemorySuggestion.GetString("status"))
+
+	changes, err := fixture.hub.FindRecordsByFilter("asset_changes", "asset = {:asset} && source_collection = 'assets'", "-created", -1, 0, map[string]any{
+		"asset": fixture.asset.Id,
+	})
+	require.NoError(t, err)
+	require.Empty(t, changes)
+}
+
 func TestAssetEnrichmentAcceptWritesMetadataAndChange(t *testing.T) {
 	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-accept@example.com")
 	response := fixture.generateReport(t)
@@ -1260,6 +3467,404 @@ func TestAssetEnrichmentAcceptRejectsIllegalField(t *testing.T) {
 	)
 	require.Equal(t, http.StatusBadRequest, acceptResponse.Status, acceptResponse.Body)
 	require.Contains(t, acceptResponse.Body, "字段不允许")
+}
+
+func TestAssetEnrichmentAcceptRejectsMetadataFieldWithoutPrefix(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-metadata-prefix@example.com")
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+	prefixlessSuggestion, err := pulseTests.CreateRecord(fixture.hub, "asset_enrichment_suggestions", map[string]any{
+		"user":              fixture.user.Id,
+		"asset":             fixture.asset.Id,
+		"report":            reports[0].Id,
+		"target_collection": "assets",
+		"target_record":     fixture.asset.Id,
+		"target_field":      "cpu_model",
+		"target_label":      "CPU 型号",
+		"current_value":     "",
+		"collected_value":   "Fake CPU",
+		"recommended_value": "Fake CPU",
+		"source":            "online",
+		"confidence":        90,
+		"conflict":          false,
+		"status":            "pending",
+		"notes":             "metadata 字段必须带 metadata. 前缀。",
+		"metadata":          map[string]any{},
+	})
+	require.NoError(t, err)
+
+	acceptResponse := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		"/api/pulse/asset-enrichment-suggestions/"+prefixlessSuggestion.Id+"/accept",
+		nil,
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusBadRequest, acceptResponse.Status, acceptResponse.Body)
+	require.Contains(t, acceptResponse.Body, "字段不允许")
+}
+
+func TestAssetEnrichmentAcceptWritesOfficialURLMetadataFields(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-official-url-accept@example.com")
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+	productURLSuggestion, err := pulseTests.CreateRecord(fixture.hub, "asset_enrichment_suggestions", map[string]any{
+		"user":              fixture.user.Id,
+		"asset":             fixture.asset.Id,
+		"report":            reports[0].Id,
+		"target_collection": "assets",
+		"target_record":     fixture.asset.Id,
+		"target_field":      "metadata.product_url",
+		"target_label":      "厂家官方产品页",
+		"current_value":     "",
+		"collected_value":   "https://www.mi.com/redmi-k50",
+		"recommended_value": "https://www.mi.com/redmi-k50",
+		"source":            "online",
+		"confidence":        95,
+		"conflict":          false,
+		"status":            "pending",
+		"notes":             "厂家官方产品页必须允许确认写回 metadata。",
+		"metadata":          map[string]any{},
+	})
+	require.NoError(t, err)
+
+	acceptResponse := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		"/api/pulse/asset-enrichment-suggestions/"+productURLSuggestion.Id+"/accept",
+		nil,
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, acceptResponse.Status, acceptResponse.Body)
+
+	updatedAsset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, updatedAsset)
+	require.Equal(t, "https://www.mi.com/redmi-k50", metadata["product_url"])
+}
+
+func TestAssetEnrichmentAcceptRejectsDuplicateAssetName(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-duplicate-name@example.com")
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+	_, err := pulseTests.CreateRecord(fixture.hub, "assets", map[string]any{
+		"user":   fixture.user.Id,
+		"name":   "书房主机",
+		"type":   "physical_host",
+		"status": "active",
+	})
+	require.NoError(t, err)
+
+	duplicateNameSuggestion, err := pulseTests.CreateRecord(fixture.hub, "asset_enrichment_suggestions", map[string]any{
+		"user":              fixture.user.Id,
+		"asset":             fixture.asset.Id,
+		"report":            reports[0].Id,
+		"target_collection": "assets",
+		"target_record":     fixture.asset.Id,
+		"target_field":      "name",
+		"target_label":      "资产名称",
+		"current_value":     "Archive Host",
+		"collected_value":   "书房主机",
+		"recommended_value": "书房主机",
+		"source":            "online",
+		"confidence":        92,
+		"conflict":          true,
+		"status":            "pending",
+		"notes":             "补全建议不能绕过资产主档重复约束。",
+		"metadata":          map[string]any{},
+	})
+	require.NoError(t, err)
+
+	acceptResponse := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		"/api/pulse/asset-enrichment-suggestions/"+duplicateNameSuggestion.Id+"/accept",
+		nil,
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusBadRequest, acceptResponse.Status, acceptResponse.Body)
+	require.Contains(t, acceptResponse.Body, "同类型同名资产已存在")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	require.Equal(t, "Archive Host", asset.GetString("name"))
+
+	updatedSuggestion, err := fixture.hub.FindRecordById("asset_enrichment_suggestions", duplicateNameSuggestion.Id)
+	require.NoError(t, err)
+	require.Equal(t, "pending", updatedSuggestion.GetString("status"))
+}
+
+func TestAssetEnrichmentAcceptRejectsDuplicateAssetSerialNumber(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-duplicate-serial@example.com")
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+	_, err := pulseTests.CreateRecord(fixture.hub, "assets", map[string]any{
+		"user":          fixture.user.Id,
+		"name":          "另一台主机",
+		"type":          "physical_host",
+		"status":        "active",
+		"serial_number": "SN-EXISTING-001",
+	})
+	require.NoError(t, err)
+
+	duplicateSerialSuggestion, err := pulseTests.CreateRecord(fixture.hub, "asset_enrichment_suggestions", map[string]any{
+		"user":              fixture.user.Id,
+		"asset":             fixture.asset.Id,
+		"report":            reports[0].Id,
+		"target_collection": "assets",
+		"target_record":     fixture.asset.Id,
+		"target_field":      "serial_number",
+		"target_label":      "序列号",
+		"current_value":     "",
+		"collected_value":   "sn-existing-001",
+		"recommended_value": "sn-existing-001",
+		"source":            "online",
+		"confidence":        90,
+		"conflict":          false,
+		"status":            "pending",
+		"notes":             "补全建议不能写入已存在的资产序列号。",
+		"metadata":          map[string]any{},
+	})
+	require.NoError(t, err)
+
+	acceptResponse := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		"/api/pulse/asset-enrichment-suggestions/"+duplicateSerialSuggestion.Id+"/accept",
+		nil,
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusBadRequest, acceptResponse.Status, acceptResponse.Body)
+	require.Contains(t, acceptResponse.Body, "资产序列号已存在")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	require.Empty(t, asset.GetString("serial_number"))
+
+	updatedSuggestion, err := fixture.hub.FindRecordById("asset_enrichment_suggestions", duplicateSerialSuggestion.Id)
+	require.NoError(t, err)
+	require.Equal(t, "pending", updatedSuggestion.GetString("status"))
+}
+
+func TestAssetEnrichmentAcceptRejectsNonImageOfficialImageURL(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-official-image-url-accept@example.com")
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+	nonImageURL := "https://www.mi.com/redmi-k50"
+	officialImageSuggestion, err := pulseTests.CreateRecord(fixture.hub, "asset_enrichment_suggestions", map[string]any{
+		"user":              fixture.user.Id,
+		"asset":             fixture.asset.Id,
+		"report":            reports[0].Id,
+		"target_collection": "assets",
+		"target_record":     fixture.asset.Id,
+		"target_field":      "metadata.official_image_url",
+		"target_label":      "官方图片",
+		"current_value":     "",
+		"collected_value":   nonImageURL,
+		"recommended_value": nonImageURL,
+		"source":            "online",
+		"confidence":        90,
+		"conflict":          false,
+		"status":            "pending",
+		"notes":             "错误建议不能把产品页当作官方图片写入。",
+		"metadata": map[string]any{
+			"source_urls": []string{nonImageURL},
+		},
+	})
+	require.NoError(t, err)
+
+	acceptResponse := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		"/api/pulse/asset-enrichment-suggestions/"+officialImageSuggestion.Id+"/accept",
+		nil,
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusBadRequest, acceptResponse.Status, acceptResponse.Body)
+	require.Contains(t, acceptResponse.Body, "官方图片必须是可识别的图片 URL")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	require.Empty(t, metadata["official_image_url"])
+
+	updatedSuggestion, err := fixture.hub.FindRecordById("asset_enrichment_suggestions", officialImageSuggestion.Id)
+	require.NoError(t, err)
+	require.Equal(t, "pending", updatedSuggestion.GetString("status"))
+}
+
+func TestAssetEnrichmentAcceptRejectsThirdPartyOfficialImageURL(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-third-party-official-image-url-accept@example.com")
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+	thirdPartyImageURL := "https://cdn.example.test/redmi-k50.jpg"
+	officialImageSuggestion, err := pulseTests.CreateRecord(fixture.hub, "asset_enrichment_suggestions", map[string]any{
+		"user":              fixture.user.Id,
+		"asset":             fixture.asset.Id,
+		"report":            reports[0].Id,
+		"target_collection": "assets",
+		"target_record":     fixture.asset.Id,
+		"target_field":      "metadata.official_image_url",
+		"target_label":      "官方图片",
+		"current_value":     "",
+		"collected_value":   thirdPartyImageURL,
+		"recommended_value": thirdPartyImageURL,
+		"source":            "online",
+		"confidence":        90,
+		"conflict":          false,
+		"status":            "pending",
+		"notes":             "不能只因为来源页是官方，就把第三方图片写成官方图片。",
+		"metadata": map[string]any{
+			"source_urls":  []string{"https://www.mi.com/redmi-k50/specs"},
+			"source_types": []string{"official_product"},
+		},
+	})
+	require.NoError(t, err)
+
+	acceptResponse := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		"/api/pulse/asset-enrichment-suggestions/"+officialImageSuggestion.Id+"/accept",
+		nil,
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusBadRequest, acceptResponse.Status, acceptResponse.Body)
+	require.Contains(t, acceptResponse.Body, "官方图片必须来自官方图片来源")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	require.Empty(t, metadata["official_image_url"])
+
+	updatedSuggestion, err := fixture.hub.FindRecordById("asset_enrichment_suggestions", officialImageSuggestion.Id)
+	require.NoError(t, err)
+	require.Equal(t, "pending", updatedSuggestion.GetString("status"))
+}
+
+func TestAssetEnrichmentAcceptRejectsSparseSourceArrayImageURLMismatch(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-sparse-source-image-url-accept@example.com")
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+	thirdPartyImageURL := "https://cdn.example.test/redmi-k50.jpg"
+	officialImageSuggestion, err := pulseTests.CreateRecord(fixture.hub, "asset_enrichment_suggestions", map[string]any{
+		"user":              fixture.user.Id,
+		"asset":             fixture.asset.Id,
+		"report":            reports[0].Id,
+		"target_collection": "assets",
+		"target_record":     fixture.asset.Id,
+		"target_field":      "metadata.official_image_url",
+		"target_label":      "官方图片",
+		"current_value":     "",
+		"collected_value":   thirdPartyImageURL,
+		"recommended_value": thirdPartyImageURL,
+		"source":            "online",
+		"confidence":        90,
+		"conflict":          false,
+		"status":            "pending",
+		"notes":             "旧报告里的稀疏数组不能把第三方图片错配到官方来源页。",
+		"metadata": map[string]any{
+			"source_urls":       []string{"https://www.mi.com/redmi-k50/specs"},
+			"source_types":      []string{"official_product"},
+			"source_image_urls": []string{thirdPartyImageURL},
+		},
+	})
+	require.NoError(t, err)
+
+	acceptResponse := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		"/api/pulse/asset-enrichment-suggestions/"+officialImageSuggestion.Id+"/accept",
+		nil,
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusBadRequest, acceptResponse.Status, acceptResponse.Body)
+	require.Contains(t, acceptResponse.Body, "官方图片必须来自官方图片来源")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	require.Empty(t, metadata["official_image_url"])
+}
+
+func TestAssetEnrichmentAcceptAllowsStructuredOfficialSourceImageURL(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-structured-official-image-url-accept@example.com")
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+	officialPageImageURL := "https://cdn.example.test/redmi-k50-official-page-image.jpg"
+	officialImageSuggestion, err := pulseTests.CreateRecord(fixture.hub, "asset_enrichment_suggestions", map[string]any{
+		"user":              fixture.user.Id,
+		"asset":             fixture.asset.Id,
+		"report":            reports[0].Id,
+		"target_collection": "assets",
+		"target_record":     fixture.asset.Id,
+		"target_field":      "metadata.official_image_url",
+		"target_label":      "官方图片",
+		"current_value":     "",
+		"collected_value":   officialPageImageURL,
+		"recommended_value": officialPageImageURL,
+		"source":            "online",
+		"confidence":        90,
+		"conflict":          false,
+		"status":            "pending",
+		"notes":             "结构化来源行能证明该图片由官方产品页暴露。",
+		"metadata": map[string]any{
+			"sources": []map[string]any{
+				{
+					"url":       "https://www.mi.com/redmi-k50/specs",
+					"type":      "official_product",
+					"title":     "Redmi K50 官方规格",
+					"image_url": officialPageImageURL,
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	acceptResponse := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		"/api/pulse/asset-enrichment-suggestions/"+officialImageSuggestion.Id+"/accept",
+		nil,
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, acceptResponse.Status, acceptResponse.Body)
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	require.Equal(t, officialPageImageURL, metadata["official_image_url"])
 }
 
 func newAssetEnrichmentFixture(t testing.TB, email string) assetEnrichmentFixture {

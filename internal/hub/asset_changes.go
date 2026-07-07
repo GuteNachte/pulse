@@ -46,7 +46,11 @@ func (h *Hub) trackAssetChangeRequest(e *core.RecordRequestEvent, action string)
 }
 
 func (h *Hub) createAssetChange(userID string, assetID string, sourceCollection string, sourceRecord string, action string, summary string, diff map[string]any) error {
-	collection, err := h.App.FindCachedCollectionByNameOrId("asset_changes")
+	return createAssetChangeWithApp(h.App, userID, assetID, sourceCollection, sourceRecord, action, summary, diff)
+}
+
+func createAssetChangeWithApp(app core.App, userID string, assetID string, sourceCollection string, sourceRecord string, action string, summary string, diff map[string]any) error {
+	collection, err := app.FindCachedCollectionByNameOrId("asset_changes")
 	if err != nil {
 		return err
 	}
@@ -58,7 +62,7 @@ func (h *Hub) createAssetChange(userID string, assetID string, sourceCollection 
 	record.Set("action", action)
 	record.Set("summary", summary)
 	record.Set("diff", diff)
-	return h.App.Save(record)
+	return app.Save(record)
 }
 
 func assetChangeAssetIDs(collectionName string, record *core.Record) []string {

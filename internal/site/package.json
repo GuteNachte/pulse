@@ -17,6 +17,7 @@
 		"lint": "biome lint .",
 		"check": "biome check .",
 		"check:fix": "biome check --fix .",
+		"test:asset-center": "node --experimental-strip-types src/modules/asset-center/asset-ai-task-query.test.ts && node --experimental-strip-types src/modules/asset-center/asset-ai-task-summary.test.ts && node --experimental-strip-types src/modules/asset-center/asset-enrichment-suggestion-query.test.ts && node --experimental-strip-types src/modules/asset-center/asset-parameter-display.test.ts && node --experimental-strip-types src/modules/asset-center/asset-visual-query.test.ts",
 		"check:versions": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../supplemental/scripts/check-version-consistency.ps1"
 	},
 	"dependencies": {
