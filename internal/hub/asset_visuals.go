@@ -23,7 +23,9 @@ import (
 
 const defaultAssetTurntableFrameCount = 2
 const assetVisualImageModelMaxAttempts = 3
-const defaultAssetVisualImageModelRequestTimeout = 45 * time.Second
+const defaultAssetVisualImageModelRequestTimeout = 120 * time.Second
+const maxAssetVisualImageModelRequestTimeout = 360 * time.Second
+const assetVisualImageModelMaxReferenceInputs = 2
 const assetVisualRunningTaskStaleAfter = 15 * time.Minute
 const assetVisualReferenceImageMaxBytes = 2 * 1024 * 1024
 const assetVisualGeneratedImageMaxBytes = 4 * 1024 * 1024
@@ -49,9 +51,11 @@ type assetVisualReferenceSkip struct {
 }
 
 type assetVisualImageModelInputResult struct {
-	Inputs  []string
-	URLs    []string
-	Skipped []assetVisualReferenceSkip
+	Inputs            []string
+	URLs              []string
+	InputPayloadBytes []int
+	TotalPayloadBytes int
+	Skipped           []assetVisualReferenceSkip
 }
 
 type assetVisualGenerationResult struct {
@@ -59,6 +63,8 @@ type assetVisualGenerationResult struct {
 	SkippedReferences           []assetVisualReferenceSkip
 	ReferenceInputCount         int
 	ReferenceInputURLs          []string
+	ReferenceInputPayloadBytes  []int
+	ReferenceInputTotalBytes    int
 	ImageModelOutputDiagnostics assetVisualImageModelDiagnostics
 }
 
@@ -247,6 +253,13 @@ func (h *Hub) finishAssetVisualGeneration(userID string, asset *core.Record, tas
 			outputSummary["reason"] = "reference_images_unreadable"
 			outputSummary["reference_skip_reasons"] = referenceInputErr.SkipSummaries()
 		}
+		outputSummary = mergeStringAnyMaps(outputSummary, assetVisualImageModelRequestSummary(config, assetVisualImageModelInputResult{
+			Inputs:            make([]string, generationResult.ReferenceInputCount),
+			URLs:              generationResult.ReferenceInputURLs,
+			InputPayloadBytes: generationResult.ReferenceInputPayloadBytes,
+			TotalPayloadBytes: generationResult.ReferenceInputTotalBytes,
+			Skipped:           generationResult.SkippedReferences,
+		}))
 		applyAssetVisualImageModelDiagnosticsToSummary(outputSummary, generationResult.ImageModelOutputDiagnostics)
 		if err := mergeAssetVisualTaskSummary(task, outputSummary); err != nil {
 			return nil, "failed", message, err
@@ -282,6 +295,13 @@ func (h *Hub) finishAssetVisualGeneration(userID string, asset *core.Record, tas
 		"reference_visual":      referenceVisual.Id,
 		"generated_visual":      visual.Id,
 	}
+	outputSummary = mergeStringAnyMaps(outputSummary, assetVisualImageModelRequestSummary(config, assetVisualImageModelInputResult{
+		Inputs:            make([]string, generationResult.ReferenceInputCount),
+		URLs:              generationResult.ReferenceInputURLs,
+		InputPayloadBytes: generationResult.ReferenceInputPayloadBytes,
+		TotalPayloadBytes: generationResult.ReferenceInputTotalBytes,
+		Skipped:           generationResult.SkippedReferences,
+	}))
 	if len(generationResult.SkippedReferences) > 0 {
 		outputSummary["reference_skip_reasons"] = assetVisualReferenceSkipSummaries(generationResult.SkippedReferences)
 	}
@@ -1287,18 +1307,21 @@ func (h *Hub) generateUnifiedAssetVisualFrames(config assetVisualAIConfig, asset
 		return assetVisualGenerationResult{}, newAssetVisualReferenceInputError(referenceInputResult.Skipped)
 	}
 	result := assetVisualGenerationResult{
-		SkippedReferences:   referenceInputResult.Skipped,
-		ReferenceInputCount: len(referenceInputResult.Inputs),
-		ReferenceInputURLs:  referenceInputResult.URLs,
+		SkippedReferences:          referenceInputResult.Skipped,
+		ReferenceInputCount:        len(referenceInputResult.Inputs),
+		ReferenceInputURLs:         referenceInputResult.URLs,
+		ReferenceInputPayloadBytes: referenceInputResult.InputPayloadBytes,
+		ReferenceInputTotalBytes:   referenceInputResult.TotalPayloadBytes,
 	}
+	requestSummary := assetVisualImageModelRequestSummary(config, referenceInputResult)
 	if progress != nil {
-		progress(map[string]any{
+		progress(mergeStringAnyMaps(map[string]any{
 			"phase":                 "reference_input_ready",
 			"phase_label":           "已准备模型参考图",
 			"progress_percent":      45,
 			"reference_input_count": len(referenceInputResult.Inputs),
 			"reference_input_urls":  referenceInputResult.URLs,
-		})
+		}, requestSummary))
 	}
 
 	themes := []struct {
@@ -1422,12 +1445,13 @@ func assetVisualReferenceLooksLikeNonDeviceImage(source map[string]any) bool {
 
 func (h *Hub) buildAssetVisualImageModelInputs(referenceURLs []string) assetVisualImageModelInputResult {
 	result := assetVisualImageModelInputResult{
-		Inputs:  make([]string, 0, len(referenceURLs)),
-		URLs:    make([]string, 0, len(referenceURLs)),
-		Skipped: []assetVisualReferenceSkip{},
+		Inputs:            make([]string, 0, len(referenceURLs)),
+		URLs:              make([]string, 0, len(referenceURLs)),
+		InputPayloadBytes: make([]int, 0, len(referenceURLs)),
+		Skipped:           []assetVisualReferenceSkip{},
 	}
 	for _, rawURL := range referenceURLs {
-		if len(result.Inputs) >= 4 {
+		if len(result.Inputs) >= assetVisualImageModelMaxReferenceInputs {
 			break
 		}
 		dataURI, err := h.fetchAssetVisualReferenceDataURI(rawURL)
@@ -1441,9 +1465,52 @@ func (h *Hub) buildAssetVisualImageModelInputs(referenceURLs []string) assetVisu
 		if dataURI != "" {
 			result.Inputs = append(result.Inputs, dataURI)
 			result.URLs = append(result.URLs, rawURL)
+			result.InputPayloadBytes = append(result.InputPayloadBytes, len(dataURI))
+			result.TotalPayloadBytes += len(dataURI)
 		}
 	}
 	return result
+}
+
+func assetVisualImageModelRequestSummary(config assetVisualAIConfig, inputs assetVisualImageModelInputResult) map[string]any {
+	endpointHost, endpointPath := safeEndpointHostAndPath(config.Endpoint)
+	summary := map[string]any{
+		"image_model_endpoint_host":           endpointHost,
+		"image_model_endpoint_path":           endpointPath,
+		"image_model_size":                    "768x1024",
+		"image_model_response_format":         "b64_json",
+		"image_model_max_attempts":            assetVisualImageModelMaxAttempts,
+		"image_model_timeout_seconds":         int(assetVisualImageModelRequestTimeout().Seconds()),
+		"image_model_reference_input_limit":   assetVisualImageModelMaxReferenceInputs,
+		"image_model_reference_input_count":   len(inputs.Inputs),
+		"image_model_reference_payload_bytes": inputs.TotalPayloadBytes,
+	}
+	if len(inputs.InputPayloadBytes) > 0 {
+		values := make([]int, len(inputs.InputPayloadBytes))
+		copy(values, inputs.InputPayloadBytes)
+		summary["image_model_reference_payload_sizes"] = values
+	}
+	return summary
+}
+
+func safeEndpointHostAndPath(raw string) (string, string) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "", ""
+	}
+	return parsed.Host, parsed.Path
+}
+
+func mergeStringAnyMaps(base map[string]any, overlays ...map[string]any) map[string]any {
+	if base == nil {
+		base = map[string]any{}
+	}
+	for _, overlay := range overlays {
+		for key, value := range overlay {
+			base[key] = value
+		}
+	}
+	return base
 }
 
 func summarizeAssetVisualReferenceSkipReasons(skipped []assetVisualReferenceSkip) string {
@@ -1607,7 +1674,7 @@ func (h *Hub) callAssetVisualImageModel(config assetVisualAIConfig, prompt strin
 		"size":   "768x1024",
 		"extra_body": map[string]any{
 			"image":           referenceInputs,
-			"response_format": "url",
+			"response_format": "b64_json",
 		},
 	}
 	body, err := json.Marshal(payload)
@@ -1688,8 +1755,8 @@ func assetVisualImageModelRequestTimeout() time.Duration {
 		if timeout < 100*time.Millisecond {
 			return 100 * time.Millisecond
 		}
-		if timeout > 120*time.Second {
-			return 120 * time.Second
+		if timeout > maxAssetVisualImageModelRequestTimeout {
+			return maxAssetVisualImageModelRequestTimeout
 		}
 		return timeout
 	}
@@ -1698,8 +1765,8 @@ func assetVisualImageModelRequestTimeout() time.Duration {
 		if timeout < time.Second {
 			return time.Second
 		}
-		if timeout > 120*time.Second {
-			return 120 * time.Second
+		if timeout > maxAssetVisualImageModelRequestTimeout {
+			return maxAssetVisualImageModelRequestTimeout
 		}
 		return timeout
 	}
