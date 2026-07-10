@@ -15,6 +15,7 @@ import { pageTitle } from "@/lib/branding"
 export default memo(() => {
 	const { t } = useLingui()
 	const [addSystemDialogOpen, setAddSystemDialogOpen] = useState(false)
+	const [initialAssetId, setInitialAssetId] = useState("")
 	const showAddSystem = !isReadOnlyUser()
 	const { isMobile } = useMobileLayout()
 
@@ -22,10 +23,22 @@ export default memo(() => {
 		document.title = pageTitle(t`All Clients`)
 	}, [t])
 
+	useEffect(() => {
+		if (!showAddSystem) {
+			return
+		}
+		const asset = new URLSearchParams(window.location.search).get("asset") || ""
+		if (!asset) {
+			return
+		}
+		setInitialAssetId(asset)
+		setAddSystemDialogOpen(true)
+	}, [showAddSystem])
+
 	return useMemo(
 		() => (
 			<div className="flex flex-col gap-4">
-				<AddSystemDialog open={addSystemDialogOpen} setOpen={setAddSystemDialogOpen} />
+				<AddSystemDialog open={addSystemDialogOpen} setOpen={setAddSystemDialogOpen} initialAssetId={initialAssetId} />
 				<NotificationFailuresBanner />
 				<ActiveAlerts />
 				{isMobile ? (
@@ -46,6 +59,6 @@ export default memo(() => {
 				)}
 			</div>
 		),
-		[addSystemDialogOpen, isMobile, showAddSystem]
+		[addSystemDialogOpen, initialAssetId, isMobile, showAddSystem]
 	)
 })

@@ -5,6 +5,8 @@ import { getPagePath, redirectPage } from "@nanostores/router"
 import {
 	ArchiveIcon,
 	BellIcon,
+	BlocksIcon,
+	BrainCircuitIcon,
 	DatabaseIcon,
 	InfoIcon,
 	KeyRoundIcon,
@@ -23,6 +25,9 @@ import { toast } from "@/components/ui/use-toast.ts"
 import { getCurrentUserSettingsFilter, isAdmin, isReadOnlyUser, pb } from "@/lib/api"
 import { pageTitle } from "@/lib/branding"
 import { $userSettings } from "@/lib/stores.ts"
+import { $moduleSettings } from "@/modules/module-state"
+import { getModuleForSettingsName } from "@/modules/registry"
+import type { PulseModuleId } from "@/modules/types"
 import type { UserSettings } from "@/types"
 import { SidebarNav } from "./sidebar-nav.tsx"
 
@@ -35,6 +40,8 @@ const operationAuditImport = () => import("./operation-audit.tsx")
 const backupsImport = () => import("./backups.tsx")
 const usersImport = () => import("./users.tsx")
 const advancedImport = () => import("./advanced.tsx")
+const aiSettingsImport = () => import("./ai.tsx")
+const modulesImport = () => import("./modules.tsx")
 const aboutImport = () => import("./about.tsx")
 
 const GeneralSettings = lazy(generalSettingsImport)
@@ -46,6 +53,8 @@ const OperationAudit = lazy(operationAuditImport)
 const Backups = lazy(backupsImport)
 const Users = lazy(usersImport)
 const Advanced = lazy(advancedImport)
+const AISettings = lazy(aiSettingsImport)
+const Modules = lazy(modulesImport)
 const About = lazy(aboutImport)
 
 type SettingsNavItem = {
@@ -58,6 +67,7 @@ type SettingsNavItem = {
 	danger?: boolean
 	admin?: boolean
 	noReadOnly?: boolean
+	moduleId?: PulseModuleId
 	preload?: () => Promise<{ default: ComponentType<object> }>
 } & MobileSettingsNavItem
 
@@ -93,6 +103,7 @@ export async function saveSettings(newSettings: Partial<UserSettings>) {
 export default function SettingsLayout() {
 	const { t } = useLingui()
 	const { isMobile } = useMobileLayout()
+	const moduleSettings = useStore($moduleSettings)
 
 	const sidebarNavItems: SettingsNavItem[] = [
 		{
@@ -102,6 +113,7 @@ export default function SettingsLayout() {
 			group: "常规",
 			description: "主题、图表、单位和阈值偏好",
 			keywords: ["general", "settings", "theme", "charts", "unit", "threshold"],
+			moduleId: "foundation",
 		},
 		{
 			title: "通知设置",
@@ -110,6 +122,7 @@ export default function SettingsLayout() {
 			group: "告警与通知",
 			description: "通知通道、告警规则和测试诊断",
 			keywords: ["notification", "alert", "告警", "通道", "webhook", "telegram"],
+			moduleId: "notifications",
 			preload: notificationsImport,
 		},
 		{
@@ -119,6 +132,7 @@ export default function SettingsLayout() {
 			group: "Agent 与接入",
 			description: "安装模板、目标版本和手动更新",
 			keywords: ["agent", "update", "版本", "安装", "windows", "linux", "nas"],
+			moduleId: "agent-management",
 			noReadOnly: true,
 			preload: agentSettingsImport,
 		},
@@ -129,6 +143,7 @@ export default function SettingsLayout() {
 			group: "用户与权限",
 			description: "账户、角色和密码维护",
 			keywords: ["users", "role", "permission", "账号", "角色", "权限", "密码"],
+			moduleId: "account-access",
 			admin: true,
 			preload: usersImport,
 		},
@@ -139,6 +154,7 @@ export default function SettingsLayout() {
 			group: "数据与记录",
 			description: "数据备份、下载、还原和删除",
 			keywords: ["backup", "restore", "备份", "还原", "下载", "删除"],
+			moduleId: "maintenance",
 			admin: true,
 			preload: backupsImport,
 		},
@@ -149,6 +165,7 @@ export default function SettingsLayout() {
 			group: "数据与记录",
 			description: "Hub 运行事件和技术诊断",
 			keywords: ["logs", "日志", "错误", "warning", "debug"],
+			moduleId: "maintenance",
 			preload: systemLogsImport,
 		},
 		{
@@ -158,7 +175,30 @@ export default function SettingsLayout() {
 			group: "数据与记录",
 			description: "用户、备份、Token 和管理动作",
 			keywords: ["audit", "operation", "审计", "操作记录", "管理动作"],
+			moduleId: "maintenance",
 			preload: operationAuditImport,
+		},
+		{
+			title: "模块管理",
+			href: getPagePath($router, "settings", { name: "modules" }),
+			icon: BlocksIcon,
+			group: "系统维护",
+			description: "模块状态、依赖和启停控制",
+			keywords: ["modules", "module", "模块", "开关", "启停", "依赖"],
+			moduleId: "foundation",
+			admin: true,
+			preload: modulesImport,
+		},
+		{
+			title: "AI 与识别",
+			href: getPagePath($router, "settings", { name: "ai" }),
+			icon: BrainCircuitIcon,
+			group: "资产中心",
+			description: "大模型接入、资料补全 Agent 和设备图片 Agent",
+			keywords: ["ai", "llm", "agnes", "识别", "资产补全", "图片收集", "模型"],
+			moduleId: "asset-center",
+			admin: true,
+			preload: aiSettingsImport,
 		},
 		{
 			title: "高级设置",
@@ -167,6 +207,7 @@ export default function SettingsLayout() {
 			group: "系统维护",
 			description: "底层后台和危险维护入口",
 			keywords: ["advanced", "pocketbase", "后台", "维护", "危险"],
+			moduleId: "maintenance",
 			danger: true,
 			admin: true,
 			preload: advancedImport,
@@ -178,6 +219,7 @@ export default function SettingsLayout() {
 			group: "系统维护",
 			description: "高级接入凭据、轮换和解绑",
 			keywords: ["token", "fingerprint", "凭据", "指纹", "轮换", "解绑"],
+			moduleId: "agent-management",
 			danger: true,
 			noReadOnly: true,
 			preload: fingerprintsSettingsImport,
@@ -189,15 +231,20 @@ export default function SettingsLayout() {
 			group: "系统维护",
 			description: "版本、Hub 地址和更新记录",
 			keywords: ["about", "version", "release", "关于", "版本", "更新记录"],
+			moduleId: "foundation",
 			preload: aboutImport,
 		},
 	]
 
 	const page = useStore($router)
 	const activeSettingsName = page?.params?.name ?? "general"
-	const visibleItems = sidebarNavItems.filter(
-		(item) => !((item.admin && !isAdmin()) || (item.noReadOnly && isReadOnlyUser()))
-	)
+	const visibleItems = sidebarNavItems.filter((item) => {
+		if ((item.admin && !isAdmin()) || (item.noReadOnly && isReadOnlyUser())) {
+			return false
+		}
+		const moduleId = item.moduleId ?? getModuleForSettingsName(item.href.split("/").pop())
+		return moduleSettings[moduleId]?.effectiveEnabled !== false
+	})
 	const activeItem = visibleItems.find((item) => page?.path === item.href)
 	const ActiveIcon = activeItem?.icon ?? SettingsIcon
 
@@ -221,7 +268,7 @@ export default function SettingsLayout() {
 	}
 
 	return (
-		<Card className="mb-14 min-h-96 w-full overflow-hidden rounded-lg border-border/70 bg-card px-4 py-5 shadow-none sm:px-6 sm:py-6">
+		<Card className="mb-14 min-h-96 w-full overflow-visible rounded-lg border-border/70 bg-card px-4 py-5 shadow-none sm:px-6 sm:py-6">
 			<CardHeader className="border-b border-border/70 p-0 pb-4">
 				<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 					<div className="flex min-w-0 gap-3">
@@ -249,11 +296,11 @@ export default function SettingsLayout() {
 				</div>
 			</CardHeader>
 			<CardContent className="p-0 pt-4">
-				<div className="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">
-					<aside className="min-w-0 rounded-lg border border-border/70 bg-surface-soft p-2">
-						<SidebarNav items={sidebarNavItems} />
+				<div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
+					<aside className="min-w-0 self-start overflow-visible rounded-lg border border-border/70 bg-surface-soft p-2">
+						<SidebarNav items={visibleItems} />
 					</aside>
-					<div className="h-full min-w-0 rounded-lg border border-border/70 bg-surface-soft p-3">
+					<div className="h-full min-w-0 overflow-hidden rounded-lg border border-border/70 bg-surface-soft p-3">
 						<SettingsContent name={activeSettingsName} />
 					</div>
 				</div>
@@ -286,6 +333,10 @@ function SettingsContent({ name }: { name: string }) {
 			return <Users />
 		case "advanced":
 			return <Advanced />
+		case "ai":
+			return <AISettings />
+		case "modules":
+			return <Modules />
 		case "about":
 			return <About />
 		default:

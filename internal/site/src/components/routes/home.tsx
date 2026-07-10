@@ -1,10 +1,18 @@
 import { getPagePath } from "@nanostores/router"
 import { useStore } from "@nanostores/react"
-import { AlertOctagonIcon, ArrowRightIcon, ContainerIcon, Globe2Icon, MonitorIcon, ServerIcon } from "lucide-react"
-import { memo, useEffect, useMemo, useState } from "react"
+import {
+	AlertOctagonIcon,
+	ArrowRightIcon,
+	BoxesIcon,
+	ContainerIcon,
+	Globe2Icon,
+	MonitorIcon,
+	ServerIcon,
+} from "lucide-react"
+import { lazy, memo, Suspense, useEffect, useMemo, useState } from "react"
 import { ActiveAlerts } from "@/components/active-alerts"
 import { MobileDashboard } from "@/components/mobile/mobile-dashboard"
-import { useMobileLayout } from "@/components/mobile/mobile-ui"
+import { useMobileLayout, type MobileStatusTone } from "@/components/mobile/mobile-ui"
 import { Link, $router, prependBasePath } from "@/components/router"
 import { NotificationFailuresBanner } from "@/components/notification-failures-banner"
 import { SystemMetaTags } from "@/components/system-meta-tags"
@@ -20,7 +28,13 @@ import { getSystemIPAddressLabel } from "@/lib/system-network"
 import { $alerts, $systems, $userSettings } from "@/lib/stores"
 import { getSystemDisplayName } from "@/lib/system-roles"
 import { cn } from "@/lib/utils"
-import type { SystemRecord } from "@/types"
+import { buildMonitoredAssetIds, getAssetListCounts } from "@/modules/asset-center/asset-list"
+import { getLooseLocationGroups } from "@/modules/asset-center/asset-location"
+import { $moduleSettings } from "@/modules/module-state"
+import type { PulseModuleId } from "@/modules/types"
+import type { AssetLocationRecord, AssetRecord, SystemRecord, WebsiteMonitorRecord } from "@/types"
+
+const HomeNetworkTopology = lazy(() => import("@/components/routes/home-network-topology"))
 
 type DashboardSummaryResponse = {
 	containers?: {
@@ -36,10 +50,20 @@ type DashboardSummaryResponse = {
 	}
 }
 
+type AssetDashboardSummary = {
+	total: number
+	monitored: number
+	manual: number
+	profileAttention: number
+	lifecycleAttention: number
+	looseLocations: number
+}
+
 export default memo(() => {
 	const systems = useStore($systems)
 	const alerts = useStore($alerts)
 	const userSettings = useStore($userSettings)
+	const moduleSettings = useStore($moduleSettings)
 	const { isMobile } = useMobileLayout()
 	const [summary, setSummary] = useState({
 		containers: 0,
@@ -49,6 +73,14 @@ export default memo(() => {
 		websitesUp: 0,
 		websitesDown: 0,
 		websitesUnknown: 0,
+	})
+	const [assetSummary, setAssetSummary] = useState<AssetDashboardSummary>({
+		total: 0,
+		monitored: 0,
+		manual: 0,
+		profileAttention: 0,
+		lifecycleAttention: 0,
+		looseLocations: 0,
 	})
 
 	useEffect(() => {
@@ -91,6 +123,53 @@ export default memo(() => {
 		}
 	}, [])
 
+	useEffect(() => {
+		let ignore = false
+
+		async function loadAssetSummary() {
+			try {
+				const [assets, locations, websites] = await Promise.all([
+					pb.collection<AssetRecord>("assets").getFullList({ requestKey: null, sort: "name" }),
+					pb
+						.collection<AssetLocationRecord>("asset_locations")
+						.getFullList({ requestKey: null, sort: "sort_order,name" }),
+					pb.collection<WebsiteMonitorRecord>("website_monitors").getFullList({ requestKey: null, sort: "name" }),
+				])
+				if (ignore) {
+					return
+				}
+				const monitoredAssetIds = buildMonitoredAssetIds(systems, websites)
+				const looseLocations = getLooseLocationGroups(assets, locations)
+				const counts = getAssetListCounts({
+					assets,
+					locationCount: locations.length,
+					looseLocationCount: looseLocations.length,
+					monitoredAssetIds,
+				})
+				setAssetSummary({
+					total: counts.total,
+					monitored: counts.monitored,
+					manual: counts.manual,
+					profileAttention: counts.profileAttention,
+					lifecycleAttention: counts.attention,
+					looseLocations: counts.looseLocations,
+				})
+			} catch (error) {
+				if (ignore || isPocketBaseAutoCancel(error)) {
+					return
+				}
+				console.error("load asset dashboard summary", error)
+			}
+		}
+
+		loadAssetSummary()
+		const timer = window.setInterval(loadAssetSummary, 30_000)
+		return () => {
+			ignore = true
+			window.clearInterval(timer)
+		}
+	}, [systems])
+
 	const activeAlertCount = useMemo(() => {
 		let count = 0
 		for (const systemAlerts of Object.values(alerts)) {
@@ -114,6 +193,8 @@ export default memo(() => {
 	const abnormalSystems = downCount + pausedCount
 	const websiteState = getWebsiteSummaryState(summary)
 	const containerState = getContainerSummaryState(summary)
+	const assetState = getAssetSummaryState(assetSummary)
+	const assetSummaryHref = getAssetSummaryHref(assetSummary)
 	const clientsDetail =
 		totalSystems === 0 ? "暂无机器" : abnormalSystems > 0 ? `${abnormalSystems} 台需关注` : "全部在线"
 	const overviewState =
@@ -121,7 +202,10 @@ export default memo(() => {
 			? `${activeAlertCount} 条告警触发`
 			: abnormalSystems > 0
 				? `${abnormalSystems} 台机器需要关注`
-				: "当前运行平稳"
+				: assetState.state === "warning"
+					? assetState.detail
+					: "当前运行平稳"
+	const moduleEnabled = (id: PulseModuleId) => moduleSettings[id]?.effectiveEnabled !== false
 
 	return useMemo(
 		() =>
@@ -132,11 +216,15 @@ export default memo(() => {
 					totalSystems={totalSystems}
 					abnormalSystems={abnormalSystems}
 					activeAlertCount={activeAlertCount}
+					assetCount={assetSummary.total}
+					assetDetail={assetState.detail}
+					assetHref={assetSummaryHref}
+					assetTone={toMobileStatusTone(assetState.state)}
 					containerCount={summary.containers}
 					containerDetail={containerState.detail}
-					containerTone={containerState.state}
+					containerTone={toMobileStatusTone(containerState.state)}
 					websiteText={`${summary.websitesUp}/${summary.websites}`}
-					websiteTone={websiteState.state}
+					websiteTone={toMobileStatusTone(websiteState.state)}
 					unitNet={userSettings.unitNet}
 				/>
 			) : (
@@ -157,7 +245,8 @@ export default memo(() => {
 									</p>
 								</div>
 							</div>
-							<div className="grid grid-cols-3 gap-2 rounded-lg border border-border/70 bg-surface-soft p-2 text-center xl:min-w-[24rem]">
+							<div className="grid grid-cols-4 gap-2 rounded-lg border border-border/70 bg-surface-soft p-2 text-center xl:min-w-[30rem]">
+								<OverviewPill label="总资产" value={String(assetSummary.total)} />
 								<OverviewPill label="在线机器" value={`${onlineSystems}/${totalSystems}`} />
 								<OverviewPill label="运行容器" value={`${summary.containersRunning}/${summary.containers}`} />
 								<OverviewPill label="正常网站" value={`${summary.websitesUp}/${summary.websites}`} />
@@ -166,39 +255,63 @@ export default memo(() => {
 					</section>
 
 					<section className="grid gap-4">
-						<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-							<MetricCard
-								href={getPagePath($router, "clients")}
-								title="客户端"
-								value={`${onlineSystems}/${totalSystems}`}
-								detail={clientsDetail}
-								icon={MonitorIcon}
-								state={totalSystems === 0 ? "default" : abnormalSystems > 0 ? "warning" : "success"}
-							/>
-							<MetricCard
-								href={getPagePath($router, "containers")}
-								title="容器"
-								value={String(summary.containers)}
-								detail={containerState.detail}
-								icon={ContainerIcon}
-								state={containerState.state}
-							/>
-							<MetricCard
-								href={getPagePath($router, "websites")}
-								title="网站监控"
-								value={`${summary.websitesUp}/${summary.websites}`}
-								detail={websiteState.detail}
-								icon={Globe2Icon}
-								state={websiteState.state}
-							/>
-							<MetricCard
-								href={getPagePath($router, "alerts")}
-								title="当前告警"
-								value={String(activeAlertCount)}
-								detail={activeAlertCount > 0 ? "存在触发项" : "暂无触发项"}
-								icon={AlertOctagonIcon}
-								state={activeAlertCount > 0 ? "danger" : "success"}
-							/>
+						{moduleEnabled("network-topology") && (
+							<Suspense fallback={<EmptyState loading loadingText="正在加载网络拓扑" emptyText="暂无网络拓扑" />}>
+								<HomeNetworkTopology systems={homeSystems} />
+							</Suspense>
+						)}
+
+						<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+							{moduleEnabled("asset-center") && (
+								<MetricCard
+									href={assetSummaryHref}
+									title="资产中心"
+									value={String(assetSummary.total)}
+									detail={assetState.detail}
+									icon={BoxesIcon}
+									state={assetState.state}
+								/>
+							)}
+							{moduleEnabled("client-monitoring") && (
+								<MetricCard
+									href={getPagePath($router, "clients")}
+									title="客户端监控"
+									value={`${onlineSystems}/${totalSystems}`}
+									detail={clientsDetail}
+									icon={MonitorIcon}
+									state={totalSystems === 0 ? "default" : abnormalSystems > 0 ? "warning" : "success"}
+								/>
+							)}
+							{moduleEnabled("client-monitoring") && (
+								<MetricCard
+									href={getPagePath($router, "containers")}
+									title="容器"
+									value={String(summary.containers)}
+									detail={containerState.detail}
+									icon={ContainerIcon}
+									state={containerState.state}
+								/>
+							)}
+							{moduleEnabled("website-monitoring") && (
+								<MetricCard
+									href={getPagePath($router, "websites")}
+									title="网站监控"
+									value={`${summary.websitesUp}/${summary.websites}`}
+									detail={websiteState.detail}
+									icon={Globe2Icon}
+									state={websiteState.state}
+								/>
+							)}
+							{moduleEnabled("alerts") && (
+								<MetricCard
+									href={getPagePath($router, "alerts")}
+									title="当前告警"
+									value={String(activeAlertCount)}
+									detail={activeAlertCount > 0 ? "存在触发项" : "暂无触发项"}
+									icon={AlertOctagonIcon}
+									state={activeAlertCount > 0 ? "danger" : "success"}
+								/>
+							)}
 						</div>
 					</section>
 
@@ -210,12 +323,14 @@ export default memo(() => {
 										<CardTitle className="text-xl tracking-[-0.02em]">重点机器</CardTitle>
 										<p className="text-sm text-muted-foreground">按离线、暂停和资源压力优先排序</p>
 									</div>
-									<Button asChild variant="outline" size="sm" className="shrink-0">
-										<Link href={getPagePath($router, "clients")}>
-											查看全部
-											<ArrowRightIcon className="ms-1 size-4" />
-										</Link>
-									</Button>
+									{moduleEnabled("client-monitoring") && (
+										<Button asChild variant="outline" size="sm" className="shrink-0">
+											<Link href={getPagePath($router, "clients")}>
+												查看全部
+												<ArrowRightIcon className="ms-1 size-4" />
+											</Link>
+										</Button>
+									)}
 								</div>
 							</CardHeader>
 							<CardContent className="grid gap-3 p-4">
@@ -248,9 +363,15 @@ export default memo(() => {
 									<CardTitle className="text-xl tracking-[-0.02em]">快捷入口</CardTitle>
 								</CardHeader>
 								<CardContent className="grid gap-2 p-4">
-									<QuickLink href={getPagePath($router, "clients")} icon={ServerIcon} label="所有客户端" />
-									<QuickLink href={getPagePath($router, "containers")} icon={ContainerIcon} label="容器监控" />
-									<QuickLink href={getPagePath($router, "websites")} icon={Globe2Icon} label="网站监控" />
+									{moduleEnabled("client-monitoring") && (
+										<QuickLink href={getPagePath($router, "clients")} icon={ServerIcon} label="客户端监控" />
+									)}
+									{moduleEnabled("client-monitoring") && (
+										<QuickLink href={getPagePath($router, "containers")} icon={ContainerIcon} label="容器监控" />
+									)}
+									{moduleEnabled("website-monitoring") && (
+										<QuickLink href={getPagePath($router, "websites")} icon={Globe2Icon} label="网站监控" />
+									)}
 								</CardContent>
 							</Card>
 						</div>
@@ -263,10 +384,15 @@ export default memo(() => {
 			clientsDetail,
 			downCount,
 			isMobile,
+			moduleSettings,
 			onlineSystems,
 			pausedCount,
 			recentSystems,
 			homeSystems,
+			assetState.detail,
+			assetState.state,
+			assetSummaryHref,
+			assetSummary.total,
 			containerState.detail,
 			containerState.state,
 			summary.containers,
@@ -321,6 +447,49 @@ function getContainerSummaryState(summary: { containers: number; containersStopp
 		return { detail: `停止 ${summary.containersStopped}`, state: "warning" }
 	}
 	return { detail: "全部运行", state: "success" }
+}
+
+function getAssetSummaryState(summary: AssetDashboardSummary): {
+	detail: string
+	state: MetricState
+} {
+	if (summary.total === 0) {
+		return { detail: "暂无资产", state: "default" }
+	}
+	if (summary.lifecycleAttention > 0) {
+		return { detail: `${summary.lifecycleAttention} 个保修需关注`, state: "warning" }
+	}
+	if (summary.profileAttention > 0) {
+		return { detail: `${summary.profileAttention} 个资料待补`, state: "warning" }
+	}
+	if (summary.looseLocations > 0) {
+		return { detail: `${summary.looseLocations} 个位置待归档`, state: "warning" }
+	}
+	if (summary.manual > 0) {
+		return { detail: `${summary.monitored} 已监控 / ${summary.manual} 手动`, state: "success" }
+	}
+	return { detail: "全部已接入", state: "success" }
+}
+
+function getAssetSummaryHref(summary: AssetDashboardSummary) {
+	const assetsPath = getPagePath($router, "assets")
+	if (summary.lifecycleAttention > 0) {
+		return `${assetsPath}?lifecycle=attention`
+	}
+	if (summary.profileAttention > 0) {
+		return `${assetsPath}?profile=attention`
+	}
+	if (summary.looseLocations > 0) {
+		return `${assetsPath}?location=__empty__`
+	}
+	if (summary.manual > 0) {
+		return `${assetsPath}?monitor=unmonitored`
+	}
+	return assetsPath
+}
+
+function toMobileStatusTone(state: MetricState): MobileStatusTone {
+	return state === "default" ? "neutral" : state
 }
 
 function RecentSystemCard({ system, unitNet }: { system: SystemRecord; unitNet: typeof $userSettings.value.unitNet }) {

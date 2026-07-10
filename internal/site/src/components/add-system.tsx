@@ -27,7 +27,8 @@ import {
 	systemAttributeOptions,
 } from "@/lib/system-roles"
 import { cn, tokenMap, useBrowserStorage } from "@/lib/utils"
-import type { SystemRecord } from "@/types"
+import { HOST_ASSET_TYPES, getMetadataString } from "@/modules/asset-center/asset-schema"
+import type { AssetRecord, SystemRecord } from "@/types"
 import {
 	copyDockerCompose,
 	copyPairingDockerCompose,
@@ -51,6 +52,7 @@ type InstallTab = "windows-host" | "linux-container"
 type PairingCodeResponse = {
 	id: string
 	code: string
+	asset?: string
 	target_ip?: string
 	expected_ip?: string
 	connect_ip?: string
@@ -70,19 +72,35 @@ type PairingCodeResponse = {
 	used_by?: string
 }
 
-export function AddSystemDialog({ open, setOpen }: { open: boolean; setOpen: (open: boolean) => void }) {
+export function AddSystemDialog({
+	open,
+	setOpen,
+	initialAssetId = "",
+}: {
+	open: boolean
+	setOpen: (open: boolean) => void
+	initialAssetId?: string
+}) {
 	if (isReadOnlyUser()) {
 		return null
 	}
 
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
-			{open && <SystemDialog setOpen={setOpen} />}
+			{open && <SystemDialog setOpen={setOpen} initialAssetId={initialAssetId} />}
 		</Dialog>
 	)
 }
 
-export const SystemDialog = ({ setOpen, system }: { setOpen: (open: boolean) => void; system?: SystemRecord }) => {
+export const SystemDialog = ({
+	setOpen,
+	system,
+	initialAssetId = "",
+}: {
+	setOpen: (open: boolean) => void
+	system?: SystemRecord
+	initialAssetId?: string
+}) => {
 	const [tab, setTab] = useBrowserStorage<InstallTab>("as-tab", "linux-container")
 	const [token, setToken] = useState(system?.token ?? "")
 	const [createdSystem, setCreatedSystem] = useState<SystemRecord | null>(null)
@@ -100,6 +118,10 @@ export const SystemDialog = ({ setOpen, system }: { setOpen: (open: boolean) => 
 	const [suppressOfflineAlerts, setSuppressOfflineAlerts] = useState(
 		system ? Boolean(system.suppress_offline_alerts) : true
 	)
+	const [assets, setAssets] = useState<AssetRecord[]>([])
+	const [assetsLoaded, setAssetsLoaded] = useState(false)
+	const [selectedAssetId, setSelectedAssetId] = useState(system?.asset || initialAssetId)
+	const selectedAsset = assets.find((asset) => asset.id === selectedAssetId)
 	const isBusy = isSaving || isCheckingPairing
 	const installReady = Boolean(system || pairingCode)
 	const readyToConfirmPairing = Boolean(
@@ -121,6 +143,33 @@ export const SystemDialog = ({ setOpen, system }: { setOpen: (open: boolean) => 
 			setTab("linux-container")
 		}
 	}, [tab, setTab])
+
+	useEffect(() => {
+		setAssetsLoaded(false)
+		pb.collection<AssetRecord>("assets")
+			.getFullList({ sort: "type,name", requestKey: null })
+			.then((records) => {
+				setAssets(records.filter(isAgentConnectableAsset))
+				setAssetsLoaded(true)
+			})
+			.catch((error) => {
+				console.error("load assets for system dialog", error)
+				setAssets([])
+				setAssetsLoaded(true)
+			})
+	}, [])
+
+	useEffect(() => {
+		setSelectedAssetId(system?.asset || initialAssetId)
+	}, [system?.asset, initialAssetId])
+
+	useEffect(() => {
+		if (system || pairingCode || !selectedAsset) return
+		const assetIp = getAssetAgentTargetIp(selectedAsset)
+		if (assetIp) {
+			setTargetIp(assetIp)
+		}
+	}, [pairingCode, selectedAsset, system])
 
 	useEffect(() => {
 		;(async () => {
@@ -159,17 +208,36 @@ export const SystemDialog = ({ setOpen, system }: { setOpen: (open: boolean) => 
 			custom_role: "",
 			suppress_offline_alerts: suppressOfflineAlerts,
 			pairing_confirmed: true,
+			asset: selectedAssetId || "",
+		}
+	}
+
+	function validateNewSystemAssetSelection() {
+		if (!system && !selectedAssetId) {
+			throw new Error("请先在关联资产里选择资产中心已有资产，再创建安装会话。")
+		}
+		if (!system && selectedAssetId && !assetsLoaded) {
+			throw new Error("资产候选正在加载，请稍后再创建安装会话。")
+		}
+		const matchedAsset = selectedAssetId ? assets.find((asset) => asset.id === selectedAssetId) : undefined
+		if (!system && selectedAssetId && !matchedAsset) {
+			throw new Error("当前选择的资产类型不能安装 Agent。请在资产中心选择物理主机、NAS、服务器或迷你主机。")
+		}
+		if (!system && matchedAsset && !getAssetAgentTargetIp(matchedAsset)) {
+			throw new Error("请先在资产中心为该资产填写 IPv4，再创建 Agent 安装会话。")
 		}
 	}
 
 	async function createPairingSession({ showToast = true }: { showToast?: boolean } = {}) {
-		const expectedIp = targetIp.trim()
+		validateNewSystemAssetSelection()
+		const expectedIp = (selectedAsset ? getAssetAgentTargetIp(selectedAsset) : "") || targetIp.trim()
 		if (!expectedIp) {
 			throw new Error("请填写目标机器 IP。")
 		}
+		setTargetIp(expectedIp)
 		const response = await pb.send<PairingCodeResponse>("/api/pulse/pairing-codes", {
 			method: "POST",
-			body: { target_ip: expectedIp },
+			body: { target_ip: expectedIp, asset: selectedAssetId },
 		})
 		setPairingCode(response)
 		setPendingPairedSystem(null)
@@ -215,6 +283,7 @@ export const SystemDialog = ({ setOpen, system }: { setOpen: (open: boolean) => 
 
 		try {
 			setIsSaving(true)
+			validateNewSystemAssetSelection()
 			if (system) {
 				await pb.collection("systems").update(system.id, buildSystemConfig())
 				toast({ title: "机器已保存", description: `${displayName} 的配置已更新。` })
@@ -224,7 +293,9 @@ export const SystemDialog = ({ setOpen, system }: { setOpen: (open: boolean) => 
 
 			await createPairingSession()
 		} catch (error) {
-			console.error(error)
+			if (!isExpectedSystemDialogValidationError(error)) {
+				console.error(error)
+			}
 			toast({
 				title: system ? "保存机器失败" : "创建安装会话失败",
 				description: getSystemDialogErrorMessage(error),
@@ -409,7 +480,7 @@ export const SystemDialog = ({ setOpen, system }: { setOpen: (open: boolean) => 
 									inputMode="decimal"
 									autoComplete="off"
 									required
-									disabled={Boolean(pairingCode)}
+									disabled={Boolean(pairingCode) || Boolean(selectedAsset)}
 								/>
 							</>
 						)}
@@ -424,6 +495,29 @@ export const SystemDialog = ({ setOpen, system }: { setOpen: (open: boolean) => 
 								{systemAttributeOptions.map((option) => (
 									<SelectItem key={option.value} value={option.value}>
 										{option.label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+						<Label htmlFor="asset" className="text-muted-foreground xs:text-end">
+							关联资产
+						</Label>
+						<Select
+							name="asset"
+							value={selectedAssetId || "none"}
+							onValueChange={(value) => setSelectedAssetId(value === "none" ? "" : value)}
+							disabled={Boolean(createdSystem) || (!system && Boolean(pairingCode))}
+						>
+							<SelectTrigger id="asset">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="none" disabled={!system}>
+									{system ? "不关联资产" : assets.length ? "请选择资产" : "资产中心暂无可接入资产"}
+								</SelectItem>
+								{assets.map((asset) => (
+									<SelectItem key={asset.id} value={asset.id}>
+										{getAssetSelectLabel(asset)}
 									</SelectItem>
 								))}
 							</SelectContent>
@@ -774,7 +868,27 @@ function getSystemDialogErrorMessage(error: unknown) {
 }
 
 function isExpectedSystemDialogValidationError(error: unknown) {
-	return error instanceof Error && error.message === "请填写目标机器 IP。"
+	return (
+		error instanceof Error &&
+		(error.message === "请填写目标机器 IP。" ||
+			error.message === "请先在关联资产里选择资产中心已有资产，再创建安装会话。" ||
+			error.message === "资产候选正在加载，请稍后再创建安装会话。" ||
+			error.message === "当前选择的资产类型不能安装 Agent。请在资产中心选择物理主机、NAS、服务器或迷你主机。" ||
+			error.message === "请先在资产中心为该资产填写 IPv4，再创建 Agent 安装会话。")
+	)
+}
+
+function isAgentConnectableAsset(asset: AssetRecord) {
+	return HOST_ASSET_TYPES.includes(asset.type)
+}
+
+function getAssetAgentTargetIp(asset: AssetRecord) {
+	return getMetadataString(asset.metadata, "fixed_ipv4") || asset.management_ip?.trim() || ""
+}
+
+function getAssetSelectLabel(asset: AssetRecord) {
+	const targetIp = getAssetAgentTargetIp(asset)
+	return targetIp ? `${asset.name} · ${targetIp}` : `${asset.name} · 未填 IPv4`
 }
 
 function getSystemInstallTab(system: SystemRecord): InstallTab {

@@ -27,12 +27,23 @@ func TestNotificationFailureRecordedAndCleared(t *testing.T) {
 		"host":  "127.0.0.1",
 	})
 	require.NoError(t, err)
+	asset, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user":   user.Id,
+		"name":   "通知测试主机",
+		"type":   "physical_host",
+		"status": "active",
+	})
+	require.NoError(t, err)
+	system.Set("asset", asset.Id)
+	require.NoError(t, hub.SaveNoValidate(system))
 	_, err = hub.FindCollectionByNameOrId("notification_failures")
 	require.NoError(t, err)
 
 	sendAttempts := 0
-	restoreSender := alerts.SetShoutrrrSenderForTest(func(notificationURL string, _ string) error {
+	sentMessage := ""
+	restoreSender := alerts.SetShoutrrrSenderForTest(func(notificationURL string, message string) error {
 		sendAttempts++
+		sentMessage = message
 		return fmt.Errorf("network timeout while sending to %s", notificationURL)
 	})
 	err = hub.GetAlertManager().SendAlert(alerts.AlertMessageData{
@@ -46,11 +57,13 @@ func TestNotificationFailureRecordedAndCleared(t *testing.T) {
 	require.Error(t, err)
 	restoreSender()
 	require.Equal(t, 1, sendAttempts, "test sender should have been called once")
+	assert.Contains(t, sentMessage, "资产：通知测试主机")
 
 	failures, err := hub.FindAllRecords("notification_failures")
 	require.NoError(t, err)
 	require.Len(t, failures, 1)
 	assert.Equal(t, system.Id, failures[0].GetString("system"))
+	assert.Equal(t, asset.Id, failures[0].GetString("asset"))
 	assert.Equal(t, "Connection to test-system is down", failures[0].GetString("title"))
 	assert.Equal(t, "generic+https://example.com", failures[0].GetString("target"))
 	assert.Contains(t, failures[0].GetString("error"), "network timeout")
@@ -162,6 +175,15 @@ func TestAlertNotificationCooldownSuppressesDuplicateStorms(t *testing.T) {
 		"host":  "127.0.0.1",
 	})
 	require.NoError(t, err)
+	asset, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user":   user.Id,
+		"name":   "冷却测试主机",
+		"type":   "physical_host",
+		"status": "active",
+	})
+	require.NoError(t, err)
+	system.Set("asset", asset.Id)
+	require.NoError(t, hub.SaveNoValidate(system))
 
 	sendAttempts := 0
 	restoreSender := alerts.SetShoutrrrSenderForTest(func(string, string) error {
@@ -186,6 +208,7 @@ func TestAlertNotificationCooldownSuppressesDuplicateStorms(t *testing.T) {
 	states, err := hub.FindAllRecords("alert_notification_states")
 	require.NoError(t, err)
 	require.Len(t, states, 1)
+	assert.Equal(t, asset.Id, states[0].GetString("asset"))
 	assert.Equal(t, "suppressed", states[0].GetString("status"))
 	assert.Equal(t, 1, states[0].GetInt("suppressed_count"))
 

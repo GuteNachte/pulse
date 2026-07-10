@@ -95,6 +95,36 @@ func setCollectionAuthSettings(app core.App) error {
 		return err
 	}
 
+	if err := applyCollectionRules(app, []string{"module_settings"}, collectionRules{
+		list:   &userMatchesRule,
+		view:   &userMatchesRule,
+		create: &userMatchesNotReadonlyRule,
+		update: &userMatchesNotReadonlyRule,
+		delete: nil,
+	}); err != nil {
+		return err
+	}
+
+	if err := applyCollectionRules(app, []string{"assets", "asset_interfaces", "asset_relations", "asset_maintenance", "asset_locations"}, collectionRules{
+		list:   &userMatchesRule,
+		view:   &userMatchesRule,
+		create: &userMatchesNotReadonlyRule,
+		update: &userMatchesNotReadonlyRule,
+		delete: &userMatchesNotReadonlyRule,
+	}); err != nil {
+		return err
+	}
+
+	if err := applyCollectionRules(app, []string{"asset_changes"}, collectionRules{
+		list:   &userMatchesRule,
+		view:   &userMatchesRule,
+		create: nil,
+		update: nil,
+		delete: nil,
+	}); err != nil {
+		return err
+	}
+
 	if err := applyCollectionRules(app, []string{"systems"}, collectionRules{
 		list:   &systemsReadRule,
 		view:   &systemsReadRule,
@@ -219,6 +249,16 @@ func setCollectionAuthSettings(app core.App) error {
 		view:   &userMatchesRule,
 		create: nil,
 		update: nil,
+		delete: &userMatchesNotReadonlyRule,
+	}); err != nil {
+		return err
+	}
+
+	if err := applyCollectionRules(app, []string{"network_devices", "network_ports", "network_links", "network_layouts"}, collectionRules{
+		list:   &userMatchesRule,
+		view:   &userMatchesRule,
+		create: &userMatchesNotReadonlyRule,
+		update: &userMatchesNotReadonlyRule,
 		delete: &userMatchesNotReadonlyRule,
 	}); err != nil {
 		return err

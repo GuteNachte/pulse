@@ -102,9 +102,16 @@ func TestWebsiteMonitorAlertHistoryFollowsOwnedMonitorStatus(t *testing.T) {
 		"name":  "website-host",
 		"users": []string{user.Id},
 	})
+	assetRecord := createWebsiteMonitorTestRecord(t, app, "assets", map[string]any{
+		"user":   user.Id,
+		"name":   "MoviePilot endpoint",
+		"type":   "web_endpoint",
+		"status": "active",
+	})
 	monitor := createWebsiteMonitorTestRecord(t, app, "website_monitors", map[string]any{
 		"user":             user.Id,
 		"system":           systemRecord.Id,
+		"asset":            assetRecord.Id,
 		"name":             "MoviePilot",
 		"url":              "http://127.0.0.1:3000",
 		"interval_seconds": 300,
@@ -128,6 +135,7 @@ func TestWebsiteMonitorAlertHistoryFollowsOwnedMonitorStatus(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, user.Id, historyRecord.GetString("user"))
 	require.Equal(t, systemRecord.Id, historyRecord.GetString("system"))
+	require.Equal(t, assetRecord.Id, historyRecord.GetString("asset"))
 	require.Equal(t, "网站：MoviePilot", historyRecord.GetString("name"))
 	require.Equal(t, float64(1), historyRecord.GetFloat("value"))
 

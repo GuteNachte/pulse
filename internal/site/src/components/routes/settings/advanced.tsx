@@ -13,6 +13,7 @@ import { $router, Link, prependBasePath } from "@/components/router"
 export default function Advanced() {
 	const pocketbaseHref = prependBasePath("/_/")
 	const tokenHref = getPagePath($router, "settings", { name: "tokens" })
+
 	return (
 		<div className="grid gap-4 md:gap-5">
 			<MobileAdvancedSettingsView pocketbaseHref={pocketbaseHref} tokenHref={tokenHref} />

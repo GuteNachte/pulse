@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { alertInfo } from "@/lib/alerts"
 import {
+	alertAssetName,
 	alertCreatedLabel,
 	alertDisplayName,
 	alertDurationLabel,
@@ -32,6 +33,21 @@ export const alertsHistoryColumns: ColumnDef<AlertsHistoryRecord>[] = [
 		),
 		cell: ({ row }) => <div className="max-w-60 truncate ps-2">{alertSystemName(row.original)}</div>,
 		filterFn: (row, _, filterValue) => alertSystemName(row.original).toLowerCase().includes(filterValue.toLowerCase()),
+	},
+	{
+		id: "asset",
+		accessorFn: (record) => alertAssetName(record),
+		enableSorting: true,
+		header: ({ column }) => (
+			<Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+				资产
+			</Button>
+		),
+		cell: ({ row }) => {
+			const assetName = alertAssetName(row.original)
+			return assetName ? <div className="max-w-56 truncate ps-2">{assetName}</div> : null
+		},
+		filterFn: (row, _, filterValue) => alertAssetName(row.original).toLowerCase().includes(filterValue.toLowerCase()),
 	},
 	{
 		id: "source",

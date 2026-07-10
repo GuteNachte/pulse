@@ -31,14 +31,16 @@ type AlertManager struct {
 }
 
 type AlertMessageData struct {
-	UserID   string
-	SystemID string
-	AlertID  string
-	Title    string
-	Message  string
-	Link     string
-	LinkText string
-	Resolved bool
+	UserID    string
+	SystemID  string
+	AssetID   string
+	AssetName string
+	AlertID   string
+	Title     string
+	Message   string
+	Link      string
+	LinkText  string
+	Resolved  bool
 }
 
 type UserNotificationSettings struct {
@@ -116,8 +118,18 @@ func NewAlertManager(app hubLike) *AlertManager {
 
 // Bind events to the alerts collection lifecycle
 func (am *AlertManager) bindEvents() {
+	am.hub.OnRecordAfterCreateSuccess("alerts").BindFunc(func(e *core.RecordEvent) error {
+		_ = syncAlertAssetFromSystem(e.App, e.Record)
+		return e.Next()
+	})
 	am.hub.OnRecordAfterUpdateSuccess("alerts").BindFunc(updateHistoryOnAlertUpdate)
 	am.hub.OnRecordAfterDeleteSuccess("alerts").BindFunc(resolveHistoryOnAlertDelete)
+	am.hub.OnRecordAfterUpdateSuccess("systems").BindFunc(func(e *core.RecordEvent) error {
+		if e.Record.GetString("asset") != e.Record.Original().GetString("asset") {
+			_ = syncAlertAssetsForSystem(e.App, e.Record.Id, e.Record.GetString("asset"))
+		}
+		return e.Next()
+	})
 	am.hub.OnRecordAfterUpdateSuccess("smart_devices").BindFunc(am.handleSmartDeviceAlert)
 
 	am.hub.OnServe().BindFunc(func(e *core.ServeEvent) error {
@@ -136,6 +148,7 @@ func (am *AlertManager) bindEvents() {
 
 // SendAlert sends an alert to the user
 func (am *AlertManager) SendAlert(data AlertMessageData) error {
+	data = am.withAlertAssetContext(data)
 	if data.AlertID != "" && IsAlertSilenced(am.hub, data.UserID, data.SystemID, data.AlertID) {
 		am.hub.Logger().Info("Skipped silenced alert notification", "alert_id", data.AlertID, "system", data.SystemID)
 		return nil
@@ -196,6 +209,42 @@ func (am *AlertManager) SendAlert(data AlertMessageData) error {
 	return firstErr
 }
 
+func (am *AlertManager) withAlertAssetContext(data AlertMessageData) AlertMessageData {
+	assetName := strings.TrimSpace(data.AssetName)
+	assetID := strings.TrimSpace(data.AssetID)
+	if assetName == "" && assetID != "" {
+		if assetRecord, err := am.hub.FindRecordById("assets", assetID); err == nil && assetRecord != nil {
+			assetName = strings.TrimSpace(assetRecord.GetString("name"))
+		}
+	}
+	if assetName == "" && strings.TrimSpace(data.SystemID) != "" {
+		if systemRecord, err := am.hub.FindRecordById("systems", strings.TrimSpace(data.SystemID)); err == nil && systemRecord != nil {
+			if assetID == "" {
+				assetID = strings.TrimSpace(systemRecord.GetString("asset"))
+			}
+			if assetID != "" {
+				if assetRecord, err := am.hub.FindRecordById("assets", assetID); err == nil && assetRecord != nil {
+					assetName = strings.TrimSpace(assetRecord.GetString("name"))
+				}
+			}
+		}
+	}
+	if assetName == "" {
+		return data
+	}
+	data.AssetID = assetID
+	data.AssetName = assetName
+	line := "资产：" + assetName
+	if !strings.Contains(data.Message, line) {
+		if strings.TrimSpace(data.Message) == "" {
+			data.Message = line
+		} else {
+			data.Message = line + "\n" + data.Message
+		}
+	}
+	return data
+}
+
 func alertNotificationFingerprint(data AlertMessageData) string {
 	parts := []string{
 		strings.TrimSpace(data.UserID),
@@ -227,6 +276,9 @@ func (am *AlertManager) shouldSendAlertNotification(data AlertMessageData) bool 
 		return true
 	}
 	now := time.Now().UTC()
+	if assetID := strings.TrimSpace(data.AssetID); assetID != "" {
+		record.Set("asset", assetID)
+	}
 	record.Set("status", "suppressed")
 	record.Set("title", data.Title)
 	record.Set("last_attempt_at", now)
@@ -260,6 +312,7 @@ func (am *AlertManager) recordAlertNotificationResult(data AlertMessageData, sen
 	}
 	now := time.Now().UTC()
 	record.Set("system", data.SystemID)
+	record.Set("asset", strings.TrimSpace(data.AssetID))
 	record.Set("alert_id", data.AlertID)
 	record.Set("title", data.Title)
 	record.Set("last_attempt_at", now)
@@ -319,6 +372,7 @@ func (am *AlertManager) recordNotificationFailure(data AlertMessageData, webhook
 		record.Set("count", 0)
 	}
 	record.Set("system", data.SystemID)
+	record.Set("asset", strings.TrimSpace(data.AssetID))
 	record.Set("title", data.Title)
 	record.Set("target", notificationTarget(webhook))
 	record.Set("error", common.RedactSensitiveText(sendErr.Error()))
@@ -461,6 +515,54 @@ func (am *AlertManager) setAlertTriggered(alert CachedAlertData, triggered bool)
 	if err != nil {
 		return err
 	}
+	syncAlertAssetFromSystem(am.hub, alertRecord)
 	alertRecord.Set("triggered", triggered)
 	return am.hub.Save(alertRecord)
+}
+
+func syncAlertAssetFromSystem(app core.App, alertRecord *core.Record) error {
+	if app == nil || alertRecord == nil {
+		return nil
+	}
+	assetID := ""
+	systemID := strings.TrimSpace(alertRecord.GetString("system"))
+	if systemID != "" {
+		if systemRecord, err := app.FindRecordById("systems", systemID); err == nil && systemRecord != nil {
+			assetID = strings.TrimSpace(systemRecord.GetString("asset"))
+		}
+	}
+	if strings.TrimSpace(alertRecord.GetString("asset")) == assetID {
+		return nil
+	}
+	alertRecord.Set("asset", assetID)
+	return app.SaveNoValidate(alertRecord)
+}
+
+func syncAlertAssetsForSystem(app core.App, systemID string, assetID string) error {
+	systemID = strings.TrimSpace(systemID)
+	if systemID == "" {
+		return nil
+	}
+	records, err := app.FindRecordsByFilter(
+		"alerts",
+		"system={:system}",
+		"",
+		-1,
+		0,
+		dbx.Params{"system": systemID},
+	)
+	if err != nil {
+		return err
+	}
+	assetID = strings.TrimSpace(assetID)
+	for _, record := range records {
+		if strings.TrimSpace(record.GetString("asset")) == assetID {
+			continue
+		}
+		record.Set("asset", assetID)
+		if err := app.SaveNoValidate(record); err != nil {
+			return err
+		}
+	}
+	return nil
 }

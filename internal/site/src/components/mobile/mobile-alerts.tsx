@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { useToast } from "@/components/ui/use-toast"
 import { alertInfo } from "@/lib/alerts"
 import {
+	alertAssetName,
 	alertCreatedLabel,
 	alertDisplayName,
 	alertDurationLabel,
@@ -44,9 +45,9 @@ export function MobileAlertsCenter() {
 
 	const options = useMemo(
 		() => ({
-			expand: "system",
+			expand: "system,asset",
 			fields:
-				"id,alert_id,name,value,val,state,created,resolved,acknowledged_at,acknowledged_by,silenced_until,silenced_by,silence_reason,expand.system.name,system",
+				"id,alert_id,name,value,val,state,created,resolved,acknowledged_at,acknowledged_by,silenced_until,silenced_by,silence_reason,expand.system.name,expand.system.display_name,expand.asset.name,expand.asset.type,system,asset",
 		}),
 		[]
 	)
@@ -243,6 +244,7 @@ export function MobileAlertsCenter() {
 								<DetailRow label="状态" value={alertStateLabel(selected)} />
 								<DetailRow label="级别" value={alertSeverityLabel(selected)} />
 								<DetailRow label="来源" value={alertSourceLabel(selected)} />
+								{alertAssetName(selected) && <DetailRow label="资产" value={alertAssetName(selected)} />}
 								<DetailRow label="触发值" value={alertValueLabel(selected)} />
 								<DetailRow label="触发时间" value={alertCreatedLabel(selected)} />
 								<DetailRow label="恢复时间" value={alertResolvedLabel(selected)} />
@@ -346,6 +348,7 @@ function AlertHistoryListItem({ record, onClick }: { record: AlertsHistoryRecord
 					</div>
 					<div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
 						<span>{alertSystemName(record)}</span>
+						{alertAssetName(record) && <span>资产：{alertAssetName(record)}</span>}
 						<span>{alertSourceLabel(record)}</span>
 						<span className="tabular-nums">{alertValueLabel(record)}</span>
 					</div>

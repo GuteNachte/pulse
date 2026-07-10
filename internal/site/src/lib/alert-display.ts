@@ -101,7 +101,11 @@ export function alertValueLabel(record: AlertsHistoryRecord) {
 }
 
 export function alertSystemName(record: AlertsHistoryRecord) {
-	return record.expand?.system?.name || record.system || "未知机器"
+	return record.expand?.system?.display_name || record.expand?.system?.name || record.system || "未知机器"
+}
+
+export function alertAssetName(record: AlertsHistoryRecord) {
+	return record.expand?.asset?.name || record.asset || ""
 }
 
 export function alertCreatedLabel(record: AlertsHistoryRecord) {

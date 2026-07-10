@@ -68,6 +68,13 @@ func createTestRecord(app core.App, collection string, data map[string]any) (*co
 	return record, app.Save(record)
 }
 
+func mustAssetMetadata(t testing.TB, record *core.Record) map[string]any {
+	t.Helper()
+	var metadata map[string]any
+	require.NoError(t, record.UnmarshalJSONField("metadata", &metadata))
+	return metadata
+}
+
 // Helper function to create a test user
 func createTestUser(app core.App) (*core.Record, error) {
 	userRecord, err := createTestRecord(app, "users", map[string]any{
@@ -1736,6 +1743,26 @@ func TestFindOrCreateSystemForToken(t *testing.T) {
 				require.NoError(t, system.UnmarshalJSONField("info", &info))
 				assert.Equal(t, systemEntity.ConnectionTypeWebSocket, info.ConnectionType, "System connection type should be WebSocket")
 				assert.Equal(t, []string{acr.userId}, system.Get("users"), "System users should match")
+				assetID := system.GetString("asset")
+				require.NotEmpty(t, assetID, "New system should be bound to an asset")
+				asset, err := testApp.FindRecordById("assets", assetID)
+				require.NoError(t, err, "New system asset should exist")
+				assert.Equal(t, system.GetString("name"), asset.GetString("name"), "Asset name should match system name")
+				assert.Equal(t, "physical_host", asset.GetString("type"), "Auto-created Agent asset should be a host asset")
+				assert.Equal(t, acr.userId, asset.GetString("user"), "Asset user should match token user")
+				assert.Equal(t, autoAssetSourceUniversalToken, mustAssetMetadata(t, asset)["auto_created_by"])
+				interfaces, err := testApp.FindRecordsByFilter("asset_interfaces", fmt.Sprintf("asset = '%s'", assetID), "", -1, 0)
+				require.NoError(t, err)
+				if managementIP := automaticSystemAssetManagementIP(getRealIP(acr.req)); managementIP != "" {
+					require.Len(t, interfaces, 1, "Auto-created Agent asset should have a primary management interface")
+					assert.Equal(t, "Agent 接入地址", interfaces[0].GetString("name"))
+					assert.Equal(t, "management", interfaces[0].GetString("kind"))
+					assert.Equal(t, managementIP, interfaces[0].GetString("ipv4"))
+					assert.True(t, interfaces[0].GetBool("primary"))
+					assert.Equal(t, "agent", interfaces[0].GetString("source"))
+				} else {
+					assert.Empty(t, interfaces, "Invalid or loopback Agent IP should not create an asset interface")
+				}
 			}
 
 			t.Logf("%s - Result: SystemId=%s, Fingerprint=%s", tc.description, result.SystemId, result.Fingerprint)
@@ -2047,6 +2074,15 @@ func TestFindOrCreateLocalSystem(t *testing.T) {
 	assert.Equal(t, "physical", systemRecord.GetString("role"))
 	assert.Equal(t, "production", systemRecord.GetString("primary_use"))
 	assert.Equal(t, []string{userRecord.Id}, systemRecord.Get("users"))
+	assetID := systemRecord.GetString("asset")
+	require.NotEmpty(t, assetID)
+	assetRecord, err := testApp.FindRecordById("assets", assetID)
+	require.NoError(t, err)
+	assert.Equal(t, "hub-hostname", assetRecord.GetString("name"))
+	assert.Equal(t, "physical_host", assetRecord.GetString("type"))
+	assert.Equal(t, "Hub 所在机器", assetRecord.GetString("role"))
+	assert.Equal(t, userRecord.Id, assetRecord.GetString("user"))
+	assert.Equal(t, autoAssetSourceHubLocalAgent, mustAssetMetadata(t, assetRecord)["auto_created_by"])
 
 	secondRecord, err := acr.findOrCreateLocalSystem(common.FingerprintResponse{
 		Fingerprint: "local-fingerprint",
@@ -2100,6 +2136,12 @@ func TestFindOrCreateLocalSystemAdoptsExistingFingerprintSystem(t *testing.T) {
 	assert.Equal(t, "nacht", updatedSystem.GetString("name"))
 	assert.True(t, updatedSystem.GetBool("is_local"))
 	assert.Equal(t, "内网镜像库", updatedSystem.GetString("description"))
+	adoptedAssetID := updatedSystem.GetString("asset")
+	require.NotEmpty(t, adoptedAssetID)
+	adoptedAsset, err := testApp.FindRecordById("assets", adoptedAssetID)
+	require.NoError(t, err)
+	assert.Equal(t, "nacht", adoptedAsset.GetString("name"))
+	assert.Equal(t, autoAssetSourceHubLocalAgent, mustAssetMetadata(t, adoptedAsset)["auto_created_by"])
 
 	localSystems, err := testApp.FindRecordsByFilter("systems", "is_local = true", "", -1, 0)
 	require.NoError(t, err)

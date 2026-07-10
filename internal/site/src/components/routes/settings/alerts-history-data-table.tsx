@@ -39,6 +39,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/components/ui/use-toast"
 import { alertInfo } from "@/lib/alerts"
 import { pb } from "@/lib/api"
+import { alertAssetName } from "@/lib/alert-display"
 import { cn, formatDuration, formatShortDate, useBrowserStorage } from "@/lib/utils"
 import type { AlertsHistoryRecord } from "@/types"
 import { alertsHistoryColumns } from "../../alerts-history-columns"
@@ -244,6 +245,7 @@ export default function AlertsHistoryDataTable({ hideIntro = false }: { hideIntr
 		if (!selectedRows.length) return
 		const cells: Record<string, (record: AlertsHistoryRecord) => string> = {
 			system: (record) => record.expand?.system?.name || record.system,
+			asset: (record) => alertAssetName(record),
 			name: (record) => alertInfo[record.name]?.name() || record.name,
 			value: (record) => `${record.value ?? record.val ?? ""}${alertInfo[record.name]?.unit ?? ""}`,
 			state: (record) => (record.resolved ? t`Resolved` : t`Active`),

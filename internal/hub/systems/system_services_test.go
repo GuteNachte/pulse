@@ -223,8 +223,16 @@ func TestCreateRecordsSyncsMonitoredServiceAlertHistory(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	assetRecord, err := tests.CreateRecord(hub, "assets", map[string]any{
+		"user":   user.Id,
+		"name":   "Windows workstation asset",
+		"type":   "physical_host",
+		"status": "active",
+	})
+	require.NoError(t, err)
 	systemRecord, err := tests.CreateRecord(hub, "systems", map[string]any{
 		"name":   "Windows workstation",
+		"asset":  assetRecord.Id,
 		"status": "up",
 		"users":  []string{user.Id},
 	})
@@ -258,6 +266,7 @@ func TestCreateRecordsSyncsMonitoredServiceAlertHistory(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, history, 1)
 	require.Equal(t, float64(1), history[0].GetFloat("value"))
+	require.Equal(t, assetRecord.Id, history[0].GetString("asset"))
 	require.Empty(t, history[0].GetString("resolved"))
 
 	_, err = sys.CreateRecords(&system.CombinedData{

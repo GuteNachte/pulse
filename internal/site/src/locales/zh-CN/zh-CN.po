@@ -76,7 +76,7 @@ msgstr "5 分钟"
 msgid "Actions"
 msgstr "操作"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx:249
+#: src/components/routes/settings/alerts-history-data-table.tsx:251
 msgid "Active"
 msgstr "活跃"
 
@@ -84,8 +84,8 @@ msgstr "活跃"
 msgid "Active Alerts"
 msgstr "启用的警报"
 
-#: src/components/add-system.tsx:328
-#: src/components/routes/clients.tsx:40
+#: src/components/add-system.tsx:399
+#: src/components/routes/clients.tsx:53
 msgid "Add system"
 msgstr "添加系统"
 
@@ -93,11 +93,11 @@ msgstr "添加系统"
 msgid "Agent"
 msgstr "客户端"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx:66
+#: src/components/routes/settings/alerts-history-data-table.tsx:67
 msgid "Alert History"
 msgstr "警报历史"
 
-#: src/components/routes/clients.tsx:22
+#: src/components/routes/clients.tsx:23
 msgid "All Clients"
 msgstr "所有客户端"
 
@@ -113,7 +113,7 @@ msgstr "所有客户端"
 msgid "Are you sure you want to delete {name}?"
 msgstr "您确定要删除 {name} 吗？"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx:347
+#: src/components/routes/settings/alerts-history-data-table.tsx:349
 msgid "Are you sure?"
 msgstr "您确定吗？"
 
@@ -122,12 +122,12 @@ msgid "Average"
 msgstr "平均"
 
 #. placeholder {0}: alertData.unit
-#: src/components/alerts/alerts-sheet.tsx:336
+#: src/components/alerts/alerts-sheet.tsx:376
 msgid "Average drops below <0>{value}{0}</0>"
 msgstr "平均值降至<0>{value}{0}</0>以下"
 
 #. placeholder {0}: alertData.unit
-#: src/components/alerts/alerts-sheet.tsx:344
+#: src/components/alerts/alerts-sheet.tsx:384
 msgid "Average exceeds <0>{value}{0}</0>"
 msgstr "平均值超过<0>{value}{0}</0>"
 
@@ -175,13 +175,13 @@ msgstr "电池"
 msgid "Below {0}{1} in last {2, plural, one {# minute} other {# minutes}}"
 msgstr "在过去的{2, plural, one {# 分钟} other {# 分钟}}中低于{0}{1}"
 
-#: src/components/routes/settings/general.tsx:161
-#: src/components/routes/settings/general.tsx:180
+#: src/components/routes/settings/general.tsx:196
+#: src/components/routes/settings/general.tsx:215
 msgid "Bits (Kbps, Mbps, Gbps)"
 msgstr "比特 (Kbps, Mbps, Gbps)"
 
-#: src/components/routes/settings/general.tsx:158
-#: src/components/routes/settings/general.tsx:177
+#: src/components/routes/settings/general.tsx:193
+#: src/components/routes/settings/general.tsx:212
 msgid "Bytes (KB/s, MB/s, GB/s)"
 msgstr "字节 (KB/s, MB/s, GB/s)"
 
@@ -189,7 +189,7 @@ msgstr "字节 (KB/s, MB/s, GB/s)"
 msgid "Cache / Buffers"
 msgstr "缓存/缓冲区"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx:355
+#: src/components/routes/settings/alerts-history-data-table.tsx:357
 #: src/components/systems-table/systems-table-columns.tsx:824
 msgid "Cancel"
 msgstr "取消"
@@ -198,7 +198,7 @@ msgstr "取消"
 msgid "Capacity"
 msgstr "容量"
 
-#: src/components/routes/settings/general.tsx:136
+#: src/components/routes/settings/general.tsx:171
 msgid "Celsius (°C)"
 msgstr "摄氏度 (°C)"
 
@@ -211,11 +211,11 @@ msgstr "充电"
 msgid "Charging"
 msgstr "充电中"
 
-#: src/components/routes/settings/general.tsx:83
+#: src/components/routes/settings/general.tsx:118
 msgid "Chart options"
 msgstr "图表选项"
 
-#: src/components/routes/settings/layout.tsx:87
+#: src/components/routes/settings/layout.tsx:97
 msgid "Check logs for more details."
 msgstr "检查日志以获取更多详细信息。"
 
@@ -237,7 +237,7 @@ msgstr "确认密码"
 msgid "Connection is down"
 msgstr "连接已断开"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx:361
+#: src/components/routes/settings/alerts-history-data-table.tsx:363
 #: src/components/systems-table/systems-table-columns.tsx:836
 msgid "Continue"
 msgstr "继续"
@@ -281,11 +281,11 @@ msgid "Create account"
 msgstr "创建账户"
 
 #. Context: date created
-#: src/components/alerts-history-columns.tsx:130
+#: src/components/alerts-history-columns.tsx:146
 msgid "Created"
 msgstr "创建时间"
 
-#: src/components/routes/settings/general.tsx:203
+#: src/components/routes/settings/general.tsx:238
 msgid "Critical (%)"
 msgstr "临界 (%)"
 
@@ -307,11 +307,11 @@ msgstr "当前状态"
 msgid "Cycles"
 msgstr "循环次数"
 
-#: src/components/routes/settings/general.tsx:86
+#: src/components/routes/settings/general.tsx:121
 msgid "Default time period"
 msgstr "默认时间段"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx:340
+#: src/components/routes/settings/alerts-history-data-table.tsx:342
 #: src/components/routes/system/smart-table.tsx:433
 #: src/components/routes/system/smart-table.tsx:706
 #: src/components/systems-table/systems-table-columns.tsx:729
@@ -339,7 +339,7 @@ msgstr "磁盘"
 msgid "Disk I/O"
 msgstr "磁盘 I/O"
 
-#: src/components/routes/settings/general.tsx:166
+#: src/components/routes/settings/general.tsx:201
 msgid "Disk unit"
 msgstr "磁盘单位"
 
@@ -376,7 +376,7 @@ msgstr "离线"
 msgid "Download"
 msgstr "下载"
 
-#: src/components/alerts-history-columns.tsx:172
+#: src/components/alerts-history-columns.tsx:188
 msgid "Duration"
 msgstr "持续时间"
 
@@ -384,7 +384,7 @@ msgstr "持续时间"
 msgid "Edit"
 msgstr "编辑"
 
-#: src/components/add-system.tsx:328
+#: src/components/add-system.tsx:399
 msgid "Edit system"
 msgstr "编辑系统"
 
@@ -397,8 +397,8 @@ msgstr "电子邮件"
 msgid "Empty"
 msgstr "空电"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx:237
-#: src/components/routes/settings/notifications.tsx:974
+#: src/components/routes/settings/alerts-history-data-table.tsx:238
+#: src/components/routes/settings/notifications.tsx:983
 #: src/components/routes/settings/tokens-fingerprints.tsx:319
 msgid "Error"
 msgstr "错误"
@@ -410,11 +410,11 @@ msgstr "错误"
 msgid "Exceeds {0}{1} in last {2, plural, one {# minute} other {# minutes}}"
 msgstr "在过去的{2, plural, one {# 分钟} other {# 分钟}}中超过{0}{1}"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx:369
+#: src/components/routes/settings/alerts-history-data-table.tsx:371
 msgid "Export"
 msgstr "导出"
 
-#: src/components/routes/settings/general.tsx:139
+#: src/components/routes/settings/general.tsx:174
 msgid "Fahrenheit (°F)"
 msgstr "华氏度 (°F)"
 
@@ -422,12 +422,12 @@ msgstr "华氏度 (°F)"
 msgid "Failed Attributes:"
 msgstr "失败属性："
 
-#: src/components/routes/settings/layout.tsx:86
-#: src/components/routes/settings/notifications.tsx:368
+#: src/components/routes/settings/layout.tsx:96
+#: src/components/routes/settings/notifications.tsx:371
 msgid "Failed to save settings"
 msgstr "保存设置失败"
 
-#: src/components/routes/settings/notifications.tsx:981
+#: src/components/routes/settings/notifications.tsx:990
 msgid "Failed to send test notification"
 msgstr "发送测试通知失败"
 
@@ -444,7 +444,7 @@ msgstr "过滤..."
 msgid "Firmware"
 msgstr "固件"
 
-#: src/components/alerts/alerts-sheet.tsx:391
+#: src/components/alerts/alerts-sheet.tsx:431
 msgid "For <0>{min}</0> {min, plural, one {minute} other {minutes}}"
 msgstr "持续<0>{min}</0> {min, plural, one {分钟} other {分钟}}"
 
@@ -452,10 +452,6 @@ msgstr "持续<0>{min}</0> {min, plural, one {分钟} other {分钟}}"
 #: src/lib/i18n.ts:34
 msgid "Full"
 msgstr "满电"
-
-#: src/components/routes/settings/general.tsx:44
-msgid "General"
-msgstr "常规"
 
 #: src/lib/alerts.ts:47
 msgid "GPU Usage"
@@ -515,8 +511,8 @@ msgstr "5 分钟内的平均负载"
 msgid "Load Avg"
 msgstr "负载"
 
-#: src/components/navbar.tsx:96
-#: src/components/navbar.tsx:161
+#: src/components/navbar.tsx:130
+#: src/components/navbar.tsx:212
 msgid "Log Out"
 msgstr "登出"
 
@@ -549,7 +545,7 @@ msgstr "内存使用率"
 msgid "Model"
 msgstr "型号"
 
-#: src/components/alerts-history-columns.tsx:56
+#: src/components/alerts-history-columns.tsx:72
 #: src/components/containers-table/containers-table-columns.tsx:124
 msgid "Name"
 msgstr "名称"
@@ -568,7 +564,7 @@ msgid "Network traffic of public interfaces"
 msgstr "公共接口的网络流量"
 
 #. Context: Bytes or bits
-#: src/components/routes/settings/general.tsx:145
+#: src/components/routes/settings/general.tsx:180
 msgid "Network unit"
 msgstr "网络单位"
 
@@ -664,8 +660,8 @@ msgstr "接收"
 msgid "Refresh"
 msgstr "刷新"
 
-#: src/components/alerts-history-columns.tsx:145
-#: src/components/routes/settings/alerts-history-data-table.tsx:249
+#: src/components/alerts-history-columns.tsx:161
+#: src/components/routes/settings/alerts-history-data-table.tsx:251
 msgid "Resolved"
 msgstr "已解决"
 
@@ -673,7 +669,7 @@ msgstr "已解决"
 msgid "Resume"
 msgstr "恢复"
 
-#: src/components/routes/settings/alerts-history-data-table.tsx:428
+#: src/components/routes/settings/alerts-history-data-table.tsx:430
 msgid "Rows per page"
 msgstr "每页行数"
 
@@ -685,11 +681,7 @@ msgstr "S.M.A.R.T. 详情"
 msgid "S.M.A.R.T. Self-Test"
 msgstr "S.M.A.R.T. 自检"
 
-#: src/components/routes/settings/general.tsx:56
-msgid "Save Settings"
-msgstr "保存设置"
-
-#: src/components/add-system.tsx:589
+#: src/components/add-system.tsx:683
 msgid "Save system"
 msgstr "保存系统"
 
@@ -701,12 +693,12 @@ msgstr "发送"
 msgid "Serial Number"
 msgstr "序列号"
 
-#: src/components/routes/settings/layout.tsx:205
-#: src/components/routes/settings/layout.tsx:233
+#: src/components/routes/settings/layout.tsx:252
+#: src/components/routes/settings/layout.tsx:280
 msgid "Settings"
 msgstr "设置"
 
-#: src/components/routes/settings/layout.tsx:81
+#: src/components/routes/settings/layout.tsx:91
 msgid "Settings saved"
 msgstr "设置已保存"
 
@@ -719,7 +711,7 @@ msgid "Sort By"
 msgstr "排序依据"
 
 #. Context: alert state (active or resolved)
-#: src/components/alerts-history-columns.tsx:105
+#: src/components/alerts-history-columns.tsx:121
 msgid "State"
 msgstr "状态"
 
@@ -743,7 +735,7 @@ msgstr "SWAP 使用率"
 msgid "Switch theme"
 msgstr "切换主题"
 
-#: src/components/alerts-history-columns.tsx:30
+#: src/components/alerts-history-columns.tsx:31
 #: src/components/containers-table/containers-table-columns.tsx:138
 #: src/components/routes/system/smart-table.tsx:78
 #: src/components/systems-table/systems-table-columns.tsx:102
@@ -766,7 +758,7 @@ msgstr "温度"
 msgid "Temperature"
 msgstr "温度"
 
-#: src/components/routes/settings/general.tsx:125
+#: src/components/routes/settings/general.tsx:160
 msgid "Temperature unit"
 msgstr "温度单位"
 
@@ -782,11 +774,11 @@ msgstr "{extraFsName}的吞吐量"
 msgid "Throughput of root filesystem"
 msgstr "根文件系统的吞吐量"
 
-#: src/components/routes/settings/general.tsx:100
+#: src/components/routes/settings/general.tsx:135
 msgid "Time format"
 msgstr "时间格式"
 
-#: src/components/add-system.tsx:491
+#: src/components/add-system.tsx:585
 msgid "Token"
 msgstr "令牌"
 
@@ -872,7 +864,7 @@ msgid "Type"
 msgstr "类型"
 
 #. Temperature / network units
-#: src/components/routes/settings/general.tsx:122
+#: src/components/routes/settings/general.tsx:157
 msgid "Unit preferences"
 msgstr "单位偏好"
 
@@ -945,7 +937,7 @@ msgctxt "Disk I/O utilization"
 msgid "Utilization"
 msgstr "利用率"
 
-#: src/components/alerts-history-columns.tsx:76
+#: src/components/alerts-history-columns.tsx:92
 msgid "Value"
 msgstr "值"
 
@@ -963,11 +955,11 @@ msgstr "可见列"
 msgid "Waiting for enough records to display"
 msgstr "正在收集足够的数据来显示"
 
-#: src/components/routes/settings/general.tsx:192
+#: src/components/routes/settings/general.tsx:227
 msgid "Warning (%)"
 msgstr "警告 (%)"
 
-#: src/components/routes/settings/general.tsx:189
+#: src/components/routes/settings/general.tsx:224
 msgid "Warning thresholds"
 msgstr "警告阈值"
 
@@ -979,33 +971,33 @@ msgstr "警告阈值"
 msgid "Write"
 msgstr "写入"
 
-#: src/components/routes/settings/layout.tsx:82
+#: src/components/routes/settings/layout.tsx:92
 msgid "Your user settings have been updated."
 msgstr "您的用户设置已更新。"
 
 #. placeholder {0}: latest.target
 #. placeholder {1}: latest.count
-#: src/components/notification-failures-banner.tsx:66
+#: src/components/notification-failures-banner.tsx:68
 msgid "最近一次失败来自 {0}，已连续失败 {1} 次。请检查 Webhook URL、网络或目标服务状态。"
 msgstr "最近一次失败来自 {0}，已连续失败 {1} 次。请检查 Webhook URL、网络或目标服务状态。"
 
-#: src/components/notification-failures-banner.tsx:63
+#: src/components/notification-failures-banner.tsx:65
 msgid "外部通知发送失败"
 msgstr "外部通知发送失败"
 
 #. placeholder {0}: failures.length
-#: src/components/notification-failures-banner.tsx:71
+#: src/components/notification-failures-banner.tsx:74
 msgid "当前共有 {0} 个通知通道存在失败记录。"
 msgstr "当前共有 {0} 个通知通道存在失败记录。"
 
-#: src/components/notification-failures-banner.tsx:80
+#: src/components/notification-failures-banner.tsx:83
 msgid "检查通知"
 msgstr "检查通知"
 
-#: src/components/routes/settings/notifications.tsx:428
+#: src/components/routes/settings/notifications.tsx:431
 msgid "测试通知已发送"
 msgstr "测试通知已发送"
 
-#: src/components/routes/settings/notifications.tsx:429
+#: src/components/routes/settings/notifications.tsx:432
 msgid "请检查对应通知服务是否收到消息。"
 msgstr "请检查对应通知服务是否收到消息。"

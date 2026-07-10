@@ -40,7 +40,11 @@ func NewHub(app core.App) *Hub {
 	hub.bindAgentReleaseHooks()
 	hub.bindWebsiteMonitorHooks()
 	hub.bindSystemDeleteProtectionHooks()
+	hub.bindAssetMasterValidationHooks()
+	hub.bindAssetBindingValidationHooks()
+	hub.bindNetworkTopologyLegacyValidationHooks()
 	hub.bindCollectionAuditHooks()
+	hub.bindAssetChangeHooks()
 	_ = onAfterBootstrapAndMigrations(app, hub.initialize)
 	return hub
 }

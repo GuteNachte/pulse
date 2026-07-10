@@ -78,12 +78,39 @@ func TestUserAlertsApi(t *testing.T) {
 		"users": []string{user1.Id, user2.Id},
 		"host":  "127.0.0.2",
 	})
+	systemUser2Only, _ := pulseTests.CreateRecord(hub, "systems", map[string]any{
+		"name":  "system-user2-only",
+		"users": []string{user2.Id},
+		"host":  "127.0.0.3",
+	})
+	asset1, _ := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user":   user1.Id,
+		"name":   "asset-system1",
+		"type":   "physical_host",
+		"status": "active",
+	})
+	asset2, _ := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user":   user1.Id,
+		"name":   "asset-system2",
+		"type":   "physical_host",
+		"status": "active",
+	})
+	unmonitoredAsset, _ := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user":   user1.Id,
+		"name":   "asset-no-system",
+		"type":   "physical_host",
+		"status": "active",
+	})
+	system1.Set("asset", asset1.Id)
+	system2.Set("asset", asset2.Id)
+	assert.NoError(t, hub.SaveNoValidate(system1))
+	assert.NoError(t, hub.SaveNoValidate(system2))
 
 	userRecords, _ := hub.CountRecords("users")
 	assert.EqualValues(t, 2, userRecords, "all users should be created")
 
 	systemRecords, _ := hub.CountRecords("systems")
-	assert.EqualValues(t, 2, systemRecords, "all systems should be created")
+	assert.EqualValues(t, 3, systemRecords, "all systems should be created")
 
 	testAppFactory := func(t testing.TB) *pbTests.TestApp {
 		return hub.TestApp
@@ -171,6 +198,89 @@ func TestUserAlertsApi(t *testing.T) {
 			},
 		},
 		{
+			Name:   "POST valid alert data by asset",
+			Method: http.MethodPost,
+			URL:    "/api/pulse/user-alerts",
+			Headers: map[string]string{
+				"Authorization": user1Token,
+			},
+			ExpectedStatus:  200,
+			ExpectedContent: []string{"\"success\":true"},
+			TestAppFactory:  testAppFactory,
+			Body: jsonReader(map[string]any{
+				"name":      "GPU",
+				"value":     70,
+				"min":       6,
+				"assets":    []string{asset1.Id},
+				"overwrite": true,
+			}),
+			BeforeTestFunc: func(t testing.TB, app *pbTests.TestApp, e *core.ServeEvent) {
+				pulseTests.ClearCollection(t, app, "alerts")
+			},
+			AfterTestFunc: func(t testing.TB, app *pbTests.TestApp, res *http.Response) {
+				alert, err := app.FindFirstRecordByFilter("alerts", "name = 'GPU' && user = {:user} && system = {:system}", dbx.Params{"user": user1.Id, "system": system1.Id})
+				assert.NoError(t, err)
+				if assert.NotNil(t, alert) {
+					assert.EqualValues(t, 70, alert.Get("value"))
+					assert.EqualValues(t, 6, alert.Get("min"))
+					assert.Equal(t, asset1.Id, alert.GetString("asset"))
+				}
+				otherAlerts, _ := app.CountRecords("alerts", dbx.HashExp{"name": "GPU", "system": system2.Id})
+				assert.Zero(t, otherAlerts)
+			},
+		},
+		{
+			Name:   "POST rejects system outside current user",
+			Method: http.MethodPost,
+			URL:    "/api/pulse/user-alerts",
+			Headers: map[string]string{
+				"Authorization": user1Token,
+			},
+			ExpectedStatus:  400,
+			ExpectedContent: []string{"Bad data"},
+			TestAppFactory:  testAppFactory,
+			Body: jsonReader(map[string]any{
+				"name":    "CPU",
+				"value":   80,
+				"min":     10,
+				"systems": []string{systemUser2Only.Id},
+			}),
+		},
+		{
+			Name:   "POST rejects asset outside current user",
+			Method: http.MethodPost,
+			URL:    "/api/pulse/user-alerts",
+			Headers: map[string]string{
+				"Authorization": user2Token,
+			},
+			ExpectedStatus:  400,
+			ExpectedContent: []string{"Bad data"},
+			TestAppFactory:  testAppFactory,
+			Body: jsonReader(map[string]any{
+				"name":   "CPU",
+				"value":  80,
+				"min":    10,
+				"assets": []string{asset1.Id},
+			}),
+		},
+		{
+			Name:   "POST rejects unmonitored asset target",
+			Method: http.MethodPost,
+			URL:    "/api/pulse/user-alerts",
+			Headers: map[string]string{
+				"Authorization": user1Token,
+			},
+			ExpectedStatus:  400,
+			ExpectedContent: []string{"Bad data"},
+			TestAppFactory:  testAppFactory,
+			Body: jsonReader(map[string]any{
+				"name":   "CPU",
+				"value":  80,
+				"min":    10,
+				"assets": []string{unmonitoredAsset.Id},
+			}),
+		},
+		{
 			Name:   "POST valid alert data single system",
 			Method: http.MethodPost,
 			URL:    "/api/pulse/user-alerts",
@@ -188,7 +298,7 @@ func TestUserAlertsApi(t *testing.T) {
 			}),
 			AfterTestFunc: func(t testing.TB, app *pbTests.TestApp, res *http.Response) {
 				user1Alerts, _ := app.CountRecords("alerts", dbx.HashExp{"user": user1.Id})
-				assert.EqualValues(t, 3, user1Alerts, "should have 3 alerts")
+				assert.EqualValues(t, 2, user1Alerts, "should have 2 alerts")
 			},
 		},
 		{
@@ -315,6 +425,36 @@ func TestUserAlertsApi(t *testing.T) {
 			},
 		},
 		{
+			Name:   "DELETE alert by asset",
+			Method: http.MethodDelete,
+			URL:    "/api/pulse/user-alerts",
+			Headers: map[string]string{
+				"Authorization": user1Token,
+			},
+			ExpectedStatus:  200,
+			ExpectedContent: []string{"\"count\":1", "\"success\":true"},
+			TestAppFactory:  testAppFactory,
+			Body: jsonReader(map[string]any{
+				"name":   "Disk",
+				"assets": []string{asset1.Id},
+			}),
+			BeforeTestFunc: func(t testing.TB, app *pbTests.TestApp, e *core.ServeEvent) {
+				pulseTests.ClearCollection(t, app, "alerts")
+				pulseTests.CreateRecord(app, "alerts", map[string]any{
+					"name":   "Disk",
+					"system": system1.Id,
+					"asset":  asset1.Id,
+					"user":   user1.Id,
+					"value":  80,
+					"min":    10,
+				})
+			},
+			AfterTestFunc: func(t testing.TB, app *pbTests.TestApp, res *http.Response) {
+				alerts, _ := app.CountRecords("alerts")
+				assert.Zero(t, alerts, "should have 0 alerts")
+			},
+		},
+		{
 			Name:   "DELETE alert multiple systems",
 			Method: http.MethodDelete,
 			URL:    "/api/pulse/user-alerts",
@@ -412,7 +552,7 @@ func TestGlobalAlertPoliciesApi(t *testing.T) {
 		"name":  "policy-system-1",
 		"users": []string{user1.Id},
 	})
-	_, _ = pulseTests.CreateRecord(hub, "systems", map[string]any{
+	system2, _ := pulseTests.CreateRecord(hub, "systems", map[string]any{
 		"name":  "policy-system-2",
 		"users": []string{user1.Id},
 	})
@@ -420,6 +560,27 @@ func TestGlobalAlertPoliciesApi(t *testing.T) {
 		"name":  "policy-system-other",
 		"users": []string{user2.Id},
 	})
+	asset1, _ := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user": user1.Id,
+		"name": "Gaming PC",
+		"type": "physical_host",
+	})
+	asset2, _ := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user": user1.Id,
+		"name": "NAS Box",
+		"type": "nas",
+	})
+	assetOther, _ := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user": user2.Id,
+		"name": "Other Asset",
+		"type": "server",
+	})
+	system1.Set("asset", asset1.Id)
+	system2.Set("asset", asset2.Id)
+	systemOther.Set("asset", assetOther.Id)
+	assert.NoError(t, hub.Save(system1))
+	assert.NoError(t, hub.Save(system2))
+	assert.NoError(t, hub.Save(systemOther))
 
 	testAppFactory := func(t testing.TB) *pbTests.TestApp {
 		return hub.TestApp
@@ -470,6 +631,12 @@ func TestGlobalAlertPoliciesApi(t *testing.T) {
 				assert.EqualValues(t, 1, policies)
 				alerts, _ := app.CountRecords("alerts", dbx.HashExp{"user": user1.Id, "name": "CPU"})
 				assert.EqualValues(t, 2, alerts)
+				system1Alert, err := app.FindFirstRecordByFilter("alerts", "system = {:system} && user = {:user} && name = 'CPU'", dbx.Params{"system": system1.Id, "user": user1.Id})
+				assert.NoError(t, err)
+				assert.Equal(t, asset1.Id, system1Alert.GetString("asset"))
+				system2Alert, err := app.FindFirstRecordByFilter("alerts", "system = {:system} && user = {:user} && name = 'CPU'", dbx.Params{"system": system2.Id, "user": user1.Id})
+				assert.NoError(t, err)
+				assert.Equal(t, asset2.Id, system2Alert.GetString("asset"))
 				otherAlerts, _ := app.CountRecords("alerts", dbx.HashExp{"system": systemOther.Id, "name": "CPU"})
 				assert.Zero(t, otherAlerts)
 			},
@@ -481,9 +648,17 @@ func TestGlobalAlertPoliciesApi(t *testing.T) {
 			Headers: map[string]string{
 				"Authorization": user1Token,
 			},
-			ExpectedStatus:     200,
-			ExpectedContent:    []string{"\"name\":\"CPU\"", "\"value\":72", "\"min\":8"},
-			NotExpectedContent: []string{user2.Id},
+			ExpectedStatus: 200,
+			ExpectedContent: []string{
+				"\"name\":\"CPU\"",
+				"\"value\":72",
+				"\"min\":8",
+				"\"coverage_count\":2",
+				"\"coverage_system_count\":2",
+				"\"name\":\"Gaming PC\"",
+				"\"name\":\"NAS Box\"",
+			},
+			NotExpectedContent: []string{user2.Id, "Other Asset"},
 			TestAppFactory:     testAppFactory,
 		},
 		{
@@ -506,6 +681,7 @@ func TestGlobalAlertPoliciesApi(t *testing.T) {
 				assert.NoError(t, err)
 				assert.EqualValues(t, 88, alert.Get("value"))
 				assert.EqualValues(t, 12, alert.Get("min"))
+				assert.Equal(t, asset1.Id, alert.GetString("asset"))
 			},
 		},
 		{

@@ -3,12 +3,15 @@ import { getPagePath } from "@nanostores/router"
 import { useStore } from "@nanostores/react"
 import {
 	BellIcon,
+	BoxesIcon,
 	ContainerIcon,
 	Globe2Icon,
+	HousePlugIcon,
 	LayoutDashboardIcon,
 	LogOutIcon,
 	MenuIcon,
 	MonitorIcon,
+	NetworkIcon,
 	SettingsIcon,
 	UserIcon,
 } from "lucide-react"
@@ -25,6 +28,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { logOut, pb } from "@/lib/api"
 import { cn, runOnce } from "@/lib/utils"
+import { $moduleSettings } from "@/modules/module-state"
+import type { PulseModuleId } from "@/modules/types"
 import { useMobileLayout } from "./mobile/mobile-ui"
 import { Logo } from "./logo"
 import { ModeToggle } from "./mode-toggle"
@@ -33,6 +38,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip"
 
 export default function Navbar() {
 	const page = useStore($router)
+	const moduleSettings = useStore($moduleSettings)
 	const { isMobile } = useMobileLayout()
 	const settingsPath = getPagePath($router, "settings", { name: "general" })
 	const settingsIndexPath = prependBasePath("/settings")
@@ -42,9 +48,15 @@ export default function Navbar() {
 	}
 	const currentPath = typeof window !== "undefined" ? window.location.pathname : ""
 	const isActiveRoute = (route: string, href?: string) => page?.route === route || (href ? currentPath === href : false)
+	const assetsPath = getPagePath($router, "assets")
+	const smarthomePath = getPagePath($router, "smarthome")
+	const networkPath = getPagePath($router, "network")
 	const containersPath = getPagePath($router, "containers")
+	const clientsPath = getPagePath($router, "clients")
+	const websitesPath = getPagePath($router, "websites")
 	const alertsPath = getPagePath($router, "alerts")
 	const accountMenuActive = isActiveRoute("alerts", alertsPath) || isActiveRoute("settings", settingsPath)
+	const moduleEnabled = (id: PulseModuleId) => moduleSettings[id]?.effectiveEnabled !== false
 
 	return (
 		<div className="my-1 flex h-10 items-center rounded-none border-0 bg-transparent px-1 pe-0 sm:px-2 md:my-4 md:h-16 md:rounded-lg md:border md:border-border md:bg-card md:px-5 md:shadow-none">
@@ -76,16 +88,38 @@ export default function Navbar() {
 									<SettingsIcon className="me-2.5 h-4 w-4" />
 									系统设置
 								</DropdownMenuItem>
-								<DropdownMenuItem onSelect={navigateFromMenu(getPagePath($router, "settings", { name: "agent" }))}>
-									<MonitorIcon className="me-2.5 h-4 w-4" />
-									Agent 管理
-								</DropdownMenuItem>
-								<DropdownMenuItem
-									onSelect={navigateFromMenu(getPagePath($router, "settings", { name: "notifications" }))}
-								>
-									<BellIcon className="me-2.5 h-4 w-4" />
-									通知设置
-								</DropdownMenuItem>
+								{moduleEnabled("asset-center") && (
+									<DropdownMenuItem onSelect={navigateFromMenu(assetsPath)}>
+										<BoxesIcon className="me-2.5 h-4 w-4" />
+										资产中心
+									</DropdownMenuItem>
+								)}
+								{moduleEnabled("network-topology") && (
+									<DropdownMenuItem onSelect={navigateFromMenu(networkPath)}>
+										<NetworkIcon className="me-2.5 h-4 w-4" />
+										网络拓扑
+									</DropdownMenuItem>
+								)}
+								{moduleEnabled("smarthome") && (
+									<DropdownMenuItem onSelect={navigateFromMenu(smarthomePath)}>
+										<HousePlugIcon className="me-2.5 h-4 w-4" />
+										智能家居
+									</DropdownMenuItem>
+								)}
+								{moduleEnabled("agent-management") && (
+									<DropdownMenuItem onSelect={navigateFromMenu(getPagePath($router, "settings", { name: "agent" }))}>
+										<MonitorIcon className="me-2.5 h-4 w-4" />
+										Agent 管理
+									</DropdownMenuItem>
+								)}
+								{moduleEnabled("notifications") && (
+									<DropdownMenuItem
+										onSelect={navigateFromMenu(getPagePath($router, "settings", { name: "notifications" }))}
+									>
+										<BellIcon className="me-2.5 h-4 w-4" />
+										通知设置
+									</DropdownMenuItem>
+								)}
 								<DropdownMenuItem onSelect={navigateFromMenu(getPagePath($router, "settings", { name: "about" }))}>
 									<UserIcon className="me-2.5 h-4 w-4" />
 									关于 Pulse
@@ -109,23 +143,36 @@ export default function Navbar() {
 					>
 						<LayoutDashboardIcon className="h-[1.2rem] w-[1.2rem]" />
 					</NavIconLink>
-					<NavIconLink
-						href={getPagePath($router, "clients")}
-						label="所有客户端"
-						active={isActiveRoute("clients", getPagePath($router, "clients"))}
-					>
-						<MonitorIcon className="h-[1.2rem] w-[1.2rem]" />
-					</NavIconLink>
-					<NavIconLink href={containersPath} label="容器监控" active={isActiveRoute("containers", containersPath)}>
-						<ContainerIcon className="h-[1.2rem] w-[1.2rem]" />
-					</NavIconLink>
-					<NavIconLink
-						href={getPagePath($router, "websites")}
-						label="网站监控"
-						active={isActiveRoute("websites", getPagePath($router, "websites"))}
-					>
-						<Globe2Icon className="h-[1.2rem] w-[1.2rem]" />
-					</NavIconLink>
+					{moduleEnabled("asset-center") && (
+						<NavIconLink href={assetsPath} label="资产中心" active={isActiveRoute("assets", assetsPath)}>
+							<BoxesIcon className="h-[1.2rem] w-[1.2rem]" />
+						</NavIconLink>
+					)}
+					{moduleEnabled("network-topology") && (
+						<NavIconLink href={networkPath} label="网络拓扑" active={isActiveRoute("network", networkPath)}>
+							<NetworkIcon className="h-[1.2rem] w-[1.2rem]" />
+						</NavIconLink>
+					)}
+					{moduleEnabled("smarthome") && (
+						<NavIconLink href={smarthomePath} label="智能家居" active={isActiveRoute("smarthome", smarthomePath)}>
+							<HousePlugIcon className="h-[1.2rem] w-[1.2rem]" />
+						</NavIconLink>
+					)}
+					{moduleEnabled("client-monitoring") && (
+						<NavIconLink href={clientsPath} label="客户端监控" active={isActiveRoute("clients", clientsPath)}>
+							<MonitorIcon className="h-[1.2rem] w-[1.2rem]" />
+						</NavIconLink>
+					)}
+					{moduleEnabled("client-monitoring") && (
+						<NavIconLink href={containersPath} label="容器监控" active={isActiveRoute("containers", containersPath)}>
+							<ContainerIcon className="h-[1.2rem] w-[1.2rem]" />
+						</NavIconLink>
+					)}
+					{moduleEnabled("website-monitoring") && (
+						<NavIconLink href={websitesPath} label="网站监控" active={isActiveRoute("websites", websitesPath)}>
+							<Globe2Icon className="h-[1.2rem] w-[1.2rem]" />
+						</NavIconLink>
+					)}
 					<ModeToggle />
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
@@ -145,11 +192,15 @@ export default function Navbar() {
 						<DropdownMenuContent align="end" className="min-w-44">
 							<DropdownMenuLabel className="max-w-56 truncate">{pb.authStore.record?.email}</DropdownMenuLabel>
 							<DropdownMenuSeparator />
-							<DropdownMenuItem onSelect={navigateFromMenu(alertsPath)}>
-								<BellIcon className="me-2.5 h-4 w-4" />
-								<span>告警中心</span>
-							</DropdownMenuItem>
-							<DropdownMenuSeparator />
+							{moduleEnabled("alerts") && (
+								<>
+									<DropdownMenuItem onSelect={navigateFromMenu(alertsPath)}>
+										<BellIcon className="me-2.5 h-4 w-4" />
+										<span>告警中心</span>
+									</DropdownMenuItem>
+									<DropdownMenuSeparator />
+								</>
+							)}
 							<DropdownMenuItem onSelect={navigateFromMenu(settingsPath)}>
 								<SettingsIcon className="me-2.5 h-4 w-4" />
 								<span>系统设置</span>

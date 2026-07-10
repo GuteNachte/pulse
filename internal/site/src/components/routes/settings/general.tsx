@@ -1,6 +1,15 @@
 /** biome-ignore-all lint/correctness/useUniqueElementIds: component is only rendered once */
 import { Trans } from "@lingui/react/macro"
-import { AlertTriangleIcon, ClockIcon, LoaderCircleIcon, PaletteIcon, RulerIcon, SaveIcon } from "lucide-react"
+import {
+	AlertTriangleIcon,
+	ClockIcon,
+	LoaderCircleIcon,
+	PaletteIcon,
+	RulerIcon,
+	SaveIcon,
+	Settings2Icon,
+	type LucideIcon,
+} from "lucide-react"
 import { useState, type FormEvent, type ReactNode } from "react"
 import { MobileGeneralSettingsForm } from "@/components/mobile/mobile-general-settings"
 import { useTheme, type Theme } from "@/components/theme-provider"
@@ -32,33 +41,59 @@ export default function SettingsProfilePage({ userSettings }: { userSettings: Us
 	}
 
 	return (
-		<div className="flex h-full w-full max-w-6xl flex-col py-1">
+		<div className="grid w-full gap-4 md:gap-5">
 			<MobileGeneralSettingsForm userSettings={userSettings} isLoading={isLoading} onSubmit={handleSubmit} />
-			<form onSubmit={handleSubmit} className="hidden flex-1 flex-col gap-4 md:flex">
-				<section className="overflow-hidden rounded-lg border border-border/70 bg-surface-soft shadow-none">
-					<div className="border-b border-border/70 bg-card px-5 py-4">
-						<div className="flex min-w-0 items-start justify-between gap-4">
-							<div className="min-w-0">
-								<div className="text-xs font-medium text-muted-foreground">个人偏好</div>
-								<h3 className="mt-1 text-xl font-semibold tracking-tight">
-									<Trans>General</Trans>
-								</h3>
-								<p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-									设置主题、图表时间、单位和告警颜色阈值。这里只影响当前用户的显示偏好。
-								</p>
+			<form onSubmit={handleSubmit} className="hidden flex-col gap-4 md:flex">
+				<section className="rounded-lg border border-border/70 bg-surface-soft p-2 shadow-none">
+					<div className="rounded-md border border-border/70 bg-card p-3 shadow-none">
+						<div className="flex min-w-0 items-center justify-between gap-4">
+							<div className="flex min-w-0 items-center gap-3">
+								<div className="grid size-10 shrink-0 place-items-center rounded-md border border-border/70 bg-surface-soft text-muted-foreground">
+									<Settings2Icon className="size-4" />
+								</div>
+								<div className="min-w-0">
+									<div className="text-xs font-medium text-muted-foreground">个人偏好</div>
+									<h3 className="mt-1 text-lg font-semibold tracking-tight text-foreground">常规设置</h3>
+									<p className="mt-1 max-w-3xl text-pretty text-sm leading-relaxed text-muted-foreground">
+										设置主题、图表时间、单位和阈值颜色。这里只影响当前用户看到的显示偏好。
+									</p>
+								</div>
 							</div>
 							<Button
 								type="submit"
-								className="shrink-0 gap-1.5 transition-transform active:scale-[0.96] disabled:opacity-100"
+								className="min-h-10 shrink-0 gap-1.5 transition-transform active:scale-[0.96] disabled:opacity-100"
 								disabled={isLoading}
 							>
 								{isLoading ? <LoaderCircleIcon className="size-4 animate-spin" /> : <SaveIcon className="size-4" />}
-								<Trans>Save Settings</Trans>
+								保存设置
 							</Button>
 						</div>
 					</div>
+					<div className="mt-2 grid gap-2 lg:grid-cols-4">
+						<PreferenceSummaryCard icon={PaletteIcon} label="主题" value={getThemeLabel(theme)} detail="当前显示模式" />
+						<PreferenceSummaryCard
+							icon={ClockIcon}
+							label="图表"
+							value={getChartTimeSummary(userSettings.chartTime)}
+							detail={`${userSettings.hourFormat ?? (currentHour12() ? HourFormat["12h"] : HourFormat["24h"])} 时间制`}
+						/>
+						<PreferenceSummaryCard
+							icon={RulerIcon}
+							label="单位"
+							value={`${getTemperatureUnitLabel(userSettings.unitTemp)} / ${getRateUnitLabel(userSettings.unitNet)}`}
+							detail={`磁盘 ${getRateUnitLabel(userSettings.unitDisk)}`}
+						/>
+						<PreferenceSummaryCard
+							icon={AlertTriangleIcon}
+							label="阈值"
+							value={`${userSettings.colorWarn ?? 65}% / ${userSettings.colorCrit ?? 90}%`}
+							detail="颜色提示，不改变告警规则"
+						/>
+					</div>
+				</section>
 
-					<div className="grid gap-3 p-4">
+				<section className="rounded-lg border border-border/70 bg-surface-soft p-2 shadow-none">
+					<div className="grid gap-2">
 						<DesktopSettingSection
 							icon={<PaletteIcon className="size-4 text-muted-foreground" />}
 							title="界面偏好"
@@ -231,7 +266,7 @@ function DesktopSettingSection({
 	children: ReactNode
 }) {
 	return (
-		<section className="grid gap-4 rounded-lg border border-border/70 bg-card p-4 shadow-none lg:grid-cols-[13rem_minmax(0,1fr)]">
+		<section className="grid gap-4 rounded-md border border-border/70 bg-card p-4 shadow-none lg:grid-cols-[12rem_minmax(0,1fr)]">
 			<div className="min-w-0">
 				<div className="flex items-center gap-2">
 					<span className="grid size-8 shrink-0 place-items-center rounded-md border border-border/70 bg-surface-soft">
@@ -248,11 +283,54 @@ function DesktopSettingSection({
 
 function DesktopSettingField({ label, htmlFor, children }: { label: ReactNode; htmlFor: string; children: ReactNode }) {
 	return (
-		<div className="grid gap-2 rounded-lg border border-border/70 bg-card p-3 shadow-none">
+		<div className="grid gap-2 rounded-md border border-border/70 bg-surface-soft p-3 shadow-none">
 			<Label className="block text-xs font-medium text-muted-foreground" htmlFor={htmlFor}>
 				{label}
 			</Label>
 			{children}
 		</div>
 	)
+}
+
+function PreferenceSummaryCard({
+	icon: Icon,
+	label,
+	value,
+	detail,
+}: {
+	icon: LucideIcon
+	label: string
+	value: ReactNode
+	detail: string
+}) {
+	return (
+		<div className="rounded-md bg-card px-3 py-2.5 shadow-none">
+			<div className="flex items-center justify-between gap-3">
+				<div className="text-xs text-muted-foreground">{label}</div>
+				<span className="grid size-8 shrink-0 place-items-center rounded-md bg-surface-soft text-muted-foreground">
+					<Icon className="size-3.5" />
+				</span>
+			</div>
+			<div className="mt-2 truncate text-base font-semibold tabular-nums text-foreground">{value}</div>
+			<div className="mt-1 truncate text-xs text-muted-foreground">{detail}</div>
+		</div>
+	)
+}
+
+function getThemeLabel(theme: Theme) {
+	if (theme === "light") return "浅色"
+	if (theme === "dark") return "深色"
+	return "跟随系统"
+}
+
+function getChartTimeSummary(chartTime: UserSettings["chartTime"]) {
+	return chartTimeData[chartTime]?.label() ?? "默认"
+}
+
+function getTemperatureUnitLabel(unit: UserSettings["unitTemp"]) {
+	return Number(unit ?? Unit.Celsius) === Unit.Fahrenheit ? "°F" : "°C"
+}
+
+function getRateUnitLabel(unit: UserSettings["unitNet"] | UserSettings["unitDisk"]) {
+	return Number(unit ?? Unit.Bytes) === Unit.Bits ? "bits" : "bytes"
 }

@@ -54,6 +54,7 @@ func TestCollectionRulesDefault(t *testing.T) {
 	assert.Equal(t, isUserMatchesUserNotReadonly, *alertsCollection.CreateRule)
 	assert.Equal(t, isUserMatchesUserNotReadonly, *alertsCollection.UpdateRule)
 	assert.Equal(t, isUserMatchesUserNotReadonly, *alertsCollection.DeleteRule)
+	assert.NotNil(t, alertsCollection.Fields.GetByName("asset"))
 
 	// alerts_history collection
 	alertsHistoryCollection, err := hub.FindCollectionByNameOrId("alerts_history")
@@ -68,6 +69,7 @@ func TestCollectionRulesDefault(t *testing.T) {
 	assert.NotNil(t, alertsHistoryCollection.Fields.GetByName("silenced_until"))
 	assert.NotNil(t, alertsHistoryCollection.Fields.GetByName("silenced_by"))
 	assert.NotNil(t, alertsHistoryCollection.Fields.GetByName("silence_reason"))
+	assert.NotNil(t, alertsHistoryCollection.Fields.GetByName("asset"))
 
 	// alert_policies collection
 	alertPoliciesCollection, err := hub.FindCollectionByNameOrId("alert_policies")
@@ -85,6 +87,149 @@ func TestCollectionRulesDefault(t *testing.T) {
 	assert.Nil(t, agentPairingCodesCollection.CreateRule)
 	assert.Nil(t, agentPairingCodesCollection.UpdateRule)
 	assert.Equal(t, isUserMatchesUserNotReadonly, *agentPairingCodesCollection.DeleteRule)
+	assert.NotNil(t, agentPairingCodesCollection.Fields.GetByName("asset"))
+
+	for _, collectionName := range []string{"network_devices", "network_ports", "network_links", "network_layouts"} {
+		collection, err := hub.FindCollectionByNameOrId(collectionName)
+		require.NoError(t, err, "Failed to find %s collection", collectionName)
+		assert.Equal(t, isUserMatchesUser, *collection.ListRule, "%s list rule", collectionName)
+		assert.Equal(t, isUserMatchesUser, *collection.ViewRule, "%s view rule", collectionName)
+		assert.Equal(t, isUserMatchesUserNotReadonly, *collection.CreateRule, "%s create rule", collectionName)
+		assert.Equal(t, isUserMatchesUserNotReadonly, *collection.UpdateRule, "%s update rule", collectionName)
+		assert.Equal(t, isUserMatchesUserNotReadonly, *collection.DeleteRule, "%s delete rule", collectionName)
+		assert.NotNil(t, collection.Fields.GetByName("user"), "%s should be user-scoped", collectionName)
+	}
+
+	networkDevicesCollection, err := hub.FindCollectionByNameOrId("network_devices")
+	require.NoError(t, err)
+	assert.NotNil(t, networkDevicesCollection.Fields.GetByName("name"))
+	assert.NotNil(t, networkDevicesCollection.Fields.GetByName("type"))
+	assert.NotNil(t, networkDevicesCollection.Fields.GetByName("model"))
+	assert.NotNil(t, networkDevicesCollection.Fields.GetByName("management_ip"))
+	assert.NotNil(t, networkDevicesCollection.Fields.GetByName("role"))
+	assert.NotNil(t, networkDevicesCollection.Fields.GetByName("notes"))
+
+	networkPortsCollection, err := hub.FindCollectionByNameOrId("network_ports")
+	require.NoError(t, err)
+	assert.NotNil(t, networkPortsCollection.Fields.GetByName("device"))
+	assert.NotNil(t, networkPortsCollection.Fields.GetByName("system"))
+	assert.NotNil(t, networkPortsCollection.Fields.GetByName("asset"))
+	assert.NotNil(t, networkPortsCollection.Fields.GetByName("name"))
+	assert.NotNil(t, networkPortsCollection.Fields.GetByName("type"))
+	assert.NotNil(t, networkPortsCollection.Fields.GetByName("speed_mbps"))
+	assert.NotNil(t, networkPortsCollection.Fields.GetByName("notes"))
+
+	networkLinksCollection, err := hub.FindCollectionByNameOrId("network_links")
+	require.NoError(t, err)
+	assert.NotNil(t, networkLinksCollection.Fields.GetByName("source_port"))
+	assert.NotNil(t, networkLinksCollection.Fields.GetByName("target_port"))
+	assert.NotNil(t, networkLinksCollection.Fields.GetByName("kind"))
+	assert.NotNil(t, networkLinksCollection.Fields.GetByName("name"))
+	assert.NotNil(t, networkLinksCollection.Fields.GetByName("notes"))
+
+	networkLayoutsCollection, err := hub.FindCollectionByNameOrId("network_layouts")
+	require.NoError(t, err)
+	assert.NotNil(t, networkLayoutsCollection.Fields.GetByName("key"))
+	assert.NotNil(t, networkLayoutsCollection.Fields.GetByName("layout"))
+
+	for _, collectionName := range []string{"assets", "asset_interfaces", "asset_relations", "asset_maintenance", "asset_attachments", "asset_locations"} {
+		collection, err := hub.FindCollectionByNameOrId(collectionName)
+		require.NoError(t, err, "Failed to find %s collection", collectionName)
+		assert.Equal(t, isUserMatchesUser, *collection.ListRule, "%s list rule", collectionName)
+		assert.Equal(t, isUserMatchesUser, *collection.ViewRule, "%s view rule", collectionName)
+		assert.Equal(t, isUserMatchesUserNotReadonly, *collection.CreateRule, "%s create rule", collectionName)
+		assert.Equal(t, isUserMatchesUserNotReadonly, *collection.UpdateRule, "%s update rule", collectionName)
+		assert.Equal(t, isUserMatchesUserNotReadonly, *collection.DeleteRule, "%s delete rule", collectionName)
+		assert.NotNil(t, collection.Fields.GetByName("user"), "%s should be user-scoped", collectionName)
+	}
+
+	assetChangesCollection, err := hub.FindCollectionByNameOrId("asset_changes")
+	require.NoError(t, err, "Failed to find asset_changes collection")
+	assert.Equal(t, isUserMatchesUser, *assetChangesCollection.ListRule)
+	assert.Equal(t, isUserMatchesUser, *assetChangesCollection.ViewRule)
+	assert.Nil(t, assetChangesCollection.CreateRule)
+	assert.Nil(t, assetChangesCollection.UpdateRule)
+	assert.Nil(t, assetChangesCollection.DeleteRule)
+	assert.NotNil(t, assetChangesCollection.Fields.GetByName("user"))
+	assert.NotNil(t, assetChangesCollection.Fields.GetByName("asset"))
+	assert.NotNil(t, assetChangesCollection.Fields.GetByName("source_collection"))
+	assert.NotNil(t, assetChangesCollection.Fields.GetByName("source_record"))
+	assert.NotNil(t, assetChangesCollection.Fields.GetByName("action"))
+	assert.NotNil(t, assetChangesCollection.Fields.GetByName("summary"))
+	assert.NotNil(t, assetChangesCollection.Fields.GetByName("diff"))
+	sourceCollectionField, ok := assetChangesCollection.Fields.GetByName("source_collection").(*core.SelectField)
+	require.True(t, ok)
+	assert.Contains(t, sourceCollectionField.Values, "asset_attachments")
+
+	assetsCollection, err := hub.FindCollectionByNameOrId("assets")
+	require.NoError(t, err)
+	assert.NotNil(t, assetsCollection.Fields.GetByName("name"))
+	assetTypeField, ok := assetsCollection.Fields.GetByName("type").(*core.SelectField)
+	require.True(t, ok)
+	for _, value := range []string{
+		"ups",
+		"game_console",
+		"handheld",
+		"ebook",
+		"wearable",
+		"tv",
+		"speaker",
+		"smarthome_gateway",
+		"sensor",
+		"light",
+		"plug",
+		"lock",
+		"vacuum",
+	} {
+		assert.Contains(t, assetTypeField.Values, value, "assets.type should include %s", value)
+	}
+	assert.NotNil(t, assetsCollection.Fields.GetByName("status"))
+	assert.NotNil(t, assetsCollection.Fields.GetByName("parent_asset"))
+	assert.NotNil(t, assetsCollection.Fields.GetByName("management_ip"))
+	assert.NotNil(t, assetsCollection.Fields.GetByName("metadata"))
+
+	assetInterfacesCollection, err := hub.FindCollectionByNameOrId("asset_interfaces")
+	require.NoError(t, err)
+	assert.NotNil(t, assetInterfacesCollection.Fields.GetByName("asset"))
+	assert.NotNil(t, assetInterfacesCollection.Fields.GetByName("name"))
+	assert.NotNil(t, assetInterfacesCollection.Fields.GetByName("kind"))
+	assert.NotNil(t, assetInterfacesCollection.Fields.GetByName("ipv4"))
+	assert.NotNil(t, assetInterfacesCollection.Fields.GetByName("ipv6"))
+	assert.NotNil(t, assetInterfacesCollection.Fields.GetByName("speed_mbps"))
+
+	assetRelationsCollection, err := hub.FindCollectionByNameOrId("asset_relations")
+	require.NoError(t, err)
+	assert.NotNil(t, assetRelationsCollection.Fields.GetByName("source_asset"))
+	assert.NotNil(t, assetRelationsCollection.Fields.GetByName("target_asset"))
+	assert.NotNil(t, assetRelationsCollection.Fields.GetByName("kind"))
+
+	assetMaintenanceCollection, err := hub.FindCollectionByNameOrId("asset_maintenance")
+	require.NoError(t, err)
+	assert.NotNil(t, assetMaintenanceCollection.Fields.GetByName("asset"))
+	assert.NotNil(t, assetMaintenanceCollection.Fields.GetByName("kind"))
+	assert.NotNil(t, assetMaintenanceCollection.Fields.GetByName("title"))
+	assert.NotNil(t, assetMaintenanceCollection.Fields.GetByName("event_date"))
+	assert.NotNil(t, assetMaintenanceCollection.Fields.GetByName("notes"))
+
+	assetAttachmentsCollection, err := hub.FindCollectionByNameOrId("asset_attachments")
+	require.NoError(t, err)
+	assert.NotNil(t, assetAttachmentsCollection.Fields.GetByName("asset"))
+	assert.NotNil(t, assetAttachmentsCollection.Fields.GetByName("kind"))
+	assert.NotNil(t, assetAttachmentsCollection.Fields.GetByName("title"))
+	attachmentFilesField, ok := assetAttachmentsCollection.Fields.GetByName("files").(*core.FileField)
+	require.True(t, ok)
+	assert.True(t, attachmentFilesField.Protected)
+	assert.Equal(t, 5, attachmentFilesField.MaxSelect)
+	assert.Equal(t, int64(20*1024*1024), attachmentFilesField.MaxSize)
+	assert.NotNil(t, assetAttachmentsCollection.Fields.GetByName("notes"))
+
+	assetLocationsCollection, err := hub.FindCollectionByNameOrId("asset_locations")
+	require.NoError(t, err)
+	assert.NotNil(t, assetLocationsCollection.Fields.GetByName("name"))
+	assert.NotNil(t, assetLocationsCollection.Fields.GetByName("kind"))
+	assert.NotNil(t, assetLocationsCollection.Fields.GetByName("parent_location"))
+	assert.NotNil(t, assetLocationsCollection.Fields.GetByName("sort_order"))
+	assert.NotNil(t, assetLocationsCollection.Fields.GetByName("notes"))
 
 	// notification_failures collection
 	notificationFailuresCollection, err := hub.FindCollectionByNameOrId("notification_failures")
@@ -94,6 +239,7 @@ func TestCollectionRulesDefault(t *testing.T) {
 	assert.Nil(t, notificationFailuresCollection.CreateRule)
 	assert.Nil(t, notificationFailuresCollection.UpdateRule)
 	assert.Equal(t, isUserMatchesUserNotReadonly, *notificationFailuresCollection.DeleteRule)
+	assert.NotNil(t, notificationFailuresCollection.Fields.GetByName("asset"))
 
 	notificationChannelHealthCollection, err := hub.FindCollectionByNameOrId("notification_channel_health")
 	require.NoError(t, err, "Failed to find notification_channel_health collection")
@@ -115,6 +261,7 @@ func TestCollectionRulesDefault(t *testing.T) {
 	assert.Equal(t, isUserMatchesUserNotReadonly, *alertNotificationStatesCollection.DeleteRule)
 	assert.NotNil(t, alertNotificationStatesCollection.Fields.GetByName("next_allowed_at"))
 	assert.NotNil(t, alertNotificationStatesCollection.Fields.GetByName("suppressed_count"))
+	assert.NotNil(t, alertNotificationStatesCollection.Fields.GetByName("asset"))
 
 	// containers collection
 	containersCollection, err := hub.FindCollectionByNameOrId("containers")
@@ -179,6 +326,7 @@ func TestCollectionRulesDefault(t *testing.T) {
 	assert.Equal(t, isUserInUsersNotReadonly, *systemsCollection.CreateRule)
 	assert.Equal(t, isUserInUsersNotReadonly, *systemsCollection.UpdateRule)
 	assert.Equal(t, isUserInUsersNotReadonly, *systemsCollection.DeleteRule)
+	assert.NotNil(t, systemsCollection.Fields.GetByName("asset"))
 
 	// universal_tokens collection
 	universalTokensCollection, err := hub.FindCollectionByNameOrId("universal_tokens")
@@ -199,6 +347,19 @@ func TestCollectionRulesDefault(t *testing.T) {
 	assert.Equal(t, isUserMatchesUserNotReadonly, *userSettingsCollection.UpdateRule)
 	assert.Nil(t, userSettingsCollection.DeleteRule)
 
+	moduleSettingsCollection, err := hub.FindCollectionByNameOrId("module_settings")
+	require.NoError(t, err, "Failed to find module_settings collection")
+	assert.Equal(t, isUserMatchesUser, *moduleSettingsCollection.ListRule)
+	assert.Equal(t, isUserMatchesUser, *moduleSettingsCollection.ViewRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *moduleSettingsCollection.CreateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *moduleSettingsCollection.UpdateRule)
+	assert.Nil(t, moduleSettingsCollection.DeleteRule)
+	assert.NotNil(t, moduleSettingsCollection.Fields.GetByName("user"))
+	assert.NotNil(t, moduleSettingsCollection.Fields.GetByName("module_id"))
+	assert.NotNil(t, moduleSettingsCollection.Fields.GetByName("enabled"))
+	assert.NotNil(t, moduleSettingsCollection.Fields.GetByName("settings"))
+	assert.NotNil(t, moduleSettingsCollection.Fields.GetByName("health"))
+
 	agentReleasesCollection, err := hub.FindCollectionByNameOrId("agent_releases")
 	require.NoError(t, err, "Failed to find agent_releases collection")
 	assert.Nil(t, agentReleasesCollection.Fields.GetByName("recommended"))
@@ -206,6 +367,7 @@ func TestCollectionRulesDefault(t *testing.T) {
 
 	websiteMonitorsCollection, err := hub.FindCollectionByNameOrId("website_monitors")
 	require.NoError(t, err, "Failed to find website_monitors collection")
+	assert.NotNil(t, websiteMonitorsCollection.Fields.GetByName("asset"))
 	assert.NotNil(t, websiteMonitorsCollection.Fields.GetByName("expected_content"))
 	assert.NotNil(t, websiteMonitorsCollection.Fields.GetByName("last_failure_category"))
 
@@ -249,6 +411,64 @@ func TestOperationActionCollectionSupportsAllAllowedActions(t *testing.T) {
 	assert.ElementsMatch(t, pulseHub.OperationFailureCodes(), auditFailureCodeField.Values)
 
 	assert.ElementsMatch(t, pulseHub.AllowedOperationActions(), selectField.Values)
+}
+
+func TestAssetCollectionSelectValuesMatchAssetCenterModel(t *testing.T) {
+	hub, _ := pulseTests.NewTestHub(t.TempDir())
+	defer hub.Cleanup()
+
+	assetsCollection, err := hub.FindCollectionByNameOrId("assets")
+	require.NoError(t, err)
+	assetTypeField, ok := assetsCollection.Fields.GetByName("type").(*core.SelectField)
+	require.True(t, ok, "assets.type should be a select field")
+	assert.ElementsMatch(t, []string{
+		"internet",
+		"physical_host",
+		"nas",
+		"server",
+		"mini_pc",
+		"router",
+		"switch",
+		"ap",
+		"gateway",
+		"ont",
+		"firewall",
+		"phone",
+		"tablet",
+		"camera",
+		"printer",
+		"ups",
+		"game_console",
+		"handheld",
+		"ebook",
+		"wearable",
+		"tv",
+		"speaker",
+		"smarthome_gateway",
+		"sensor",
+		"light",
+		"plug",
+		"lock",
+		"vacuum",
+		"iot",
+		"web_endpoint",
+		"custom",
+	}, assetTypeField.Values)
+
+	relationsCollection, err := hub.FindCollectionByNameOrId("asset_relations")
+	require.NoError(t, err)
+	relationKindField, ok := relationsCollection.Fields.GetByName("kind").(*core.SelectField)
+	require.True(t, ok, "asset_relations.kind should be a select field")
+	assert.ElementsMatch(t, []string{
+		"hosted_on",
+		"connected_to",
+		"monitors",
+		"depends_on",
+		"owns",
+		"located_in",
+		"powered_by",
+		"custom",
+	}, relationKindField.Values)
 }
 
 func TestCollectionRulesShareAllSystems(t *testing.T) {
@@ -301,6 +521,7 @@ func TestCollectionRulesShareAllSystems(t *testing.T) {
 	assert.Nil(t, agentPairingCodesCollection.CreateRule)
 	assert.Nil(t, agentPairingCodesCollection.UpdateRule)
 	assert.Equal(t, isUserMatchesUserNotReadonly, *agentPairingCodesCollection.DeleteRule)
+	assert.NotNil(t, agentPairingCodesCollection.Fields.GetByName("asset"))
 
 	// notification_failures collection
 	notificationFailuresCollection, err := hub.FindCollectionByNameOrId("notification_failures")
@@ -310,6 +531,7 @@ func TestCollectionRulesShareAllSystems(t *testing.T) {
 	assert.Nil(t, notificationFailuresCollection.CreateRule)
 	assert.Nil(t, notificationFailuresCollection.UpdateRule)
 	assert.Equal(t, isUserMatchesUserNotReadonly, *notificationFailuresCollection.DeleteRule)
+	assert.NotNil(t, notificationFailuresCollection.Fields.GetByName("asset"))
 
 	notificationChannelHealthCollection, err := hub.FindCollectionByNameOrId("notification_channel_health")
 	require.NoError(t, err, "Failed to find notification_channel_health collection")
@@ -326,6 +548,7 @@ func TestCollectionRulesShareAllSystems(t *testing.T) {
 	assert.Nil(t, alertNotificationStatesCollection.CreateRule)
 	assert.Nil(t, alertNotificationStatesCollection.UpdateRule)
 	assert.Equal(t, isUserMatchesUserNotReadonly, *alertNotificationStatesCollection.DeleteRule)
+	assert.NotNil(t, alertNotificationStatesCollection.Fields.GetByName("asset"))
 
 	// containers collection
 	containersCollection, err := hub.FindCollectionByNameOrId("containers")
@@ -409,6 +632,14 @@ func TestCollectionRulesShareAllSystems(t *testing.T) {
 	assert.Equal(t, isUserMatchesUserNotReadonly, *userSettingsCollection.CreateRule)
 	assert.Equal(t, isUserMatchesUserNotReadonly, *userSettingsCollection.UpdateRule)
 	assert.Nil(t, userSettingsCollection.DeleteRule)
+
+	moduleSettingsCollection, err := hub.FindCollectionByNameOrId("module_settings")
+	require.NoError(t, err, "Failed to find module_settings collection")
+	assert.Equal(t, isUserMatchesUser, *moduleSettingsCollection.ListRule)
+	assert.Equal(t, isUserMatchesUser, *moduleSettingsCollection.ViewRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *moduleSettingsCollection.CreateRule)
+	assert.Equal(t, isUserMatchesUserNotReadonly, *moduleSettingsCollection.UpdateRule)
+	assert.Nil(t, moduleSettingsCollection.DeleteRule)
 }
 
 func TestDisablePasswordAuth(t *testing.T) {
@@ -663,6 +894,26 @@ func TestApiCollectionsAuthRules(t *testing.T) {
 			},
 			AfterTestFunc: func(t testing.TB, app *pbTests.TestApp, res *http.Response) {
 				count, _ := app.CountRecords("user_settings")
+				assert.EqualValues(t, 0, count)
+			},
+		},
+		{
+			Name:   "Readonly cannot create module settings collection records",
+			Method: http.MethodPost,
+			URL:    "/api/collections/module_settings/records",
+			Headers: map[string]string{
+				"Authorization": userReadonlyToken,
+			},
+			Body:            strings.NewReader(fmt.Sprintf(`{"user":"%s","module_id":"network-topology","enabled":false}`, userReadonly.Id)),
+			ExpectedStatus:  400,
+			ExpectedContent: []string{"Failed to create record."},
+			TestAppFactory:  testAppFactory,
+			BeforeTestFunc: func(t testing.TB, app *pbTests.TestApp, e *core.ServeEvent) {
+				count, _ := app.CountRecords("module_settings")
+				assert.EqualValues(t, 0, count)
+			},
+			AfterTestFunc: func(t testing.TB, app *pbTests.TestApp, res *http.Response) {
+				count, _ := app.CountRecords("module_settings")
 				assert.EqualValues(t, 0, count)
 			},
 		},
