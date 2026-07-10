@@ -12,11 +12,41 @@ import (
 	pulseTests "gutenacht.site/pulse/internal/tests"
 )
 
-func TestAssetMasterValidationRejectsCrossUserAssetReferences(t *testing.T) {
+func TestAssetMasterValidation(t *testing.T) {
 	hub, err := pulseTests.NewTestHub(t.TempDir())
 	require.NoError(t, err)
 	defer hub.Cleanup()
 
+	t.Run("RejectsCrossUserAssetReferences", func(t *testing.T) {
+		testAssetMasterValidationRejectsCrossUserAssetReferences(t, hub)
+	})
+	t.Run("RejectsDuplicateAssets", func(t *testing.T) {
+		testAssetMasterValidationRejectsDuplicateAssets(t, hub)
+	})
+	t.Run("RequiresPhoneVariantSpecs", func(t *testing.T) {
+		testAssetMasterValidationRequiresPhoneVariantSpecs(t, hub)
+	})
+	t.Run("KeepsSinglePrimaryInterface", func(t *testing.T) {
+		testAssetInterfaceValidationKeepsSinglePrimaryInterface(t, hub)
+	})
+	t.Run("RejectsDuplicateNetworkIdentifiers", func(t *testing.T) {
+		testAssetInterfaceValidationRejectsDuplicateNetworkIdentifiers(t, hub)
+	})
+	t.Run("RejectsInvalidRelationEndpoints", func(t *testing.T) {
+		testAssetRelationValidationRejectsInvalidEndpoints(t, hub)
+	})
+	t.Run("RejectsDuplicateRelationEndpoints", func(t *testing.T) {
+		testAssetRelationValidationRejectsDuplicateEndpoints(t, hub)
+	})
+	t.Run("RejectsRelationInterfaceEndpointMismatch", func(t *testing.T) {
+		testAssetRelationValidationRejectsInterfaceEndpointMismatch(t, hub)
+	})
+	t.Run("RejectsCrossUserLocationParentAndCycles", func(t *testing.T) {
+		testAssetLocationValidationRejectsCrossUserParentAndCycles(t, hub)
+	})
+}
+
+func testAssetMasterValidationRejectsCrossUserAssetReferences(t *testing.T, hub *pulseTests.TestHub) {
 	user, err := pulseTests.CreateUser(hub, "asset-master@example.com", "password")
 	require.NoError(t, err)
 	otherUser, err := pulseTests.CreateUser(hub, "asset-master-other@example.com", "password")
@@ -73,11 +103,7 @@ func TestAssetMasterValidationRejectsCrossUserAssetReferences(t *testing.T) {
 	require.Contains(t, rejectedParent.Body, "父级资产不属于当前用户")
 }
 
-func TestAssetMasterValidationRejectsDuplicateAssets(t *testing.T) {
-	hub, err := pulseTests.NewTestHub(t.TempDir())
-	require.NoError(t, err)
-	defer hub.Cleanup()
-
+func testAssetMasterValidationRejectsDuplicateAssets(t *testing.T, hub *pulseTests.TestHub) {
 	user, err := pulseTests.CreateUser(hub, "asset-duplicate@example.com", "password")
 	require.NoError(t, err)
 	token, err := user.NewAuthToken()
@@ -204,11 +230,7 @@ func TestAssetMasterValidationRejectsDuplicateAssets(t *testing.T) {
 	require.Equal(t, http.StatusOK, ownInterfaceIPAsManagementIP.Status, ownInterfaceIPAsManagementIP.Body)
 }
 
-func TestAssetMasterValidationRequiresPhoneVariantSpecs(t *testing.T) {
-	hub, err := pulseTests.NewTestHub(t.TempDir())
-	require.NoError(t, err)
-	defer hub.Cleanup()
-
+func testAssetMasterValidationRequiresPhoneVariantSpecs(t *testing.T, hub *pulseTests.TestHub) {
 	user, err := pulseTests.CreateUser(hub, "asset-phone-variant@example.com", "password")
 	require.NoError(t, err)
 	token, err := user.NewAuthToken()
@@ -248,11 +270,7 @@ func TestAssetMasterValidationRequiresPhoneVariantSpecs(t *testing.T) {
 	require.Equal(t, http.StatusOK, completePhone.Status, completePhone.Body)
 }
 
-func TestAssetInterfaceValidationKeepsSinglePrimaryInterface(t *testing.T) {
-	hub, err := pulseTests.NewTestHub(t.TempDir())
-	require.NoError(t, err)
-	defer hub.Cleanup()
-
+func testAssetInterfaceValidationKeepsSinglePrimaryInterface(t *testing.T, hub *pulseTests.TestHub) {
 	user, err := pulseTests.CreateUser(hub, "asset-interface-primary@example.com", "password")
 	require.NoError(t, err)
 	token, err := user.NewAuthToken()
@@ -316,11 +334,7 @@ func TestAssetInterfaceValidationKeepsSinglePrimaryInterface(t *testing.T) {
 	require.Equal(t, "eth0", primaryInterfaces[0].GetString("name"))
 }
 
-func TestAssetInterfaceValidationRejectsDuplicateNetworkIdentifiers(t *testing.T) {
-	hub, err := pulseTests.NewTestHub(t.TempDir())
-	require.NoError(t, err)
-	defer hub.Cleanup()
-
+func testAssetInterfaceValidationRejectsDuplicateNetworkIdentifiers(t *testing.T, hub *pulseTests.TestHub) {
 	user, err := pulseTests.CreateUser(hub, "asset-interface-duplicate@example.com", "password")
 	require.NoError(t, err)
 	token, err := user.NewAuthToken()
@@ -411,11 +425,7 @@ func TestAssetInterfaceValidationRejectsDuplicateNetworkIdentifiers(t *testing.T
 	require.Equal(t, http.StatusOK, acceptedOwnAssetIP.Status, acceptedOwnAssetIP.Body)
 }
 
-func TestAssetRelationValidationRejectsInvalidEndpoints(t *testing.T) {
-	hub, err := pulseTests.NewTestHub(t.TempDir())
-	require.NoError(t, err)
-	defer hub.Cleanup()
-
+func testAssetRelationValidationRejectsInvalidEndpoints(t *testing.T, hub *pulseTests.TestHub) {
 	user, err := pulseTests.CreateUser(hub, "asset-relation-master@example.com", "password")
 	require.NoError(t, err)
 	otherUser, err := pulseTests.CreateUser(hub, "asset-relation-master-other@example.com", "password")
@@ -476,11 +486,7 @@ func TestAssetRelationValidationRejectsInvalidEndpoints(t *testing.T) {
 	require.Contains(t, rejectedSelf.Body, "资产关系不能连接同一个资产")
 }
 
-func TestAssetRelationValidationRejectsDuplicateEndpoints(t *testing.T) {
-	hub, err := pulseTests.NewTestHub(t.TempDir())
-	require.NoError(t, err)
-	defer hub.Cleanup()
-
+func testAssetRelationValidationRejectsDuplicateEndpoints(t *testing.T, hub *pulseTests.TestHub) {
 	user, err := pulseTests.CreateUser(hub, "asset-relation-duplicate@example.com", "password")
 	require.NoError(t, err)
 	token, err := user.NewAuthToken()
@@ -586,11 +592,7 @@ func TestAssetRelationValidationRejectsDuplicateEndpoints(t *testing.T) {
 	require.Equal(t, http.StatusOK, acceptedReversedDirectional.Status, acceptedReversedDirectional.Body)
 }
 
-func TestAssetRelationValidationRejectsInterfaceEndpointMismatch(t *testing.T) {
-	hub, err := pulseTests.NewTestHub(t.TempDir())
-	require.NoError(t, err)
-	defer hub.Cleanup()
-
+func testAssetRelationValidationRejectsInterfaceEndpointMismatch(t *testing.T, hub *pulseTests.TestHub) {
 	user, err := pulseTests.CreateUser(hub, "asset-relation-interface@example.com", "password")
 	require.NoError(t, err)
 	otherUser, err := pulseTests.CreateUser(hub, "asset-relation-interface-other@example.com", "password")
@@ -686,11 +688,7 @@ func TestAssetRelationValidationRejectsInterfaceEndpointMismatch(t *testing.T) {
 	require.Equal(t, http.StatusOK, accepted.Status, accepted.Body)
 }
 
-func TestAssetLocationValidationRejectsCrossUserParentAndCycles(t *testing.T) {
-	hub, err := pulseTests.NewTestHub(t.TempDir())
-	require.NoError(t, err)
-	defer hub.Cleanup()
-
+func testAssetLocationValidationRejectsCrossUserParentAndCycles(t *testing.T, hub *pulseTests.TestHub) {
 	user, err := pulseTests.CreateUser(hub, "asset-location-master@example.com", "password")
 	require.NoError(t, err)
 	otherUser, err := pulseTests.CreateUser(hub, "asset-location-master-other@example.com", "password")
