@@ -75,12 +75,13 @@ export default function Login() {
 								<Logo className="text-xl" />
 							</div>
 							<div className="mt-10 max-w-xl">
-								<div className="text-xs font-medium text-muted-foreground">Pulse 运维控制台</div>
-								<h1 className="mt-2 text-balance text-4xl font-semibold tracking-tight text-foreground">
-									登录后查看机器、网站、容器和告警状态。
+								<div className="text-xs font-medium text-muted-foreground">家庭资产管理与监控</div>
+								<h1 className="mt-2 text-balance text-4xl font-semibold text-foreground">
+									登录后查看家庭资产、监控状态与告警。
 								</h1>
 								<p className="mt-3 text-pretty text-sm leading-relaxed text-muted-foreground">
-									登录入口只读取公开初始化状态和 Hub 运行信息。具体机器、Token、审计和告警数据会在认证后按权限加载。
+									登录入口只读取公开初始化状态和 Hub
+									运行信息。具体资产、监控、Agent、审计和告警数据会在认证后按权限加载。
 								</p>
 							</div>
 						</div>
@@ -111,7 +112,7 @@ export default function Login() {
 						<h1 className="mb-1">
 							<Logo className="mx-auto justify-center text-xl" />
 						</h1>
-						<p className="text-xs text-muted-foreground">Pulse 运维控制台</p>
+						<p className="text-xs text-muted-foreground">家庭资产管理与监控</p>
 					</div>
 					<div className="rounded-lg border border-border/70 bg-surface-soft p-2">
 						<div className="rounded-md border border-border/70 bg-card px-3 py-2.5">
@@ -120,9 +121,7 @@ export default function Login() {
 									<div className="text-xs font-medium text-muted-foreground">
 										{isFirstRun ? "首次初始化" : "账号登录"}
 									</div>
-									<div className="mt-1 text-lg font-semibold tracking-tight">
-										{isFirstRun ? "创建首个管理员" : "登录 Pulse"}
-									</div>
+									<div className="mt-1 text-lg font-semibold">{isFirstRun ? "创建首个管理员" : "登录 Pulse"}</div>
 								</div>
 								<div className="grid size-9 shrink-0 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
 									{isFirstRun ? <ShieldCheckIcon className="size-4" /> : <ServerIcon className="size-4" />}
