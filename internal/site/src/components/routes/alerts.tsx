@@ -7,7 +7,7 @@ import {
 	ListChecksIcon,
 	SlidersHorizontalIcon,
 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AlertRulesOverview } from "@/components/alerts/alert-rules-overview"
 import { GlobalAlertSettings } from "@/components/alerts/alerts-sheet"
 import { MobileAlertsCenter } from "@/components/mobile/mobile-alerts"
@@ -37,6 +37,7 @@ import {
 } from "@/lib/alert-display"
 import { pb } from "@/lib/api"
 import { pageTitle } from "@/lib/branding"
+import { createLatestRequestGuard } from "@/lib/latest-request-guard"
 import { cn } from "@/lib/utils"
 import type { AlertPolicyRecord, AlertsHistoryRecord } from "@/types"
 
@@ -54,6 +55,8 @@ export default function AlertsCenter() {
 	const [loading, setLoading] = useState(true)
 	const [policiesLoading, setPoliciesLoading] = useState(true)
 	const [actionId, setActionId] = useState<string | null>(null)
+	const recordsLoadGuardRef = useRef(createLatestRequestGuard())
+	const policiesLoadGuardRef = useRef(createLatestRequestGuard())
 	const { toast } = useToast()
 
 	useEffect(() => {
@@ -61,6 +64,7 @@ export default function AlertsCenter() {
 	}, [])
 
 	const loadRecords = useCallback(async ({ quiet = false }: LoadRecordsOptions = {}) => {
+		const loadToken = recordsLoadGuardRef.current.begin()
 		if (!quiet) {
 			setLoading(true)
 		}
@@ -72,27 +76,32 @@ export default function AlertsCenter() {
 				sort: "-created",
 				requestKey: null,
 			})
+			if (!recordsLoadGuardRef.current.isCurrent(loadToken)) return
 			setRecords(items)
 			setSelectedAlert((current) => (current ? (items.find((item) => item.id === current.id) ?? current) : current))
 		} catch (error) {
+			if (!recordsLoadGuardRef.current.isCurrent(loadToken)) return
 			console.error("load alerts center", error)
 		} finally {
-			if (!quiet) {
+			if (!quiet && recordsLoadGuardRef.current.isCurrent(loadToken)) {
 				setLoading(false)
 			}
 		}
 	}, [])
 
 	const loadPolicies = useCallback(async () => {
+		const loadToken = policiesLoadGuardRef.current.begin()
 		setPoliciesLoading(true)
 		try {
 			const response = await pb.send<{ items: AlertPolicyRecord[] }>("/api/pulse/alert-policies", { method: "GET" })
+			if (!policiesLoadGuardRef.current.isCurrent(loadToken)) return
 			setPolicies(response.items)
 		} catch (error) {
+			if (!policiesLoadGuardRef.current.isCurrent(loadToken)) return
 			console.error("load alert policies", error)
 			setPolicies([])
 		} finally {
-			setPoliciesLoading(false)
+			if (policiesLoadGuardRef.current.isCurrent(loadToken)) setPoliciesLoading(false)
 		}
 	}, [])
 
