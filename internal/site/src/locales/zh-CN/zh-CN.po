@@ -318,7 +318,7 @@ msgstr "默认时间段"
 msgid "Delete"
 msgstr "删除"
 
-#: src/components/containers-table/containers-table.tsx:1362
+#: src/components/containers-table/containers-table.tsx:1377
 msgid "Detail"
 msgstr "详情"
 
@@ -520,7 +520,7 @@ msgstr "登出"
 msgid "Login"
 msgstr "登录"
 
-#: src/components/containers-table/containers-table.tsx:1336
+#: src/components/containers-table/containers-table.tsx:1351
 msgid "Logs"
 msgstr "日志"
 
@@ -653,8 +653,8 @@ msgstr "读取"
 msgid "Received"
 msgstr "接收"
 
-#: src/components/containers-table/containers-table.tsx:1478
-#: src/components/containers-table/containers-table.tsx:1479
+#: src/components/containers-table/containers-table.tsx:1493
+#: src/components/containers-table/containers-table.tsx:1494
 #: src/components/routes/system/smart-table.tsx:422
 #: src/components/routes/system/smart-table.tsx:701
 msgid "Refresh"
