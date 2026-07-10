@@ -302,6 +302,7 @@ export interface AssetVisualRecord extends RecordModel {
 		view?: string
 		theme?: string
 		label?: string
+		color?: string
 		url?: string
 		source_title?: string
 		source_url?: string

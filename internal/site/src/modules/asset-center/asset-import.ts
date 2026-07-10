@@ -258,11 +258,11 @@ function findExistingDuplicateReasons(form: AssetFormState, existingAssets: Asse
 			(normalizeCompareValue(asset.management_ip ?? "") === managementIp ||
 				normalizeCompareValue(metadata.fixed_ipv4 ?? "") === managementIp)
 		) {
-			reasons.push("管理 IP 已存在")
+			reasons.push("IPv4 已存在")
 			continue
 		}
 		if (fixedIpv4 && normalizeCompareValue(metadata.fixed_ipv4 ?? "") === fixedIpv4) {
-			reasons.push("固定 IPv4 已存在")
+			reasons.push("IPv4 已存在")
 			continue
 		}
 		if (mac && normalizeMac(metadata.mac ?? "") === mac) {

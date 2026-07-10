@@ -149,7 +149,7 @@ const ASSET_IMPORT_TEMPLATE_ROWS: Record<string, string>[] = [
 		serial_number: "",
 		management_ip: "",
 		role: "2.5G 交换机",
-		notes: "无管理 IP 的交换机也可以作为手动资产维护。",
+		notes: "无 IPv4 的交换机也可以作为手动资产维护。",
 		parent_asset: "",
 		"metadata.fixed_ipv4": "",
 		"metadata.fixed_ipv6": "",

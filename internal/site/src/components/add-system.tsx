@@ -224,7 +224,7 @@ export const SystemDialog = ({
 			throw new Error("当前选择的资产类型不能安装 Agent。请在资产中心选择物理主机、NAS、服务器或迷你主机。")
 		}
 		if (!system && matchedAsset && !getAssetAgentTargetIp(matchedAsset)) {
-			throw new Error("请先在资产中心为该资产填写固定 IPv4，再创建 Agent 安装会话。")
+			throw new Error("请先在资产中心为该资产填写 IPv4，再创建 Agent 安装会话。")
 		}
 	}
 
@@ -874,7 +874,7 @@ function isExpectedSystemDialogValidationError(error: unknown) {
 			error.message === "请先在关联资产里选择资产中心已有资产，再创建安装会话。" ||
 			error.message === "资产候选正在加载，请稍后再创建安装会话。" ||
 			error.message === "当前选择的资产类型不能安装 Agent。请在资产中心选择物理主机、NAS、服务器或迷你主机。" ||
-			error.message === "请先在资产中心为该资产填写固定 IPv4，再创建 Agent 安装会话。")
+			error.message === "请先在资产中心为该资产填写 IPv4，再创建 Agent 安装会话。")
 	)
 }
 
@@ -888,7 +888,7 @@ function getAssetAgentTargetIp(asset: AssetRecord) {
 
 function getAssetSelectLabel(asset: AssetRecord) {
 	const targetIp = getAssetAgentTargetIp(asset)
-	return targetIp ? `${asset.name} · ${targetIp}` : `${asset.name} · 未填固定 IPv4`
+	return targetIp ? `${asset.name} · ${targetIp}` : `${asset.name} · 未填 IPv4`
 }
 
 function getSystemInstallTab(system: SystemRecord): InstallTab {

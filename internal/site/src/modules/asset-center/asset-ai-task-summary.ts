@@ -22,7 +22,7 @@ export function formatAssetDetailTaskStatusLabel(status?: AITaskStatus) {
 		case "queued":
 			return "排队中"
 		case "running":
-			return "生成中"
+			return "收集中"
 		case "ready":
 			return "已完成"
 		case "failed":
@@ -63,15 +63,13 @@ export function formatAITaskSummary(task: AITaskRecord) {
 		}
 		const collected = numberFromRecord(task.output_summary, "collected_images")
 		const generated = getAssetVisualGeneratedImageCount(task.output_summary)
-		const referenceInputCount = numberFromRecord(task.output_summary, "reference_input_count")
 		const legacyFrames = numberFromRecord(task.output_summary, "generated_frames")
 		const suffix = formatAssetVisualDiagnosticsSuffix(task.output_summary, " · ")
 		if (collected > 0 || generated > 0) {
 			if (generated <= 0) {
-				return `设备图片 Agent · 参考图已收集 ${collected} 张，未生成统一图${suffix}`
+				return `设备图片 Agent · 已收集设备图 ${collected} 张${suffix}`
 			}
-			const inputText = referenceInputCount > 0 ? ` · 可用输入 ${referenceInputCount} 张` : ""
-			return `设备图片 Agent · 参考图 ${collected} 张 · 统一图 ${generated} 张${inputText}${suffix}`
+			return `设备图片 Agent · 历史生图 ${generated} 张（不再作为主图） · 已收集设备图 ${collected} 张${suffix}`
 		}
 		if (legacyFrames > 0) {
 			return `${task.provider || "未知服务"} / ${task.model || "未知模型"} · 历史生成 ${legacyFrames} 帧${suffix}`
@@ -91,18 +89,16 @@ export function formatAssetVisualTaskMeta(task?: AITaskRecord) {
 	}
 	const collected = numberFromRecord(task.output_summary, "collected_images")
 	const generated = getAssetVisualGeneratedImageCount(task.output_summary)
-	const referenceInputCount = numberFromRecord(task.output_summary, "reference_input_count")
 	if (task.status === "running" || task.status === "queued") {
 		const phaseLabel = stringFromUnknown(task.output_summary?.phase_label).trim()
 		const progress = numberFromRecord(task.output_summary, "progress_percent")
-		if (phaseLabel) return `图片生成中：${phaseLabel}${progress > 0 ? ` ${Math.round(progress)}%` : ""}${suffix}`
+		if (phaseLabel) return `图片收集中：${phaseLabel}${progress > 0 ? ` ${Math.round(progress)}%` : ""}${suffix}`
 	}
 	if (task.status === "ready" && (collected > 0 || generated > 0)) {
 		if (generated <= 0) {
-			return `参考图已收集：${collected} 张，未生成统一图${suffix}`
-		}
-		const inputText = referenceInputCount > 0 ? `，可用输入 ${referenceInputCount}` : ""
-		return `图片成功：参考 ${collected} / 生成 ${generated}${inputText}${suffix}`
+		return `设备图已收集：${collected} 张${suffix}`
+	}
+	return `历史生图 ${generated} 张不再作为主图，已收集设备图 ${collected} 张${suffix}`
 	}
 	return `图片 ${formatAssetDetailTaskStatusLabel(task.status)}${suffix}`
 }

@@ -20,21 +20,26 @@ type assetEnrichmentConfigUpdateRequest struct {
 	APIKey      string `json:"api_key"`
 	ClearAPIKey bool   `json:"clear_api_key"`
 	AI          struct {
-		Enabled     *bool  `json:"enabled"`
-		Provider    string `json:"provider"`
-		Endpoint    string `json:"endpoint"`
-		APIKey      string `json:"api_key"`
-		ClearAPIKey bool   `json:"clear_api_key"`
-		Model       string `json:"model"`
+		Enabled                *bool  `json:"enabled"`
+		Provider               string `json:"provider"`
+		Endpoint               string `json:"endpoint"`
+		APIKey                 string `json:"api_key"`
+		ClearAPIKey            bool   `json:"clear_api_key"`
+		Model                  string `json:"model"`
+		SourceDiscoveryEnabled *bool  `json:"source_discovery_enabled"`
+		MaxSources             int    `json:"max_sources"`
 	} `json:"ai"`
 	VisualAI struct {
-		Enabled     *bool  `json:"enabled"`
-		Provider    string `json:"provider"`
-		Endpoint    string `json:"endpoint"`
-		APIKey      string `json:"api_key"`
-		ClearAPIKey bool   `json:"clear_api_key"`
-		Model       string `json:"model"`
-		FrameCount  int    `json:"frame_count"`
+		Enabled               *bool  `json:"enabled"`
+		Provider              string `json:"provider"`
+		Endpoint              string `json:"endpoint"`
+		APIKey                string `json:"api_key"`
+		ClearAPIKey           bool   `json:"clear_api_key"`
+		Model                 string `json:"model"`
+		FrameCount            int    `json:"frame_count"`
+		ModelDiscoveryEnabled *bool  `json:"model_discovery_enabled"`
+		MaxImages             int    `json:"max_images"`
+		OfficialOnly          *bool  `json:"official_only"`
 	} `json:"visual_ai"`
 }
 
@@ -74,6 +79,12 @@ func (h *Hub) updateAssetEnrichmentConfig(e *core.RequestEvent) error {
 	if req.AI.Model != "" {
 		ai["model"] = strings.TrimSpace(req.AI.Model)
 	}
+	if req.AI.SourceDiscoveryEnabled != nil {
+		ai["source_discovery_enabled"] = *req.AI.SourceDiscoveryEnabled
+	}
+	if req.AI.MaxSources > 0 {
+		ai["max_sources"] = normalizeAssetOnlineSourceLimit(req.AI.MaxSources)
+	}
 	if req.ClearAPIKey {
 		ai["api_key"] = ""
 	} else if strings.TrimSpace(req.APIKey) != "" {
@@ -96,6 +107,15 @@ func (h *Hub) updateAssetEnrichmentConfig(e *core.RequestEvent) error {
 	}
 	if req.VisualAI.FrameCount > 0 {
 		visualAI["frame_count"] = normalizeAssetTurntableFrameCountWithDefault(req.VisualAI.FrameCount, defaultAssetTurntableFrameCount)
+	}
+	if req.VisualAI.ModelDiscoveryEnabled != nil {
+		visualAI["model_discovery_enabled"] = *req.VisualAI.ModelDiscoveryEnabled
+	}
+	if req.VisualAI.MaxImages > 0 {
+		visualAI["max_images"] = normalizeAssetVisualMaxImages(req.VisualAI.MaxImages)
+	}
+	if req.VisualAI.OfficialOnly != nil {
+		visualAI["official_only"] = *req.VisualAI.OfficialOnly
 	}
 	if req.ClearAPIKey {
 		visualAI["api_key"] = ""
@@ -131,27 +151,32 @@ func (h *Hub) assetEnrichmentConfigResponse() map[string]any {
 		"api_key":            apiKey,
 		"api_key_configured": strings.TrimSpace(apiKey) != "",
 		"ai": map[string]any{
-			"enabled":             aiConfig.Enabled,
-			"provider":            aiConfig.Provider,
-			"endpoint":            safeEditableEndpoint(aiConfig.Endpoint),
-			"endpoint_configured": strings.TrimSpace(aiConfig.Endpoint) != "",
-			"endpoint_host":       safeAssetOnlineEndpointHost(aiConfig.Endpoint),
-			"api_key":             aiConfig.APIKey,
-			"api_key_configured":  strings.TrimSpace(aiConfig.APIKey) != "",
-			"model":               aiConfig.Model,
-			"ready":               aiConfig.Enabled && strings.TrimSpace(aiConfig.Endpoint) != "" && strings.TrimSpace(aiConfig.APIKey) != "" && strings.TrimSpace(aiConfig.Model) != "",
+			"enabled":                  aiConfig.Enabled,
+			"provider":                 aiConfig.Provider,
+			"endpoint":                 safeEditableEndpoint(aiConfig.Endpoint),
+			"endpoint_configured":      strings.TrimSpace(aiConfig.Endpoint) != "",
+			"endpoint_host":            safeAssetOnlineEndpointHost(aiConfig.Endpoint),
+			"api_key":                  aiConfig.APIKey,
+			"api_key_configured":       strings.TrimSpace(aiConfig.APIKey) != "",
+			"model":                    aiConfig.Model,
+			"source_discovery_enabled": aiConfig.SourceDiscoveryEnabled,
+			"max_sources":              aiConfig.MaxSources,
+			"ready":                    aiConfig.Enabled && strings.TrimSpace(aiConfig.Endpoint) != "" && strings.TrimSpace(aiConfig.APIKey) != "" && strings.TrimSpace(aiConfig.Model) != "",
 		},
 		"visual_ai": map[string]any{
-			"enabled":             visualConfig.Enabled,
-			"provider":            visualConfig.Provider,
-			"endpoint":            safeEditableEndpoint(visualConfig.Endpoint),
-			"endpoint_configured": strings.TrimSpace(visualConfig.Endpoint) != "",
-			"endpoint_host":       safeAssetOnlineEndpointHost(visualConfig.Endpoint),
-			"api_key":             visualConfig.APIKey,
-			"api_key_configured":  strings.TrimSpace(visualConfig.APIKey) != "",
-			"model":               visualConfig.Model,
-			"ready":               visualConfig.Ready(),
-			"frame_count":         normalizeAssetTurntableFrameCountWithDefault(visualConfig.FrameCount, defaultAssetTurntableFrameCount),
+			"enabled":                 visualConfig.Enabled,
+			"provider":                visualConfig.Provider,
+			"endpoint":                safeEditableEndpoint(visualConfig.Endpoint),
+			"endpoint_configured":     strings.TrimSpace(visualConfig.Endpoint) != "",
+			"endpoint_host":           safeAssetOnlineEndpointHost(visualConfig.Endpoint),
+			"api_key":                 visualConfig.APIKey,
+			"api_key_configured":      strings.TrimSpace(visualConfig.APIKey) != "",
+			"model":                   visualConfig.Model,
+			"ready":                   visualConfig.Ready(),
+			"frame_count":             normalizeAssetTurntableFrameCountWithDefault(visualConfig.FrameCount, defaultAssetTurntableFrameCount),
+			"model_discovery_enabled": visualConfig.ModelDiscoveryEnabled,
+			"max_images":              visualConfig.MaxImages,
+			"official_only":           visualConfig.OfficialOnly,
 		},
 	}
 }
@@ -178,6 +203,12 @@ func (h *Hub) assetOnlineAIConfigFromSettings(settings map[string]any) assetOnli
 	}
 	if value, ok := configStringFromMap(section, "model"); ok {
 		config.Model = value
+	}
+	if value, ok := configBoolFromMap(section, "source_discovery_enabled"); ok {
+		config.SourceDiscoveryEnabled = value
+	}
+	if value, ok := configIntFromMap(section, "max_sources"); ok {
+		config.MaxSources = normalizeAssetOnlineSourceLimit(value)
 	}
 	config.Provider = "agnes"
 	if envEndpoint := strings.TrimSpace(os.Getenv("PULSE_ASSET_ENRICHMENT_AI_ENDPOINT")); envEndpoint != "" {
@@ -214,11 +245,20 @@ func (h *Hub) assetVisualAIConfigFromSettings(settings map[string]any) assetVisu
 	if value, ok := configIntFromMap(section, "frame_count"); ok {
 		config.FrameCount = normalizeAssetTurntableFrameCountWithDefault(value, defaultAssetTurntableFrameCount)
 	}
+	if value, ok := configBoolFromMap(section, "model_discovery_enabled"); ok {
+		config.ModelDiscoveryEnabled = value
+	}
+	if value, ok := configIntFromMap(section, "max_images"); ok {
+		config.MaxImages = normalizeAssetVisualMaxImages(value)
+	}
+	if value, ok := configBoolFromMap(section, "official_only"); ok {
+		config.OfficialOnly = value
+	}
 	config.Provider = "agnes"
 	if envEndpoint := strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_AI_ENDPOINT")); envEndpoint != "" {
-		config.Endpoint = normalizeConfigEndpointValue(envEndpoint, "/images/generations")
+		config.Endpoint = normalizeAssetVisualDiscoveryEndpoint(envEndpoint)
 	} else {
-		config.Endpoint = normalizeConfigEndpointValue(baseURL, "/images/generations")
+		config.Endpoint = normalizeAssetVisualDiscoveryEndpoint(baseURL)
 	}
 	return config
 }
@@ -306,6 +346,22 @@ func normalizeConfigEndpointValue(raw string, suffix string) string {
 		return value
 	}
 	return strings.TrimRight(value, "/") + suffix
+}
+
+func normalizeAssetVisualDiscoveryEndpoint(raw string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return ""
+	}
+	lower := strings.ToLower(strings.TrimRight(value, "/"))
+	for _, legacySuffix := range []string{"/images/generations", "/images/edits"} {
+		if strings.HasSuffix(lower, legacySuffix) {
+			value = strings.TrimRight(value, "/")
+			value = value[:len(value)-len(legacySuffix)]
+			break
+		}
+	}
+	return normalizeConfigEndpointValue(value, "/chat/completions")
 }
 
 func safeEditableEndpoint(raw string) string {

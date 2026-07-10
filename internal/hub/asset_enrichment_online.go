@@ -132,7 +132,8 @@ func (result assetOnlineEnrichmentResult) ReportLine(fallback string) string {
 
 func (h *Hub) collectAssetOnlineEnrichment(asset *core.Record, focus string) assetOnlineEnrichmentResult {
 	result := h.collectAssetOnlineReferenceEnrichment(asset)
-	if len(result.Sources) == 0 {
+	config := h.assetOnlineAIConfig()
+	if len(result.Sources) == 0 && config.SourceDiscoveryEnabled {
 		discovery, discoveredSources, discoveryErrors := h.collectAssetOnlineAISourceDiscovery(asset, focus)
 		result.Discovery = discovery
 		result.Errors = append(result.Errors, discoveryErrors...)
@@ -168,12 +169,13 @@ func (h *Hub) collectAssetOnlineAISourceDiscovery(asset *core.Record, focus stri
 		result.Error = "AI 识别未配置 endpoint/api key/model"
 		return result, nil, nil
 	}
+	limit := normalizeAssetOnlineSourceLimit(config.MaxSources)
 	query := buildAssetOnlineSearchQuery(asset)
 	if strings.TrimSpace(query) == "" {
 		result.Error = "资产缺少厂商、型号或内部型号，无法发现可信来源"
 		return result, nil, nil
 	}
-	payload, err := buildAssetOnlineAISourceDiscoveryPayload(asset, config.Model, focus)
+	payload, err := buildAssetOnlineAISourceDiscoveryPayload(asset, config.Model, focus, limit)
 	if err != nil {
 		result.Error = "AI 来源发现请求构造失败"
 		return result, nil, nil
@@ -196,8 +198,8 @@ func (h *Hub) collectAssetOnlineAISourceDiscovery(asset *core.Record, focus stri
 	}
 	sources := h.assetOnlineSourcesFromAIURLs(asset, sourceURLs)
 	sources = rankAssetOnlineSources(filterAssetOnlineSourcesByVariant(dedupeAssetOnlineSources(sources), asset), asset)
-	if len(sources) > assetOnlineSearchLimit {
-		sources = sources[:assetOnlineSearchLimit]
+	if len(sources) > limit {
+		sources = sources[:limit]
 	}
 	sources = h.enrichAssetOnlineSources(sources)
 	if len(sources) == 0 {
@@ -339,11 +341,13 @@ func assetOnlineAIRetryDelay(attempt int, retryAfter string) time.Duration {
 }
 
 type assetOnlineAIConfig struct {
-	Enabled  bool
-	Provider string
-	Endpoint string
-	APIKey   string
-	Model    string
+	Enabled                bool
+	Provider               string
+	Endpoint               string
+	APIKey                 string
+	Model                  string
+	SourceDiscoveryEnabled bool
+	MaxSources             int
 }
 
 func assetOnlineAIConfigFromEnv() assetOnlineAIConfig {
@@ -359,11 +363,13 @@ func assetOnlineAIConfigFromEnv() assetOnlineAIConfig {
 		enabled = false
 	}
 	return assetOnlineAIConfig{
-		Enabled:  enabled,
-		Provider: provider,
-		Endpoint: firstNonEmpty(strings.TrimSpace(os.Getenv("PULSE_ASSET_ENRICHMENT_AI_ENDPOINT")), defaultAssetOnlineAIEndpoint(provider)),
-		APIKey:   key,
-		Model:    firstNonEmpty(strings.TrimSpace(os.Getenv("PULSE_ASSET_ENRICHMENT_AI_MODEL")), defaultAssetOnlineAIModel(provider)),
+		Enabled:                enabled,
+		Provider:               provider,
+		Endpoint:               firstNonEmpty(strings.TrimSpace(os.Getenv("PULSE_ASSET_ENRICHMENT_AI_ENDPOINT")), defaultAssetOnlineAIEndpoint(provider)),
+		APIKey:                 key,
+		Model:                  firstNonEmpty(strings.TrimSpace(os.Getenv("PULSE_ASSET_ENRICHMENT_AI_MODEL")), defaultAssetOnlineAIModel(provider)),
+		SourceDiscoveryEnabled: configBoolEnvDefault("PULSE_ASSET_ENRICHMENT_AI_SOURCE_DISCOVERY_ENABLED", true),
+		MaxSources:             normalizeAssetOnlineSourceLimit(configIntEnvDefault("PULSE_ASSET_ENRICHMENT_AI_MAX_SOURCES", assetOnlineSearchLimit)),
 	}
 }
 
@@ -388,6 +394,43 @@ func defaultAssetOnlineAIModel(provider string) string {
 	return ""
 }
 
+func normalizeAssetOnlineSourceLimit(value int) int {
+	if value <= 0 {
+		return assetOnlineSearchLimit
+	}
+	if value < 2 {
+		return 2
+	}
+	if value > 10 {
+		return 10
+	}
+	return value
+}
+
+func configBoolEnvDefault(key string, fallback bool) bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	switch value {
+	case "true", "1", "yes", "on":
+		return true
+	case "false", "0", "no", "off":
+		return false
+	default:
+		return fallback
+	}
+}
+
+func configIntEnvDefault(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
 func safeAssetOnlineEndpointHost(raw string) string {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || parsed.Host == "" {
@@ -396,7 +439,8 @@ func safeAssetOnlineEndpointHost(raw string) string {
 	return parsed.Host
 }
 
-func buildAssetOnlineAISourceDiscoveryPayload(asset *core.Record, model string, focus string) (map[string]any, error) {
+func buildAssetOnlineAISourceDiscoveryPayload(asset *core.Record, model string, focus string, limit int) (map[string]any, error) {
+	limit = normalizeAssetOnlineSourceLimit(limit)
 	instruction := "你是 Pulse 资产中心的可信来源发现 Agent。你这一步只负责找到可追溯资料来源 URL，不要输出任何资产字段建议。优先级：1 厂商官网产品页、支持页、规格页、说明书、官方图片或官方 CDN；2 权威渠道；3 GSMArena、DeviceSpecifications、Kimovil 等规格库只做交叉验证；4 普通博客、电商、论坛只能作为低置信度线索。必须避免同系列不同型号、Pro/Ultra/电竞版等变体混入。返回严格 JSON：{\"source_urls\":[\"https://...\"]}，最多 5 个 URL。"
 	if focus == "official_colors" {
 		instruction = "你是 Pulse 资产中心的可信来源发现 Agent。你这一步只负责找到设备官方配色和官方外观图片相关的可追溯来源 URL，不要输出任何资产字段建议。优先级：1 厂商官网产品页、规格页、官方图片或官方 CDN；2 厂商支持页或说明书；3 权威规格库仅作交叉验证。普通博客、电商、论坛不能作为官方配色依据。必须避免同系列不同型号、Pro/Ultra/电竞版等变体混入。返回严格 JSON：{\"source_urls\":[\"https://...\"]}，最多 5 个 URL。"
@@ -418,7 +462,7 @@ func buildAssetOnlineAISourceDiscoveryPayload(asset *core.Record, model string, 
 				"query": buildAssetOnlineSearchQuery(asset),
 				"source_policy": map[string]any{
 					"return_only_urls":  true,
-					"max_urls":          assetOnlineSearchLimit,
+					"max_urls":          limit,
 					"preferred_sources": []string{"official product page", "official support page", "official specs page", "official manual", "official image or CDN image"},
 					"reject":            []string{"untraceable content", "same-series but different variant", "blog or ecommerce claims when official source exists"},
 				},

@@ -162,7 +162,7 @@ export function AssetPreviewPanel({ asset, parent, monitored, maintenanceCount, 
 		asset.role ? { label: "用途", value: asset.role } : undefined,
 		assetTag ? { label: "编号", value: assetTag, mono: true } : undefined,
 		color ? { label: "颜色", value: color } : undefined,
-		mac ? { label: "主 MAC", value: mac, mono: true } : undefined,
+		mac ? { label: "MAC", value: mac, mono: true } : undefined,
 		parent ? { label: "归属", value: parent.name } : undefined,
 		...summaryRows,
 	].filter(Boolean) as { label: string; value: string; mono?: boolean }[]
@@ -251,7 +251,7 @@ export function AssetPreviewPanel({ asset, parent, monitored, maintenanceCount, 
 	)
 }
 
-const hiddenPreviewSummaryLabels = new Set(["类型", "状态", "型号", "位置", "固定 IP", "管理 IP", "IP", "接入", "公网"])
+const hiddenPreviewSummaryLabels = new Set(["类型", "状态", "型号", "位置", "IPv4", "固定 IP", "管理 IP", "IP", "接入", "公网"])
 
 function AssetLedgerCell({
 	label,

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html"
 	"image"
+	"image/color"
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
@@ -26,11 +27,15 @@ import (
 	nethtml "golang.org/x/net/html"
 )
 
-const defaultAssetTurntableFrameCount = 2
+const defaultAssetTurntableFrameCount = 1
+const defaultAssetVisualCandidateCount = 10
+const defaultAssetVisualMaxImages = 12
 const assetVisualImageModelMaxAttempts = 3
+const assetVisualImageModelQualityMaxAttempts = 2
 const defaultAssetVisualImageModelRequestTimeout = 120 * time.Second
 const maxAssetVisualImageModelRequestTimeout = 360 * time.Second
 const assetVisualImageModelMaxReferenceInputs = 2
+const assetVisualImageModelMaxReferenceCandidates = 8
 const assetVisualRunningTaskStaleAfter = 15 * time.Minute
 const assetVisualReferenceImageMaxBytes = 2 * 1024 * 1024
 const assetVisualReferenceImageFetchMaxBytes = 12 * 1024 * 1024
@@ -44,12 +49,15 @@ type assetTurntableVisualRequest struct {
 }
 
 type assetVisualAIConfig struct {
-	Enabled    bool
-	Provider   string
-	Endpoint   string
-	APIKey     string
-	Model      string
-	FrameCount int
+	Enabled               bool
+	Provider              string
+	Endpoint              string
+	APIKey                string
+	Model                 string
+	FrameCount            int
+	ModelDiscoveryEnabled bool
+	MaxImages             int
+	OfficialOnly          bool
 }
 
 type assetVisualReferenceSkip struct {
@@ -61,8 +69,17 @@ type assetVisualImageModelInputResult struct {
 	Inputs            []string
 	URLs              []string
 	InputPayloadBytes []int
+	ColorMatchScores  []int
 	TotalPayloadBytes int
 	Skipped           []assetVisualReferenceSkip
+}
+
+type assetVisualImageModelInputCandidate struct {
+	DataURI      string
+	URL          string
+	PayloadBytes int
+	ColorScore   int
+	Index        int
 }
 
 type assetVisualGenerationResult struct {
@@ -71,6 +88,7 @@ type assetVisualGenerationResult struct {
 	ReferenceInputCount         int
 	ReferenceInputURLs          []string
 	ReferenceInputPayloadBytes  []int
+	ReferenceInputColorScores   []int
 	ReferenceInputTotalBytes    int
 	ImageModelOutputDiagnostics assetVisualImageModelDiagnostics
 }
@@ -137,7 +155,8 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 	var req assetTurntableVisualRequest
 	_ = json.NewDecoder(e.Request.Body).Decode(&req)
 	config := h.assetVisualAIConfig()
-	frameCount := normalizeAssetTurntableFrameCountWithDefault(req.FrameCount, config.FrameCount)
+	config.MaxImages = defaultAssetVisualCandidateCount
+	frameCount := defaultAssetVisualCandidateCount
 	color := firstNonEmpty(strings.TrimSpace(req.Color), recordMetadataString(asset, "color"), recordMetadataString(asset, "device_color"))
 	if message := validateAssetVisualGenerationPrerequisites(asset, color, config); message != "" {
 		task, visual, createErr := h.createFailedAssetVisualTaskAndRecord(e.Auth.Id, asset, config, frameCount, color, message, "blocked")
@@ -147,8 +166,7 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 		return e.JSON(http.StatusOK, map[string]any{"task": task, "visual": visual, "status": "blocked", "message": message})
 	}
 	h.failStaleAssetVisualTasks(e.Auth.Id, asset.Id)
-	references := h.collectAssetVisualReferenceSources(asset)
-	prompt := buildAssetVisualUnificationPrompt(asset, color, references)
+	references := h.collectAssetVisualReferenceSourcesForColor(asset, config, color)
 
 	task, err := h.createAssetAITask(e.Auth.Id, asset.Id, config, frameCount, color, references)
 	if err != nil {
@@ -159,14 +177,14 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 		return e.InternalServerError("Failed to create asset visual.", err)
 	}
 
-	frames := buildCollectedAssetVisualFrames(references, frameCount)
+	frames := h.buildCollectedAssetVisualFrames(asset, references, frameCount, color)
 	if len(frames) == 0 {
 		message := "没有找到可追溯设备图片。请先补充厂家支持页、官方图片 URL，或运行资料补全 Agent 后再收集。"
 		task.Set("status", "failed")
 		task.Set("error", message)
 		_ = mergeAssetVisualTaskSummary(task, map[string]any{
 			"phase":            "failed",
-			"phase_label":      "生成失败",
+			"phase_label":      "收集失败",
 			"progress_percent": 100,
 			"collected_images": 0,
 			"reason":           "no_traceable_images",
@@ -190,35 +208,105 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 	referenceVisual.Set("frame_count", len(frames))
 	referenceVisual.Set("metadata", map[string]any{
 		"collection_status": "ready",
-		"visual_role":       "reference_only",
-		"note":              "设备图片来自可追溯来源，只作为图片 Agent 统一化编辑参考，不直接作为资产最终展示图。",
+		"visual_role":       "candidate_set",
+		"candidate_count":   len(frames),
+		"note":              "设备图片来自官方 / 可追溯来源，作为用户选择主图的候选集。",
 	})
+	referenceVisual.Set("primary", false)
 	if err := h.Save(referenceVisual); err != nil {
 		return e.InternalServerError("Failed to update asset visual.", err)
 	}
 	if err := h.updateAssetVisualTaskProgress(task, map[string]any{
 		"phase":            "references_ready",
-		"phase_label":      "已收集参考图",
-		"progress_percent": 30,
+		"phase_label":      "已收集设备图",
+		"progress_percent": 100,
 		"collected_images": len(frames),
 		"reference_visual": referenceVisual.Id,
+		"generated_images": 0,
+		"mode":             "reference_image_collection",
+		"selected_color":   color,
+		"candidate_count":  len(frames),
 	}); err != nil {
 		return e.InternalServerError("Failed to update AI task.", err)
 	}
-
-	if req.Async {
-		go h.runAssetVisualGenerationInBackground(e.Auth.Id, asset.Id, task.Id, referenceVisual.Id, color, references, prompt, frames, config)
-		return e.JSON(http.StatusOK, map[string]any{"task": task, "visual": referenceVisual, "status": "running"})
+	task.Set("status", "ready")
+	task.Set("error", "")
+	if err := h.Save(task); err != nil {
+		return e.InternalServerError("Failed to update AI task.", err)
 	}
+	h.createOperationAudit(e, "", "asset_visual_collect", asset.Id, "", "success", "资产设备候选图片已收集")
+	return e.JSON(http.StatusOK, map[string]any{"task": task, "visual": referenceVisual, "status": "ready", "message": "设备候选图片已收集，请在编辑资产右侧选择主图。"})
+}
 
-	visual, status, message, err := h.finishAssetVisualGeneration(e.Auth.Id, asset, task, referenceVisual, color, references, prompt, frames, config)
+type selectAssetVisualCandidateRequest struct {
+	FrameIndex int `json:"frame_index"`
+}
+
+func (h *Hub) selectAssetVisualCandidate(e *core.RequestEvent) error {
+	assetID := strings.TrimSpace(e.Request.PathValue("id"))
+	visualID := strings.TrimSpace(e.Request.PathValue("visualId"))
+	if assetID == "" || visualID == "" {
+		return e.BadRequestError("Missing asset visual selection target.", nil)
+	}
+	asset, err := h.findUserAssetRecord(assetID, e.Auth.Id)
 	if err != nil {
-		return e.InternalServerError("Failed to update asset visual task.", err)
+		return e.NotFoundError("Asset not found.", err)
 	}
-	if status == "ready" {
-		h.createOperationAudit(e, "", "asset_visual_generate", asset.Id, "", "success", "资产设备统一全貌图已生成")
+	visual, err := h.FindRecordById("asset_visuals", visualID)
+	if err != nil || visual.GetString("user") != e.Auth.Id || visual.GetString("asset") != asset.Id {
+		return e.NotFoundError("Asset visual not found.", err)
 	}
-	return e.JSON(http.StatusOK, map[string]any{"task": task, "visual": firstNonNilRecord(visual, referenceVisual), "status": status, "message": message})
+	var req selectAssetVisualCandidateRequest
+	_ = json.NewDecoder(e.Request.Body).Decode(&req)
+	var frames []map[string]any
+	_ = visual.UnmarshalJSONField("frames", &frames)
+	if len(frames) == 0 {
+		return e.BadRequestError("候选图为空，请重新找图。", nil)
+	}
+	if req.FrameIndex < 0 || req.FrameIndex >= len(frames) {
+		return e.BadRequestError("候选图序号无效。", nil)
+	}
+	selectedFrame := cloneStringAnyMap(frames[req.FrameIndex])
+	if !isLikelyAssetVisualImageURL(stringFromAny(selectedFrame["url"])) {
+		return e.BadRequestError("候选图不是可用图片。", nil)
+	}
+	selectedFrame["index"] = 0
+	selectedFrame["label"] = "主图"
+
+	collection, err := h.FindCachedCollectionByNameOrId("asset_visuals")
+	if err != nil {
+		return e.InternalServerError("Failed to load asset visual collection.", err)
+	}
+	record := core.NewRecord(collection)
+	record.Set("user", e.Auth.Id)
+	record.Set("asset", asset.Id)
+	record.Set("task", visual.GetString("task"))
+	record.Set("kind", "official_reference")
+	record.Set("status", "ready")
+	record.Set("title", firstNonEmpty(asset.GetString("name"), asset.GetString("model"), "设备主图"))
+	record.Set("color", firstNonEmpty(stringFromAny(selectedFrame["color"]), visual.GetString("color")))
+	record.Set("frame_count", 1)
+	record.Set("primary", true)
+	record.Set("frames", []map[string]any{selectedFrame})
+	var sources []map[string]any
+	_ = visual.UnmarshalJSONField("sources", &sources)
+	record.Set("sources", sources)
+	record.Set("prompt", visual.GetString("prompt"))
+	record.Set("metadata", map[string]any{
+		"collection_status":    "ready",
+		"visual_role":          "final_reference",
+		"selected_from_visual": visual.Id,
+		"selected_frame_index": req.FrameIndex,
+		"note":                 "用户从设备图片候选集中选择的主图。",
+	})
+	if err := h.Save(record); err != nil {
+		return e.InternalServerError("Failed to save selected asset visual.", err)
+	}
+	if err := h.demotePreviousPrimaryAssetVisuals(e.Auth.Id, asset.Id, record.Id); err != nil {
+		return e.InternalServerError("Failed to update previous asset visuals.", err)
+	}
+	h.createOperationAudit(e, "", "asset_visual_select", asset.Id, "", "success", "资产设备主图已选择")
+	return e.JSON(http.StatusOK, map[string]any{"visual": record, "status": "ready", "message": "设备主图已更新。"})
 }
 
 func (h *Hub) runAssetVisualGenerationInBackground(userID string, assetID string, taskID string, referenceVisualID string, color string, references []map[string]any, prompt string, frames []map[string]any, config assetVisualAIConfig) {
@@ -307,6 +395,7 @@ func (h *Hub) finishAssetVisualGeneration(userID string, asset *core.Record, tas
 		Inputs:            make([]string, generationResult.ReferenceInputCount),
 		URLs:              generationResult.ReferenceInputURLs,
 		InputPayloadBytes: generationResult.ReferenceInputPayloadBytes,
+		ColorMatchScores:  generationResult.ReferenceInputColorScores,
 		TotalPayloadBytes: generationResult.ReferenceInputTotalBytes,
 		Skipped:           generationResult.SkippedReferences,
 	}))
@@ -456,22 +545,27 @@ func assetVisualAIConfigFromEnv() assetVisualAIConfig {
 	if enabledEnv == "false" {
 		enabled = false
 	}
+	rawEndpoint := strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_AI_ENDPOINT"))
+	modelDiscoveryDefault := true
+	if strings.Contains(strings.ToLower(rawEndpoint), "/images/") {
+		modelDiscoveryDefault = false
+	}
 	return assetVisualAIConfig{
-		Enabled:    enabled,
-		Provider:   firstNonEmpty(strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_AI_PROVIDER")), "agnes"),
-		Endpoint:   firstNonEmpty(strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_AI_ENDPOINT")), "https://apihub.agnes-ai.com/v1/images/generations"),
-		APIKey:     key,
-		Model:      firstNonEmpty(strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_AI_MODEL")), "agnes-image-2.1-flash"),
-		FrameCount: normalizeAssetTurntableFrameCount(0),
+		Enabled:               enabled,
+		Provider:              firstNonEmpty(strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_AI_PROVIDER")), "agnes"),
+		Endpoint:              normalizeAssetVisualDiscoveryEndpoint(firstNonEmpty(rawEndpoint, "https://apihub.agnes-ai.com/v1/chat/completions")),
+		APIKey:                key,
+		Model:                 firstNonEmpty(strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_AI_MODEL")), "agnes-2.0-flash"),
+		FrameCount:            normalizeAssetTurntableFrameCount(0),
+		ModelDiscoveryEnabled: configBoolEnvDefault("PULSE_ASSET_VISUAL_AI_MODEL_DISCOVERY_ENABLED", modelDiscoveryDefault),
+		MaxImages:             normalizeAssetVisualMaxImages(configIntEnvDefault("PULSE_ASSET_VISUAL_AI_MAX_IMAGES", defaultAssetVisualMaxImages)),
+		OfficialOnly:          configBoolEnvDefault("PULSE_ASSET_VISUAL_AI_OFFICIAL_ONLY", true),
 	}
 }
 
 func normalizeAssetTurntableFrameCount(value int) int {
-	if value <= 0 {
-		if _, err := strconv.Atoi(strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_FRAME_COUNT"))); err == nil {
-			// Legacy env var is intentionally ignored now: device visuals are fixed to day/night factual images.
-		}
-	}
+	// Legacy request/settings/env values are intentionally ignored now:
+	// device image collection keeps one factual image for the selected official color.
 	return defaultAssetTurntableFrameCount
 }
 
@@ -495,13 +589,16 @@ func (h *Hub) createAssetAITask(userID string, assetID string, config assetVisua
 		"target_count":      frameCount,
 		"color":             color,
 		"reference_sources": references,
-		"mode":              "reference_image_unification",
-		"style":             "unified_catalog_day_night",
+		"mode":              "reference_image_collection",
+		"style":             "traceable_device_images",
 	})
 	record.Set("output_summary", map[string]any{
-		"phase":            "reference_collecting",
-		"phase_label":      "正在收集参考图",
-		"progress_percent": 10,
+		"phase":                   "reference_collecting",
+		"phase_label":             "正在收集参考图",
+		"progress_percent":        10,
+		"model_discovery_enabled": config.ModelDiscoveryEnabled,
+		"model_discovered_images": countAssetVisualReferencesByProvider(references, "asset_visual_agent"),
+		"official_only":           config.OfficialOnly,
 		"phase_history": []map[string]any{
 			{
 				"phase": "reference_collecting",
@@ -601,9 +698,13 @@ func (h *Hub) createGeneratedAssetVisualRecord(userID string, asset *core.Record
 }
 
 func (h *Hub) demotePreviousGeneratedAssetVisuals(userID string, assetID string, activeVisualID string) error {
+	return h.demotePreviousPrimaryAssetVisuals(userID, assetID, activeVisualID)
+}
+
+func (h *Hub) demotePreviousPrimaryAssetVisuals(userID string, assetID string, activeVisualID string) error {
 	records, err := h.FindRecordsByFilter(
 		"asset_visuals",
-		"user = {:user} && asset = {:asset} && kind = 'ai_turntable' && primary = true && id != {:active}",
+		"user = {:user} && asset = {:asset} && primary = true && id != {:active}",
 		"-created",
 		-1,
 		0,
@@ -634,9 +735,13 @@ func (h *Hub) demotePreviousGeneratedAssetVisuals(userID string, assetID string,
 }
 
 func (h *Hub) collectAssetVisualReferenceSources(asset *core.Record) []map[string]any {
+	return h.collectAssetVisualReferenceSourcesForColor(asset, h.assetVisualAIConfig(), firstNonEmpty(recordMetadataString(asset, "color"), recordMetadataString(asset, "device_color")))
+}
+
+func (h *Hub) collectAssetVisualReferenceSourcesForColor(asset *core.Record, config assetVisualAIConfig, color string) []map[string]any {
 	result := make([]map[string]any, 0, defaultAssetTurntableFrameCount*6)
 	seen := map[string]bool{}
-	candidateLimit := defaultAssetTurntableFrameCount * 6
+	candidateLimit := normalizeAssetVisualMaxImages(config.MaxImages)
 	if officialImageURL := recordMetadataString(asset, "official_image_url"); isLikelyImageURL(officialImageURL) {
 		result = appendAssetVisualReferenceSource(result, seen, map[string]any{
 			"title":      "已确认官方设备图片",
@@ -644,6 +749,7 @@ func (h *Hub) collectAssetVisualReferenceSources(asset *core.Record) []map[strin
 			"image_url":  officialImageURL,
 			"type":       "official_image",
 			"provider":   "asset_master",
+			"color":      firstNonEmpty(color, recordMetadataString(asset, "color"), recordMetadataString(asset, "device_color")),
 			"confidence": 96,
 		})
 	}
@@ -667,13 +773,253 @@ func (h *Hub) collectAssetVisualReferenceSources(asset *core.Record) []map[strin
 			"image_url":  source.ImageURL,
 			"type":       source.Type,
 			"provider":   source.Provider,
+			"color":      inferAssetVisualSourceColor(asset, color, strings.Join(nonEmptyStrings(source.Title, source.URL, source.ImageURL), " ")),
 			"confidence": source.Confidence,
 		})
 		if len(result) >= candidateLimit {
 			break
 		}
 	}
+	if len(result) < candidateLimit {
+		result = h.collectAssetVisualAISourceDiscovery(asset, color, config, result, seen, candidateLimit)
+	}
 	return result
+}
+
+func normalizeAssetVisualMaxImages(value int) int {
+	if value <= 0 {
+		return defaultAssetVisualMaxImages
+	}
+	if value < 2 {
+		return 2
+	}
+	if value > 12 {
+		return 12
+	}
+	return value
+}
+
+func countAssetVisualReferencesByProvider(references []map[string]any, provider string) int {
+	count := 0
+	for _, reference := range references {
+		if stringFromAny(reference["provider"]) == provider {
+			count++
+		}
+	}
+	return count
+}
+
+func (h *Hub) collectAssetVisualAISourceDiscovery(asset *core.Record, color string, config assetVisualAIConfig, result []map[string]any, seen map[string]bool, limit int) []map[string]any {
+	if !config.Ready() || !config.ModelDiscoveryEnabled || !assetVisualEndpointLooksLikeChatEndpoint(config.Endpoint) {
+		return result
+	}
+	payload, err := buildAssetVisualAISourceDiscoveryPayload(asset, color, config.Model, limit)
+	if err != nil {
+		return result
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return result
+	}
+	rawBody, _, errMessage := callAssetOnlineAIModel(assetOnlineAIConfig{
+		Enabled:  config.Enabled,
+		Provider: config.Provider,
+		Endpoint: config.Endpoint,
+		APIKey:   config.APIKey,
+		Model:    config.Model,
+	}, body)
+	if errMessage != "" {
+		return result
+	}
+	candidates := extractAssetVisualAIReferenceCandidates(extractAssetOnlineAIContent(rawBody))
+	for _, candidate := range candidates {
+		if len(result) >= limit {
+			break
+		}
+		imageURL := firstNonEmpty(candidate.ImageURL, candidate.URL)
+		if imageURL == "" || !isLikelyAssetVisualImageURL(imageURL) {
+			continue
+		}
+		sourceType := firstNonEmpty(candidate.Type, classifyAssetOnlineURL(imageURL))
+		if config.OfficialOnly && !assetVisualAIReferenceSourceAllowed(imageURL, sourceType) {
+			continue
+		}
+		result = appendAssetVisualReferenceSource(result, seen, map[string]any{
+			"title":      firstNonEmpty(candidate.Title, "资料补全 Agent 找到的设备图"),
+			"url":        firstNonEmpty(candidate.SourceURL, imageURL),
+			"image_url":  imageURL,
+			"type":       firstNonEmpty(sourceType, "official_image"),
+			"provider":   "asset_visual_agent",
+			"color":      firstNonEmpty(candidate.Color, inferAssetVisualSourceColor(asset, color, strings.Join(nonEmptyStrings(candidate.Title, candidate.SourceURL, imageURL), " "))),
+			"confidence": candidate.Confidence,
+		})
+	}
+	return result
+}
+
+func assetVisualEndpointLooksLikeChatEndpoint(endpoint string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(endpoint)), "/chat/completions")
+}
+
+func assetVisualAIReferenceSourceAllowed(rawURL string, sourceType string) bool {
+	if assetOnlineSourceHasOfficialAuthority(assetOnlineSource{Type: sourceType}) {
+		return true
+	}
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err == nil && isLocalAssetOnlineHost(parsed.Hostname()) {
+		return true
+	}
+	return false
+}
+
+type assetVisualAIReferenceCandidate struct {
+	URL        string
+	ImageURL   string
+	SourceURL  string
+	Title      string
+	Type       string
+	Color      string
+	Confidence int
+}
+
+func extractAssetVisualAIReferenceCandidates(content string) []assetVisualAIReferenceCandidate {
+	content = strings.TrimSpace(content)
+	content = strings.TrimPrefix(content, "```json")
+	content = strings.TrimPrefix(content, "```")
+	content = strings.TrimSuffix(content, "```")
+	var parsed struct {
+		ImageURLs  []string `json:"image_urls"`
+		SourceURLs []string `json:"source_urls"`
+		Images     []struct {
+			URL        string `json:"url"`
+			ImageURL   string `json:"image_url"`
+			SourceURL  string `json:"source_url"`
+			Title      string `json:"title"`
+			Type       string `json:"type"`
+			Color      string `json:"color"`
+			Confidence int    `json:"confidence"`
+		} `json:"images"`
+		Sources []struct {
+			URL        string `json:"url"`
+			ImageURL   string `json:"image_url"`
+			SourceURL  string `json:"source_url"`
+			Title      string `json:"title"`
+			Type       string `json:"type"`
+			Color      string `json:"color"`
+			Confidence int    `json:"confidence"`
+		} `json:"sources"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(content)), &parsed); err != nil {
+		return nil
+	}
+	result := make([]assetVisualAIReferenceCandidate, 0, len(parsed.ImageURLs)+len(parsed.Sources)+len(parsed.Images))
+	for _, rawURL := range normalizeAssetOnlineAISourceURLs(parsed.ImageURLs) {
+		result = append(result, assetVisualAIReferenceCandidate{URL: rawURL, ImageURL: rawURL, Type: classifyAssetOnlineURL(rawURL), Confidence: 88})
+	}
+	for _, item := range parsed.Images {
+		result = append(result, normalizeAssetVisualAIReferenceCandidate(item.URL, item.ImageURL, item.SourceURL, item.Title, item.Type, item.Color, item.Confidence))
+	}
+	for _, item := range parsed.Sources {
+		result = append(result, normalizeAssetVisualAIReferenceCandidate(item.URL, item.ImageURL, item.SourceURL, item.Title, item.Type, item.Color, item.Confidence))
+	}
+	if len(parsed.SourceURLs) > 0 {
+		for _, rawURL := range normalizeAssetOnlineAISourceURLs(parsed.SourceURLs) {
+			if !isLikelyImageURL(rawURL) {
+				continue
+			}
+			result = append(result, assetVisualAIReferenceCandidate{URL: rawURL, ImageURL: rawURL, Type: classifyAssetOnlineURL(rawURL), Confidence: 82})
+		}
+	}
+	return dedupeAssetVisualAIReferenceCandidates(result)
+}
+
+func normalizeAssetVisualAIReferenceCandidate(urlValue string, imageURL string, sourceURL string, title string, sourceType string, color string, confidence int) assetVisualAIReferenceCandidate {
+	urls := normalizeAssetOnlineAISourceURLs(nonEmptyStrings(imageURL, urlValue))
+	if len(urls) == 0 {
+		return assetVisualAIReferenceCandidate{}
+	}
+	imageURL = urls[0]
+	sourceURLs := normalizeAssetOnlineAISourceURLs(nonEmptyStrings(sourceURL, urlValue))
+	if len(sourceURLs) > 0 {
+		sourceURL = sourceURLs[0]
+	}
+	if confidence <= 0 || confidence > 100 {
+		confidence = 82
+	}
+	return assetVisualAIReferenceCandidate{
+		URL:        imageURL,
+		ImageURL:   imageURL,
+		SourceURL:  sourceURL,
+		Title:      cleanOnlineText(title),
+		Type:       firstNonEmpty(strings.TrimSpace(sourceType), classifyAssetOnlineURL(imageURL)),
+		Color:      cleanOnlineText(color),
+		Confidence: confidence,
+	}
+}
+
+func dedupeAssetVisualAIReferenceCandidates(candidates []assetVisualAIReferenceCandidate) []assetVisualAIReferenceCandidate {
+	result := make([]assetVisualAIReferenceCandidate, 0, len(candidates))
+	seen := map[string]bool{}
+	for _, candidate := range candidates {
+		imageURL := strings.TrimSpace(candidate.ImageURL)
+		if imageURL == "" {
+			imageURL = strings.TrimSpace(candidate.URL)
+		}
+		if imageURL == "" {
+			continue
+		}
+		key := strings.ToLower(imageURL)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		candidate.ImageURL = imageURL
+		candidate.URL = firstNonEmpty(candidate.URL, imageURL)
+		result = append(result, candidate)
+	}
+	return result
+}
+
+func buildAssetVisualAISourceDiscoveryPayload(asset *core.Record, color string, model string, limit int) (map[string]any, error) {
+	limit = normalizeAssetVisualMaxImages(limit)
+	return map[string]any{
+		"model":       model,
+		"temperature": 0,
+		"messages": []map[string]string{
+			{
+				"role":    "system",
+				"content": "你是 Pulse 资产中心的设备图片找图 Agent。你只返回官方或可追溯真实设备图片 URL，不生成图片，不返回产品页截图，不返回营销海报、色卡、图标、Logo、相机样张或不同型号图片。目标是找到最多 10 张同一设备的候选图，并按官方颜色分类。若用户提供 selected_color，优先找这个官方颜色；若 selected_color 为空，必须覆盖官方可确认的不同颜色并给每张图标注官方色名。优先级：1 厂商官网产品图库、规格页、支持页、官方 CDN；2 官方说明书或资料包；3 权威规格库只作兜底。必须匹配厂商、型号和内部型号，不能混入同系列不同型号或电商改色图。返回严格 JSON：{\"sources\":[{\"image_url\":\"https://...\",\"source_url\":\"https://...\",\"title\":\"...\",\"color\":\"官方色名\",\"type\":\"official_image\",\"confidence\":90}]}；每条 sources 都尽量填写 color。",
+			},
+			{
+				"role": "user",
+				"content": mustJSON(map[string]any{
+					"asset": map[string]any{
+						"name":           asset.GetString("name"),
+						"type":           asset.GetString("type"),
+						"vendor":         asset.GetString("vendor"),
+						"model":          asset.GetString("model"),
+						"internal_model": recordMetadataString(asset, "internal_model"),
+						"selected_color": color,
+						"known_colors":   assetOfficialColorOptions(asset),
+						"support_url":    recordMetadataString(asset, "support_url"),
+						"product_url":    recordMetadataString(asset, "product_url"),
+						"official_url":   recordMetadataString(asset, "official_url"),
+					},
+					"max_images": limit,
+					"source_policy": map[string]any{
+						"must_be_real_device_photo_or_render": true,
+						"required_result_count":               limit,
+						"must_match_selected_color":           strings.TrimSpace(color) != "",
+						"group_by_official_color":             true,
+						"color_required_per_source":           true,
+						"preferred_sources":                   []string{"official product gallery", "official specs page image", "official support image", "official CDN image"},
+						"reject":                              []string{"AI generated image", "marketing banner", "poster", "color chart", "icon", "logo", "camera sample", "different variant", "ecommerce-only image when official source exists"},
+					},
+				}),
+			},
+		},
+		"response_format": map[string]string{"type": "json_object"},
+	}, nil
 }
 
 func appendAssetVisualReferenceSource(result []map[string]any, seen map[string]bool, source map[string]any) []map[string]any {
@@ -714,7 +1060,7 @@ func (h *Hub) collectAssetVisualPageImageSources(asset *core.Record, result []ma
 		if !assetOnlineSourceHasOfficialAuthority(assetOnlineSource{Type: sourceType}) {
 			continue
 		}
-		result = h.collectAssetVisualBundleImageSources(parsed, body, page.Provider, result, seen, limit)
+		result = h.collectAssetVisualBundleImageSources(asset, parsed, body, page.Provider, result, seen, limit)
 		if len(result) >= limit {
 			break
 		}
@@ -728,6 +1074,7 @@ func (h *Hub) collectAssetVisualPageImageSources(asset *core.Record, result []ma
 				"image_url":  candidate.URL,
 				"type":       "official_page_image",
 				"provider":   page.Provider,
+				"color":      inferAssetVisualSourceColor(asset, "", strings.Join(nonEmptyStrings(title, candidate.Context, candidate.URL), " ")),
 				"confidence": 90,
 			})
 			if len(result) >= limit {
@@ -792,7 +1139,7 @@ type assetVisualHTMLImageCandidate struct {
 	Height  int
 }
 
-func (h *Hub) collectAssetVisualBundleImageSources(pageURL *url.URL, body string, provider string, result []map[string]any, seen map[string]bool, limit int) []map[string]any {
+func (h *Hub) collectAssetVisualBundleImageSources(asset *core.Record, pageURL *url.URL, body string, provider string, result []map[string]any, seen map[string]bool, limit int) []map[string]any {
 	for _, scriptURL := range extractAssetVisualProductScriptURLs(pageURL, body) {
 		if len(result) >= limit {
 			break
@@ -808,6 +1155,7 @@ func (h *Hub) collectAssetVisualBundleImageSources(pageURL *url.URL, body string
 				"image_url":  imageURL,
 				"type":       "official_product_bundle_image",
 				"provider":   provider,
+				"color":      inferAssetVisualSourceColor(asset, "", imageURL),
 				"confidence": 94,
 			})
 			if len(result) >= limit {
@@ -1204,10 +1552,18 @@ func buildAssetImageCollectionPrompt(asset *core.Record, color string, frameCoun
 	return strings.Join(nonEmptyStrings(
 		"Collect traceable device images for a home asset catalog.",
 		"Device: "+strings.Join(nonEmptyStrings(asset.GetString("vendor"), asset.GetString("model"), recordMetadataString(asset, "internal_model"), asset.GetString("name")), " / "),
-		"Color: "+color+".",
-		fmt.Sprintf("Need exactly %d theme-ready real source images: day and night. Do not invent device appearance.", frameCount),
+		assetVisualCollectionColorPrompt(color),
+		fmt.Sprintf("Need up to %d real source images. Do not invent device appearance.", frameCount),
 		"Traceable image URLs: "+strings.Join(referenceLines, " ; "),
 	), "\n")
+}
+
+func assetVisualCollectionColorPrompt(color string) string {
+	color = strings.TrimSpace(color)
+	if color == "" {
+		return "Color: not preselected. Collect candidates across official colors and keep every candidate labeled with its official color when known."
+	}
+	return "Color: " + color + ". Prefer candidates matching this selected official color."
 }
 
 func buildAssetVisualUnificationPrompt(asset *core.Record, color string, references []map[string]any) string {
@@ -1217,36 +1573,60 @@ func buildAssetVisualUnificationPrompt(asset *core.Record, color string, referen
 			referenceLines = append(referenceLines, imageURL)
 		}
 	}
+	colorInstruction := assetVisualOfficialColorPrompt(color)
 	return strings.Join(nonEmptyStrings(
-		"You are the Pulse asset image Agent. This is an image-to-image asset catalog task, not a free text-to-image task.",
-		"Use the provided reference device images as the source of truth. Preserve the exact real device identity, body shape, camera layout, ports, bezels, logo placement, proportions, and selected official color.",
+		"You are the Pulse asset image Agent. This is an image-to-image asset catalog cleanup task, not a free text-to-image task and not a 3D redesign task.",
+		"Change request: keep the reference device as the product layer, replace only the scene/background, remove poster foreground clutter, and fit the original device into a unified catalog canvas.",
+		"Elements to preserve unchanged: the exact real device identity, body outline, body thickness, camera island shape, lens count, lens positions, flash shape, ports, side buttons, bezels, logo placement, proportions, material, and selected official color.",
+		"Do not create a new render, a similar phone, or a redesigned product. Treat the input reference device as the final product source, not as loose inspiration.",
 		"If references conflict, prefer official product, official support, official CDN, and product bundle images over all other sources.",
 		"Device: "+strings.Join(nonEmptyStrings(asset.GetString("vendor"), asset.GetString("model"), recordMetadataString(asset, "internal_model"), asset.GetString("name")), " / "),
 		"Selected official color: "+color+".",
-		"Composition requirements: show the complete device body, keep the device large and readable, occupy about 70-82% of the canvas height, center it with consistent scale and placement across all assets.",
-		"For phones and tablets, show front and back views together when the references support it; otherwise show the most complete official product view. Do not crop the device.",
-		"Style requirements: clean catalog render, unified neutral background, realistic material, no hands, no packaging, no marketing text, no UI screenshots, no extra accessories, no invented camera modules, no invented colors.",
+		colorInstruction,
+		"Reference fidelity is mandatory: use the provided reference image as the exact device source. Do not redraw, redesign, or reinterpret the device body, lens count, camera island shape, logo placement, side buttons, bezels, proportions, color, or material.",
+		"Remove the original poster scene, rocks, flames, plants, hands, packaging, marketing text, UI screenshots, and any other non-device background elements from the reference image. Keep only the device on the requested unified catalog background.",
+		"If the official reference image hides a small part of the phone behind poster foreground, reconstruct only the missing outer body edge from the same device silhouette. Do not change the camera module, body color, button position, lens count, lens placement, or proportions.",
+		"Do not invent or garble brand text, specification text, certification text, or model labels. Preserve text only when it can remain exact from the reference; otherwise remove, fade, or softly blur tiny text instead of creating fake letters.",
+		"Composition requirements: show exactly one asset in one selected color, use a portrait 3:4 catalog canvas, show the complete device body from top to bottom with visible top, bottom, left, and right margins, keep the device readable without touching any canvas edge, occupy about 62-78% of the canvas height, center it with consistent scale and placement across all assets.",
+		"For phones and tablets, keep the same camera angle as the strongest official reference. Preserve the exact camera island geometry and lens count from the reference; do not simplify it into a generic circular or square phone camera module. Prefer a single clean three-quarter back view only when that is already present in the reference. If front and back are both shown, both views must be the same selected official color. Never place two different colors in one output.",
+		"If the official reference has strong colored environment light, treat that light as background contamination only. Keep the device body in the selected official color, not in the poster light color.",
+		"Style requirements: clean catalog render, unified neutral background, realistic material, no hands, no packaging, no marketing text, no UI screenshots, no extra accessories, no invented camera modules, no invented colors, no second device color.",
 		"Output theme requirement will be provided per request: day uses a light neutral background; night uses a dark immersive neutral background. The device itself must remain clear and must not disappear into the background.",
 		"Reference image URLs: "+strings.Join(referenceLines, " ; "),
 	), "\n")
 }
 
-func validateAssetVisualGenerationPrerequisites(asset *core.Record, color string, config assetVisualAIConfig) string {
-	if !config.Ready() {
-		return "设备图片 Agent 未配置完整。请先在 AI 设置里配置 Agnes Base URL、API Key 和图片模型。"
-	}
-	if strings.TrimSpace(asset.GetString("model")) == "" || strings.TrimSpace(recordMetadataString(asset, "internal_model")) == "" {
-		return "生成统一全貌图需要型号 / 规格和内部型号 / 搜索代码。"
-	}
-	if strings.TrimSpace(color) == "" {
-		return "生成统一全貌图前必须先选择设备官方配色。"
-	}
-	if assetRequiresOfficialColorSelection(asset) {
-		options := assetOfficialColorOptions(asset)
-		if len(options) == 0 {
-			return "手机等固定规格设备必须先点击“获取官方颜色”，由资料补全 Agent 采集官方配色，再选择其中一个配色后才能生成图片。"
+func assetVisualOfficialColorPrompt(color string) string {
+	color = strings.TrimSpace(color)
+	colorClass := classifyAssetVisualOfficialColor(color)
+	switch colorClass {
+	case "dark":
+		return "Selected color constraint: render the body as the official " + color + " color, a very dark graphite black / ink-black finish with subtle cool highlights only. Do not turn the device blue, purple, green, silver, or white."
+	case "light":
+		return "Selected color constraint: render the body as the official " + color + " color, a light white / silver finish. Do not turn the device black, blue, green, purple, or gold."
+	case "green":
+		return "Selected color constraint: render the body as the official " + color + " color, a green / teal finish matching the official reference. Do not turn the device black, white, blue, purple, or gold."
+	case "purple":
+		return "Selected color constraint: render the body as the official " + color + " color, a purple / violet finish matching the official reference. Do not turn the device black, white, blue, green, or gold."
+	case "blue":
+		return "Selected color constraint: render the body as the official " + color + " color, a blue finish matching the official reference. Do not turn the device black, white, green, purple, or gold."
+	case "gold":
+		return "Selected color constraint: render the body as the official " + color + " color, a gold / warm finish matching the official reference. Do not turn the device black, white, blue, green, or purple."
+	default:
+		if color == "" {
+			return ""
 		}
-		if !assetColorInOptions(color, options) {
+		return "Selected color constraint: render only the official " + color + " color shown by the reference images. Do not invent another device color."
+	}
+}
+
+func validateAssetVisualGenerationPrerequisites(asset *core.Record, color string, config assetVisualAIConfig) string {
+	if strings.TrimSpace(asset.GetString("model")) == "" || strings.TrimSpace(recordMetadataString(asset, "internal_model")) == "" {
+		return "收集设备图片需要型号 / 规格和内部型号 / 搜索代码。"
+	}
+	if strings.TrimSpace(color) != "" && assetRequiresOfficialColorSelection(asset) {
+		options := assetOfficialColorOptions(asset)
+		if len(options) > 0 && !assetColorInOptions(color, options) {
 			return "当前颜色不在已采集的官方配色中。请先从官方配色列表里选择。"
 		}
 	}
@@ -1265,6 +1645,37 @@ func assetRequiresOfficialColorSelection(asset *core.Record) bool {
 func assetOfficialColorOptions(asset *core.Record) []string {
 	raw := firstNonEmpty(recordMetadataString(asset, "colors_available"), recordMetadataString(asset, "official_colors"))
 	return splitAssetColorOptions(raw)
+}
+
+func inferAssetVisualSourceColor(asset *core.Record, selectedColor string, context string) string {
+	if strings.TrimSpace(selectedColor) != "" {
+		return strings.TrimSpace(selectedColor)
+	}
+	normalizedContext := normalizeAssetVisualMatchText(context)
+	if normalizedContext == "" {
+		return ""
+	}
+	for _, option := range assetOfficialColorOptions(asset) {
+		if key := normalizeAssetVisualMatchText(option); key != "" && strings.Contains(normalizedContext, key) {
+			return option
+		}
+	}
+	switch classifyAssetVisualOfficialColor(context) {
+	case "dark":
+		return "黑色系"
+	case "light":
+		return "银白色系"
+	case "green":
+		return "绿色系"
+	case "purple":
+		return "紫色系"
+	case "blue":
+		return "蓝色系"
+	case "gold":
+		return "金色系"
+	default:
+		return ""
+	}
 }
 
 func splitAssetColorOptions(raw string) []string {
@@ -1310,7 +1721,7 @@ func (h *Hub) generateUnifiedAssetVisualFrames(config assetVisualAIConfig, asset
 	if len(referenceURLs) == 0 {
 		return assetVisualGenerationResult{}, fmt.Errorf("没有可用于图片编辑的参考图。")
 	}
-	referenceInputResult := h.buildAssetVisualImageModelInputs(referenceURLs)
+	referenceInputResult := h.buildAssetVisualImageModelInputs(referenceURLs, color)
 	if len(referenceInputResult.Inputs) == 0 {
 		return assetVisualGenerationResult{}, newAssetVisualReferenceInputError(referenceInputResult.Skipped)
 	}
@@ -1319,6 +1730,7 @@ func (h *Hub) generateUnifiedAssetVisualFrames(config assetVisualAIConfig, asset
 		ReferenceInputCount:        len(referenceInputResult.Inputs),
 		ReferenceInputURLs:         referenceInputResult.URLs,
 		ReferenceInputPayloadBytes: referenceInputResult.InputPayloadBytes,
+		ReferenceInputColorScores:  referenceInputResult.ColorMatchScores,
 		ReferenceInputTotalBytes:   referenceInputResult.TotalPayloadBytes,
 	}
 	requestSummary := assetVisualImageModelRequestSummary(config, referenceInputResult)
@@ -1337,8 +1749,8 @@ func (h *Hub) generateUnifiedAssetVisualFrames(config assetVisualAIConfig, asset
 		label  string
 		prompt string
 	}{
-		{id: "day", label: "白天", prompt: "Generate the day version with a light neutral catalog background. Keep the device centered, large, fully visible, and in the selected official color. Do not change the device model."},
-		{id: "night", label: "夜晚", prompt: "Generate the night version with a dark immersive neutral catalog background. Keep the device centered, large, fully visible, clearly lit, and in the selected official color. Do not change the device model."},
+		{id: "day", label: "白天", prompt: "Generate the day version by preserving the original reference device and replacing the scene with a light neutral catalog background. Use a portrait 3:4 canvas. Keep exactly one complete device, centered, fully visible with top, bottom, left, and right margins, and only in the selected official color. Remove every non-selected body color from the references. Do not change the device model, camera island, lens positions, body color, or logo placement."},
+		{id: "night", label: "夜晚", prompt: "Generate the night version by preserving the original reference device and replacing the scene with a dark graphite or near-black immersive neutral catalog background. Use a portrait 3:4 canvas. The background must be truly dark; white, off-white, beige, silver, and light gray backgrounds are forbidden. Keep exactly one complete device, centered, fully visible with top, bottom, left, and right margins, clearly lit, and only in the selected official color. Remove every non-selected body color from the references. Do not change the device model, camera island, lens positions, body color, or logo placement."},
 	}
 	frames := make([]map[string]any, 0, len(themes))
 	outputProbeCache := assetVisualImageModelOutputProbeCache{}
@@ -1351,18 +1763,42 @@ func (h *Hub) generateUnifiedAssetVisualFrames(config assetVisualAIConfig, asset
 				"generated_images": len(frames),
 			})
 		}
-		modelResult, err := h.callAssetVisualImageModel(config, basePrompt+"\n"+theme.prompt, referenceInputResult.Inputs, outputProbeCache)
-		result.ImageModelOutputDiagnostics = mergeAssetVisualImageModelDiagnostics(result.ImageModelOutputDiagnostics, modelResult.Diagnostics)
-		if err != nil {
+		var modelResult assetVisualImageModelCallResult
+		var frameURL string
+		var err error
+		var validationReason string
+		for qualityAttempt := 1; qualityAttempt <= assetVisualImageModelQualityMaxAttempts; qualityAttempt++ {
+			prompt := basePrompt + "\n" + theme.prompt
+			if validationReason != "" {
+				prompt += "\nPrevious output was rejected by Pulse quality checks: " + validationReason + " Regenerate the image with the complete device fully visible, centered, with larger clean margins, correct selected official color, and unchanged camera module geometry."
+			}
+			modelResult, err = h.callAssetVisualImageModel(config, prompt, referenceInputResult.Inputs, outputProbeCache)
+			result.ImageModelOutputDiagnostics = mergeAssetVisualImageModelDiagnostics(result.ImageModelOutputDiagnostics, modelResult.Diagnostics)
+			if err != nil {
+				result.Frames = frames
+				return result, err
+			}
+			frameURL = postprocessAssetVisualGeneratedFrameDataURI(modelResult.URL, theme.id)
+			validationReason = validateAssetVisualGeneratedFrameDataURI(frameURL, asset, color)
+			if validationReason == "" {
+				break
+			}
+			result.ImageModelOutputDiagnostics.Rejections = append(result.ImageModelOutputDiagnostics.Rejections, assetVisualImageModelOutputRejection{
+				Source: modelResult.ResponseFormat,
+				URL:    frameURL,
+				Reason: validationReason,
+			})
+		}
+		if validationReason != "" {
 			result.Frames = frames
-			return result, err
+			return result, errors.New(validationReason)
 		}
 		frames = append(frames, map[string]any{
 			"index":           index,
 			"view":            "unified",
 			"theme":           theme.id,
 			"label":           theme.label,
-			"url":             modelResult.URL,
+			"url":             frameURL,
 			"source_title":    "设备图片 Agent 统一化输出",
 			"source_url":      "",
 			"revised_prompt":  modelResult.RevisedPrompt,
@@ -1452,18 +1888,20 @@ func assetVisualReferenceLooksLikeNonDeviceImage(source map[string]any) bool {
 	return false
 }
 
-func (h *Hub) buildAssetVisualImageModelInputs(referenceURLs []string) assetVisualImageModelInputResult {
+func (h *Hub) buildAssetVisualImageModelInputs(referenceURLs []string, color string) assetVisualImageModelInputResult {
 	result := assetVisualImageModelInputResult{
 		Inputs:            make([]string, 0, len(referenceURLs)),
 		URLs:              make([]string, 0, len(referenceURLs)),
 		InputPayloadBytes: make([]int, 0, len(referenceURLs)),
+		ColorMatchScores:  make([]int, 0, len(referenceURLs)),
 		Skipped:           []assetVisualReferenceSkip{},
 	}
-	for _, rawURL := range referenceURLs {
-		if len(result.Inputs) >= assetVisualImageModelMaxReferenceInputs {
+	candidates := make([]assetVisualImageModelInputCandidate, 0, minInt(len(referenceURLs), assetVisualImageModelMaxReferenceCandidates))
+	for index, rawURL := range referenceURLs {
+		if len(candidates) >= assetVisualImageModelMaxReferenceCandidates {
 			break
 		}
-		dataURI, err := h.fetchAssetVisualReferenceDataURI(rawURL)
+		dataURI, rawBody, err := h.fetchAssetVisualReferenceDataURI(rawURL, color)
 		if err != nil {
 			result.Skipped = append(result.Skipped, assetVisualReferenceSkip{
 				URL:    rawURL,
@@ -1472,13 +1910,183 @@ func (h *Hub) buildAssetVisualImageModelInputs(referenceURLs []string) assetVisu
 			continue
 		}
 		if dataURI != "" {
-			result.Inputs = append(result.Inputs, dataURI)
-			result.URLs = append(result.URLs, rawURL)
-			result.InputPayloadBytes = append(result.InputPayloadBytes, len(dataURI))
-			result.TotalPayloadBytes += len(dataURI)
+			candidates = append(candidates, assetVisualImageModelInputCandidate{
+				DataURI:      dataURI,
+				URL:          rawURL,
+				PayloadBytes: len(dataURI),
+				ColorScore:   scoreAssetVisualReferenceImageColor(rawBody, color),
+				Index:        index,
+			})
+		}
+	}
+	for _, candidate := range selectAssetVisualImageModelInputCandidates(candidates, color) {
+		if len(result.Inputs) >= assetVisualImageModelMaxReferenceInputs {
+			break
+		}
+		result.Inputs = append(result.Inputs, candidate.DataURI)
+		result.URLs = append(result.URLs, candidate.URL)
+		result.InputPayloadBytes = append(result.InputPayloadBytes, candidate.PayloadBytes)
+		result.ColorMatchScores = append(result.ColorMatchScores, candidate.ColorScore)
+		result.TotalPayloadBytes += candidate.PayloadBytes
+	}
+	return result
+}
+
+func selectAssetVisualImageModelInputCandidates(candidates []assetVisualImageModelInputCandidate, color string) []assetVisualImageModelInputCandidate {
+	if len(candidates) == 0 {
+		return nil
+	}
+	selected := make([]assetVisualImageModelInputCandidate, len(candidates))
+	copy(selected, candidates)
+	colorClass := classifyAssetVisualOfficialColor(color)
+	if colorClass == "unknown" {
+		return selected
+	}
+	sort.SliceStable(selected, func(i, j int) bool {
+		if selected[i].ColorScore == selected[j].ColorScore {
+			return selected[i].Index < selected[j].Index
+		}
+		return selected[i].ColorScore > selected[j].ColorScore
+	})
+	bestScore := selected[0].ColorScore
+	if bestScore < 18 {
+		return candidates
+	}
+	filtered := make([]assetVisualImageModelInputCandidate, 0, assetVisualImageModelMaxReferenceInputs)
+	for _, candidate := range selected {
+		if candidate.ColorScore <= 0 || bestScore-candidate.ColorScore > 10 {
+			continue
+		}
+		filtered = append(filtered, candidate)
+		if len(filtered) >= assetVisualImageModelMaxReferenceInputs {
+			break
+		}
+	}
+	if len(filtered) == 0 {
+		return candidates
+	}
+	return filtered
+}
+
+func scoreAssetVisualReferenceImageColor(rawBody []byte, color string) int {
+	colorClass := classifyAssetVisualOfficialColor(color)
+	if colorClass == "unknown" || len(rawBody) == 0 {
+		return 0
+	}
+	img, _, err := image.Decode(bytes.NewReader(rawBody))
+	if err != nil {
+		return 0
+	}
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return 0
+	}
+	startX := bounds.Min.X + width*38/100
+	endX := bounds.Min.X + width*62/100
+	startY := bounds.Min.Y + height*14/100
+	endY := bounds.Min.Y + height*92/100
+	stride := maxInt(1, minInt(width, height)/90)
+	total := 0
+	matches := 0
+	for y := startY; y < endY; y += stride {
+		for x := startX; x < endX; x += stride {
+			r16, g16, b16, _ := img.At(x, y).RGBA()
+			r := int(r16 >> 8)
+			g := int(g16 >> 8)
+			b := int(b16 >> 8)
+			total++
+			if assetVisualPixelMatchesColorClass(r, g, b, colorClass) {
+				matches++
+			}
+		}
+	}
+	if total == 0 {
+		return 0
+	}
+	return matches * 100 / total
+}
+
+func assetVisualPixelMatchesColorClass(r int, g int, b int, colorClass string) bool {
+	maxChannel := maxInt(r, g, b)
+	minChannel := minInt(r, g, b)
+	luma := (r*299 + g*587 + b*114) / 1000
+	saturation := maxChannel - minChannel
+	switch colorClass {
+	case "dark":
+		return luma < 82 && saturation < 70
+	case "light":
+		return luma > 178 && saturation < 58
+	case "green":
+		return g > r+16 && g > b-8 && luma > 70
+	case "purple":
+		return r > 78 && b > 92 && b > g+12
+	case "blue":
+		return b > r+12 && b > g-8 && luma > 62
+	case "gold":
+		return r > 130 && g > 92 && b < 120
+	default:
+		return false
+	}
+}
+
+func classifyAssetVisualOfficialColor(color string) string {
+	text := normalizeAssetVisualMatchText(color)
+	if text == "" {
+		return "unknown"
+	}
+	for _, marker := range []string{"墨", "黑", "玄", "夜", "暗", "shadow", "black", "obsidian", "graphite", "midnight"} {
+		if strings.Contains(text, marker) {
+			return "dark"
+		}
+	}
+	for _, marker := range []string{"白", "银", "雪", "月", "霜", "冰", "white", "silver", "pearl", "moon"} {
+		if strings.Contains(text, marker) {
+			return "light"
+		}
+	}
+	for _, marker := range []string{"绿", "青", "翠", "幽芒", "green", "teal", "cyan"} {
+		if strings.Contains(text, marker) {
+			return "green"
+		}
+	}
+	for _, marker := range []string{"紫", "藤", "violet", "purple", "lavender"} {
+		if strings.Contains(text, marker) {
+			return "purple"
+		}
+	}
+	for _, marker := range []string{"蓝", "海", "sky", "blue"} {
+		if strings.Contains(text, marker) {
+			return "blue"
+		}
+	}
+	for _, marker := range []string{"金", "黄", "橙", "gold", "yellow", "orange"} {
+		if strings.Contains(text, marker) {
+			return "gold"
+		}
+	}
+	return "unknown"
+}
+
+func minInt(values ...int) int {
+	if len(values) == 0 {
+		return 0
+	}
+	result := values[0]
+	for _, value := range values[1:] {
+		if value < result {
+			result = value
 		}
 	}
 	return result
+}
+
+func absInt(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
 }
 
 func assetVisualImageModelRequestSummary(config assetVisualAIConfig, inputs assetVisualImageModelInputResult) map[string]any {
@@ -1499,6 +2107,11 @@ func assetVisualImageModelRequestSummary(config assetVisualAIConfig, inputs asse
 		values := make([]int, len(inputs.InputPayloadBytes))
 		copy(values, inputs.InputPayloadBytes)
 		summary["image_model_reference_payload_sizes"] = values
+	}
+	if len(inputs.ColorMatchScores) > 0 {
+		values := make([]int, len(inputs.ColorMatchScores))
+		copy(values, inputs.ColorMatchScores)
+		summary["image_model_reference_color_scores"] = values
 	}
 	return summary
 }
@@ -1606,59 +2219,209 @@ func summarizeAssetVisualImageModelOutputURL(rawURL string) string {
 	return rawURL
 }
 
-func (h *Hub) fetchAssetVisualReferenceDataURI(rawURL string) (string, error) {
+func (h *Hub) fetchAssetVisualReferenceDataURI(rawURL string, color string) (string, []byte, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if !isLikelyAssetVisualImageURL(rawURL) {
-		return "", fmt.Errorf("参考图 URL 不可用。")
+		return "", nil, fmt.Errorf("参考图 URL 不可用。")
 	}
 	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	req.Header.Set("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*;q=0.8")
 	req.Header.Set("User-Agent", "PulseAssetVisualAgent/1.0")
 	client := &http.Client{Timeout: 25 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("参考图下载失败：%s", strconvItoa(resp.StatusCode))
+		return "", nil, fmt.Errorf("参考图下载失败：%s", strconvItoa(resp.StatusCode))
 	}
 	if resp.ContentLength > assetVisualReferenceImageFetchMaxBytes {
-		return "", fmt.Errorf("参考图大小超过可处理上限。")
+		return "", nil, fmt.Errorf("参考图大小超过可处理上限。")
 	}
 	rawBody, err := io.ReadAll(io.LimitReader(resp.Body, assetVisualReferenceImageFetchMaxBytes+1))
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if len(rawBody) == 0 {
-		return "", fmt.Errorf("参考图大小不符合要求。")
+		return "", nil, fmt.Errorf("参考图大小不符合要求。")
 	}
 	if len(rawBody) > assetVisualReferenceImageFetchMaxBytes {
-		return "", fmt.Errorf("参考图大小超过可处理上限。")
+		return "", nil, fmt.Errorf("参考图大小超过可处理上限。")
 	}
 	mimeType := assetVisualReferenceImageMimeType(rawBody)
 	if mimeType == "" {
-		return "", fmt.Errorf("参考图不是可用图片。")
+		return "", nil, fmt.Errorf("参考图不是可用图片。")
 	}
+	preparedBody, preparedMime, err := prepareAssetVisualReferenceImageForModel(rawBody, color)
+	if err != nil {
+		return "", nil, fmt.Errorf("参考图无法预处理为设备外观输入。")
+	}
+	rawBody = preparedBody
+	mimeType = preparedMime
 	if len(rawBody) > assetVisualReferenceImageMaxBytes {
 		normalized, normalizedMime, err := normalizeAssetVisualReferenceImage(rawBody)
 		if err != nil {
-			return "", fmt.Errorf("参考图大小超过模型输入上限，且无法压缩处理。")
+			return "", nil, fmt.Errorf("参考图大小超过模型输入上限，且无法压缩处理。")
 		}
 		rawBody = normalized
 		mimeType = normalizedMime
 	}
 	if len(rawBody) > assetVisualReferenceImageMaxBytes {
-		return "", fmt.Errorf("参考图大小超过模型输入上限。")
+		return "", nil, fmt.Errorf("参考图大小超过模型输入上限。")
 	}
-	return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(rawBody), nil
+	if width, height, ok := assetVisualReferenceImageDimensions(rawBody); ok && !assetVisualReferenceImageDimensionsLookLikeDevice(width, height) {
+		return "", nil, fmt.Errorf("参考图尺寸过小，不像设备外观图。")
+	}
+	return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(rawBody), rawBody, nil
+}
+
+func prepareAssetVisualReferenceImageForModel(rawBody []byte, color string) ([]byte, string, error) {
+	mimeType := assetVisualReferenceImageMimeType(rawBody)
+	if mimeType == "" {
+		return nil, "", fmt.Errorf("invalid reference image")
+	}
+	img, _, err := image.Decode(bytes.NewReader(rawBody))
+	if err != nil {
+		return rawBody, mimeType, nil
+	}
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return nil, "", fmt.Errorf("invalid image bounds")
+	}
+	needsNormalize := len(rawBody) > assetVisualReferenceImageMaxBytes
+	if assetVisualReferenceImageLooksLikeWidePoster(width, height) {
+		img = cropAssetVisualWidePosterToDeviceReference(img, bounds, color)
+		needsNormalize = true
+	}
+	if !needsNormalize {
+		return rawBody, mimeType, nil
+	}
+	return encodeAssetVisualReferenceImageForModel(img)
+}
+
+func assetVisualReferenceImageLooksLikeWidePoster(width int, height int) bool {
+	if width <= 0 || height <= 0 {
+		return false
+	}
+	return width*10 >= height*16
+}
+
+func cropAssetVisualWidePosterToDeviceReference(img image.Image, bounds image.Rectangle, color string) image.Image {
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return img
+	}
+	if cropBounds, ok := assetVisualColorFocusedCropBounds(img, bounds, color); ok {
+		return imaging.Crop(img, cropBounds)
+	}
+	cropWidth := height * 58 / 100
+	if cropWidth < width*22/100 {
+		cropWidth = width * 22 / 100
+	}
+	if cropWidth > width {
+		cropWidth = width
+	}
+	if cropWidth < 260 {
+		cropWidth = minInt(width, 260)
+	}
+	x0 := bounds.Min.X + (width-cropWidth)/2
+	x1 := x0 + cropWidth
+	if x0 < bounds.Min.X {
+		x0 = bounds.Min.X
+		x1 = x0 + cropWidth
+	}
+	if x1 > bounds.Max.X {
+		x1 = bounds.Max.X
+		x0 = x1 - cropWidth
+	}
+	return imaging.Crop(img, image.Rect(x0, bounds.Min.Y, x1, bounds.Max.Y))
+}
+
+func assetVisualColorFocusedCropBounds(img image.Image, bounds image.Rectangle, colorName string) (image.Rectangle, bool) {
+	colorClass := classifyAssetVisualOfficialColor(colorName)
+	if colorClass == "unknown" {
+		return image.Rectangle{}, false
+	}
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return image.Rectangle{}, false
+	}
+	search := image.Rect(
+		bounds.Min.X+width*28/100,
+		bounds.Min.Y+height*4/100,
+		bounds.Min.X+width*72/100,
+		bounds.Min.Y+height*96/100,
+	)
+	stride := maxInt(1, minInt(width, height)/120)
+	x0, y0 := bounds.Max.X, bounds.Max.Y
+	x1, y1 := bounds.Min.X, bounds.Min.Y
+	matches := 0
+	for y := search.Min.Y; y < search.Max.Y; y += stride {
+		for x := search.Min.X; x < search.Max.X; x += stride {
+			r16, g16, b16, _ := img.At(x, y).RGBA()
+			if !assetVisualPixelMatchesColorClass(int(r16>>8), int(g16>>8), int(b16>>8), colorClass) {
+				continue
+			}
+			matches++
+			if x < x0 {
+				x0 = x
+			}
+			if x > x1 {
+				x1 = x
+			}
+			if y < y0 {
+				y0 = y
+			}
+			if y > y1 {
+				y1 = y
+			}
+		}
+	}
+	if matches < 80 || x1 <= x0 || y1 <= y0 {
+		return image.Rectangle{}, false
+	}
+	deviceWidth := x1 - x0
+	deviceHeight := y1 - y0
+	if deviceWidth < width*4/100 || deviceHeight < height*28/100 {
+		return image.Rectangle{}, false
+	}
+	paddingX := maxInt(width*3/100, deviceWidth*55/100)
+	paddingTop := height * 8 / 100
+	paddingBottom := height * 6 / 100
+	cropX0 := maxInt(bounds.Min.X, x0-paddingX)
+	cropX1 := minInt(bounds.Max.X, x1+paddingX)
+	cropY0 := maxInt(bounds.Min.Y, y0-paddingTop)
+	cropY1 := minInt(bounds.Max.Y, y1+paddingBottom)
+	if cropX1-cropX0 < 260 || cropY1-cropY0 < 480 {
+		return image.Rectangle{}, false
+	}
+	return image.Rect(cropX0, cropY0, cropX1, cropY1), true
 }
 
 func assetVisualReferenceImageMimeType(rawBody []byte) string {
 	return assetVisualImageMimeTypeFromBytes(rawBody)
+}
+
+func assetVisualReferenceImageDimensions(rawBody []byte) (int, int, bool) {
+	config, _, err := image.DecodeConfig(bytes.NewReader(rawBody))
+	if err != nil || config.Width <= 0 || config.Height <= 0 {
+		return 0, 0, false
+	}
+	return config.Width, config.Height, true
+}
+
+func assetVisualReferenceImageDimensionsLookLikeDevice(width int, height int) bool {
+	longEdge := maxInt(width, height)
+	shortEdge := minInt(width, height)
+	return longEdge >= 480 && shortEdge >= 220
 }
 
 func normalizeAssetVisualReferenceImage(rawBody []byte) ([]byte, string, error) {
@@ -1666,6 +2429,10 @@ func normalizeAssetVisualReferenceImage(rawBody []byte) ([]byte, string, error) 
 	if err != nil {
 		return nil, "", err
 	}
+	return encodeAssetVisualReferenceImageForModel(img)
+}
+
+func encodeAssetVisualReferenceImageForModel(img image.Image) ([]byte, string, error) {
 	bounds := img.Bounds()
 	width := bounds.Dx()
 	height := bounds.Dy()
@@ -1781,6 +2548,9 @@ func (h *Hub) callAssetVisualImageModelWithResponseFormat(config assetVisualAICo
 		resp, err := client.Do(req)
 		if err != nil {
 			lastErr = fmt.Errorf("图片模型请求失败：%s", err.Error())
+			if assetVisualImageModelErrorTimedOut(err) {
+				return assetVisualImageModelCallResult{}, lastErr
+			}
 			if attempt < assetVisualImageModelMaxAttempts {
 				time.Sleep(assetVisualRetryDelay(attempt, ""))
 				continue
@@ -1838,6 +2608,9 @@ func assetVisualImageModelShouldFallbackToURL(err error) bool {
 		return false
 	}
 	text := strings.ToLower(err.Error())
+	if assetVisualImageModelErrorTimedOut(err) {
+		return false
+	}
 	for _, marker := range []string{"401", "403", "unauthorized", "forbidden"} {
 		if strings.Contains(text, marker) {
 			return false
@@ -1864,6 +2637,20 @@ func assetVisualImageModelShouldFallbackToURL(err error) bool {
 		}
 	}
 	return false
+}
+
+func assetVisualImageModelErrorTimedOut(err error) bool {
+	if err == nil {
+		return false
+	}
+	var timeoutErr interface{ Timeout() bool }
+	if errors.As(err, &timeoutErr) && timeoutErr.Timeout() {
+		return true
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "client.timeout") ||
+		strings.Contains(text, "context deadline exceeded") ||
+		strings.Contains(text, "deadline exceeded")
 }
 
 func isTransientAssetVisualImageModelStatus(status int) bool {
@@ -1975,6 +2762,305 @@ func assetVisualImageModelDataURIFromBase64WithReason(value string) (string, str
 		return "", "模型返回的 Base64 不是可识别图片。"
 	}
 	return "data:" + mimeType + ";base64," + payload, ""
+}
+
+func postprocessAssetVisualGeneratedFrameDataURI(value string, theme string) string {
+	if theme != "night" {
+		return value
+	}
+	rawBody, ok := decodeAssetVisualDataURIBytes(value)
+	if !ok {
+		return value
+	}
+	img, _, err := image.Decode(bytes.NewReader(rawBody))
+	if err != nil {
+		return value
+	}
+	normalized, changed := darkenConnectedLightAssetVisualBackground(img)
+	if !changed {
+		return value
+	}
+	var output bytes.Buffer
+	if err := imaging.Encode(&output, normalized, imaging.PNG); err != nil || output.Len() == 0 {
+		return value
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(output.Bytes())
+}
+
+func validateAssetVisualGeneratedFrameDataURI(value string, asset *core.Record, colorName string) string {
+	rawBody, ok := decodeAssetVisualDataURIBytes(value)
+	if !ok {
+		return ""
+	}
+	img, _, err := image.Decode(bytes.NewReader(rawBody))
+	if err != nil {
+		return ""
+	}
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return "图片模型输出尺寸无效。"
+	}
+	if assetVisualOutputShouldBePortrait(asset) {
+		ratio := float64(width) / float64(height)
+		if ratio < 0.58 || ratio > 0.86 {
+			return "图片模型输出不是适合手机资产的竖向全貌图。"
+		}
+	}
+	foreground, ok := detectAssetVisualForegroundBounds(img)
+	if !ok {
+		return ""
+	}
+	foregroundHeightRatio := float64(foreground.Dy()) / float64(height)
+	foregroundTouchesEdge := assetVisualForegroundTouchesCanvasEdge(foreground, bounds, width, height)
+	if assetVisualOutputShouldBePortrait(asset) && !foregroundTouchesEdge && (foregroundHeightRatio < 0.48 || foregroundHeightRatio > 0.92) {
+		return "图片模型输出的设备主体比例不适合资产详情展示。"
+	}
+	if reason := validateAssetVisualGeneratedFrameColor(img, foreground, colorName); reason != "" {
+		return reason
+	}
+	return ""
+}
+
+func assetVisualForegroundTouchesCanvasEdge(foreground image.Rectangle, bounds image.Rectangle, width int, height int) bool {
+	marginX := maxInt(2, width*2/100)
+	marginY := maxInt(2, height*2/100)
+	return foreground.Min.X <= bounds.Min.X+marginX ||
+		foreground.Max.X >= bounds.Max.X-marginX ||
+		foreground.Min.Y <= bounds.Min.Y+marginY ||
+		foreground.Max.Y >= bounds.Max.Y-marginY
+}
+
+func assetVisualOutputShouldBePortrait(asset *core.Record) bool {
+	if asset == nil {
+		return false
+	}
+	switch strings.TrimSpace(asset.GetString("type")) {
+	case "phone", "tablet", "wearable", "handheld", "ebook":
+		return true
+	default:
+		return false
+	}
+}
+
+func detectAssetVisualForegroundBounds(img image.Image) (image.Rectangle, bool) {
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return image.Rectangle{}, false
+	}
+	background := averageAssetVisualCornerColor(img, bounds)
+	stride := maxInt(1, minInt(width, height)/180)
+	x0, y0 := bounds.Max.X, bounds.Max.Y
+	x1, y1 := bounds.Min.X, bounds.Min.Y
+	foregroundSamples := 0
+	totalSamples := 0
+	for y := bounds.Min.Y; y < bounds.Max.Y; y += stride {
+		for x := bounds.Min.X; x < bounds.Max.X; x += stride {
+			totalSamples++
+			r16, g16, b16, a16 := img.At(x, y).RGBA()
+			if a16 == 0 {
+				continue
+			}
+			pixel := color.RGBA{R: uint8(r16 >> 8), G: uint8(g16 >> 8), B: uint8(b16 >> 8), A: uint8(a16 >> 8)}
+			if !assetVisualPixelDiffersFromBackground(pixel, background) {
+				continue
+			}
+			foregroundSamples++
+			if x < x0 {
+				x0 = x
+			}
+			if x > x1 {
+				x1 = x
+			}
+			if y < y0 {
+				y0 = y
+			}
+			if y > y1 {
+				y1 = y
+			}
+		}
+	}
+	if totalSamples == 0 || foregroundSamples*100/totalSamples < 3 || x1 <= x0 || y1 <= y0 {
+		return image.Rectangle{}, false
+	}
+	return image.Rect(x0, y0, x1+stride, y1+stride).Intersect(bounds), true
+}
+
+func averageAssetVisualCornerColor(img image.Image, bounds image.Rectangle) color.RGBA {
+	width := bounds.Dx()
+	height := bounds.Dy()
+	sampleWidth := maxInt(2, width/12)
+	sampleHeight := maxInt(2, height/12)
+	rects := []image.Rectangle{
+		image.Rect(bounds.Min.X, bounds.Min.Y, bounds.Min.X+sampleWidth, bounds.Min.Y+sampleHeight),
+		image.Rect(bounds.Max.X-sampleWidth, bounds.Min.Y, bounds.Max.X, bounds.Min.Y+sampleHeight),
+		image.Rect(bounds.Min.X, bounds.Max.Y-sampleHeight, bounds.Min.X+sampleWidth, bounds.Max.Y),
+		image.Rect(bounds.Max.X-sampleWidth, bounds.Max.Y-sampleHeight, bounds.Max.X, bounds.Max.Y),
+	}
+	var rTotal, gTotal, bTotal, count int
+	for _, rect := range rects {
+		stride := maxInt(1, minInt(rect.Dx(), rect.Dy())/16)
+		for y := rect.Min.Y; y < rect.Max.Y; y += stride {
+			for x := rect.Min.X; x < rect.Max.X; x += stride {
+				r16, g16, b16, a16 := img.At(x, y).RGBA()
+				if a16 == 0 {
+					continue
+				}
+				rTotal += int(r16 >> 8)
+				gTotal += int(g16 >> 8)
+				bTotal += int(b16 >> 8)
+				count++
+			}
+		}
+	}
+	if count == 0 {
+		return color.RGBA{}
+	}
+	return color.RGBA{R: uint8(rTotal / count), G: uint8(gTotal / count), B: uint8(bTotal / count), A: 255}
+}
+
+func assetVisualPixelDiffersFromBackground(pixel color.RGBA, background color.RGBA) bool {
+	dr := absInt(int(pixel.R) - int(background.R))
+	dg := absInt(int(pixel.G) - int(background.G))
+	db := absInt(int(pixel.B) - int(background.B))
+	distance := dr + dg + db
+	maxChannel := maxInt(int(pixel.R), int(pixel.G), int(pixel.B))
+	minChannel := minInt(int(pixel.R), int(pixel.G), int(pixel.B))
+	saturation := maxChannel - minChannel
+	return distance > 68 || (distance > 42 && saturation > 44)
+}
+
+func validateAssetVisualGeneratedFrameColor(img image.Image, foreground image.Rectangle, colorName string) string {
+	colorClass := classifyAssetVisualOfficialColor(colorName)
+	if colorClass == "unknown" {
+		return ""
+	}
+	stride := maxInt(1, minInt(foreground.Dx(), foreground.Dy())/120)
+	total := 0
+	matches := 0
+	for y := foreground.Min.Y; y < foreground.Max.Y; y += stride {
+		for x := foreground.Min.X; x < foreground.Max.X; x += stride {
+			r16, g16, b16, a16 := img.At(x, y).RGBA()
+			if a16 == 0 {
+				continue
+			}
+			total++
+			if assetVisualPixelMatchesGeneratedColorClass(int(r16>>8), int(g16>>8), int(b16>>8), colorClass) {
+				matches++
+			}
+		}
+	}
+	if total < 80 {
+		return ""
+	}
+	if matches*100/total < 10 {
+		return "图片模型输出的设备主体颜色与所选官方配色不一致。"
+	}
+	return ""
+}
+
+func assetVisualPixelMatchesGeneratedColorClass(r int, g int, b int, colorClass string) bool {
+	maxChannel := maxInt(r, g, b)
+	minChannel := minInt(r, g, b)
+	luma := (r*299 + g*587 + b*114) / 1000
+	saturation := maxChannel - minChannel
+	switch colorClass {
+	case "dark":
+		return luma < 112 && saturation < 112
+	case "light":
+		return luma > 160 && saturation < 82
+	case "green":
+		return g > r+10 && g > b-18 && luma > 58
+	case "purple":
+		return r > 70 && b > 86 && b > g+4
+	case "blue":
+		return b > r+8 && b > g-16 && luma > 48
+	case "gold":
+		return r > 118 && g > 82 && b < 138
+	default:
+		return false
+	}
+}
+
+func decodeAssetVisualDataURIBytes(value string) ([]byte, bool) {
+	trimmed := strings.TrimSpace(value)
+	commaIndex := strings.Index(trimmed, ",")
+	if commaIndex <= 0 {
+		return nil, false
+	}
+	header := strings.ToLower(strings.TrimSpace(trimmed[:commaIndex]))
+	if !strings.HasPrefix(header, "data:") || !strings.Contains(header, ";base64") {
+		return nil, false
+	}
+	payload := strings.TrimSpace(trimmed[commaIndex+1:])
+	if payload == "" {
+		return nil, false
+	}
+	rawBody, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil || len(rawBody) == 0 {
+		return nil, false
+	}
+	return rawBody, true
+}
+
+func darkenConnectedLightAssetVisualBackground(img image.Image) (*image.NRGBA, bool) {
+	canvas := imaging.Clone(img)
+	bounds := canvas.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return canvas, false
+	}
+	visited := make([]bool, width*height)
+	queue := make([]image.Point, 0, width*2+height*2)
+	push := func(x int, y int) {
+		if x < bounds.Min.X || x >= bounds.Max.X || y < bounds.Min.Y || y >= bounds.Max.Y {
+			return
+		}
+		index := (y-bounds.Min.Y)*width + (x - bounds.Min.X)
+		if visited[index] {
+			return
+		}
+		visited[index] = true
+		if !assetVisualPixelLooksLikeLightNeutralBackground(canvas.NRGBAAt(x, y)) {
+			return
+		}
+		queue = append(queue, image.Point{X: x, Y: y})
+	}
+	for x := bounds.Min.X; x < bounds.Max.X; x++ {
+		push(x, bounds.Min.Y)
+		push(x, bounds.Max.Y-1)
+	}
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		push(bounds.Min.X, y)
+		push(bounds.Max.X-1, y)
+	}
+	changed := false
+	for len(queue) > 0 {
+		point := queue[0]
+		queue = queue[1:]
+		pixel := canvas.NRGBAAt(point.X, point.Y)
+		luma := (int(pixel.R)*299 + int(pixel.G)*587 + int(pixel.B)*114) / 1000
+		shade := uint8(8 + maxInt(0, 255-luma)/16)
+		canvas.SetNRGBA(point.X, point.Y, color.NRGBA{R: shade, G: shade + 1, B: shade + 4, A: pixel.A})
+		changed = true
+		push(point.X+1, point.Y)
+		push(point.X-1, point.Y)
+		push(point.X, point.Y+1)
+		push(point.X, point.Y-1)
+	}
+	return canvas, changed
+}
+
+func assetVisualPixelLooksLikeLightNeutralBackground(pixel color.NRGBA) bool {
+	maxChannel := maxInt(int(pixel.R), int(pixel.G), int(pixel.B))
+	minChannel := minInt(int(pixel.R), int(pixel.G), int(pixel.B))
+	luma := (int(pixel.R)*299 + int(pixel.G)*587 + int(pixel.B)*114) / 1000
+	saturation := maxChannel - minChannel
+	return pixel.A > 0 && luma >= 132 && saturation <= 54
 }
 
 func (h *Hub) materializeAssetVisualImageModelOutput(output assetVisualImageModelOutput, outputProbeCache assetVisualImageModelOutputProbeCache) (string, string) {
@@ -2094,18 +3180,23 @@ func assetVisualImageMimeTypeFromBytes(rawBody []byte) string {
 	return ""
 }
 
-func buildCollectedAssetVisualFrames(references []map[string]any, limit int) []map[string]any {
-	themeLabels := []struct {
-		theme string
-		label string
-	}{
-		{theme: "day", label: "白天"},
-		{theme: "night", label: "夜晚"},
+func (h *Hub) buildCollectedAssetVisualFrames(asset *core.Record, references []map[string]any, limit int, color string) []map[string]any {
+	if limit <= 0 {
+		limit = defaultAssetVisualCandidateCount
 	}
-	if limit <= 0 || limit > len(themeLabels) {
-		limit = len(themeLabels)
+	if limit > defaultAssetVisualCandidateCount {
+		limit = defaultAssetVisualCandidateCount
 	}
 	candidates := make([]map[string]any, 0, limit)
+	referenceURLs := assetVisualModelReferenceURLs(references)
+	preferredURLs := h.preferredAssetVisualReferenceURLs(referenceURLs, color)
+	if len(referenceURLs) > 0 && strings.TrimSpace(color) != "" && len(preferredURLs) == 0 {
+		return nil
+	}
+	preferredURLSet := map[string]bool{}
+	for _, rawURL := range preferredURLs {
+		preferredURLSet[strings.ToLower(strings.TrimSpace(rawURL))] = true
+	}
 	for _, source := range references {
 		imageURL, _ := source["image_url"].(string)
 		if imageURL == "" {
@@ -2120,12 +3211,31 @@ func buildCollectedAssetVisualFrames(references []map[string]any, limit int) []m
 			"url":          imageURL,
 			"source_title": title,
 			"source_url":   sourceURL,
+			"color":        firstNonEmpty(stringFromAny(source["color"]), inferAssetVisualSourceColor(asset, color, strings.Join(nonEmptyStrings(title, sourceURL, imageURL), " "))),
 			"theme_score":  scoreAssetVisualNightCandidate(source),
 			"visual_score": scoreAssetVisualDisplayCandidate(source),
 		})
 	}
+	if len(preferredURLSet) > 0 {
+		filtered := make([]map[string]any, 0, len(candidates))
+		for _, rawURL := range preferredURLs {
+			key := strings.ToLower(strings.TrimSpace(rawURL))
+			for _, candidate := range candidates {
+				if strings.ToLower(strings.TrimSpace(stringFromAny(candidate["url"]))) == key {
+					filtered = append(filtered, candidate)
+					break
+				}
+			}
+		}
+		if len(filtered) > 0 {
+			candidates = filtered
+		}
+	}
 	if len(candidates) == 0 {
 		return nil
+	}
+	if limit > len(candidates) {
+		limit = len(candidates)
 	}
 	frames := make([]map[string]any, 0, limit)
 	orderedCandidates := orderAssetVisualThemeCandidates(candidates, limit)
@@ -2133,15 +3243,27 @@ func buildCollectedAssetVisualFrames(references []map[string]any, limit int) []m
 		source := orderedCandidates[index%len(orderedCandidates)]
 		frames = append(frames, map[string]any{
 			"index":        index,
-			"view":         "theme",
-			"theme":        themeLabels[index].theme,
-			"label":        themeLabels[index].label,
+			"view":         "candidate",
+			"theme":        "candidate",
+			"label":        fmt.Sprintf("候选 %d", index+1),
+			"color":        stringFromAny(source["color"]),
 			"url":          source["url"],
 			"source_title": source["source_title"],
 			"source_url":   source["source_url"],
 		})
 	}
 	return frames
+}
+
+func (h *Hub) preferredAssetVisualReferenceURLs(referenceURLs []string, color string) []string {
+	if len(referenceURLs) == 0 || strings.TrimSpace(color) == "" {
+		return nil
+	}
+	inputs := h.buildAssetVisualImageModelInputs(referenceURLs, color)
+	if len(inputs.URLs) == 0 {
+		return nil
+	}
+	return inputs.URLs
 }
 
 func orderAssetVisualThemeCandidates(candidates []map[string]any, limit int) []map[string]any {

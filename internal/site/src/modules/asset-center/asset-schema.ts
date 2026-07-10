@@ -174,9 +174,9 @@ const lifecycleFields: AssetFieldDefinition[] = [
 ]
 
 const fixedAddressFields: AssetFieldDefinition[] = [
-	{ key: "fixed_ipv4", label: "固定 IPv4", source: "metadata", placeholder: "192.168.1.10", capture: "manual" },
-	{ key: "fixed_ipv6", label: "固定 IPv6", source: "metadata", placeholder: "可选", capture: "manual" },
-	{ key: "mac", label: "主 MAC", source: "metadata", placeholder: "AA:BB:CC:DD:EE:FF", capture: "manual" },
+	{ key: "fixed_ipv4", label: "IPv4", source: "metadata", placeholder: "192.168.1.10", capture: "manual" },
+	{ key: "fixed_ipv6", label: "IPv6", source: "metadata", placeholder: "可选", capture: "manual" },
+	{ key: "mac", label: "MAC", source: "metadata", placeholder: "AA:BB:CC:DD:EE:FF", capture: "manual" },
 	{
 		key: "management_url",
 		label: "管理 URL",
@@ -190,7 +190,7 @@ const fixedAddressFields: AssetFieldDefinition[] = [
 const agentConnectionFields: AssetFieldDefinition[] = [
 	{
 		key: "fixed_ipv4",
-		label: "固定 IPv4",
+		label: "IPv4",
 		source: "metadata",
 		required: true,
 		placeholder: "192.168.1.10",
@@ -198,12 +198,12 @@ const agentConnectionFields: AssetFieldDefinition[] = [
 	},
 	{
 		key: "fixed_ipv6",
-		label: "固定 IPv6",
+		label: "IPv6",
 		source: "metadata",
 		placeholder: "Agent 接入后可采集",
 		capture: "agent_collectable",
 	},
-	{ key: "mac", label: "主 MAC", source: "metadata", placeholder: "Agent 接入后可采集", capture: "agent_collectable" },
+	{ key: "mac", label: "MAC", source: "metadata", placeholder: "Agent 接入后可采集", capture: "agent_collectable" },
 	{
 		key: "management_url",
 		label: "管理 URL",
@@ -562,8 +562,9 @@ const hostHardwareDetailFields: AssetFieldDefinition[] = [
 ]
 
 const networkDeviceFields: AssetFieldDefinition[] = [
-	{ key: "management_ip", label: "管理 IP", source: "asset", placeholder: "192.168.1.1" },
-	{ key: "mac", label: "管理 MAC", source: "metadata", placeholder: "AA:BB:CC:DD:EE:FF" },
+	{ key: "fixed_ipv4", label: "IPv4", source: "metadata", placeholder: "192.168.1.1" },
+	{ key: "fixed_ipv6", label: "IPv6", source: "metadata", placeholder: "可选" },
+	{ key: "mac", label: "MAC", source: "metadata", placeholder: "AA:BB:CC:DD:EE:FF" },
 	{ key: "port_count", label: "端口数量", source: "metadata", type: "number", placeholder: "5" },
 	{
 		key: "default_port_speed_mbps",
@@ -582,7 +583,7 @@ const internetFields: AssetFieldDefinition[] = [
 	{ key: "vendor", label: "运营商", source: "asset", placeholder: "联通 / 电信 / 移动" },
 	{ key: "model", label: "套餐 / 线路名称", source: "asset", placeholder: "千兆宽带 / 第二宽带" },
 	{ key: "line_id", label: "线路编号 / 备注", source: "metadata", placeholder: "可选，不存敏感密码" },
-	{ key: "access_mode", label: "接入方式", source: "metadata", placeholder: "桥接 / 路由 / PPPoE / DHCP / 固定 IP" },
+	{ key: "access_mode", label: "接入方式", source: "metadata", placeholder: "桥接 / 路由 / PPPoE / DHCP / 静态 IPv4" },
 	{ key: "down_mbps", label: "下行 Mbps", source: "metadata", type: "number", placeholder: "1000" },
 	{ key: "up_mbps", label: "上行 Mbps", source: "metadata", type: "number", placeholder: "100" },
 	{ key: "public_ipv4", label: "公网 IPv4", source: "metadata", placeholder: "可选" },
@@ -817,8 +818,8 @@ const webEndpointFields: AssetFieldDefinition[] = [
 
 const customFields: AssetFieldDefinition[] = [
 	{ key: "custom_category", label: "自定义分类", source: "metadata", placeholder: "例如 UPS / KVM / 采集器" },
-	{ key: "fixed_ipv4", label: "固定 IPv4", source: "metadata", placeholder: "可选" },
-	{ key: "fixed_ipv6", label: "固定 IPv6", source: "metadata", placeholder: "可选" },
+	{ key: "fixed_ipv4", label: "IPv4", source: "metadata", placeholder: "可选" },
+	{ key: "fixed_ipv6", label: "IPv6", source: "metadata", placeholder: "可选" },
 	{ key: "mac", label: "MAC", source: "metadata", placeholder: "可选" },
 ]
 
@@ -1067,32 +1068,32 @@ export function getAssetSummaryRows(asset: AssetRecord): { label: string; value:
 	}
 	if (NETWORK_ASSET_TYPES.includes(asset.type)) {
 		pushRow(rows, "型号", [asset.vendor, asset.model].filter(Boolean).join(" "))
-		pushRow(rows, "管理 IP", asset.management_ip, true)
+		pushRow(rows, "IPv4", getMetadataString(metadata, "fixed_ipv4") || asset.management_ip, true)
 		pushRow(rows, "端口", formatPortSummary(metadata), true)
 		pushRow(rows, "位置", asset.location)
 		return rows
 	}
 	if (HOST_ASSET_TYPES.includes(asset.type) || asset.type === "vm") {
-		pushRow(rows, "固定 IP", getMetadataString(metadata, "fixed_ipv4") || asset.management_ip, true)
+		pushRow(rows, "IPv4", getMetadataString(metadata, "fixed_ipv4") || asset.management_ip, true)
 		pushRow(rows, "规格", formatHostSpec(metadata))
 		pushRow(rows, "网卡", formatSpeed(getMetadataNumber(metadata, "primary_nic_speed_mbps")), true)
 		return rows
 	}
 	if (PERSONAL_ASSET_TYPES.includes(asset.type)) {
-		pushRow(rows, "固定 IP", getMetadataString(metadata, "fixed_ipv4") || asset.management_ip, true)
+		pushRow(rows, "IPv4", getMetadataString(metadata, "fixed_ipv4") || asset.management_ip, true)
 		pushRow(rows, "容量", formatStorageGb(getMetadataNumber(metadata, "storage_gb")), true)
 		pushRow(rows, "连接", getMetadataString(metadata, "wifi_standard"))
 		return rows
 	}
 	if (asset.type === "camera") {
-		pushRow(rows, "固定 IP", getMetadataString(metadata, "fixed_ipv4") || asset.management_ip, true)
+		pushRow(rows, "IPv4", getMetadataString(metadata, "fixed_ipv4") || asset.management_ip, true)
 		pushRow(rows, "协议", getMetadataString(metadata, "protocol"))
 		pushRow(rows, "规格", getMetadataString(metadata, "resolution"))
 		pushRow(rows, "供电", getMetadataString(metadata, "power_mode"))
 		return rows
 	}
 	if (asset.type === "printer") {
-		pushRow(rows, "固定 IP", getMetadataString(metadata, "fixed_ipv4") || asset.management_ip, true)
+		pushRow(rows, "IPv4", getMetadataString(metadata, "fixed_ipv4") || asset.management_ip, true)
 		pushRow(rows, "类型", getMetadataString(metadata, "printer_type"))
 		pushRow(rows, "耗材", getMetadataString(metadata, "supplies"))
 		pushRow(rows, "纸张", getMetadataString(metadata, "paper_size"))
@@ -1113,7 +1114,7 @@ export function getAssetSummaryRows(asset: AssetRecord): { label: string; value:
 		return rows
 	}
 	if (asset.type === "custom") {
-		pushRow(rows, "固定 IP", getMetadataString(metadata, "fixed_ipv4") || asset.management_ip, true)
+		pushRow(rows, "IPv4", getMetadataString(metadata, "fixed_ipv4") || asset.management_ip, true)
 		pushRow(rows, "分类", getMetadataString(metadata, "custom_category"))
 		pushRow(rows, "MAC", getMetadataString(metadata, "mac"), true)
 		pushRow(rows, "位置", asset.location)
@@ -1184,8 +1185,8 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 			{ label: "厂商 / 品牌", ok: Boolean(asset.vendor?.trim()) },
 			{ label: "型号", ok: Boolean(asset.model?.trim()) },
 			{ label: "厂家资料页", ok: hasOfficialReference },
-			{ label: "管理 IP", ok: Boolean(asset.management_ip?.trim()) },
-			{ label: "管理 MAC", ok: Boolean(getMetadataString(metadata, "mac")) },
+			{ label: "IPv4", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) },
+			{ label: "MAC", ok: Boolean(getMetadataString(metadata, "mac")) },
 			{ label: "端口数量", ok: Boolean(getMetadataNumber(metadata, "port_count")) },
 			{ label: "端口速率", ok: Boolean(getMetadataNumber(metadata, "default_port_speed_mbps")) }
 		)
@@ -1196,7 +1197,7 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 			{ label: "厂商 / 品牌", ok: Boolean(asset.vendor?.trim()) },
 			{ label: "型号", ok: Boolean(asset.model?.trim()) },
 			{ label: "厂家资料页", ok: hasOfficialReference },
-			{ label: "固定 IPv4", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) },
+			{ label: "IPv4", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) },
 			{ label: "计划接入 Agent", ok: Boolean(getMetadataString(metadata, "planned_agent")) },
 			{ label: "CPU 型号", ok: Boolean(getMetadataString(metadata, "cpu_model")) },
 			{
@@ -1218,7 +1219,7 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 	if (asset.type === "vm") {
 		checks.push(
 			{ label: "宿主资产", ok: Boolean(asset.parent_asset) },
-			{ label: "固定 IPv4", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) },
+			{ label: "IPv4", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) },
 			{ label: "计划接入 Agent", ok: Boolean(getMetadataString(metadata, "planned_agent")) }
 		)
 		return checks
@@ -1255,8 +1256,8 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 			{ label: "厂商 / 品牌", ok: Boolean(asset.vendor?.trim()) },
 			{ label: "型号", ok: Boolean(asset.model?.trim()) },
 			{ label: "厂家资料页", ok: hasOfficialReference },
-			{ label: "固定 IP", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) },
-			{ label: "主 MAC", ok: Boolean(getMetadataString(metadata, "mac")) },
+			{ label: "IPv4", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) },
+			{ label: "MAC", ok: Boolean(getMetadataString(metadata, "mac")) },
 			{ label: "供电方式", ok: Boolean(getMetadataString(metadata, "power_mode")) }
 		)
 		if (isPhoneVariantSpecRequired(asset.type)) {
@@ -1272,15 +1273,15 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 			{ label: "厂商 / 品牌", ok: Boolean(asset.vendor?.trim()) },
 			{ label: "型号", ok: Boolean(asset.model?.trim()) },
 			{ label: "厂家资料页", ok: hasOfficialReference },
-			{ label: "固定 IP", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) },
-			{ label: "主 MAC", ok: Boolean(getMetadataString(metadata, "mac")) }
+			{ label: "IPv4", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) },
+			{ label: "MAC", ok: Boolean(getMetadataString(metadata, "mac")) }
 		)
 		return checks
 	}
 	checks.push(
 		{ label: "自定义分类", ok: Boolean(getMetadataString(metadata, "custom_category")) },
 		{
-			label: "固定 IP 或 MAC",
+			label: "IPv4 或 MAC",
 			ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || getMetadataString(metadata, "mac")),
 		}
 	)

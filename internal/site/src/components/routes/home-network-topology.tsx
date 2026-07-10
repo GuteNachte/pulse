@@ -94,6 +94,7 @@ import {
 import { getSystemIPAddressLabel } from "@/lib/system-network"
 import { getSystemDisplayName } from "@/lib/system-roles"
 import { cn } from "@/lib/utils"
+import { getMetadataString } from "@/modules/asset-center/asset-schema"
 import type {
 	AssetInterfaceRecord,
 	AssetRecord,
@@ -1246,7 +1247,9 @@ function NodeDetailsDialog({
 								{asset?.type === "internet" && getInternetBandwidthLabel(asset) && (
 									<TopologyDetailRow label="宽带带宽" value={getInternetBandwidthLabel(asset)} />
 								)}
-								{asset?.management_ip && <TopologyDetailRow label="管理 IP" value={asset.management_ip} />}
+								{asset && (getMetadataString(asset.metadata, "fixed_ipv4") || asset.management_ip) && (
+									<TopologyDetailRow label="IPv4" value={getMetadataString(asset.metadata, "fixed_ipv4") || asset.management_ip} />
+								)}
 								{asset?.role && <TopologyDetailRow label="角色" value={asset.role} />}
 								{asset?.location && <TopologyDetailRow label="位置" value={asset.location} />}
 								{system?.info?.h && <TopologyDetailRow label="主机名" value={system.info.h} />}
@@ -1439,7 +1442,7 @@ function DeviceDialog({
 						) : (
 							<>
 								<TextField name="model" label="型号" placeholder="设备型号" />
-								<TextField name="management_ip" label="管理 IP" placeholder="192.168.1.1" />
+								<TextField name="management_ip" label="IPv4" placeholder="192.168.1.1" />
 								<TextField name="role" label="角色" placeholder="网关 / 核心交换机 / Wi-Fi AP" />
 							</>
 						)}

@@ -120,51 +120,49 @@ export function AssetTagInput({
 }) {
 	const normalizedValue = value.trim()
 	const presetValue = nextAssetTagPreview.trim()
-	const isPreset = Boolean(presetValue && normalizedValue === presetValue)
-	const shouldShowCustom = Boolean(normalizedValue && !isPreset)
-	const [customMode, setCustomMode] = useState(shouldShowCustom)
+	const [customMode, setCustomMode] = useState(false)
 
 	useEffect(() => {
 		if (required && !normalizedValue && presetValue) {
 			onChange(presetValue)
-			return
 		}
-		if (shouldShowCustom) {
-			setCustomMode(true)
-		} else if (isPreset) {
-			setCustomMode(false)
-		}
-	}, [isPreset, normalizedValue, onChange, presetValue, required, shouldShowCustom])
+	}, [normalizedValue, onChange, presetValue, required])
 
-	const selectValue = customMode || shouldShowCustom ? "__custom__" : normalizedValue
+	const displayValue = normalizedValue || presetValue
+	const selectValue = customMode ? "__custom__" : displayValue
 
 	return (
-		<div className="grid gap-2">
+		<div className="grid gap-1.5">
 			{name && <input type="hidden" name={name} value={normalizedValue} />}
-			<select
-				id={id}
-				value={selectValue}
-				onChange={(event) => {
-					const nextValue = event.target.value
-					if (nextValue === "__custom__") {
-						setCustomMode(true)
-						return
-					}
-					setCustomMode(false)
-					onChange(nextValue)
-				}}
-				className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus:border-ring/70 focus:ring-2 focus:ring-ring/15"
-			>
-				{!required && <option value="">{presetValue ? `自动编号：${presetValue}` : "自动编号"}</option>}
-				{presetValue && <option value={presetValue}>预设编号：{presetValue}</option>}
-				<option value="__custom__">自定义编号</option>
-			</select>
-			{(customMode || shouldShowCustom) && (
+			{customMode ? (
 				<Input
-					value={normalizedValue}
-					placeholder={presetValue ? `例如 ${presetValue}` : "输入资产编号"}
-					onChange={(event) => onChange(event.target.value)}
+					id={id}
+					value={value}
+					placeholder={presetValue || "输入资产编号"}
+					onChange={(event) => {
+						setCustomMode(true)
+						onChange(event.target.value)
+					}}
 				/>
+			) : (
+				<select
+					id={id}
+					value={selectValue}
+					onChange={(event) => {
+						const nextValue = event.target.value
+						if (nextValue === "__custom__") {
+							setCustomMode(true)
+							onChange(displayValue)
+							return
+						}
+						setCustomMode(false)
+						onChange(nextValue)
+					}}
+					className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus:border-ring/70 focus:ring-2 focus:ring-ring/15"
+				>
+					<option value={displayValue}>{displayValue || "保存时自动生成"}</option>
+					<option value="__custom__">自定义编号</option>
+				</select>
 			)}
 		</div>
 	)
@@ -244,12 +242,12 @@ export function AssetLocationInput({
 	const secondValue = parts[1] ?? ""
 	const rootOptions = getLocationRootOptions(locationOptions, rootValue)
 	const secondOptions = getLocationSecondOptions(locationOptions, rootValue, secondValue)
-	const rootListId = `${idPrefix}-root`
-	const secondListId = `${idPrefix}-second`
 
 	function updateRoot(nextRoot: string) {
 		const root = nextRoot.trim()
-		const second = secondValue.trim()
+		const second = getLocationSecondOptions(locationOptions, root, "").includes(secondValue.trim())
+			? secondValue.trim()
+			: ""
 		onChange(root ? joinLocationPath(root, second) : "")
 	}
 
@@ -263,36 +261,47 @@ export function AssetLocationInput({
 		<div className="grid gap-2 sm:grid-cols-2">
 			<div className="grid gap-1.5">
 				<div className="text-xs text-muted-foreground">一级位置</div>
-				<Input
-					list={rootListId}
+				<select
+					id={`${idPrefix}-root`}
 					value={rootValue}
-					placeholder="家 / 公司"
-					onChange={(event) => updateRoot(event.target.value)}
-				/>
-				<datalist id={rootListId}>
+					onChange={(event) => {
+						updateRoot(event.target.value)
+					}}
+					className={locationSelectClassName}
+				>
+					<option value="">选择一级位置</option>
 					{rootOptions.map((location) => (
-						<option key={location} value={location} />
+						<option key={location} value={location}>
+							{location}
+						</option>
 					))}
-				</datalist>
+				</select>
 			</div>
 			<div className="grid gap-1.5">
 				<div className="text-xs text-muted-foreground">二级房间</div>
-				<Input
-					list={secondListId}
+				<select
+					id={`${idPrefix}-second`}
 					value={secondValue}
-					placeholder={rootValue ? "客厅 / 书房 / 办公室" : "先填写一级位置"}
-					onChange={(event) => updateSecond(event.target.value)}
+					onChange={(event) => {
+						updateSecond(event.target.value)
+					}}
 					disabled={!rootValue}
-				/>
-				<datalist id={secondListId}>
+					className={locationSelectClassName}
+				>
+					<option value="">{rootValue ? "选择二级房间" : "先选择一级位置"}</option>
 					{secondOptions.map((location) => (
-						<option key={location} value={location} />
+						<option key={location} value={location}>
+							{location}
+						</option>
 					))}
-				</datalist>
+				</select>
 			</div>
 		</div>
 	)
 }
+
+const locationSelectClassName =
+	"h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus:border-ring/70 focus:ring-2 focus:ring-ring/15 disabled:cursor-not-allowed disabled:opacity-60"
 
 export function AssetFormField({
 	label,

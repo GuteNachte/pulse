@@ -85,15 +85,10 @@ const runningVisualTask = {
 	provider: "agnes",
 	model: "agnes-image-2.1-flash",
 	output_summary: {
-		phase: "image_model_day",
-		phase_label: "正在生成白天图",
+		phase: "reference_collecting",
+		phase_label: "正在收集参考图",
 		progress_percent: 55,
 		collected_images: 2,
-		image_model_reference_input_count: 2,
-		image_model_reference_payload_bytes: 3145728,
-		image_model_response_format: "b64_json",
-		image_model_fallback_response_format: "url",
-		image_model_timeout_seconds: 120,
 	},
 } as unknown as AITaskRecord
 
@@ -141,12 +136,12 @@ assertDeepEqual(getReferenceSkipReasonSummary(readyVisualTask.output_summary), {
 
 assertEqual(
 	formatAITaskSummary(readyVisualTask),
-	"设备图片 Agent · 参考图 2 张 · 统一图 2 张 · 可用输入 1 张 · 跳过 1 张：参考图大小超过模型输入上限。"
+	"设备图片 Agent · 历史生图 2 张（不再作为主图） · 已收集设备图 2 张 · 跳过 1 张：参考图大小超过模型输入上限。"
 )
 
 assertEqual(
 	formatAssetVisualTaskMeta(readyVisualTask),
-	"图片成功：参考 2 / 生成 2，可用输入 1，跳过 1 张：参考图大小超过模型输入上限。"
+	"历史生图 2 张不再作为主图，已收集设备图 2 张，跳过 1 张：参考图大小超过模型输入上限。"
 )
 
 assertEqual(
@@ -165,24 +160,27 @@ assertEqual(
 
 assertEqual(
 	formatAITaskSummary(runningVisualTask),
-	"设备图片 Agent · 正在生成白天图 · 55% · 模型请求：输入 2 张 / 请求 3 MB / 输出 b64_json / 备用 url / 超时 120 秒"
+	"设备图片 Agent · 正在收集参考图 · 55%"
 )
 
 assertEqual(
 	formatAssetVisualTaskMeta(runningVisualTask),
-	"图片生成中：正在生成白天图 55%，模型请求：输入 2 张 / 请求 3 MB / 输出 b64_json / 备用 url / 超时 120 秒"
+	"图片收集中：正在收集参考图 55%"
 )
 
 assertEqual(
 	formatAITaskSummary(readyVisualTaskWithModelRejections),
-	"设备图片 Agent · 参考图 2 张 · 统一图 2 张 · 模型跳过 2 个候选：模型返回的 URL 不是可验证图片。"
+	"设备图片 Agent · 历史生图 2 张（不再作为主图） · 已收集设备图 2 张 · 模型跳过 2 个候选：模型返回的 URL 不是可验证图片。"
 )
 
 assertEqual(
 	formatAssetVisualTaskMeta(readyVisualTaskWithModelRejections),
-	"图片成功：参考 2 / 生成 2，模型跳过 2 个候选：模型返回的 URL 不是可验证图片。"
+	"历史生图 2 张不再作为主图，已收集设备图 2 张，模型跳过 2 个候选：模型返回的 URL 不是可验证图片。"
 )
 
-assertEqual(formatAITaskSummary(legacyReadyVisualTaskWithThemeImages), "设备图片 Agent · 参考图 2 张 · 统一图 2 张")
+assertEqual(
+	formatAITaskSummary(legacyReadyVisualTaskWithThemeImages),
+	"设备图片 Agent · 历史生图 2 张（不再作为主图） · 已收集设备图 2 张"
+)
 
-assertEqual(formatAssetVisualTaskMeta(legacyReadyVisualTaskWithThemeImages), "图片成功：参考 2 / 生成 2")
+assertEqual(formatAssetVisualTaskMeta(legacyReadyVisualTaskWithThemeImages), "历史生图 2 张不再作为主图，已收集设备图 2 张")

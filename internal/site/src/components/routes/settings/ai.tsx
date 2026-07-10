@@ -27,9 +27,15 @@ type AssetEnrichmentConfig = {
 	base_url_host: string
 	api_key: string
 	api_key_configured: boolean
-	ai: AIProviderConfig
+	ai: AIProviderConfig & {
+		source_discovery_enabled: boolean
+		max_sources: number
+	}
 	visual_ai: AIProviderConfig & {
 		frame_count: number
+		model_discovery_enabled: boolean
+		max_images: number
+		official_only: boolean
 	}
 }
 
@@ -51,10 +57,14 @@ type AISettingsForm = {
 	aiEnabled: boolean
 	aiModel: string
 	aiApiKey: string
+	aiSourceDiscoveryEnabled: boolean
+	aiMaxSources: number
 	visualEnabled: boolean
 	visualModel: string
 	visualApiKey: string
-	frameCount: number
+	visualModelDiscoveryEnabled: boolean
+	visualMaxImages: number
+	visualOfficialOnly: boolean
 }
 
 const defaultForm: AISettingsForm = {
@@ -63,10 +73,14 @@ const defaultForm: AISettingsForm = {
 	aiEnabled: false,
 	aiModel: "agnes-2.0-flash",
 	aiApiKey: "",
+	aiSourceDiscoveryEnabled: true,
+	aiMaxSources: 5,
 	visualEnabled: false,
-	visualModel: "agnes-image-2.1-flash",
+	visualModel: "agnes-2.0-flash",
 	visualApiKey: "",
-	frameCount: 2,
+	visualModelDiscoveryEnabled: true,
+	visualMaxImages: 8,
+	visualOfficialOnly: true,
 }
 
 export default function AISettings() {
@@ -78,13 +92,9 @@ export default function AISettings() {
 
 	const readyCount = useMemo(() => {
 		if (!config) return 0
-		return [
-			config.base_url && config.api_key_configured,
-			config.base_url && config.api_key_configured && config.visual_ai.model,
-		].filter(Boolean).length
+		return [config.base_url && config.api_key_configured, config.visual_ai.enabled].filter(Boolean).length
 	}, [config])
 	const textAccessReady = Boolean(config?.base_url && config?.api_key_configured)
-	const imageAccessReady = Boolean(config?.base_url && config?.api_key_configured)
 	const latestEnrichmentTask = aiTasks.find((task) => task.kind === "asset_enrichment")
 	const latestVisualTask = aiTasks.find((task) => task.kind === "asset_visual")
 
@@ -119,13 +129,17 @@ export default function AISettings() {
 						provider: "agnes",
 						model: form.aiModel,
 						api_key: form.aiApiKey,
+						source_discovery_enabled: form.aiSourceDiscoveryEnabled,
+						max_sources: form.aiMaxSources,
 					},
 					visual_ai: {
 						enabled: form.visualEnabled,
 						provider: "agnes",
 						model: form.visualModel,
 						api_key: form.visualApiKey,
-						frame_count: form.frameCount,
+						model_discovery_enabled: form.visualModelDiscoveryEnabled,
+						max_images: form.visualMaxImages,
+						official_only: form.visualOfficialOnly,
 					},
 				},
 			})
@@ -217,6 +231,19 @@ export default function AISettings() {
 										onChange={(value) => setForm((current) => ({ ...current, aiModel: value }))}
 										placeholder="agnes-2.0-flash"
 									/>
+									<ToggleRow
+										label="启用模型来源发现"
+										description="主档没有支持页或产品页时，先让资料补全 Agent 找官网、支持页、规格页和说明书 URL，再由 Hub 抓取校验。"
+										checked={form.aiSourceDiscoveryEnabled}
+										onCheckedChange={(value) => setForm((current) => ({ ...current, aiSourceDiscoveryEnabled: value }))}
+									/>
+									<NumberSetting
+										label="可信来源上限"
+										value={form.aiMaxSources}
+										min={2}
+										max={10}
+										onChange={(value) => setForm((current) => ({ ...current, aiMaxSources: value }))}
+									/>
 									<div className="rounded-md border border-border/70 bg-surface-soft p-3 text-xs leading-relaxed text-muted-foreground">
 										执行口径：优先使用资产主档里的厂商、型号、内部型号、支持页、本地 Agent
 										采集结果；需要外部资料时由资料补全 Agent
@@ -229,30 +256,45 @@ export default function AISettings() {
 							<SettingsPanel
 								icon={ImageIcon}
 								title="设备图片 Agent"
-								description="只配置这个 Agent 的任务行为。它先收集官方 / 可追溯真实图片，再调用图片模型生成统一风格最终图。"
+								description="只配置这个 Agent 的任务行为。它从官方 / 可追溯来源收集合适的真实设备图片，不再调用图片模型重绘外观。"
 							>
 								<div className="grid gap-4">
 									<ToggleRow
 										label="启用设备图片 Agent"
-										description="关闭后不再生成新的设备图片；执行时优先使用已确认官方图片、厂家支持页和官网图片作为参考。"
+										description="关闭后不再收集新的设备图片；执行时优先使用已确认官方图片、厂家支持页和官网图片。"
 										checked={form.visualEnabled}
 										onCheckedChange={(value) => setForm((current) => ({ ...current, visualEnabled: value }))}
 									/>
 									<AgentModelField
-										label="一致性整理模型"
+										label="找图策略模型"
 										value={form.visualModel}
 										onChange={(value) => setForm((current) => ({ ...current, visualModel: value }))}
-										placeholder="agnes-image-2.1-flash"
+										placeholder="agnes-2.0-flash"
 									/>
-									<div className="rounded-lg border border-border/70 bg-surface-soft p-3">
-										<Label htmlFor="visual-frame-count" className="text-xs">
-											图片收集上限
-										</Label>
-										<Input id="visual-frame-count" type="number" min={2} max={2} value={2} readOnly className="mt-2" />
-										<p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-											固定生成白天 / 夜晚两张统一风格图片；参考图会先转成 Data URI 传给 Agnes，避免只靠不可访问 URL
-											凭空生成。
-										</p>
+									<ToggleRow
+										label="启用模型找图"
+										description="已有主档 URL 不够时，让找图策略模型返回官方图片或官方 CDN 候选 URL。"
+										checked={form.visualModelDiscoveryEnabled}
+										onCheckedChange={(value) =>
+											setForm((current) => ({ ...current, visualModelDiscoveryEnabled: value }))
+										}
+									/>
+									<ToggleRow
+										label="只收官方 / 可追溯图片"
+										description="开启后会拒绝低可信页面图片；Hub 仍会下载并按图片字节校验。"
+										checked={form.visualOfficialOnly}
+										onCheckedChange={(value) => setForm((current) => ({ ...current, visualOfficialOnly: value }))}
+									/>
+									<NumberSetting
+										label="候选筛选上限"
+										value={form.visualMaxImages}
+										min={2}
+										max={12}
+										onChange={(value) => setForm((current) => ({ ...current, visualMaxImages: value }))}
+									/>
+									<div className="rounded-md border border-border/70 bg-surface-soft p-3 text-xs leading-relaxed text-muted-foreground">
+										执行口径：候选图只作为筛选池，Agent 会尽量按官方颜色分类；最终由用户在资产编辑里选择 1
+										张作为设备主图。
 									</div>
 								</div>
 							</SettingsPanel>
@@ -268,9 +310,9 @@ export default function AISettings() {
 						/>
 						<ConfigStatusCard
 							icon={ImageIcon}
-							title="图片模型接入"
-							value={imageAccessReady ? "已配置" : "未配置"}
-							active={imageAccessReady}
+							title="图片收集能力"
+							value={form.visualEnabled ? "已启用" : "未启用"}
+							active={form.visualEnabled}
 						/>
 					</div>
 					<div className="grid gap-3 md:grid-cols-2">
@@ -323,10 +365,14 @@ function formFromConfig(config: AssetEnrichmentConfig): AISettingsForm {
 		aiEnabled: config.ai.enabled,
 		aiModel: config.ai.model || defaultForm.aiModel,
 		aiApiKey: config.api_key || config.ai.api_key || "",
+		aiSourceDiscoveryEnabled: config.ai.source_discovery_enabled ?? defaultForm.aiSourceDiscoveryEnabled,
+		aiMaxSources: config.ai.max_sources || defaultForm.aiMaxSources,
 		visualEnabled: config.visual_ai.enabled,
 		visualModel: config.visual_ai.model || defaultForm.visualModel,
 		visualApiKey: config.api_key || config.visual_ai.api_key || "",
-		frameCount: defaultForm.frameCount,
+		visualModelDiscoveryEnabled: config.visual_ai.model_discovery_enabled ?? defaultForm.visualModelDiscoveryEnabled,
+		visualMaxImages: config.visual_ai.max_images || defaultForm.visualMaxImages,
+		visualOfficialOnly: config.visual_ai.official_only ?? defaultForm.visualOfficialOnly,
 	}
 }
 
@@ -537,6 +583,39 @@ function AgentModelField({
 			</p>
 		</div>
 	)
+}
+
+function NumberSetting({
+	label,
+	value,
+	min,
+	max,
+	onChange,
+}: {
+	label: string
+	value: number
+	min: number
+	max: number
+	onChange: (value: number) => void
+}) {
+	return (
+		<div className="rounded-lg border border-border/70 bg-surface-soft p-3">
+			<Label className="text-xs">{label}</Label>
+			<Input
+				type="number"
+				min={min}
+				max={max}
+				value={value}
+				onChange={(event) => onChange(clampNumber(Number(event.target.value), min, max))}
+				className="mt-2"
+			/>
+		</div>
+	)
+}
+
+function clampNumber(value: number, min: number, max: number) {
+	if (!Number.isFinite(value)) return min
+	return Math.max(min, Math.min(max, Math.round(value)))
 }
 
 function SecretField({
