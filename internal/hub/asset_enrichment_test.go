@@ -1833,7 +1833,7 @@ func TestAssetVisualExcludesMarketingBundleImagesFromModelReferences(t *testing.
 	require.NotContains(t, referenceInputURLs, "product-poster.jpg")
 }
 
-func TestAssetVisualCollectsSelectedColorReferenceAsPrimaryDisplay(t *testing.T) {
+func TestAssetVisualCollectsSelectedColorReferencesBeforeUserSelectsPrimaryDisplay(t *testing.T) {
 	fixture := newAssetEnrichmentFixture(t, "asset-visual-selected-color-display@example.com")
 	var referenceServer *httptest.Server
 	referenceServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1896,11 +1896,13 @@ func TestAssetVisualCollectsSelectedColorReferenceAsPrimaryDisplay(t *testing.T)
 	visualMetadata := recordMetadata(t, referenceVisual)
 	require.Equal(t, "candidate_set", visualMetadata["visual_role"])
 	frames := recordJSONArrayField(t, referenceVisual, "frames")
-	require.Len(t, frames, 1)
-	require.Equal(t, "墨羽黑", frames[0]["color"])
-	require.Contains(t, fmt.Sprint(frames[0]["url"]), "sw2-2.jpg")
-	require.NotContains(t, fmt.Sprint(frames), "sw2-1.jpg")
-	require.NotContains(t, fmt.Sprint(frames), "sw2-3.jpg")
+	require.Len(t, frames, 3)
+	for _, frame := range frames {
+		require.Equal(t, "墨羽黑", frame["color"])
+	}
+	require.Contains(t, fmt.Sprint(frames), "sw2-1.jpg")
+	require.Contains(t, fmt.Sprint(frames), "sw2-2.jpg")
+	require.Contains(t, fmt.Sprint(frames), "sw2-3.jpg")
 
 	tasks, err := fixture.hub.FindRecordsByFilter("ai_tasks", "asset = {:asset} && kind = 'asset_visual'", "-created", -1, 0, map[string]any{
 		"asset": asset.Id,
@@ -1916,7 +1918,7 @@ func TestAssetVisualCollectsSelectedColorReferenceAsPrimaryDisplay(t *testing.T)
 		fixture.hub.TestApp,
 		http.MethodPost,
 		fmt.Sprintf("/api/pulse/assets/%s/visuals/%s/select", asset.Id, referenceVisual.Id),
-		strings.NewReader(`{"frame_index":0}`),
+		strings.NewReader(`{"frame_index":1}`),
 		fixture.headers,
 	)
 	require.Equal(t, http.StatusOK, selectResponse.Status, selectResponse.Body)
@@ -1928,6 +1930,9 @@ func TestAssetVisualCollectsSelectedColorReferenceAsPrimaryDisplay(t *testing.T)
 	selectedMetadata := recordMetadata(t, selectedVisuals[0])
 	require.Equal(t, "final_reference", selectedMetadata["visual_role"])
 	require.Equal(t, referenceVisual.Id, selectedMetadata["selected_from_visual"])
+	selectedFrames := recordJSONArrayField(t, selectedVisuals[0], "frames")
+	require.Len(t, selectedFrames, 1)
+	require.Contains(t, fmt.Sprint(selectedFrames[0]["url"]), "sw2-2.jpg")
 }
 
 func TestAssetVisualPrioritizesSelectedColorReferenceForImageModel(t *testing.T) {

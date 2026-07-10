@@ -2693,20 +2693,14 @@ func TestCreateUserEndpointAvailability(t *testing.T) {
 }
 
 func TestAutoLoginMiddleware(t *testing.T) {
-	var hubs []*pulseTests.TestHub
-
-	defer func() {
-		for _, hub := range hubs {
-			hub.Cleanup()
-		}
-	}()
-
 	t.Setenv("AUTO_LOGIN", "user@test.com")
 
+	hub, err := pulseTests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer hub.Cleanup()
+	hub.StartHub()
+
 	testAppFactory := func(t testing.TB) *pbTests.TestApp {
-		hub, _ := pulseTests.NewTestHub(t.TempDir())
-		hubs = append(hubs, hub)
-		hub.StartHub()
 		return hub.TestApp
 	}
 
@@ -2747,20 +2741,14 @@ func TestAutoLoginMiddleware(t *testing.T) {
 }
 
 func TestTrustedHeaderMiddleware(t *testing.T) {
-	var hubs []*pulseTests.TestHub
-
-	defer func() {
-		for _, hub := range hubs {
-			hub.Cleanup()
-		}
-	}()
-
 	t.Setenv("TRUSTED_AUTH_HEADER", "X-Pulse-Trusted")
 
+	hub, err := pulseTests.NewTestHub(t.TempDir())
+	require.NoError(t, err)
+	defer hub.Cleanup()
+	hub.StartHub()
+
 	testAppFactory := func(t testing.TB) *pbTests.TestApp {
-		hub, _ := pulseTests.NewTestHub(t.TempDir())
-		hubs = append(hubs, hub)
-		hub.StartHub()
 		return hub.TestApp
 	}
 

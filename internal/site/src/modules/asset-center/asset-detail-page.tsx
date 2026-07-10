@@ -1,9 +1,7 @@
 import { getPagePath } from "@nanostores/router"
 import {
-	AlertTriangleIcon,
 	ArrowLeftIcon,
 	BatteryIcon,
-	BellIcon,
 	BoxesIcon,
 	CpuIcon,
 	ImageIcon,
@@ -16,14 +14,12 @@ import {
 	NetworkIcon,
 	PaperclipIcon,
 	PencilIcon,
-	SendIcon,
 	ThermometerIcon,
 } from "lucide-react"
 import { lazy, memo, Suspense, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react"
 import { $router, Link } from "@/components/router"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
 	Dialog,
 	DialogContent,
@@ -36,19 +32,6 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
-import {
-	alertCreatedLabel,
-	alertDisplayName,
-	alertSeverity,
-	alertSeverityLabel,
-	alertSourceLabel,
-	alertStateLabel,
-	alertSystemName,
-	alertValueLabel,
-} from "@/lib/alert-display"
-import { AlertContent } from "@/components/alerts/alerts-sheet"
-import { formatPolicyCoverage, getPoliciesForAsset } from "@/components/alerts/alert-rules-overview"
-import { alertInfo } from "@/lib/alerts"
 import { isPocketBaseAutoCancel, isReadOnlyUser, pb } from "@/lib/api"
 import { pageTitle } from "@/lib/branding"
 import { cn } from "@/lib/utils"
@@ -134,12 +117,7 @@ import type {
 	AssetRecord,
 	AssetRelationKind,
 	AssetRelationRecord,
-	AlertNotificationStateRecord,
-	AlertPolicyRecord,
-	AlertRecord,
-	AlertsHistoryRecord,
 	NetworkInterfaceDetails,
-	NotificationFailureRecord,
 	SystemDetailsRecord,
 	SystemRecord,
 } from "@/types"
@@ -2700,316 +2678,6 @@ type AssetCollectionWriteback = {
 	targetLabel: string
 }
 
-function AssetAlertPoliciesCard({
-	assetId,
-	systems,
-	assetAlerts,
-	policies,
-	readOnly,
-}: {
-	assetId: string
-	systems: SystemRecord[]
-	assetAlerts: AlertRecord[]
-	policies: AlertPolicyRecord[]
-	readOnly: boolean
-}) {
-	const matchedPolicies = getPoliciesForAsset(policies, assetId)
-	const alertByName = new Map<string, AlertRecord>()
-	for (const alert of assetAlerts) {
-		if (!alertByName.has(alert.name)) {
-			alertByName.set(alert.name, alert)
-		}
-	}
-	const alertKeys = Object.keys(alertInfo)
-	const enabledCount = alertKeys.filter((key) => alertByName.has(key)).length
-	return (
-		<Card className="border-border/70 bg-card shadow-none">
-			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
-				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg">资产告警配置</CardTitle>
-					{enabledCount > 0 && <MetaTag>{enabledCount} 已启用</MetaTag>}
-				</div>
-			</CardHeader>
-			<CardContent className="grid gap-3 p-4">
-				{systems.length === 0 ? (
-					<EmptyBlock icon={<ListChecksIcon className="size-5" />} text="需要先接入客户端监控后才能配置资源告警。" />
-				) : readOnly ? (
-					<EmptyBlock icon={<ListChecksIcon className="size-5" />} text="只读账号不能修改资产告警规则。" />
-				) : (
-					<div className="grid gap-2">
-						{alertKeys.map((key) => (
-							<AlertContent
-								key={key}
-								alertKey={key}
-								data={alertInfo[key]}
-								assetId={assetId}
-								alert={alertByName.get(key)}
-							/>
-						))}
-					</div>
-				)}
-				<div className="rounded-lg border border-border/70 bg-surface-soft p-3">
-					<div className="flex items-center justify-between gap-3">
-						<div className="font-medium text-foreground">全局规则覆盖</div>
-						<MetaTag>{matchedPolicies.length} 项</MetaTag>
-					</div>
-					<div className="mt-3 grid gap-2">
-						{matchedPolicies.length === 0 ? (
-							<div className="text-sm text-muted-foreground">当前资产没有覆盖到已启用的全局资源规则。</div>
-						) : (
-							matchedPolicies.map((policy) => (
-								<div key={policy.id} className="rounded-md border border-border/70 bg-card px-3 py-2">
-									<div className="flex items-start justify-between gap-3">
-										<div className="min-w-0">
-											<div className="flex min-w-0 flex-wrap items-center gap-2">
-												<MetaTag>资源阈值</MetaTag>
-												<span className="min-w-0 truncate font-medium text-foreground">
-													{getAlertPolicyLabel(policy.name)}
-												</span>
-											</div>
-											<div className="mt-2 grid gap-1 text-xs text-muted-foreground">
-												<span>{formatAssetPolicyThreshold(policy)}</span>
-												<span>{formatPolicyCoverage(policy)}</span>
-											</div>
-										</div>
-										<MetaTag>{policy.min} 分钟</MetaTag>
-									</div>
-								</div>
-							))
-						)}
-					</div>
-				</div>
-				<Button asChild variant="outline" className="gap-2">
-					<Link href={getPagePath($router, "alerts")}>
-						<ListChecksIcon className="size-4" />
-						查看告警中心
-					</Link>
-				</Button>
-			</CardContent>
-		</Card>
-	)
-}
-
-function AssetAlertHistoryCard({ records }: { records: AlertsHistoryRecord[] }) {
-	const currentCount = records.filter((record) => !record.resolved).length
-	return (
-		<Card className="border-border/70 bg-card shadow-none">
-			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
-				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg">告警历史</CardTitle>
-					{records.length > 0 && (
-						<MetaTag>{currentCount > 0 ? `${currentCount} 未恢复` : `${records.length} 条记录`}</MetaTag>
-					)}
-				</div>
-			</CardHeader>
-			<CardContent className="grid gap-2 p-4">
-				{records.length === 0 ? (
-					<EmptyBlock
-						icon={<AlertTriangleIcon className="size-5" />}
-						text="暂无关联告警。只有真实采集或检测触发后才会显示。"
-					/>
-				) : (
-					<>
-						{records.slice(0, 6).map((record) => (
-							<Link
-								key={record.id}
-								href={`${getPagePath($router, "alerts")}?search=${encodeURIComponent(alertDisplayName(record))}`}
-								className="rounded-lg border border-border/70 bg-surface-soft p-3 transition-colors hover:bg-surface-card"
-							>
-								<div className="flex items-start justify-between gap-3">
-									<div className="min-w-0">
-										<div className="flex min-w-0 flex-wrap items-center gap-2">
-											<AlertSeverityBadge record={record} />
-											<MetaTag>{alertSourceLabel(record)}</MetaTag>
-											{record.expand?.asset?.name && <MetaTag>{record.expand.asset.name}</MetaTag>}
-											<span className="min-w-0 truncate font-medium text-foreground">{alertDisplayName(record)}</span>
-										</div>
-										<div className="mt-2 grid gap-1 text-xs text-muted-foreground">
-											<span>{alertSystemName(record)}</span>
-											<span className="tabular-nums">
-												{alertValueLabel(record)} · {alertCreatedLabel(record)}
-											</span>
-										</div>
-									</div>
-									<MetaTag>{alertStateLabel(record)}</MetaTag>
-								</div>
-							</Link>
-						))}
-						<Button asChild variant="outline" className="mt-1 gap-2">
-							<Link href={getPagePath($router, "alerts")}>
-								<AlertTriangleIcon className="size-4" />
-								查看告警中心
-							</Link>
-						</Button>
-					</>
-				)}
-			</CardContent>
-		</Card>
-	)
-}
-
-function getAlertPolicyLabel(name: string) {
-	switch (name) {
-		case "Status":
-			return "离线告警"
-		case "CPU":
-			return "CPU 使用率"
-		case "Memory":
-			return "内存使用率"
-		case "Disk":
-			return "磁盘使用率"
-		case "Temperature":
-			return "温度"
-		case "Bandwidth":
-			return "网络带宽"
-		case "GPU":
-			return "GPU 使用率"
-		case "LoadAvg1":
-			return "1 分钟负载"
-		case "LoadAvg5":
-			return "5 分钟负载"
-		case "LoadAvg15":
-			return "15 分钟负载"
-		case "Battery":
-			return "电池电量"
-		default:
-			return name
-	}
-}
-
-function formatAssetPolicyThreshold(policy: AlertPolicyRecord) {
-	if (policy.name === "Status") {
-		return `离线持续 ${policy.min} 分钟后触发`
-	}
-	const value = Number.isInteger(policy.value) ? String(policy.value) : policy.value.toFixed(1).replace(/\.0$/, "")
-	const unit =
-		policy.name === "Temperature"
-			? "°C"
-			: policy.name === "Bandwidth"
-				? " MB/s"
-				: policy.name.startsWith("LoadAvg")
-					? ""
-					: "%"
-	const direction = policy.name === "Battery" ? "低于" : "超过"
-	return `${direction} ${value}${unit} 持续 ${policy.min} 分钟后触发`
-}
-
-function AlertSeverityBadge({ record }: { record: AlertsHistoryRecord }) {
-	const severity = alertSeverity(record)
-	return (
-		<span
-			className={cn(
-				"inline-flex min-h-6 items-center rounded-md border px-2 text-xs font-medium",
-				severity === "critical"
-					? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
-					: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
-			)}
-		>
-			{alertSeverityLabel(record)}
-		</span>
-	)
-}
-
-function AssetNotificationStatusCard({
-	failures,
-	states,
-}: {
-	failures: NotificationFailureRecord[]
-	states: AlertNotificationStateRecord[]
-}) {
-	const activeStates = states.filter((item) => item.status === "failed" || isActiveNotificationCooldown(item))
-	const recentStates = activeStates.length ? activeStates : states.slice(0, 4)
-	return (
-		<Card className="border-border/70 bg-card shadow-none">
-			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
-				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg">通知状态</CardTitle>
-					{failures.length || activeStates.length ? (
-						<MetaTag>{failures.length ? `${failures.length} 失败` : `${activeStates.length} 冷却`}</MetaTag>
-					) : null}
-				</div>
-			</CardHeader>
-			<CardContent className="grid gap-2 p-4">
-				{failures.length === 0 && states.length === 0 ? (
-					<EmptyBlock
-						icon={<BellIcon className="size-5" />}
-						text="暂无通知诊断。只有真实发送、失败或重复告警冷却后才会显示。"
-					/>
-				) : (
-					<>
-						{failures.slice(0, 3).map((failure) => (
-							<div key={failure.id} className="rounded-lg border border-orange-500/24 bg-surface-soft p-3">
-								<div className="flex flex-wrap items-center gap-2">
-									<AlertTriangleIcon className="size-4 text-orange-600 dark:text-orange-300" />
-									<span className="min-w-0 truncate font-medium text-foreground">{failure.title}</span>
-									{failure.expand?.asset?.name && <MetaTag>{failure.expand.asset.name}</MetaTag>}
-									<MetaTag>失败 {failure.count} 次</MetaTag>
-								</div>
-								<div className="mt-2 grid gap-1 text-xs text-muted-foreground">
-									<span className="truncate font-mono">{failure.target}</span>
-									<span className="break-words text-orange-700 dark:text-orange-300">{failure.error}</span>
-									<span>最后失败：{formatTime(failure.updated)}</span>
-								</div>
-							</div>
-						))}
-						{recentStates.map((record) => (
-							<div key={record.id} className="rounded-lg border border-border/70 bg-surface-soft p-3">
-								<div className="flex items-start justify-between gap-3">
-									<div className="min-w-0">
-										<div className="flex min-w-0 flex-wrap items-center gap-2">
-											<SendIcon className="size-4 text-muted-foreground" />
-											<span className="min-w-0 truncate font-medium text-foreground">
-												{record.title || record.alert_id}
-											</span>
-											{record.expand?.asset?.name && <MetaTag>{record.expand.asset.name}</MetaTag>}
-										</div>
-										<div className="mt-2 grid gap-1 text-xs text-muted-foreground">
-											{record.status === "suppressed" && (
-												<span>
-													已抑制 {record.suppressed_count ?? 0} 次，下一次允许发送：
-													{record.next_allowed_at ? formatTime(record.next_allowed_at) : "等待冷却结束"}
-												</span>
-											)}
-											{record.status === "failed" && record.last_error && (
-												<span className="break-words text-orange-700 dark:text-orange-300">{record.last_error}</span>
-											)}
-											<span>{notificationStateTimeLabel(record)}</span>
-										</div>
-									</div>
-									<NotificationStateBadge status={record.status} />
-								</div>
-							</div>
-						))}
-						<Button asChild variant="outline" className="mt-1 gap-2">
-							<Link href={getPagePath($router, "settings", { name: "notifications" })}>
-								<BellIcon className="size-4" />
-								查看通知设置
-							</Link>
-						</Button>
-					</>
-				)}
-			</CardContent>
-		</Card>
-	)
-}
-
-function NotificationStateBadge({ status }: { status: AlertNotificationStateRecord["status"] }) {
-	return (
-		<span
-			className={cn(
-				"inline-flex min-h-6 shrink-0 items-center rounded-md border px-2 text-xs font-medium",
-				status === "failed" || status === "suppressed"
-					? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
-					: status === "resolved"
-						? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
-						: "border-border/70 bg-card text-muted-foreground"
-			)}
-		>
-			{notificationStateLabel(status)}
-		</span>
-	)
-}
-
 function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfileGroup[] {
 	const metadata = asset.metadata
 	const urlRow = (
@@ -3770,47 +3438,6 @@ function formatDate(value: string) {
 	const date = new Date(value)
 	if (Number.isNaN(date.getTime())) return value
 	return date.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" })
-}
-
-function formatTime(value: string) {
-	const date = new Date(value)
-	if (Number.isNaN(date.getTime())) return value
-	return date.toLocaleString("zh-CN", { hour12: false })
-}
-
-function isActiveNotificationCooldown(record: AlertNotificationStateRecord) {
-	if (record.status !== "suppressed" || !record.next_allowed_at) return false
-	const nextAllowed = new Date(record.next_allowed_at)
-	return !Number.isNaN(nextAllowed.getTime()) && nextAllowed > new Date()
-}
-
-function notificationStateLabel(status?: AlertNotificationStateRecord["status"]) {
-	switch (status) {
-		case "failed":
-			return "发送失败"
-		case "suppressed":
-			return "冷却中"
-		case "resolved":
-			return "已恢复"
-		default:
-			return "已发送"
-	}
-}
-
-function notificationStateTimeLabel(record: AlertNotificationStateRecord) {
-	if (record.status === "resolved" && record.last_resolved_at) {
-		return `恢复通知：${formatTime(record.last_resolved_at)}`
-	}
-	if (record.status === "failed" && record.last_attempt_at) {
-		return `最近尝试：${formatTime(record.last_attempt_at)}`
-	}
-	if (record.status === "suppressed" && record.last_suppressed_at) {
-		return `最近抑制：${formatTime(record.last_suppressed_at)}`
-	}
-	if (record.last_sent_at) {
-		return `最近发送：${formatTime(record.last_sent_at)}`
-	}
-	return `更新时间：${formatTime(record.updated)}`
 }
 
 function getMetadataNotes(metadata?: Record<string, unknown>) {
