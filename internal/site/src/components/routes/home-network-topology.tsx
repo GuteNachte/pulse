@@ -95,6 +95,13 @@ import { getSystemIPAddressLabel } from "@/lib/system-network"
 import { getSystemDisplayName } from "@/lib/system-roles"
 import { cn } from "@/lib/utils"
 import { getMetadataString } from "@/modules/asset-center/asset-schema"
+import {
+	buildTopologyAssetOptions,
+	formatTopologyInternetBandwidth,
+	formatTopologyPortSpeed,
+	getUnlinkedTopologySystems,
+	mapTopologyPortTypeToAssetInterfaceKind,
+} from "@/modules/network-topology/workspace-data"
 import type {
 	AssetInterfaceRecord,
 	AssetRecord,
@@ -535,7 +542,7 @@ function NetworkTopologyPanel({ systems, mode }: { systems: SystemRecord[]; mode
 							<div className="rounded-lg border border-border/70 bg-surface-soft p-3">
 								<div className="text-sm font-semibold">未接入拓扑的机器</div>
 								<div className="mt-2 grid gap-2">
-									{getUnlinkedSystems(systems, topologyPorts)
+									{getUnlinkedTopologySystems(systems, topologyPorts)
 										.slice(0, 5)
 										.map((system) => (
 											<Link
@@ -549,7 +556,7 @@ function NetworkTopologyPanel({ systems, mode }: { systems: SystemRecord[]; mode
 												</div>
 											</Link>
 										))}
-									{getUnlinkedSystems(systems, topologyPorts).length === 0 && (
+									{getUnlinkedTopologySystems(systems, topologyPorts).length === 0 && (
 										<div className="rounded-md border border-border/70 bg-card px-3 py-4 text-sm text-muted-foreground">
 											无未接入机器
 										</div>
@@ -1137,7 +1144,7 @@ function SelectionDetails({ node, ports }: { node?: Node<TopologyNodeData>; port
 								<span className="text-xs text-muted-foreground">{getPortTypeLabel(port.type)}</span>
 							</div>
 							{port.speed_mbps ? (
-								<div className="mt-1 text-xs text-muted-foreground">{formatPortSpeed(port.speed_mbps)}</div>
+								<div className="mt-1 text-xs text-muted-foreground">{formatTopologyPortSpeed(port.speed_mbps)}</div>
 							) : null}
 						</div>
 					))
@@ -1244,8 +1251,8 @@ function NodeDetailsDialog({
 								{asset?.type === "internet" && asset.vendor && (
 									<TopologyDetailRow label="运营商" value={asset.vendor} />
 								)}
-								{asset?.type === "internet" && getInternetBandwidthLabel(asset) && (
-									<TopologyDetailRow label="宽带带宽" value={getInternetBandwidthLabel(asset)} />
+								{asset?.type === "internet" && formatTopologyInternetBandwidth(asset) && (
+									<TopologyDetailRow label="宽带带宽" value={formatTopologyInternetBandwidth(asset)} />
 								)}
 								{asset && (getMetadataString(asset.metadata, "fixed_ipv4") || asset.management_ip) && (
 									<TopologyDetailRow
@@ -1293,7 +1300,7 @@ function NodeDetailsDialog({
 												</NodeTag>
 											</div>
 											<div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
-												<span>{port.speed_mbps ? formatPortSpeed(port.speed_mbps) : "速率未设置"}</span>
+												<span>{port.speed_mbps ? formatTopologyPortSpeed(port.speed_mbps) : "速率未设置"}</span>
 												{port.notes && <span className="break-all">{port.notes}</span>}
 											</div>
 										</div>
@@ -1477,7 +1484,7 @@ function PortDialog({
 }) {
 	const [assetId, setAssetId] = useState("")
 	const [type, setType] = useState<NetworkPortRecord["type"]>("lan")
-	const assetOptions = useMemo(() => buildTopologyAssets(assets, systems), [assets, systems])
+	const assetOptions = useMemo(() => buildTopologyAssetOptions(assets, systems), [assets, systems])
 	async function onSubmit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault()
 		if (!assetId) return
@@ -1485,7 +1492,7 @@ function PortDialog({
 		await createAssetInterface(userId, {
 			asset: assetId,
 			name: form.get("name")?.toString() || "Port",
-			kind: mapNetworkPortTypeToAssetInterfaceKind(type),
+			kind: mapTopologyPortTypeToAssetInterfaceKind(type),
 			speed_mbps: Number(form.get("speed_mbps")) || undefined,
 			ipv4: form.get("ipv4")?.toString(),
 			ipv6: form.get("ipv6")?.toString(),
@@ -1556,7 +1563,7 @@ function LinkDialog({
 	const [sourceAsset, setSourceAsset] = useState("")
 	const [targetAsset, setTargetAsset] = useState("")
 	const [kind, setKind] = useState<NetworkLinkRecord["kind"]>("ethernet")
-	const assetOptions = useMemo(() => buildTopologyAssets(assets, systems), [assets, systems])
+	const assetOptions = useMemo(() => buildTopologyAssetOptions(assets, systems), [assets, systems])
 	async function onSubmit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault()
 		if (!sourceAsset || !targetAsset || sourceAsset === targetAsset) return
@@ -1692,74 +1699,6 @@ function createAssetInterface(
 		connected: true,
 		source: "manual",
 	})
-}
-
-function getUnlinkedSystems(systems: SystemRecord[], ports: NetworkPortRecord[]) {
-	const linkedSystemIds = new Set(ports.map((port) => port.system).filter(Boolean))
-	return systems.filter((system) => !system.asset && !linkedSystemIds.has(system.id))
-}
-
-function buildTopologyAssets(assets: AssetRecord[], systems: SystemRecord[]) {
-	const assetsById = new Map(assets.map((asset) => [asset.id, asset]))
-	const systemAssets = systems
-		.filter((system) => system.asset && !assetsById.has(system.asset))
-		.map(
-			(system) =>
-				({
-					id: system.asset,
-					user: "",
-					name: getSystemDisplayName(system),
-					type: "physical_host",
-					created: "",
-					updated: "",
-					collectionId: "",
-					collectionName: "assets",
-				}) as AssetRecord
-		)
-	return [...assets.filter((asset) => asset.type !== "web_endpoint"), ...systemAssets]
-}
-
-function mapNetworkPortTypeToAssetInterfaceKind(type: NetworkPortRecord["type"]): AssetInterfaceRecord["kind"] {
-	if (type === "wan") return "wan"
-	if (type === "wifi") return "wifi"
-	if (type === "management") return "management"
-	if (type === "lan" || type === "uplink" || type === "downlink" || type === "system") return "ethernet"
-	return "custom"
-}
-
-function formatPortSpeed(value: number) {
-	if (value >= 1000) {
-		return `${value / 1000} Gbps`
-	}
-	return `${value} Mbps`
-}
-
-function getInternetBandwidthLabel(asset: AssetRecord) {
-	const down = getMetadataNumber(asset.metadata, "down_mbps")
-	const up = getMetadataNumber(asset.metadata, "up_mbps")
-	if (!down && !up) {
-		return ""
-	}
-	return `↓ ${formatCompactBandwidth(down)} / ↑ ${formatCompactBandwidth(up)}`
-}
-
-function getMetadataNumber(metadata: Record<string, unknown> | undefined, key: string) {
-	const value = metadata?.[key]
-	if (typeof value === "number" && Number.isFinite(value)) return value
-	if (typeof value === "string") {
-		const parsed = Number(value)
-		return Number.isFinite(parsed) ? parsed : undefined
-	}
-	return undefined
-}
-
-function formatCompactBandwidth(value?: number) {
-	if (!value) return "未设"
-	if (value >= 1000) {
-		const gbps = value / 1000
-		return `${Number.isInteger(gbps) ? gbps.toFixed(0) : gbps.toFixed(1)}G`
-	}
-	return `${value}M`
 }
 
 export default memo(HomeNetworkTopology)
