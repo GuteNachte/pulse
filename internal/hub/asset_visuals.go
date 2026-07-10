@@ -599,7 +599,7 @@ func (h *Hub) collectAssetVisualAISourceDiscovery(asset *core.Record, color stri
 			continue
 		}
 		sourceType := firstNonEmpty(candidate.Type, classifyAssetOnlineURL(imageURL))
-		if config.OfficialOnly && !assetVisualAIReferenceSourceAllowed(imageURL) {
+		if config.OfficialOnly && !assetVisualAIReferenceSourceAllowed(asset, imageURL) {
 			continue
 		}
 		result = appendAssetVisualReferenceSource(result, seen, map[string]any{
@@ -619,7 +619,7 @@ func assetVisualEndpointLooksLikeChatEndpoint(endpoint string) bool {
 	return strings.Contains(strings.ToLower(strings.TrimSpace(endpoint)), "/chat/completions")
 }
 
-func assetVisualAIReferenceSourceAllowed(rawURL string) bool {
+func assetVisualAIReferenceSourceAllowed(asset *core.Record, rawURL string) bool {
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil {
 		return false
@@ -627,7 +627,46 @@ func assetVisualAIReferenceSourceAllowed(rawURL string) bool {
 	if isLocalAssetOnlineHost(parsed.Hostname()) {
 		return true
 	}
-	return assetOnlineSourceHasOfficialAuthority(assetOnlineSource{Type: classifyAssetOnlineURL(parsed.String())})
+	if !assetOnlineSourceHasOfficialAuthority(assetOnlineSource{Type: classifyAssetOnlineURL(parsed.String())}) {
+		return false
+	}
+	return assetVisualOfficialHostMatchesVendor(asset.GetString("vendor"), parsed.Hostname())
+}
+
+func assetVisualOfficialHostMatchesVendor(vendor string, host string) bool {
+	vendor = strings.ToLower(strings.TrimSpace(vendor))
+	host = strings.ToLower(strings.TrimSpace(host))
+	if vendor == "" {
+		return true
+	}
+	knownHosts := map[string][]string{
+		"xiaomi":   {"mi.com", "mi-img.com", "mifile.cn", "xiaomi.com", "redmi.com"},
+		"redmi":    {"mi.com", "mi-img.com", "mifile.cn", "xiaomi.com", "redmi.com"},
+		"apple":    {"apple.com"},
+		"samsung":  {"samsung.com"},
+		"lenovo":   {"lenovo.com"},
+		"asus":     {"asus.com"},
+		"tp-link":  {"tp-link.com", "tplinkcloud.com"},
+		"synology": {"synology.com"},
+		"qnap":     {"qnap.com"},
+		"unraid":   {"unraid.net"},
+		"fnos":     {"fnos.com"},
+		"huawei":   {"huawei.com"},
+		"honor":    {"honor.com"},
+		"oppo":     {"oppo.com"},
+	}
+	for marker, hosts := range knownHosts {
+		if !strings.Contains(vendor, marker) {
+			continue
+		}
+		for _, allowedHost := range hosts {
+			if host == allowedHost || strings.HasSuffix(host, "."+allowedHost) {
+				return true
+			}
+		}
+		return false
+	}
+	return true
 }
 
 type assetVisualAIReferenceCandidate struct {

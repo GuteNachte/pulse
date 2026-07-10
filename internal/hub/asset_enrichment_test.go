@@ -1531,7 +1531,7 @@ func TestAssetVisualRejectsAgentClaimedOfficialImageFromUntrustedHost(t *testing
 	discoveryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodPost, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"sources\":[{\"image_url\":\"https://untrusted.example.test/redmi-k50-black.jpg\",\"source_url\":\"https://untrusted.example.test/redmi-k50-black.jpg\",\"title\":\"Redmi K50 墨羽黑官方图\",\"color\":\"墨羽黑\",\"type\":\"official_image\",\"confidence\":98}]}"}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"sources\":[{\"image_url\":\"https://www.apple.com/iphone/redmi-k50-black.jpg\",\"source_url\":\"https://www.apple.com/iphone/redmi-k50-black.jpg\",\"title\":\"Redmi K50 墨羽黑官方图\",\"color\":\"墨羽黑\",\"type\":\"official_image\",\"confidence\":98}]}"}}]}`))
 	}))
 	t.Cleanup(discoveryServer.Close)
 	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
