@@ -101,6 +101,7 @@ import {
 	formatAssetVisualTaskMeta as formatAssetVisualTaskSummary,
 } from "./asset-ai-task-summary"
 import { loadLatestAITasksByKind } from "./asset-ai-task-query"
+import { loadAssetEditCatalog } from "./asset-edit-catalog-query"
 import { loadLatestReportSuggestions, loadPendingOfficialColorSuggestions } from "./asset-enrichment-suggestion-query"
 import { getEnrichmentReportStatusLabel } from "./asset-enrichment-report"
 import { formatAssetParameterRowDisplay } from "./asset-parameter-display"
@@ -527,17 +528,15 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		interfaces: AssetInterfaceRecord[]
 	}) {
 		try {
-			const [assets, allInterfaces, locations] = await Promise.all([
-				pb.collection<AssetRecord>("assets").getFullList({ sort: "type,name", requestKey: null }),
-				pb.collection<AssetInterfaceRecord>("asset_interfaces").getFullList({
-					sort: "asset,-primary,kind,name",
-					requestKey: null,
-				}),
-				pb.collection<AssetLocationRecord>("asset_locations").getFullList({
-					sort: "sort_order,name",
-					requestKey: null,
-				}),
-			])
+			const {
+				assets,
+				interfaces: allInterfaces,
+				locations,
+			} = await loadAssetEditCatalog({
+				assets: pb.collection<AssetRecord>("assets"),
+				interfaces: pb.collection<AssetInterfaceRecord>("asset_interfaces"),
+				locations: pb.collection<AssetLocationRecord>("asset_locations"),
+			})
 			setState((current) => {
 				if (current.asset?.id !== assetId) return current
 				const catalogAssets = assets.some((item) => item.id === assetId) ? assets : [fallbackAsset, ...assets]
