@@ -11,16 +11,18 @@ import {
 	SparklesIcon,
 } from "lucide-react"
 import type { ComponentType, ReactNode, SVGProps } from "react"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "@/components/ui/use-toast"
 import { pb } from "@/lib/api"
+import { createLatestRequestGuard } from "@/lib/latest-request-guard"
 import { loadLatestAITasksByKind } from "@/modules/asset-center/asset-ai-task-query"
 import { formatAITaskStatusLabel, formatAITaskSummary } from "@/modules/asset-center/asset-ai-task-summary"
 import type { AITaskRecord } from "@/types"
+import { loadAISettingsSnapshot } from "./ai-settings-load"
 
 type AssetEnrichmentConfig = {
 	base_url: string
@@ -89,6 +91,7 @@ export default function AISettings() {
 	const [aiTasks, setAiTasks] = useState<AITaskRecord[]>([])
 	const [loading, setLoading] = useState(true)
 	const [saving, setSaving] = useState(false)
+	const latestLoad = useRef(createLatestRequestGuard())
 
 	const readyCount = useMemo(() => {
 		if (!config) return 0
@@ -98,25 +101,32 @@ export default function AISettings() {
 	const latestEnrichmentTask = aiTasks.find((task) => task.kind === "asset_enrichment")
 	const latestVisualTask = aiTasks.find((task) => task.kind === "asset_visual")
 
-	useEffect(() => {
-		loadConfig()
-	}, [])
-
-	async function loadConfig() {
+	const loadConfig = useCallback(async () => {
+		const request = latestLoad.current.begin()
 		setLoading(true)
 		try {
-			const next = await pb.send<AssetEnrichmentConfig>("/api/pulse/asset-enrichment/config", { requestKey: null })
+			const { config: next, tasks } = await loadAISettingsSnapshot(
+				() => pb.send<AssetEnrichmentConfig>("/api/pulse/asset-enrichment/config", { requestKey: null }),
+				loadRecentAITasks
+			)
+			if (!latestLoad.current.isCurrent(request)) return
 			setConfig(next)
 			setForm(formFromConfig(next))
-			setAiTasks(await loadRecentAITasks())
+			setAiTasks(tasks)
 		} catch {
+			if (!latestLoad.current.isCurrent(request)) return
 			toast({ title: "读取 AI 与识别设置失败", description: "请确认当前账号拥有管理员权限。", variant: "destructive" })
 		} finally {
-			setLoading(false)
+			if (latestLoad.current.isCurrent(request)) setLoading(false)
 		}
-	}
+	}, [])
+
+	useEffect(() => {
+		loadConfig()
+	}, [loadConfig])
 
 	async function saveConfig() {
+		const request = latestLoad.current.begin()
 		setSaving(true)
 		try {
 			const next = await pb.send<AssetEnrichmentConfig>("/api/pulse/asset-enrichment/config", {
@@ -143,18 +153,22 @@ export default function AISettings() {
 					},
 				},
 			})
+			if (!latestLoad.current.isCurrent(request)) return
 			setConfig(next)
 			setForm(formFromConfig(next))
-			setAiTasks(await loadRecentAITasks())
+			const tasks = await loadRecentAITasks()
+			if (!latestLoad.current.isCurrent(request)) return
+			setAiTasks(tasks)
 			toast({ title: "AI 与识别设置已保存", description: "后续资产补全会统一交给资料补全 Agent 处理。" })
 		} catch (error) {
+			if (!latestLoad.current.isCurrent(request)) return
 			toast({
 				title: "保存 AI 与识别设置失败",
 				description: getConfigErrorMessage(error),
 				variant: "destructive",
 			})
 		} finally {
-			setSaving(false)
+			if (latestLoad.current.isCurrent(request)) setSaving(false)
 		}
 	}
 
