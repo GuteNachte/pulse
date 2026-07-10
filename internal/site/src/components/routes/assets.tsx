@@ -22,6 +22,7 @@ import {
 	AssetInput,
 	AssetMetaTag,
 } from "@/modules/asset-center/components/asset-form-fields"
+import { AssetLocationSettingsDialog } from "@/modules/asset-center/components/asset-location-settings-dialog"
 import { QuickAssetCreateFields } from "@/modules/asset-center/components/asset-quick-create-fields"
 import { AssetTypePicker, AssetTypeRail } from "@/modules/asset-center/components/asset-type-picker"
 import { Button } from "@/components/ui/button"
@@ -66,15 +67,12 @@ import {
 	type AssetNumberingSettings,
 } from "@/modules/asset-center/asset-numbering"
 import {
-	DEFAULT_ASSET_LOCATION_PRESETS,
 	buildArchivedLocationPayload,
 	buildLocationPath,
-	buildLocationPresetParts,
-	buildLocationPresetPath,
 	buildPresetLocationPayload,
-	getLocationPresetParentPath,
 	getLooseLocationGroups,
 } from "@/modules/asset-center/asset-location"
+import type { AssetLocationPresetSelection } from "@/modules/asset-center/asset-location-dialog"
 import {
 	buildAssetCenterSnapshot,
 	buildAssetExportCsv,
@@ -136,9 +134,6 @@ const lifecycleFilterValues: AssetLifecycleFilter[] = [
 ]
 const assetTypeValues = ASSET_TYPE_OPTIONS.map((option) => option.value)
 const assetStatusValues = STATUS_OPTIONS.map((option) => option.value)
-const customLocationOptionValue = "__custom__"
-const noSecondLocationOptionValue = "__none__"
-
 export default memo(function AssetsPage() {
 	const [assets, setAssets] = useState<AssetRecord[]>([])
 	const [locations, setLocations] = useState<AssetLocationRecord[]>([])
@@ -155,10 +150,6 @@ export default memo(function AssetsPage() {
 	const [exportDialogOpen, setExportDialogOpen] = useState(false)
 	const [formStep, setFormStep] = useState<AssetFormStep>("type")
 	const [formMode, setFormMode] = useState<AssetFormMode>("quick")
-	const [locationRootSelection, setLocationRootSelection] = useState(DEFAULT_ASSET_LOCATION_PRESETS[0].name)
-	const [locationSecondSelection, setLocationSecondSelection] = useState("")
-	const [customLocationRoot, setCustomLocationRoot] = useState("")
-	const [customLocationSecond, setCustomLocationSecond] = useState("")
 	const [editing, setEditing] = useState<AssetRecord | null>(null)
 	const [profileFocus, setProfileFocus] = useState(false)
 	const [form, setForm] = useState<AssetFormState>(emptyAssetForm)
@@ -251,48 +242,6 @@ export default memo(function AssetsPage() {
 	)
 
 	const looseLocationGroups = useMemo(() => getLooseLocationGroups(assets, locations), [assets, locations])
-	const locationsByPath = useMemo(() => {
-		const next = new Map<string, AssetLocationRecord>()
-		for (const location of locations) {
-			const path = buildLocationPath(location, locations)
-			if (path) next.set(path, location)
-		}
-		return next
-	}, [locations])
-	const locationPresetItems = useMemo(() => {
-		return DEFAULT_ASSET_LOCATION_PRESETS.map((preset) => {
-			const path = buildLocationPresetPath(preset)
-			const parentPath = getLocationPresetParentPath(preset)
-			const parts = buildLocationPresetParts(preset)
-			return {
-				preset,
-				path,
-				parentPath,
-				parts,
-				level: Math.min(parts.length, 2),
-				existing: locationsByPath.get(path),
-			}
-		})
-	}, [locationsByPath])
-	const rootLocationPresetItems = useMemo(
-		() => locationPresetItems.filter((item) => item.level === 1),
-		[locationPresetItems]
-	)
-	const secondLocationPresetItems = useMemo(() => {
-		if (locationRootSelection === customLocationOptionValue) return []
-		return locationPresetItems.filter((item) => item.level === 2 && item.parentPath === locationRootSelection)
-	}, [locationPresetItems, locationRootSelection])
-	const locationPresetGroups = useMemo(() => {
-		return rootLocationPresetItems.map((root) => ({
-			root,
-			children: locationPresetItems.filter((item) => item.level === 2 && item.parentPath === root.path),
-		}))
-	}, [locationPresetItems, rootLocationPresetItems])
-	const selectedRootLocationName =
-		locationRootSelection === customLocationOptionValue ? customLocationRoot.trim() : locationRootSelection
-	const selectedSecondLocationName =
-		locationSecondSelection === customLocationOptionValue ? customLocationSecond.trim() : locationSecondSelection
-
 	const maintenanceByAsset = useMemo(() => groupMaintenanceByAsset(maintenance), [maintenance])
 
 	const filteredAssets = useMemo(() => {
@@ -681,10 +630,6 @@ export default memo(function AssetsPage() {
 	}
 
 	function openLocationCreateDialog() {
-		setLocationRootSelection(DEFAULT_ASSET_LOCATION_PRESETS[0].name)
-		setLocationSecondSelection("")
-		setCustomLocationRoot("")
-		setCustomLocationSecond("")
 		setLocationDialogOpen(true)
 	}
 
@@ -711,22 +656,10 @@ export default memo(function AssetsPage() {
 		}
 	}
 
-	async function createLocationPresetFromSelection() {
+	async function createLocationPresetFromSelection(selection: AssetLocationPresetSelection) {
 		const user = pb.authStore.record?.id
 		if (!user) return
-		const rootName = selectedRootLocationName
-		const secondName =
-			locationSecondSelection === noSecondLocationOptionValue || !locationSecondSelection
-				? ""
-				: selectedSecondLocationName
-		if (!rootName) {
-			toast({ title: "请选择或填写一级位置", variant: "destructive" })
-			return
-		}
-		if (locationSecondSelection === customLocationOptionValue && !secondName) {
-			toast({ title: "请填写自定义二级房间", variant: "destructive" })
-			return
-		}
+		const { rootName, rootPreset, secondName, secondPreset } = selection
 		setSaving(true)
 		try {
 			const createdOrExisting = new Map<string, AssetLocationRecord>()
@@ -738,12 +671,15 @@ export default memo(function AssetsPage() {
 			let rootLocation = createdOrExisting.get(rootName)
 			if (!rootLocation) {
 				rootLocation = await pb.collection<AssetLocationRecord>("asset_locations").create(
-					buildPresetLocationPayload(user, {
-						name: rootName,
-						kind: "area",
-						sortOrder: locationRootSelection === "公司" ? 20 : 10,
-						notes: `${rootName}一级位置。`,
-					})
+					buildPresetLocationPayload(
+						user,
+						rootPreset ?? {
+							name: rootName,
+							kind: "area",
+							sortOrder: rootName === "公司" ? 20 : 10,
+							notes: `${rootName}一级位置。`,
+						}
+					)
 				)
 				createdOrExisting.set(rootName, rootLocation)
 				createdCount += 1
@@ -751,11 +687,10 @@ export default memo(function AssetsPage() {
 			if (secondName) {
 				const secondPath = `${rootName} / ${secondName}`
 				if (!createdOrExisting.has(secondPath)) {
-					const preset = secondLocationPresetItems.find((item) => item.preset.name === secondName)?.preset
 					const created = await pb.collection<AssetLocationRecord>("asset_locations").create(
 						buildPresetLocationPayload(
 							user,
-							preset ?? {
+							secondPreset ?? {
 								name: secondName,
 								kind: "room",
 								parentName: rootName,
@@ -1178,144 +1113,17 @@ export default memo(function AssetsPage() {
 				</DialogContent>
 			</Dialog>
 
-			<Dialog open={locationDialogOpen} onOpenChange={setLocationDialogOpen}>
-				<DialogContent className="flex max-h-[86vh] max-w-3xl flex-col overflow-hidden">
-					<DialogHeader>
-						<DialogTitle>位置</DialogTitle>
-						<DialogDescription>只维护一级位置和二级房间，资产录入时直接复用。</DialogDescription>
-					</DialogHeader>
-					<div className="grid min-h-0 gap-4 overflow-y-auto pr-1 md:grid-cols-[minmax(0,1fr)_20rem]">
-						<div className="grid content-start gap-3">
-							<div className="grid gap-2 rounded-lg border border-border/70 bg-card p-3">
-								<div className="flex items-center justify-between gap-3 text-sm">
-									<div className="font-medium text-foreground">预设位置</div>
-									<AssetMetaTag>{rootLocationPresetItems.length} 个一级</AssetMetaTag>
-								</div>
-								<div className="grid gap-2">
-									{locationPresetGroups.map((group) => (
-										<div key={group.root.path} className="grid gap-1.5 rounded-md bg-surface-soft p-2">
-											<div className="flex items-center justify-between gap-2">
-												<div className="text-sm font-medium text-foreground">{group.root.preset.name}</div>
-												<span className="text-xs text-muted-foreground">{group.children.length} 个房间</span>
-											</div>
-											<div className="flex flex-wrap gap-1">
-												{group.children.map((item) => (
-													<span
-														key={item.path}
-														className={cn(
-															"rounded-md border px-1.5 py-0.5 text-xs",
-															item.existing
-																? "border-border/70 bg-card text-foreground"
-																: "border-dashed border-border/70 text-muted-foreground"
-														)}
-													>
-														{item.preset.name}
-													</span>
-												))}
-											</div>
-										</div>
-									))}
-								</div>
-							</div>
-							{looseLocationGroups.length > 0 && (
-								<div className="grid gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">
-									<div className="flex items-center justify-between gap-3">
-										<div className="min-w-0">
-											<div className="text-sm font-medium">待归档位置</div>
-										</div>
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={archiveLooseLocations}
-											disabled={saving || readOnly}
-											className="h-8 shrink-0 border-amber-300 bg-white px-2 text-xs text-amber-900 hover:bg-amber-100"
-										>
-											归档全部
-										</Button>
-									</div>
-									<div className="flex flex-wrap gap-1.5">
-										{looseLocationGroups.slice(0, 8).map((group) => (
-											<AssetMetaTag key={group.name} tone="warning">
-												{group.name} · {group.count}
-											</AssetMetaTag>
-										))}
-										{looseLocationGroups.length > 8 && (
-											<AssetMetaTag tone="warning">另 {looseLocationGroups.length - 8} 个</AssetMetaTag>
-										)}
-									</div>
-								</div>
-							)}
-						</div>
-						<div className="grid content-start gap-3 rounded-lg border border-border/70 bg-surface-soft p-3">
-							<div className="text-sm font-medium text-foreground">新增预设</div>
-							<AssetFormField label="一级位置" required>
-								<select
-									value={locationRootSelection}
-									onChange={(event) => {
-										setLocationRootSelection(event.target.value)
-										setLocationSecondSelection("")
-										setCustomLocationSecond("")
-									}}
-									className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
-								>
-									{rootLocationPresetItems.map((item) => (
-										<option key={item.path} value={item.preset.name}>
-											{item.preset.name}
-										</option>
-									))}
-									<option value={customLocationOptionValue}>自定义</option>
-								</select>
-							</AssetFormField>
-							{locationRootSelection === customLocationOptionValue && (
-								<AssetFormField label="自定义一级位置" required>
-									<Input
-										value={customLocationRoot}
-										placeholder="例如 家、公司、父母家"
-										onChange={(event) => setCustomLocationRoot(event.target.value)}
-									/>
-								</AssetFormField>
-							)}
-							<AssetFormField label="二级房间">
-								<select
-									value={locationSecondSelection}
-									onChange={(event) => setLocationSecondSelection(event.target.value)}
-									className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
-								>
-									<option value="">选择二级房间</option>
-									<option value={noSecondLocationOptionValue}>只新增一级位置</option>
-									{secondLocationPresetItems.map((item) => (
-										<option key={item.path} value={item.preset.name}>
-											{item.preset.name}
-										</option>
-									))}
-									<option value={customLocationOptionValue}>自定义</option>
-								</select>
-							</AssetFormField>
-							{locationSecondSelection === customLocationOptionValue && (
-								<AssetFormField label="自定义二级房间" required>
-									<Input
-										value={customLocationSecond}
-										placeholder="例如 客厅、卧室、书房"
-										onChange={(event) => setCustomLocationSecond(event.target.value)}
-									/>
-								</AssetFormField>
-							)}
-							<div className="rounded-md border border-border/70 bg-card p-3 text-sm text-muted-foreground">
-								将新增：<span className="font-medium text-foreground">{selectedRootLocationName || "未选择"}</span>
-								{selectedSecondLocationName && (
-									<>
-										{" / "}
-										<span className="font-medium text-foreground">{selectedSecondLocationName}</span>
-									</>
-								)}
-							</div>
-							<Button onClick={createLocationPresetFromSelection} disabled={saving || readOnly}>
-								{saving ? "添加中" : "新增预设"}
-							</Button>
-						</div>
-					</div>
-				</DialogContent>
-			</Dialog>
+			<AssetLocationSettingsDialog
+				open={locationDialogOpen}
+				onOpenChange={setLocationDialogOpen}
+				locations={locations}
+				looseLocationGroups={looseLocationGroups}
+				saving={saving}
+				readOnly={readOnly}
+				onArchiveLooseLocations={archiveLooseLocations}
+				onCreatePreset={createLocationPresetFromSelection}
+				onValidationError={(title) => toast({ title, variant: "destructive" })}
+			/>
 
 			<Dialog open={numberingDialogOpen} onOpenChange={setNumberingDialogOpen}>
 				<DialogContent className="max-w-md">
