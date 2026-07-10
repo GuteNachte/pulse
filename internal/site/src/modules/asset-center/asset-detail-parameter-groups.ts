@@ -10,10 +10,10 @@ import {
 	NetworkIcon,
 	ThermometerIcon,
 } from "lucide-react"
-import type { ReactNode } from "react"
+import { createElement, type ReactNode } from "react"
 import type { AssetRecord } from "@/types"
 import type { AssetParameterGroup, AssetParameterRow } from "./components/asset-parameter-columns"
-import { formatAssetParameterRowDisplay } from "./asset-parameter-display"
+import { formatAssetParameterRowDisplay } from "./asset-parameter-display.ts"
 import {
 	HOST_ASSET_TYPES,
 	getAssetFormSections,
@@ -21,7 +21,7 @@ import {
 	getMetadataString,
 	getStatusLabel,
 	type AssetFieldDefinition,
-} from "./asset-schema"
+} from "./asset-schema.ts"
 export function buildAssetParameterGroups(asset: AssetRecord): AssetParameterGroup[] {
 	const useHostHardwareProfile = HOST_ASSET_TYPES.includes(asset.type)
 	const archiveGroups = useHostHardwareProfile
@@ -84,17 +84,17 @@ function splitArchiveSectionIntoParameterGroups(section: ArchiveDetailSection): 
 				"gpu_model",
 				"gpu_detail",
 			],
-			icon: <CpuIcon className="size-4" />,
+			icon: createElement(CpuIcon, { className: "size-4" }),
 		},
 		{
 			title: "内存",
 			keys: ["memory_gb", "memory_detail", "memory_type"],
-			icon: <HardDriveIcon className="size-4" />,
+			icon: createElement(HardDriveIcon, { className: "size-4" }),
 		},
 		{
 			title: "存储",
 			keys: ["storage_gb", "storage_detail", "storage_options"],
-			icon: <HardDriveIcon className="size-4" />,
+			icon: createElement(HardDriveIcon, { className: "size-4" }),
 		},
 	]
 	return buckets.flatMap((bucket) => {
@@ -214,13 +214,13 @@ function normalizeArchiveSectionTitle(title: string) {
 }
 
 function getParameterGroupIcon(title: string) {
-	if (title.includes("屏幕")) return <MonitorIcon className="size-4" />
-	if (title.includes("电池") || title.includes("充电")) return <BatteryIcon className="size-4" />
-	if (title.includes("影像")) return <ImageIcon className="size-4" />
-	if (title.includes("网络") || title.includes("接口")) return <NetworkIcon className="size-4" />
-	if (title.includes("外观") || title.includes("尺寸")) return <BoxesIcon className="size-4" />
-	if (title.includes("账号")) return <Globe2Icon className="size-4" />
-	return <ListChecksIcon className="size-4" />
+	if (title.includes("屏幕")) return createElement(MonitorIcon, { className: "size-4" })
+	if (title.includes("电池") || title.includes("充电")) return createElement(BatteryIcon, { className: "size-4" })
+	if (title.includes("影像")) return createElement(ImageIcon, { className: "size-4" })
+	if (title.includes("网络") || title.includes("接口")) return createElement(NetworkIcon, { className: "size-4" })
+	if (title.includes("外观") || title.includes("尺寸")) return createElement(BoxesIcon, { className: "size-4" })
+	if (title.includes("账号")) return createElement(Globe2Icon, { className: "size-4" })
+	return createElement(ListChecksIcon, { className: "size-4" })
 }
 
 function normalizeGroupId(value: string) {
@@ -407,7 +407,7 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 	return [
 		{
 			title: "整机与支持",
-			icon: <MonitorIcon className="size-4" />,
+			icon: createElement(MonitorIcon, { className: "size-4" }),
 			rows: compact([
 				directRow("厂商 / 品牌", asset.vendor),
 				directRow("型号 / 规格", asset.model),
@@ -421,7 +421,7 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 		},
 		{
 			title: "CPU",
-			icon: <CpuIcon className="size-4" />,
+			icon: createElement(CpuIcon, { className: "size-4" }),
 			rows: compact([
 				metadataRow("CPU 厂商", "cpu_vendor", "agent_collectable"),
 				metadataRow("CPU 型号", "cpu_model", "agent_collectable"),
@@ -430,7 +430,7 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 		},
 		{
 			title: "主板 / BIOS",
-			icon: <BoxesIcon className="size-4" />,
+			icon: createElement(BoxesIcon, { className: "size-4" }),
 			rows: compact([
 				metadataRow("主板品牌", "motherboard_vendor"),
 				metadataRow("主板型号", "motherboard_model"),
@@ -440,7 +440,7 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 		},
 		{
 			title: "GPU",
-			icon: <ThermometerIcon className="size-4" />,
+			icon: createElement(ThermometerIcon, { className: "size-4" }),
 			rows: compact([
 				metadataRow("显卡品牌 / 型号", "gpu_detail"),
 				metadataRow("GPU 芯片厂商", "gpu_vendor"),
@@ -452,7 +452,7 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 		},
 		{
 			title: "内存",
-			icon: <BoxesIcon className="size-4" />,
+			icon: createElement(BoxesIcon, { className: "size-4" }),
 			rows: compact([
 				numberRow("内存容量", "memory_gb", "GB", "agent_collectable"),
 				metadataRow("内存品牌 / 规格", "memory_detail"),
@@ -466,7 +466,7 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 		},
 		{
 			title: "存储",
-			icon: <HardDriveIcon className="size-4" />,
+			icon: createElement(HardDriveIcon, { className: "size-4" }),
 			rows: compact([
 				metadataRow("存储摘要", "storage_summary", "agent_collectable"),
 				metadataRow("硬盘品牌 / 型号", "storage_detail"),
@@ -479,7 +479,7 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 		},
 		{
 			title: "网络硬件",
-			icon: <NetworkIcon className="size-4" />,
+			icon: createElement(NetworkIcon, { className: "size-4" }),
 			rows: compact([
 				numberRow("主网卡速率", "primary_nic_speed_mbps", "Mbps", "agent_collectable"),
 				metadataRow("网卡品牌 / 型号", "nic_detail"),
@@ -493,7 +493,7 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 		},
 		{
 			title: "机箱 / 电源",
-			icon: <BatteryIcon className="size-4" />,
+			icon: createElement(BatteryIcon, { className: "size-4" }),
 			rows: compact([
 				metadataRow("机箱 / 电源", "chassis_power_detail", "manual"),
 				metadataRow("机箱品牌", "chassis_vendor", "manual"),
