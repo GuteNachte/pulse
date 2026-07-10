@@ -171,17 +171,6 @@ type AssetDetailState = {
 	enrichmentReports: AssetEnrichmentReportRecord[]
 	enrichmentSuggestions: AssetEnrichmentSuggestionRecord[]
 	officialColorSuggestions: AssetEnrichmentSuggestionRecord[]
-	systems: SystemRecord[]
-	systemDetails: SystemDetailsRecord[]
-	smartDevices: SmartDeviceRecord[]
-	containers: ContainerRecord[]
-	systemStats: SystemStatsRecord[]
-	websites: WebsiteMonitorRecord[]
-	alerts: AlertsHistoryRecord[]
-	assetAlerts: AlertRecord[]
-	alertPolicies: AlertPolicyRecord[]
-	notificationFailures: NotificationFailureRecord[]
-	notificationStates: AlertNotificationStateRecord[]
 }
 
 const AssetEnrichmentReportDialog = lazy(() =>
@@ -213,17 +202,6 @@ const emptyState: AssetDetailState = {
 	enrichmentReports: [],
 	enrichmentSuggestions: [],
 	officialColorSuggestions: [],
-	systems: [],
-	systemDetails: [],
-	smartDevices: [],
-	containers: [],
-	systemStats: [],
-	websites: [],
-	alerts: [],
-	assetAlerts: [],
-	alertPolicies: [],
-	notificationFailures: [],
-	notificationStates: [],
 }
 
 const interfaceKindOptions: { value: AssetInterfaceKind; label: string }[] = [
@@ -410,7 +388,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	async function loadDetail(options?: { waitSecondary?: boolean; waitEditCatalog?: boolean }) {
 		setLoading(true)
 		try {
-			const [assetRecord, interfaces, relations, systems] = await Promise.all([
+			const [assetRecord, interfaces, relations] = await Promise.all([
 				pb.collection<AssetRecord>("assets").getOne(id, { requestKey: null }),
 				pb.collection<AssetInterfaceRecord>("asset_interfaces").getFullList({
 					filter: `asset="${id}"`,
@@ -422,11 +400,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					sort: "kind,created",
 					requestKey: null,
 				}),
-				pb.collection<SystemRecord>("systems").getFullList({
-					filter: `asset="${id}"`,
-					sort: "name",
-					requestKey: null,
-				}),
 			])
 			setState({
 				...emptyState,
@@ -435,16 +408,12 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				interfaces,
 				allInterfaces: interfaces,
 				relations,
-				systems,
 			})
 			setFileToken("")
 			document.title = pageTitle(`${assetRecord.name} / 资产详情`)
 			setLoading(false)
 			const secondaryLoad = startSecondaryDetailDataLoad({
 				assetId: id,
-				fallbackAsset: assetRecord,
-				relations,
-				systems,
 			})
 			if (options?.waitSecondary) {
 				await secondaryLoad
@@ -469,12 +438,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		}
 	}
 
-	function startSecondaryDetailDataLoad(options: {
-		assetId: string
-		fallbackAsset: AssetRecord
-		relations: AssetRelationRecord[]
-		systems: SystemRecord[]
-	}) {
+	function startSecondaryDetailDataLoad(options: { assetId: string }) {
 		let secondaryLoad: Promise<void>
 		secondaryLoad = loadSecondaryDetailData(options).finally(() => {
 			if (secondaryLoadRef.current === secondaryLoad) {
@@ -551,44 +515,32 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		}
 	}
 
-	async function loadSecondaryDetailData({
-		assetId,
-		fallbackAsset,
-		relations,
-		systems,
-	}: {
-		assetId: string
-		fallbackAsset: AssetRecord
-		relations: AssetRelationRecord[]
-		systems: SystemRecord[]
-	}) {
+	async function loadSecondaryDetailData({ assetId }: { assetId: string }) {
 		try {
-			const [relatedWebsiteAssets, maintenance, attachments, visuals, aiTasks, changes, enrichmentReports] =
-				await Promise.all([
-					loadRelatedWebsiteEndpointAssets(assetId, fallbackAsset, relations),
-					pb.collection<AssetMaintenanceRecord>("asset_maintenance").getFullList({
-						filter: `asset="${assetId}"`,
-						sort: "-event_date,-created",
-						requestKey: null,
-					}),
-					pb.collection<AssetAttachmentRecord>("asset_attachments").getFullList({
-						filter: `asset="${assetId}"`,
-						sort: "kind,title",
-						requestKey: null,
-					}),
-					loadDisplayAssetVisuals(pb.collection<AssetVisualRecord>("asset_visuals"), assetId),
-					loadLatestAITasksByKind(pb.collection<AITaskRecord>("ai_tasks"), { assetId }),
-					pb.collection<AssetChangeRecord>("asset_changes").getList(1, 20, {
-						filter: `asset="${assetId}"`,
-						sort: "-created",
-						requestKey: null,
-					}),
-					pb.collection<AssetEnrichmentReportRecord>("asset_enrichment_reports").getList(1, 10, {
-						filter: `asset="${assetId}"`,
-						sort: "-created",
-						requestKey: null,
-					}),
-				])
+			const [maintenance, attachments, visuals, aiTasks, changes, enrichmentReports] = await Promise.all([
+				pb.collection<AssetMaintenanceRecord>("asset_maintenance").getFullList({
+					filter: `asset="${assetId}"`,
+					sort: "-event_date,-created",
+					requestKey: null,
+				}),
+				pb.collection<AssetAttachmentRecord>("asset_attachments").getFullList({
+					filter: `asset="${assetId}"`,
+					sort: "kind,title",
+					requestKey: null,
+				}),
+				loadDisplayAssetVisuals(pb.collection<AssetVisualRecord>("asset_visuals"), assetId),
+				loadLatestAITasksByKind(pb.collection<AITaskRecord>("ai_tasks"), { assetId }),
+				pb.collection<AssetChangeRecord>("asset_changes").getList(1, 20, {
+					filter: `asset="${assetId}"`,
+					sort: "-created",
+					requestKey: null,
+				}),
+				pb.collection<AssetEnrichmentReportRecord>("asset_enrichment_reports").getList(1, 10, {
+					filter: `asset="${assetId}"`,
+					sort: "-created",
+					requestKey: null,
+				}),
+			])
 			const [enrichmentSuggestions, officialColorSuggestions] = await Promise.all([
 				loadLatestReportSuggestions(
 					pb.collection<AssetEnrichmentSuggestionRecord>("asset_enrichment_suggestions"),
@@ -599,20 +551,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					assetId
 				),
 			])
-			const assetsForDerivedData = uniqueAssetRecords([fallbackAsset, ...relatedWebsiteAssets])
-			const websiteAssetIds = getAssetWebsiteEndpointIds(assetId, assetsForDerivedData, relations)
-			const detailAssetIds = uniqueIds([assetId, ...websiteAssetIds])
-			const [websites, alerts, assetAlerts, notificationFailures, notificationStates, systemDetails, runtimeSummary] =
-				await Promise.all([
-					loadAssetWebsiteMonitors(websiteAssetIds),
-					loadAssetAlertHistory(detailAssetIds),
-					loadAssetActiveAlerts(assetId),
-					loadAssetNotificationFailures(detailAssetIds),
-					loadAssetNotificationStates(detailAssetIds),
-					loadSystemDetails(systems),
-					loadAssetRuntimeSummary(systems),
-				])
-			const alertPolicies = await loadAlertPolicies()
 			setState((current) => {
 				if (current.asset?.id !== assetId) return current
 				return {
@@ -625,17 +563,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					enrichmentReports: enrichmentReports.items,
 					enrichmentSuggestions,
 					officialColorSuggestions,
-					systems,
-					systemDetails,
-					smartDevices: runtimeSummary.smartDevices,
-					containers: runtimeSummary.containers,
-					systemStats: runtimeSummary.systemStats,
-					websites,
-					alerts,
-					assetAlerts,
-					alertPolicies,
-					notificationFailures,
-					notificationStates,
 				}
 			})
 			if (attachments.some((item) => item.files?.length > 0)) {
