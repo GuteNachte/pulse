@@ -3148,52 +3148,6 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 	]
 }
 
-function LifecycleLine({ label, value, note }: { label: string; value: string; note?: string }) {
-	return (
-		<div className="min-w-0 rounded-md border border-border/70 bg-surface-soft px-3 py-2">
-			<div className="flex items-center justify-between gap-3">
-				<span className="text-xs text-muted-foreground">{label}</span>
-				<span className="truncate text-sm font-medium text-foreground">{value}</span>
-			</div>
-			{note && note !== value && <div className="mt-1 truncate text-xs text-muted-foreground">{note}</div>}
-		</div>
-	)
-}
-
-function RelationLine({
-	label,
-	direction,
-	target,
-	href,
-	description,
-	compact,
-}: {
-	label: string
-	direction: string
-	target?: AssetRecord
-	href?: string
-	description?: string
-	compact?: boolean
-}) {
-	const content = (
-		<div className={cn("min-w-0", !compact && "rounded-lg border border-border/70 bg-surface-soft p-3")}>
-			<div className="flex flex-wrap items-center gap-2">
-				<MetaTag>{label}</MetaTag>
-				<span className="text-xs text-muted-foreground">{direction}</span>
-				<span className="font-medium text-foreground">{target?.name ?? "未知资产"}</span>
-				{target && <MetaTag>{getAssetTypeLabel(target.type)}</MetaTag>}
-			</div>
-			{description && <div className="mt-1 text-xs text-muted-foreground">{description}</div>}
-		</div>
-	)
-	if (!href) return content
-	return (
-		<Link href={href} className="block min-w-0 transition-opacity hover:opacity-80">
-			{content}
-		</Link>
-	)
-}
-
 function EmptyBlock({ icon, text }: { icon: ReactNode; text: string }) {
 	return (
 		<div className="grid place-items-center rounded-lg border border-dashed border-border/70 bg-surface-soft p-6 text-center">
@@ -3256,23 +3210,6 @@ function getAssetVisualTaskMeta(tasks: AITaskRecord[], visuals: AssetVisualRecor
 		return formatAssetVisualTaskSummary(latestTask)
 	}
 	return visuals.length ? `${visuals.length} 组图片` : "未收集"
-}
-
-function ActionTag({ children, action }: { children: ReactNode; action: AssetChangeAction }) {
-	return (
-		<span
-			className={cn(
-				"rounded-md border px-1.5 py-0.5 text-[11px] font-medium",
-				action === "delete"
-					? "border-red-200 bg-red-50 text-red-700"
-					: action === "create"
-						? "border-emerald-200 bg-emerald-50 text-emerald-700"
-						: "border-border/70 bg-card text-muted-foreground"
-			)}
-		>
-			{children}
-		</span>
-	)
 }
 
 function ToneTag({ children, tone }: { children: ReactNode; tone: AssetLifecycleTone }) {
