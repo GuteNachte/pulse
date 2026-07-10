@@ -361,7 +361,10 @@ export default function SystemsTable({ headerAction }: { headerAction?: ReactNod
 			{CardHead}
 			<div
 				className="grid justify-start gap-3 p-4"
-				style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 20rem), 24rem))" }}
+				style={{
+					gridTemplateColumns:
+						visibleRows.length === 1 ? "minmax(0, 1fr)" : "repeat(auto-fill, minmax(min(100%, 20rem), 24rem))",
+				}}
 			>
 				{rows?.length ? (
 					visibleRows.map((row) => {
