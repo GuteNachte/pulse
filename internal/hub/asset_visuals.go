@@ -23,17 +23,7 @@ import (
 const defaultAssetTurntableFrameCount = 1
 const defaultAssetVisualCandidateCount = 10
 const defaultAssetVisualMaxImages = 12
-const assetVisualImageModelMaxAttempts = 3
-const assetVisualImageModelQualityMaxAttempts = 2
-const defaultAssetVisualImageModelRequestTimeout = 120 * time.Second
-const maxAssetVisualImageModelRequestTimeout = 360 * time.Second
-const assetVisualImageModelMaxReferenceInputs = 2
-const assetVisualImageModelMaxReferenceCandidates = 8
 const assetVisualRunningTaskStaleAfter = 15 * time.Minute
-const assetVisualReferenceImageMaxBytes = 2 * 1024 * 1024
-const assetVisualReferenceImageFetchMaxBytes = 12 * 1024 * 1024
-const assetVisualReferenceImageMaxLongEdge = 1024
-const assetVisualGeneratedImageMaxBytes = 4 * 1024 * 1024
 
 type assetTurntableVisualRequest struct {
 	Color      string `json:"color"`
@@ -66,7 +56,6 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 	var req assetTurntableVisualRequest
 	_ = json.NewDecoder(e.Request.Body).Decode(&req)
 	config := h.assetVisualAIConfig()
-	config.MaxImages = defaultAssetVisualCandidateCount
 	frameCount := defaultAssetVisualCandidateCount
 	color := firstNonEmpty(strings.TrimSpace(req.Color), recordMetadataString(asset, "color"), recordMetadataString(asset, "device_color"))
 	if message := validateAssetVisualGenerationPrerequisites(asset, color, config); message != "" {
@@ -468,43 +457,6 @@ func (h *Hub) createAssetVisualRecord(userID string, asset *core.Record, taskID 
 		return nil, err
 	}
 	return record, nil
-}
-
-func (h *Hub) createGeneratedAssetVisualRecord(userID string, asset *core.Record, taskID string, color string, frames []map[string]any, references []map[string]any, prompt string) (*core.Record, error) {
-	collection, err := h.FindCachedCollectionByNameOrId("asset_visuals")
-	if err != nil {
-		return nil, err
-	}
-	record := core.NewRecord(collection)
-	record.Set("user", userID)
-	record.Set("asset", asset.Id)
-	record.Set("task", taskID)
-	record.Set("kind", "ai_turntable")
-	record.Set("status", "ready")
-	record.Set("title", firstNonEmpty(asset.GetString("name"), asset.GetString("model"), "设备统一全貌图"))
-	record.Set("color", color)
-	record.Set("frame_count", len(frames))
-	record.Set("primary", true)
-	record.Set("frames", frames)
-	record.Set("sources", references)
-	record.Set("prompt", prompt)
-	record.Set("metadata", map[string]any{
-		"generation_status": "ready",
-		"reference_input":   "data_uri",
-		"visual_role":       "final_unified",
-		"style":             "统一背景、统一摆放、统一资产展示图",
-	})
-	if err := h.Save(record); err != nil {
-		return nil, err
-	}
-	if err := h.demotePreviousGeneratedAssetVisuals(userID, asset.Id, record.Id); err != nil {
-		return nil, err
-	}
-	return record, nil
-}
-
-func (h *Hub) demotePreviousGeneratedAssetVisuals(userID string, assetID string, activeVisualID string) error {
-	return h.demotePreviousPrimaryAssetVisuals(userID, assetID, activeVisualID)
 }
 
 func (h *Hub) demotePreviousPrimaryAssetVisuals(userID string, assetID string, activeVisualID string) error {
@@ -1370,60 +1322,6 @@ func assetVisualCollectionColorPrompt(color string) string {
 		return "Color: not preselected. Collect candidates across official colors and keep every candidate labeled with its official color when known."
 	}
 	return "Color: " + color + ". Prefer candidates matching this selected official color."
-}
-
-func buildAssetVisualUnificationPrompt(asset *core.Record, color string, references []map[string]any) string {
-	referenceLines := make([]string, 0, len(references))
-	for _, source := range references {
-		if imageURL, _ := source["image_url"].(string); imageURL != "" {
-			referenceLines = append(referenceLines, imageURL)
-		}
-	}
-	colorInstruction := assetVisualOfficialColorPrompt(color)
-	return strings.Join(nonEmptyStrings(
-		"You are the Pulse asset image Agent. This is an image-to-image asset catalog cleanup task, not a free text-to-image task and not a 3D redesign task.",
-		"Change request: keep the reference device as the product layer, replace only the scene/background, remove poster foreground clutter, and fit the original device into a unified catalog canvas.",
-		"Elements to preserve unchanged: the exact real device identity, body outline, body thickness, camera island shape, lens count, lens positions, flash shape, ports, side buttons, bezels, logo placement, proportions, material, and selected official color.",
-		"Do not create a new render, a similar phone, or a redesigned product. Treat the input reference device as the final product source, not as loose inspiration.",
-		"If references conflict, prefer official product, official support, official CDN, and product bundle images over all other sources.",
-		"Device: "+strings.Join(nonEmptyStrings(asset.GetString("vendor"), asset.GetString("model"), recordMetadataString(asset, "internal_model"), asset.GetString("name")), " / "),
-		"Selected official color: "+color+".",
-		colorInstruction,
-		"Reference fidelity is mandatory: use the provided reference image as the exact device source. Do not redraw, redesign, or reinterpret the device body, lens count, camera island shape, logo placement, side buttons, bezels, proportions, color, or material.",
-		"Remove the original poster scene, rocks, flames, plants, hands, packaging, marketing text, UI screenshots, and any other non-device background elements from the reference image. Keep only the device on the requested unified catalog background.",
-		"If the official reference image hides a small part of the phone behind poster foreground, reconstruct only the missing outer body edge from the same device silhouette. Do not change the camera module, body color, button position, lens count, lens placement, or proportions.",
-		"Do not invent or garble brand text, specification text, certification text, or model labels. Preserve text only when it can remain exact from the reference; otherwise remove, fade, or softly blur tiny text instead of creating fake letters.",
-		"Composition requirements: show exactly one asset in one selected color, use a portrait 3:4 catalog canvas, show the complete device body from top to bottom with visible top, bottom, left, and right margins, keep the device readable without touching any canvas edge, occupy about 62-78% of the canvas height, center it with consistent scale and placement across all assets.",
-		"For phones and tablets, keep the same camera angle as the strongest official reference. Preserve the exact camera island geometry and lens count from the reference; do not simplify it into a generic circular or square phone camera module. Prefer a single clean three-quarter back view only when that is already present in the reference. If front and back are both shown, both views must be the same selected official color. Never place two different colors in one output.",
-		"If the official reference has strong colored environment light, treat that light as background contamination only. Keep the device body in the selected official color, not in the poster light color.",
-		"Style requirements: clean catalog render, unified neutral background, realistic material, no hands, no packaging, no marketing text, no UI screenshots, no extra accessories, no invented camera modules, no invented colors, no second device color.",
-		"Output theme requirement will be provided per request: day uses a light neutral background; night uses a dark immersive neutral background. The device itself must remain clear and must not disappear into the background.",
-		"Reference image URLs: "+strings.Join(referenceLines, " ; "),
-	), "\n")
-}
-
-func assetVisualOfficialColorPrompt(color string) string {
-	color = strings.TrimSpace(color)
-	colorClass := classifyAssetVisualOfficialColor(color)
-	switch colorClass {
-	case "dark":
-		return "Selected color constraint: render the body as the official " + color + " color, a very dark graphite black / ink-black finish with subtle cool highlights only. Do not turn the device blue, purple, green, silver, or white."
-	case "light":
-		return "Selected color constraint: render the body as the official " + color + " color, a light white / silver finish. Do not turn the device black, blue, green, purple, or gold."
-	case "green":
-		return "Selected color constraint: render the body as the official " + color + " color, a green / teal finish matching the official reference. Do not turn the device black, white, blue, purple, or gold."
-	case "purple":
-		return "Selected color constraint: render the body as the official " + color + " color, a purple / violet finish matching the official reference. Do not turn the device black, white, blue, green, or gold."
-	case "blue":
-		return "Selected color constraint: render the body as the official " + color + " color, a blue finish matching the official reference. Do not turn the device black, white, green, purple, or gold."
-	case "gold":
-		return "Selected color constraint: render the body as the official " + color + " color, a gold / warm finish matching the official reference. Do not turn the device black, white, blue, green, or purple."
-	default:
-		if color == "" {
-			return ""
-		}
-		return "Selected color constraint: render only the official " + color + " color shown by the reference images. Do not invent another device color."
-	}
 }
 
 func classifyAssetVisualOfficialColor(color string) string {

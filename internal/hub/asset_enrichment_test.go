@@ -2284,6 +2284,89 @@ func TestAssetVisualAvoidsDuplicateProductPageFetchWhenImagesAreEnough(t *testin
 	require.Equal(t, 1, productPageRequests)
 }
 
+func TestAssetVisualRespectsConfiguredCandidateLimit(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-configured-candidates@example.com")
+	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/products/redmi-k50":
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方产品页</title></head><body>
+				<img src="/images/redmi-k50-black-front.jpg" alt="Redmi K50 墨羽黑 正面" width="900" height="1200">
+				<img src="/images/redmi-k50-black-back.jpg" alt="Redmi K50 墨羽黑 背面" width="900" height="1200">
+				<img src="/images/redmi-k50-black-side.jpg" alt="Redmi K50 墨羽黑 侧面" width="900" height="1200">
+			</body></html>`))
+		case strings.HasPrefix(r.URL.Path, "/images/"):
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(referenceServer.Close)
+	adminUser, err := pulseTests.CreateUserWithRole(fixture.hub, "asset-visual-config-admin@example.com", "password", "admin")
+	require.NoError(t, err)
+	adminToken, err := adminUser.NewAuthToken()
+	require.NoError(t, err)
+	configBody, err := json.Marshal(map[string]any{
+		"visual_ai": map[string]any{
+			"enabled":                 false,
+			"model_discovery_enabled": false,
+			"max_images":              2,
+			"official_only":           true,
+		},
+	})
+	require.NoError(t, err)
+	configResponse := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		"/api/pulse/asset-enrichment/config",
+		bytes.NewReader(configBody),
+		map[string]string{"Authorization": adminToken},
+	)
+	require.Equal(t, http.StatusOK, configResponse.Status, configResponse.Body)
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"ready"`)
+
+	visuals, err := fixture.hub.FindRecordsByFilter("asset_visuals", "asset = {:asset}", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	var candidateSet *core.Record
+	for _, visual := range visuals {
+		metadata := recordJSONField(t, visual, "metadata")
+		if metadata["visual_role"] == "candidate_set" {
+			candidateSet = visual
+			break
+		}
+	}
+	require.NotNil(t, candidateSet)
+	require.Len(t, recordJSONArrayField(t, candidateSet, "frames"), 2)
+}
+
 func TestAssetVisualRejectsLowTrustPageImages(t *testing.T) {
 	fixture := newAssetEnrichmentFixture(t, "asset-visual-low-trust-page@example.com")
 	var imageRequestCount int
