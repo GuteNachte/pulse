@@ -7,7 +7,6 @@ import {
 	BoxesIcon,
 	CpuIcon,
 	DownloadIcon,
-	ExternalLinkIcon,
 	ImageIcon,
 	Globe2Icon,
 	HardDriveIcon,
@@ -3662,112 +3661,6 @@ function NotificationStateBadge({ status }: { status: AlertNotificationStateReco
 		>
 			{notificationStateLabel(status)}
 		</span>
-	)
-}
-
-function QuickActionButtons({ asset }: { asset: AssetRecord }) {
-	const canConnectAgent = canConnectAgentMonitoring(asset)
-	const canConnectWebsite = canConnectWebsiteMonitoring(asset)
-	const officialReference = getAssetOfficialReferenceLink(asset)
-	const managementUrl = getMetadataString(asset.metadata, "management_url")
-
-	return (
-		<>
-			{canConnectAgent ? (
-				<Button asChild variant="outline" size="sm" className="gap-2">
-					<Link href={`${getPagePath($router, "clients")}?asset=${encodeURIComponent(asset.id)}`}>
-						<MonitorIcon className="size-4" />
-						接入 Agent
-					</Link>
-				</Button>
-			) : null}
-			{canConnectWebsite ? (
-				<Button asChild variant="outline" size="sm" className="gap-2">
-					<Link href={`${getPagePath($router, "websites")}?asset=${encodeURIComponent(asset.id)}&add=1`}>
-						<Globe2Icon className="size-4" />
-						接入网站
-					</Link>
-				</Button>
-			) : null}
-			<Button asChild variant="outline" size="sm" className="gap-2">
-				<Link href={getPagePath($router, "network")}>
-					<NetworkIcon className="size-4" />
-					拓扑
-				</Link>
-			</Button>
-			{managementUrl && (
-				<Button asChild variant="outline" size="sm" className="gap-2">
-					<a href={managementUrl} target="_blank" rel="noreferrer">
-						<ExternalLinkIcon className="size-4" />
-						管理地址
-					</a>
-				</Button>
-			)}
-			{officialReference && (
-				<Button asChild variant="outline" size="sm" className="gap-2">
-					<a href={officialReference.url} target="_blank" rel="noreferrer">
-						<ExternalLinkIcon className="size-4" />
-						{officialReference.label}
-					</a>
-				</Button>
-			)}
-		</>
-	)
-}
-
-function getAssetOfficialReferenceLink(asset: AssetRecord) {
-	const supportUrl = getMetadataString(asset.metadata, "support_url")
-	if (supportUrl) return { label: "支持页", url: supportUrl }
-	const productUrl = getMetadataString(asset.metadata, "product_url")
-	if (productUrl) return { label: "产品页", url: productUrl }
-	const officialUrl = getMetadataString(asset.metadata, "official_url")
-	if (officialUrl) return { label: "资料页", url: officialUrl }
-	return undefined
-}
-
-function SummaryPill({ label, value }: { label: string; value: number | string }) {
-	return (
-		<div className="rounded-md border border-border/70 bg-card px-3 py-2">
-			<div className="text-xs text-muted-foreground">{label}</div>
-			<div className="mt-1 font-mono text-lg font-semibold tabular-nums">{value}</div>
-		</div>
-	)
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
-	return (
-		<div className="min-w-0 rounded-md border border-border/70 bg-card px-3 py-2">
-			<div className="text-xs text-muted-foreground">{label}</div>
-			<div className="mt-1 break-words text-sm font-medium text-foreground">{value}</div>
-		</div>
-	)
-}
-
-function ArchiveDetailRow({ field, value }: { field: AssetFieldDefinition; value: string }) {
-	const isUrl = field.type === "url" && /^https?:\/\//i.test(value)
-	const display = formatAssetParameterRowDisplay(field, value)
-	return (
-		<div
-			className={cn(
-				"grid min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-2 rounded-sm px-1 py-1",
-				field.span === "full" && "md:col-span-2 2xl:col-span-3"
-			)}
-		>
-			<div className="min-w-0 truncate text-xs text-muted-foreground">{display.label}</div>
-			{isUrl ? (
-				<a
-					href={value}
-					target="_blank"
-					rel="noreferrer"
-					className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
-				>
-					<span className="min-w-0 truncate">{display.value}</span>
-					<ExternalLinkIcon className="size-3.5 shrink-0" />
-				</a>
-			) : (
-				<div className="min-w-0 break-words text-sm font-medium text-foreground">{display.value}</div>
-			)}
-		</div>
 	)
 }
 
