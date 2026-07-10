@@ -17,6 +17,7 @@ import { useMemo } from "react"
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { EmptyState, TableEmptyRow } from "@/components/ui/empty-state"
 import { pb } from "@/lib/api"
+import { createLatestRequestGuard } from "@/lib/latest-request-guard"
 import type { ContainerRecord, SystemRecord } from "@/types"
 import {
 	createContainerColumns,
@@ -1247,6 +1248,8 @@ function ContainerSheet({
 	const [infoFullscreenOpen, setInfoFullscreenOpen] = useState<boolean>(false)
 	const [isRefreshingLogs, setIsRefreshingLogs] = useState<boolean>(false)
 	const logsContainerRef = useRef<HTMLDivElement>(null)
+	const logsLoadGuardRef = useRef(createLatestRequestGuard())
+	const infoLoadGuardRef = useRef(createLatestRequestGuard())
 
 	const container = activeContainer.current
 
@@ -1258,11 +1261,13 @@ function ContainerSheet({
 
 	const refreshLogs = async () => {
 		if (!container) return
+		const loadToken = logsLoadGuardRef.current.begin()
 		setIsRefreshingLogs(true)
 		const startTime = Date.now()
 
 		try {
 			const logsHtml = await getLogsHtml(container)
+			if (!logsLoadGuardRef.current.isCurrent(loadToken)) return
 			setLogsDisplay(logsHtml)
 			setTimeout(scrollLogsToBottom, 20)
 		} catch (error) {
@@ -1272,7 +1277,7 @@ function ContainerSheet({
 			const elapsed = Date.now() - startTime
 			const remaining = Math.max(0, 500 - elapsed)
 			setTimeout(() => {
-				setIsRefreshingLogs(false)
+				if (logsLoadGuardRef.current.isCurrent(loadToken)) setIsRefreshingLogs(false)
 			}, remaining)
 		}
 	}
@@ -1280,13 +1285,23 @@ function ContainerSheet({
 	useEffect(() => {
 		setLogsDisplay("")
 		setInfoDisplay("")
+		setIsRefreshingLogs(false)
 		if (!container) return
-		;(async () => {
-			const [logsHtml, infoHtml] = await Promise.all([getLogsHtml(container), getInfoHtml(container)])
+		const logsToken = logsLoadGuardRef.current.begin()
+		const infoToken = infoLoadGuardRef.current.begin()
+		getLogsHtml(container).then((logsHtml) => {
+			if (!logsLoadGuardRef.current.isCurrent(logsToken)) return
 			setLogsDisplay(logsHtml)
-			setInfoDisplay(infoHtml)
 			setTimeout(scrollLogsToBottom, 20)
-		})()
+		})
+		getInfoHtml(container).then((infoHtml) => {
+			if (!infoLoadGuardRef.current.isCurrent(infoToken)) return
+			setInfoDisplay(infoHtml)
+		})
+		return () => {
+			logsLoadGuardRef.current.begin()
+			infoLoadGuardRef.current.begin()
+		}
 	}, [container])
 
 	if (!container) return null
