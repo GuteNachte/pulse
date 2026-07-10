@@ -38,6 +38,7 @@ import { cn } from "@/lib/utils"
 import { getAssetIcon } from "./components/asset-card"
 import { AssetEditActionBar } from "./components/asset-edit-action-bar"
 import { SelectField, TextAreaField, TextField } from "./components/asset-detail-form-fields"
+import { AssetProfileEditField } from "./components/asset-edit-profile-fields"
 import { AssetEditVisualPanel } from "./components/asset-edit-visual-panel"
 import { AssetSuggestionWorkbench } from "./components/asset-suggestion-workbench"
 import {
@@ -48,7 +49,6 @@ import {
 } from "./components/asset-parameter-columns"
 import { AssetVisualCard } from "./components/asset-visual-card"
 import {
-	AssetFieldCaptureTag,
 	AssetLocationInput,
 	AssetTagInput,
 	OfficialColorField,
@@ -56,6 +56,7 @@ import {
 	PHONE_STORAGE_OPTIONS,
 	PhoneVariantSpecField,
 } from "./components/asset-form-fields"
+import { buildAssetProfileEditSections, getRequiredAssetProfileFieldKeys } from "./asset-edit-profile-sections"
 import { buildNextAssetTag, loadAssetNumberingSettings, normalizeAssetNumberingSettings } from "./asset-numbering"
 import { buildAssetLocationOptions } from "./asset-list"
 import {
@@ -2326,163 +2327,6 @@ function AssetEditWorkbench({
 			</form>
 		</DialogContent>
 	)
-}
-
-function getRequiredAssetProfileFieldKeys(type: AssetRecord["type"]) {
-	const keys = new Set([
-		"name",
-		"type",
-		"vendor",
-		"model",
-		"internal_model",
-		"color",
-		"asset_tag",
-		"location",
-		"management_ip",
-		"fixed_ipv4",
-	])
-	if (isPhoneVariantSpecRequired(type)) {
-		keys.add("memory_gb")
-		keys.add("storage_gb")
-	}
-	return keys
-}
-
-function buildAssetProfileEditSections(type: AssetRecord["type"], requiredFieldKeys: Set<string>) {
-	return getAssetFormSections(type)
-		.map((section) => ({
-			...section,
-			fields: section.fields.filter((field) => !requiredFieldKeys.has(field.key)),
-		}))
-		.filter((section) => section.fields.length > 0)
-}
-
-function AssetProfileEditField({
-	field,
-	asset,
-	locationOptions,
-	nextAssetTagPreview,
-}: {
-	field: AssetFieldDefinition
-	asset: AssetRecord
-	locationOptions: string[]
-	nextAssetTagPreview: string
-}) {
-	const metadata = asset.metadata ?? {}
-	const defaultValue = getAssetProfileEditFieldDefaultValue(asset, field)
-	const className = field.span === "full" || field.key === "notes" ? "sm:col-span-2" : undefined
-
-	if (field.key === "notes") {
-		return <TextAreaField name="notes" label={field.label} defaultValue={asset.notes} className={className} />
-	}
-	if (field.key === "location") {
-		return (
-			<div className={cn("grid gap-2", className)}>
-				<Label>
-					{field.label}
-					{field.required && <span className="ms-1 text-destructive">*</span>}
-				</Label>
-				<AssetLocationInput
-					idPrefix={`asset-detail-edit-field-${field.key}`}
-					value={asset.location || ""}
-					locationOptions={locationOptions}
-					onChange={() => undefined}
-				/>
-			</div>
-		)
-	}
-	if (field.key === "asset_tag") {
-		return (
-			<div className={cn("grid gap-2", className)}>
-				<Label htmlFor="asset-detail-edit-field-asset-tag">{field.label}</Label>
-				<AssetTagInput
-					id="asset-detail-edit-field-asset-tag"
-					name={field.key}
-					value={getMetadataString(metadata, field.key)}
-					onChange={() => undefined}
-					nextAssetTagPreview={nextAssetTagPreview}
-				/>
-			</div>
-		)
-	}
-	if (field.key === "memory_gb") {
-		return (
-			<PhoneVariantSpecField
-				name={field.key}
-				label={field.label}
-				required={field.required}
-				defaultValue={String(getMetadataNumber(metadata, field.key) ?? "")}
-				options={PHONE_MEMORY_OPTIONS}
-				customPlaceholder="例如 10"
-			/>
-		)
-	}
-	if (field.key === "storage_gb") {
-		return (
-			<PhoneVariantSpecField
-				name={field.key}
-				label={field.label}
-				required={field.required}
-				defaultValue={String(getMetadataNumber(metadata, field.key) ?? "")}
-				options={PHONE_STORAGE_OPTIONS}
-				customPlaceholder="例如 384"
-			/>
-		)
-	}
-	if (field.type === "select" && field.options) {
-		return (
-			<SelectField
-				name={field.key}
-				label={field.label}
-				options={field.options}
-				defaultValue={defaultValue}
-				placeholder="未设置"
-			/>
-		)
-	}
-	return (
-		<div className={cn("grid gap-2", className)}>
-			<Label htmlFor={`asset-detail-edit-field-${field.key}`} className="flex min-w-0 flex-wrap items-center gap-1.5">
-				<span>
-					{field.label}
-					{field.required && <span className="ms-1 text-destructive">*</span>}
-				</span>
-				<AssetFieldCaptureTag capture={field.capture} required={field.required} />
-			</Label>
-			<Input
-				id={`asset-detail-edit-field-${field.key}`}
-				name={field.key}
-				type={field.type === "number" || field.type === "date" || field.type === "url" ? field.type : "text"}
-				defaultValue={defaultValue}
-				placeholder={field.placeholder}
-			/>
-		</div>
-	)
-}
-
-function getAssetProfileEditFieldDefaultValue(asset: AssetRecord, field: AssetFieldDefinition) {
-	switch (field.key) {
-		case "name":
-			return asset.name || ""
-		case "status":
-			return asset.status || "active"
-		case "vendor":
-			return asset.vendor || ""
-		case "model":
-			return asset.model || ""
-		case "serial_number":
-			return asset.serial_number || ""
-		case "management_ip":
-			return asset.management_ip || ""
-		case "location":
-			return asset.location || ""
-		case "role":
-			return asset.role || ""
-		case "notes":
-			return asset.notes || ""
-		default:
-			return getMetadataString(asset.metadata, field.key)
-	}
 }
 
 function AssetEditCount({ label, value }: { label: string; value: number }) {
