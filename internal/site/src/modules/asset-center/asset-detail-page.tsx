@@ -102,6 +102,13 @@ import {
 	groupAssetVisualCandidateFramesByColor,
 	loadDisplayAssetVisuals,
 } from "./asset-visual-query"
+import {
+	getAssetOfficialColorOptions,
+	getAssetVisualColor,
+	getAssetVisualGenerationBlockReason,
+	isOfficialColorRequiredForAssetType,
+	mergeOfficialColorOptions,
+} from "./asset-visual-color"
 import { getAssetSourceProfile } from "./asset-source-profile"
 import {
 	formatCollectedNicSummary,
@@ -6423,91 +6430,6 @@ function firstNonEmpty(...values: (string | undefined)[]) {
 
 function wait(ms: number) {
 	return new Promise((resolve) => window.setTimeout(resolve, ms))
-}
-
-function getAssetVisualColor(asset: AssetRecord) {
-	return firstNonEmpty(getMetadataString(asset.metadata, "color"), getMetadataString(asset.metadata, "device_color"))
-}
-
-function getAssetOfficialColorOptions(asset: AssetRecord, suggestions: AssetEnrichmentSuggestionRecord[] = []) {
-	const metadata = asset.metadata ?? {}
-	return mergeAssetColorOptions([
-		...parseAssetColorOptions(
-			firstNonEmpty(getMetadataString(metadata, "colors_available"), getMetadataString(metadata, "official_colors"))
-		),
-		...suggestions.flatMap((suggestion) => getOfficialColorOptionsFromSuggestion(suggestion)),
-	])
-}
-
-function parseAssetColorOptions(raw: string) {
-	const normalized = raw
-		.replace(/[，、/／|；;\n]+/g, ",")
-		.split(",")
-		.map((item) => item.trim().replace(/^[[\]【】()（）"'“”]+|[[\]【】()（）"'“”]+$/g, ""))
-		.filter(Boolean)
-	const seen = new Set<string>()
-	const result: string[] = []
-	for (const item of normalized) {
-		const key = normalizeComparableText(item)
-		if (!key || seen.has(key)) continue
-		seen.add(key)
-		result.push(item)
-	}
-	return result
-}
-
-function mergeOfficialColorOptions(options: string[], current?: string) {
-	const result = [...options]
-	const value = current?.trim()
-	if (value && !options.some((option) => normalizeComparableText(option) === normalizeComparableText(value))) {
-		result.unshift(value)
-	}
-	return result
-}
-
-function mergeAssetColorOptions(options: string[]) {
-	const seen = new Set<string>()
-	const result: string[] = []
-	for (const option of options) {
-		const value = option.trim()
-		const key = normalizeComparableText(value)
-		if (!value || !key || seen.has(key)) continue
-		seen.add(key)
-		result.push(value)
-	}
-	return result
-}
-
-function getOfficialColorOptionsFromSuggestion(suggestion: AssetEnrichmentSuggestionRecord) {
-	if (suggestion.status !== "pending") return []
-	if (suggestion.target_collection !== "assets") return []
-	const field = suggestion.target_field.replace(/^metadata\./, "")
-	if (field !== "colors_available" && field !== "official_colors") return []
-	return parseAssetColorOptions(suggestion.recommended_value)
-}
-
-function getOfficialColorFetchRequirements(asset: AssetRecord) {
-	const missing: string[] = []
-	if (!asset.vendor?.trim()) missing.push("厂商 / 品牌")
-	if (!asset.model?.trim()) missing.push("型号 / 规格")
-	if (!getMetadataString(asset.metadata, "internal_model")) missing.push("内部型号 / 搜索代码")
-	return missing
-}
-
-function isOfficialColorRequiredForAssetType(type: AssetRecord["type"]) {
-	return ["phone", "tablet", "wearable", "handheld", "ebook", "game_console", "tv", "speaker"].includes(type)
-}
-
-function getAssetVisualGenerationBlockReason(asset: AssetRecord, color: string, officialColorOptions: string[]) {
-	if (!asset.model?.trim() || !getMetadataString(asset.metadata, "internal_model")) {
-		return "收集设备图需要先保存型号 / 规格和内部型号 / 搜索代码。"
-	}
-	if (color.trim() && isOfficialColorRequiredForAssetType(asset.type) && officialColorOptions.length > 0) {
-		if (!officialColorOptions.some((option) => normalizeComparableText(option) === normalizeComparableText(color))) {
-			return "当前配色不是已采集的官方配色，请从官方配色列表选择。"
-		}
-	}
-	return ""
 }
 
 function getAssetRecognitionRequirements(asset: AssetRecord): AssetRecognitionRequirement[] {
