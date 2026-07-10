@@ -1,6 +1,7 @@
 import {
 	getAssetDisplayVisual,
 	getAssetVisualCandidateFrames,
+	getAssetVisualStageLayout,
 	getDisplayAssetVisualFrames,
 	getLatestAssetVisualCandidateSet,
 	groupAssetVisualCandidateFramesByColor,
@@ -13,6 +14,24 @@ function assertDeepEqual(actual: unknown, expected: unknown) {
 		throw new Error(`Expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`)
 	}
 }
+
+assertDeepEqual(getAssetVisualStageLayout(false, false), {
+	stageClassName: "aspect-[16/10]",
+	imageClassName: "",
+	maxWidth: "100%",
+})
+
+assertDeepEqual(getAssetVisualStageLayout(true, false), {
+	stageClassName: "aspect-[3/4]",
+	imageClassName: "object-contain p-1 sm:p-2",
+	maxWidth: "min(100%, calc((100vh - 10rem) * 0.75), 24rem)",
+})
+
+assertDeepEqual(getAssetVisualStageLayout(true, true), {
+	stageClassName: "aspect-[4/3]",
+	imageClassName: "object-cover p-0",
+	maxWidth: "100%",
+})
 
 const calls: Array<{ page: number; perPage: number; options: Record<string, unknown> }> = []
 const fakeCollection = {

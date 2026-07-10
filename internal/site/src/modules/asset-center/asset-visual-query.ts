@@ -49,6 +49,28 @@ export function getAssetDisplayVisual(visuals: AssetVisualRecord[]) {
 	)
 }
 
+export function getAssetVisualStageLayout(hasVisual: boolean, useLandscapeImageLayout: boolean) {
+	if (!hasVisual) {
+		return {
+			stageClassName: "aspect-[16/10]",
+			imageClassName: "",
+			maxWidth: "100%",
+		}
+	}
+	if (useLandscapeImageLayout) {
+		return {
+			stageClassName: "aspect-[4/3]",
+			imageClassName: "object-cover p-0",
+			maxWidth: "100%",
+		}
+	}
+	return {
+		stageClassName: "aspect-[3/4]",
+		imageClassName: "object-contain p-1 sm:p-2",
+		maxWidth: "min(100%, calc((100vh - 10rem) * 0.75), 24rem)",
+	}
+}
+
 export type AssetVisualCandidateFrame = {
 	visualId: string
 	index: number

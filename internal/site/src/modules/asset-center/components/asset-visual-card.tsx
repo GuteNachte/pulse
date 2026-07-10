@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 import type { AssetVisualRecord } from "@/types"
-import { getAssetDisplayVisual, getDisplayAssetVisualFrames } from "../asset-visual-query"
+import { getAssetDisplayVisual, getAssetVisualStageLayout, getDisplayAssetVisualFrames } from "../asset-visual-query"
 
 export function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 	const { theme } = useTheme()
@@ -20,8 +20,7 @@ export function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 	const activeImageRatio =
 		activeImageSize && activeImageSize.height > 0 ? activeImageSize.width / activeImageSize.height : 0
 	const useLandscapeImageLayout = activeImageRatio > 1.12
-	const visualStageRatio = useLandscapeImageLayout ? "aspect-[4/3]" : "aspect-[3/4]"
-	const visualImageFit = useLandscapeImageLayout ? "object-cover p-0" : "object-contain p-1 sm:p-2"
+	const visualStageLayout = getAssetVisualStageLayout(Boolean(activeFrame?.url), useLandscapeImageLayout)
 
 	useEffect(() => {
 		if (theme !== "system" || typeof window === "undefined") return
@@ -42,12 +41,12 @@ export function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 				<div
 					className={cn(
 						"relative isolate mx-auto grid w-full select-none place-items-center overflow-hidden rounded-md border border-border/70 bg-card dark:bg-background",
-						visualStageRatio,
+						visualStageLayout.stageClassName,
 						isDarkVisualStage &&
 							"border-white/10 bg-[#050506] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05),inset_0_-80px_120px_rgba(0,0,0,0.55)]"
 					)}
 					style={{
-						maxWidth: useLandscapeImageLayout ? "100%" : "min(100%, calc((100vh - 10rem) * 0.75), 24rem)",
+						maxWidth: visualStageLayout.maxWidth,
 					}}
 				>
 					{activeFrame?.url ? (
@@ -69,7 +68,7 @@ export function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 								alt="设备全貌图"
 								className={cn(
 									"relative z-10 h-full w-full",
-									visualImageFit,
+									visualStageLayout.imageClassName,
 									isDarkVisualStage && "brightness-110 contrast-110 drop-shadow-[0_30px_52px_rgba(0,0,0,0.72)]"
 								)}
 								onLoad={(event) =>
