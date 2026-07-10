@@ -9,7 +9,7 @@ import {
 	PlusIcon,
 	SearchIcon,
 } from "lucide-react"
-import { memo, useEffect, useMemo, useRef, useState } from "react"
+import { memo, useEffect, useMemo, useState } from "react"
 import {
 	AssetListItem,
 	AssetPreviewPanel,
@@ -23,6 +23,7 @@ import {
 	AssetMetaTag,
 } from "@/modules/asset-center/components/asset-form-fields"
 import { AssetLocationSettingsDialog } from "@/modules/asset-center/components/asset-location-settings-dialog"
+import { AssetImportDialog } from "@/modules/asset-center/components/asset-import-dialog"
 import { AssetNumberingSettingsDialog } from "@/modules/asset-center/components/asset-numbering-settings-dialog"
 import { QuickAssetCreateFields } from "@/modules/asset-center/components/asset-quick-create-fields"
 import { AssetTypePicker, AssetTypeRail } from "@/modules/asset-center/components/asset-type-picker"
@@ -38,7 +39,6 @@ import {
 } from "@/components/ui/dialog"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/use-toast"
 import { isReadOnlyUser, pb } from "@/lib/api"
 import { pageTitle } from "@/lib/branding"
@@ -97,8 +97,6 @@ import {
 	STATUS_OPTIONS,
 	getAssetCompleteness,
 	getAssetFormSections,
-	getAssetTypeLabel,
-	getStatusLabel,
 	getMetadataString,
 	isPhoneVariantSpecRequired,
 	type AssetFieldDefinition,
@@ -157,7 +155,6 @@ export default memo(function AssetsPage() {
 	const [numberingForm, setNumberingForm] = useState<AssetNumberingSettings>(() => loadAssetNumberingSettings())
 	const [importText, setImportText] = useState("")
 	const [importPreviewRows, setImportPreviewRows] = useState<AssetImportPreviewRow[]>([])
-	const importFileInputRef = useRef<HTMLInputElement | null>(null)
 	const [activeAssetId, setActiveAssetId] = useState("")
 	const initialFilters = useMemo(getInitialAssetFiltersFromUrl, [])
 	const [search, setSearch] = useState(initialFilters.search)
@@ -728,7 +725,6 @@ export default memo(function AssetsPage() {
 			const validCount = previewRows.filter((row) => row.errors.length === 0).length
 			toast({ title: "导入预览已生成", description: `可导入 ${validCount} / ${previewRows.length} 条。` })
 		} catch (error) {
-			console.error("preview asset import", error)
 			setImportPreviewRows([])
 			toast({
 				title: "导入内容无法解析",
@@ -1136,108 +1132,19 @@ export default memo(function AssetsPage() {
 				onSave={saveNumberingSettings}
 			/>
 
-			<Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-				<DialogContent className="flex max-h-[88vh] max-w-5xl flex-col overflow-hidden">
-					<DialogHeader>
-						<DialogTitle>导入资产</DialogTitle>
-						<DialogDescription>支持 JSON 数组或带表头 CSV，导入前先预览校验。</DialogDescription>
-					</DialogHeader>
-					<div className="grid min-h-0 gap-4 overflow-y-auto pr-1 lg:grid-cols-[minmax(0,1fr)_22rem]">
-						<div className="grid min-h-0 gap-3">
-							<Textarea
-								value={importText}
-								onChange={(event) => setImportText(event.target.value)}
-								className="min-h-72 font-mono text-xs"
-								placeholder={`name,type,status,location,vendor,model,management_ip,metadata.fixed_ipv4,metadata.mac\n客厅路由器,router,active,弱电箱,联通,V271-20,192.168.1.1,192.168.1.1,AA:BB:CC:DD:EE:FF`}
-							/>
-							<div className="flex flex-wrap items-center gap-2">
-								<input
-									ref={importFileInputRef}
-									type="file"
-									accept=".csv,.json,application/json,text/csv,text/plain"
-									className="hidden"
-									onChange={(event) => loadImportFile(event.target.files?.[0] ?? null)}
-								/>
-								<Button variant="outline" onClick={() => importFileInputRef.current?.click()} disabled={saving}>
-									选择文件
-								</Button>
-								<Button variant="outline" onClick={downloadImportCsvTemplate} disabled={saving}>
-									下载 CSV 模板
-								</Button>
-								<Button variant="outline" onClick={downloadImportJsonExample} disabled={saving}>
-									下载 JSON 示例
-								</Button>
-								<Button variant="outline" onClick={previewImportAssets} disabled={saving || !importText.trim()}>
-									生成预览
-								</Button>
-								<Button
-									onClick={importAssets}
-									disabled={saving || importPreviewRows.every((row) => row.errors.length > 0)}
-								>
-									{saving ? "导入中" : `导入 ${importPreviewRows.filter((row) => row.errors.length === 0).length} 条`}
-								</Button>
-							</div>
-							<div className="grid gap-2">
-								{importPreviewRows.length === 0 ? (
-									<div className="rounded-lg border border-dashed border-border/70 bg-surface-soft p-4 text-sm text-muted-foreground">
-										暂无预览
-									</div>
-								) : (
-									importPreviewRows.slice(0, 20).map((row) => (
-										<div
-											key={row.index}
-											className={cn(
-												"grid gap-2 rounded-lg border p-3",
-												row.errors.length > 0
-													? "border-red-200 bg-red-50 text-red-900"
-													: row.warnings.length > 0
-														? "border-amber-200 bg-amber-50 text-amber-900"
-														: "border-border/70 bg-card"
-											)}
-										>
-											<div className="flex min-w-0 items-center justify-between gap-3">
-												<div className="min-w-0 truncate font-medium">
-													第 {row.index + 1} 条 · {row.form.name || "未命名"}
-												</div>
-												<AssetMetaTag
-													tone={row.errors.length > 0 ? "danger" : row.warnings.length > 0 ? "warning" : "ok"}
-												>
-													{row.errors.length > 0 ? "不可导入" : row.warnings.length > 0 ? "需确认" : "可导入"}
-												</AssetMetaTag>
-											</div>
-											<div className="flex flex-wrap gap-1.5">
-												<AssetMetaTag>{getAssetTypeLabel(row.form.type)}</AssetMetaTag>
-												<AssetMetaTag>{getStatusLabel(row.form.status)}</AssetMetaTag>
-												{row.form.location && <AssetMetaTag>{row.form.location}</AssetMetaTag>}
-												{row.form.management_ip && <AssetMetaTag>{row.form.management_ip}</AssetMetaTag>}
-											</div>
-											{row.errors.length > 0 && (
-												<div className="text-xs leading-5 text-red-700">{row.errors.join("；")}</div>
-											)}
-											{row.warnings.length > 0 && (
-												<div className="text-xs leading-5 text-amber-800">{row.warnings.join("；")}</div>
-											)}
-										</div>
-									))
-								)}
-								{importPreviewRows.length > 20 && (
-									<div className="text-xs text-muted-foreground">
-										其余 {importPreviewRows.length - 20} 条导入时同样会校验。
-									</div>
-								)}
-							</div>
-						</div>
-						<div className="grid content-start gap-3 rounded-lg border border-border/70 bg-surface-soft p-3">
-							<SummaryPill label="解析条数" value={importPreviewRows.length} />
-							<SummaryPill label="可导入" value={importPreviewRows.filter((row) => row.errors.length === 0).length} />
-							<SummaryPill label="需处理" value={importPreviewRows.filter((row) => row.errors.length > 0).length} />
-							<div className="rounded-md border border-border/70 bg-card p-3 text-xs leading-5 text-muted-foreground">
-								可用字段：name、type、status、location、vendor、model、serial_number、management_ip、role、notes、parent_asset、metadata.*。模板已包含宽带、路由器、交换机、NAS、网页端点和智能家居示例。
-							</div>
-						</div>
-					</div>
-				</DialogContent>
-			</Dialog>
+			<AssetImportDialog
+				open={importDialogOpen}
+				onOpenChange={setImportDialogOpen}
+				value={importText}
+				previewRows={importPreviewRows}
+				saving={saving}
+				onValueChange={setImportText}
+				onLoadFile={loadImportFile}
+				onDownloadCsvTemplate={downloadImportCsvTemplate}
+				onDownloadJsonExample={downloadImportJsonExample}
+				onPreview={previewImportAssets}
+				onImport={importAssets}
+			/>
 
 			<Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
 				<DialogContent className="max-w-2xl">
