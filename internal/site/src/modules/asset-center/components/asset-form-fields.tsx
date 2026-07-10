@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { isOfficialColorRequiredForAssetType, mergeOfficialColorOptions } from "../asset-visual-color"
 import type { AssetFieldDefinition, AssetLifecycleTone } from "@/modules/asset-center/asset-schema"
 
 export const PHONE_MEMORY_OPTIONS = [
@@ -224,6 +225,150 @@ export function PhoneVariantSpecInput({
 			)}
 		</div>
 	)
+}
+
+export function PhoneVariantSpecField({
+	name,
+	label,
+	required,
+	defaultValue,
+	options,
+	customPlaceholder,
+}: {
+	name: string
+	label: string
+	required?: boolean
+	defaultValue?: string
+	options: { value: string; label: string }[]
+	customPlaceholder?: string
+}) {
+	const [value, setValue] = useState(defaultValue ?? "")
+	useEffect(() => {
+		setValue(defaultValue ?? "")
+	}, [defaultValue])
+
+	return (
+		<div className="grid gap-2">
+			<Label htmlFor={`${name}-select`}>
+				{label}
+				{required && <span className="ms-1 text-destructive">*</span>}
+			</Label>
+			<input type="hidden" name={name} value={value} />
+			<PhoneVariantSpecInput
+				value={value}
+				onChange={setValue}
+				options={options}
+				customPlaceholder={customPlaceholder}
+			/>
+		</div>
+	)
+}
+
+export function OfficialColorField({
+	name,
+	label,
+	defaultValue,
+	options,
+	requireOfficial,
+}: {
+	name: string
+	label: string
+	defaultValue?: string
+	options: string[]
+	requireOfficial: boolean
+}) {
+	const mergedOptions = requireOfficial ? options : mergeOfficialColorOptions(options, defaultValue)
+	if (!requireOfficial && options.length === 0) {
+		return (
+			<div className="grid gap-2">
+				<div className="flex items-center justify-between gap-2">
+					<Label htmlFor={name}>{label}</Label>
+				</div>
+				<Input id={name} name={name} defaultValue={defaultValue} placeholder="资料补全后可改为官方配色" />
+			</div>
+		)
+	}
+	return (
+		<div className="grid gap-2">
+			<div className="flex items-center justify-between gap-2">
+				<Label htmlFor={name}>{label}</Label>
+			</div>
+			{mergedOptions.length > 0 && <input type="hidden" name="colors_available" value={mergedOptions.join(", ")} />}
+			<select
+				id={name}
+				name={name}
+				defaultValue={requireOfficial && defaultValue && !hasSameColor(options, defaultValue) ? "" : defaultValue || ""}
+				className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus:border-ring/70 focus:ring-2 focus:ring-ring/15"
+			>
+				<option value="">{options.length ? "请选择官方配色" : "请先智能匹配"}</option>
+				{mergedOptions.map((option) => (
+					<option key={option} value={option}>
+						{option}
+					</option>
+				))}
+			</select>
+			{requireOfficial && options.length === 0 && (
+				<div className="text-xs text-muted-foreground">
+					手机等固定规格设备不再手输颜色，需要先智能匹配生成官方颜色后选择。
+				</div>
+			)}
+		</div>
+	)
+}
+
+export function OfficialColorPicker({
+	value,
+	options,
+	assetType,
+	onChange,
+}: {
+	value: string
+	options: string[]
+	assetType: Parameters<typeof isOfficialColorRequiredForAssetType>[0]
+	onChange: (value: string) => void
+}) {
+	const requireOfficial = isOfficialColorRequiredForAssetType(assetType)
+	const mergedOptions = requireOfficial ? options : mergeOfficialColorOptions(options, value)
+	if (!requireOfficial && options.length === 0) {
+		return (
+			<div className="grid gap-2">
+				<div className="flex items-center justify-between gap-2">
+					<Label htmlFor="asset-visual-color">配色</Label>
+				</div>
+				<Input
+					id="asset-visual-color"
+					value={value}
+					onChange={(event) => onChange(event.target.value)}
+					placeholder="资料补全后优先选择官方配色"
+				/>
+			</div>
+		)
+	}
+	return (
+		<div className="grid gap-2">
+			<div className="flex items-center justify-between gap-2">
+				<Label htmlFor="asset-visual-color">官方配色</Label>
+			</div>
+			<select
+				id="asset-visual-color"
+				value={requireOfficial && value && !hasSameColor(options, value) ? "" : value}
+				onChange={(event) => onChange(event.target.value)}
+				className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus:border-ring/70 focus:ring-2 focus:ring-ring/15"
+			>
+				<option value="">{options.length ? "不指定配色，按颜色分组找图" : "不指定配色，先按图片来源分类"}</option>
+				{mergedOptions.map((option) => (
+					<option key={option} value={option}>
+						{option}
+					</option>
+				))}
+			</select>
+		</div>
+	)
+}
+
+function hasSameColor(options: string[], value: string) {
+	const normalizedValue = value.trim().toLowerCase()
+	return options.some((option) => option.trim().toLowerCase() === normalizedValue)
 }
 
 export function AssetLocationInput({
