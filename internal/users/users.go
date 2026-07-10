@@ -19,9 +19,16 @@ type UserManager struct {
 }
 
 func NewUserManager(app core.App) *UserManager {
-	return &UserManager{
+	manager := &UserManager{
 		app: app,
 	}
+	manager.bindHooks()
+	return manager
+}
+
+func (um *UserManager) bindHooks() {
+	um.app.OnRecordCreate("users").BindFunc(um.InitializeUserRole)
+	um.app.OnRecordCreate("user_settings").BindFunc(um.InitializeUserSettings)
 }
 
 // Initialize user role if not set

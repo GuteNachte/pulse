@@ -107,11 +107,6 @@ func (h *Hub) StartHub() error {
 		return e.Next()
 	})
 
-	// TODO: move to users package
-	// handle default values for user / user_settings creation
-	h.App.OnRecordCreate("users").BindFunc(h.um.InitializeUserRole)
-	h.App.OnRecordCreate("user_settings").BindFunc(h.um.InitializeUserSettings)
-
 	pb, ok := h.App.(*pocketbase.PocketBase)
 	if !ok {
 		return errors.New("not a pocketbase app")
