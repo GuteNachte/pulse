@@ -23,6 +23,7 @@ import {
 	AssetMetaTag,
 } from "@/modules/asset-center/components/asset-form-fields"
 import { AssetLocationSettingsDialog } from "@/modules/asset-center/components/asset-location-settings-dialog"
+import { AssetNumberingSettingsDialog } from "@/modules/asset-center/components/asset-numbering-settings-dialog"
 import { QuickAssetCreateFields } from "@/modules/asset-center/components/asset-quick-create-fields"
 import { AssetTypePicker, AssetTypeRail } from "@/modules/asset-center/components/asset-type-picker"
 import { Button } from "@/components/ui/button"
@@ -1125,58 +1126,15 @@ export default memo(function AssetsPage() {
 				onValidationError={(title) => toast({ title, variant: "destructive" })}
 			/>
 
-			<Dialog open={numberingDialogOpen} onOpenChange={setNumberingDialogOpen}>
-				<DialogContent className="max-w-md">
-					<DialogHeader>
-						<DialogTitle>编号</DialogTitle>
-						<DialogDescription>设置新增资产未手动填写编号时的自动编号规则。</DialogDescription>
-					</DialogHeader>
-					<div className="grid gap-4">
-						<AssetFormField label="编号前缀" required>
-							<Input
-								value={numberingForm.prefix}
-								onChange={(event) => setNumberingForm((current) => ({ ...current, prefix: event.target.value }))}
-								placeholder="ASSET-"
-							/>
-						</AssetFormField>
-						<div className="grid gap-3 sm:grid-cols-2">
-							<AssetFormField label="数字位数" required>
-								<Input
-									type="number"
-									min={1}
-									max={12}
-									value={numberingForm.digits}
-									onChange={(event) => setNumberingForm((current) => ({ ...current, digits: event.target.value }))}
-									placeholder="4"
-								/>
-							</AssetFormField>
-							<AssetFormField label="下一个序号" required>
-								<Input
-									type="number"
-									min={1}
-									value={numberingForm.nextSequence}
-									onChange={(event) =>
-										setNumberingForm((current) => ({ ...current, nextSequence: event.target.value }))
-									}
-									placeholder="1"
-								/>
-							</AssetFormField>
-						</div>
-						<div className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-surface-soft px-3 py-2">
-							<span className="text-sm text-muted-foreground">下一个编号</span>
-							<span className="font-mono text-sm font-semibold text-foreground">{nextAssetTagPreview}</span>
-						</div>
-					</div>
-					<DialogFooter>
-						<Button variant="outline" onClick={() => setNumberingDialogOpen(false)}>
-							关闭
-						</Button>
-						<Button onClick={saveNumberingSettings} disabled={readOnly}>
-							保存设置
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
+			<AssetNumberingSettingsDialog
+				open={numberingDialogOpen}
+				onOpenChange={setNumberingDialogOpen}
+				form={numberingForm}
+				nextAssetTagPreview={nextAssetTagPreview}
+				readOnly={readOnly}
+				onChange={setNumberingForm}
+				onSave={saveNumberingSettings}
+			/>
 
 			<Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
 				<DialogContent className="flex max-h-[88vh] max-w-5xl flex-col overflow-hidden">
