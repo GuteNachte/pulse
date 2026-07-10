@@ -25,6 +25,7 @@ import { failureCategoryLabel, formatMonitorError } from "./websites/format"
 import { hasMonitorCheckInputsChanged } from "./websites/monitor-save-utils"
 import { MonitorDialog } from "./websites/monitor-dialog"
 import { WebsiteMonitorListPanel } from "./websites/page-panels"
+import { createMonitorFormFromEndpointAsset } from "./websites/asset-form"
 import {
 	buildTargetPayload,
 	canLoadImage,
@@ -35,11 +36,9 @@ import {
 	nextAvailableTargetKind,
 	resolveFormIconURL,
 	resolveIconURL,
-	normalizeOptionalURL,
 	targetKindScope,
-	splitURL,
 } from "./websites/target-utils"
-import type { IconPreviewState, MonitorForm, TargetKind, TargetScope } from "./websites/types"
+import type { IconPreviewState, MonitorForm } from "./websites/types"
 import { createEmptyForm } from "./websites/types"
 import { useWebsiteMonitorData } from "./websites/use-website-monitor-data"
 
@@ -147,7 +146,7 @@ export default memo(function Websites() {
 					})
 					return
 				}
-				const nextForm = createMonitorFormFromAsset(asset, { system: system?.id || "" })
+				const nextForm = createMonitorFormFromEndpointAsset(asset, { system: system?.id || "" })
 				setForm(nextForm)
 				setIconPreview({ status: "idle", url: nextForm.icon_url })
 				setDialogOpen(true)
@@ -165,7 +164,7 @@ export default memo(function Websites() {
 			}
 			handledInitialAdd.current = true
 			setSystemFilter(system?.id || "")
-			const nextForm = createMonitorFormFromAsset(asset, { system: system?.id || "" })
+			const nextForm = createMonitorFormFromEndpointAsset(asset, { system: system?.id || "" })
 			setForm(nextForm)
 			setIconPreview({ status: "idle", url: nextForm.icon_url })
 			setDialogOpen(true)
@@ -190,7 +189,7 @@ export default memo(function Websites() {
 			return
 		}
 		const selectedSystem = systems.find((item) => item.id === (systemFilter || systems[0]?.id || ""))
-		const nextForm = createMonitorFormFromAsset(assets[0], { system: selectedSystem?.id || "" })
+		const nextForm = createMonitorFormFromEndpointAsset(assets[0], { system: selectedSystem?.id || "" })
 		setForm(nextForm)
 		setIconPreview({ status: "idle", url: nextForm.icon_url })
 		setDialogOpen(true)
@@ -400,7 +399,7 @@ export default memo(function Websites() {
 			setFormWithSyncedIcon({ ...form, asset: "" }, true)
 			return
 		}
-		const nextForm = createMonitorFormFromAsset(asset, {
+		const nextForm = createMonitorFormFromEndpointAsset(asset, {
 			base: form,
 			system: form.system,
 			interval_seconds: form.interval_seconds,
@@ -809,100 +808,4 @@ function isPocketBaseNotFound(error: unknown) {
 	return (
 		typeof error === "object" && error !== null && "status" in error && (error as { status?: unknown }).status === 404
 	)
-}
-
-function createMonitorFormFromAsset(
-	asset: AssetRecord,
-	options?: {
-		base?: MonitorForm
-		system?: string
-		interval_seconds?: number
-		timeout_seconds?: number
-		enabled?: boolean
-	}
-): MonitorForm {
-	const base = options?.base ?? createEmptyForm()
-	const targets = webEndpointTargetsFromAsset(asset)
-	const iconSource = targets.some((target) => target.kind.startsWith("internal"))
-		? "internal"
-		: targets.some((target) => target.kind.startsWith("external"))
-			? "external"
-			: base.icon_source
-	const nextForm: MonitorForm = {
-		...base,
-		id: base.id,
-		system: options?.system ?? base.system,
-		asset: asset.id,
-		name: asset.name || base.name,
-		description: firstNonEmpty(asset.notes, asset.role, base.description),
-		targets: targets.length ? targets : base.targets,
-		icon_source: iconSource,
-		group: firstNonEmpty(asset.location, asset.role, base.group),
-		interval_seconds: options?.interval_seconds ?? base.interval_seconds,
-		timeout_seconds: options?.timeout_seconds ?? base.timeout_seconds,
-		enabled: options?.enabled ?? base.enabled,
-	}
-	return { ...nextForm, icon_url: resolveFormIconURL(nextForm) }
-}
-
-function webEndpointTargetsFromAsset(asset: AssetRecord): MonitorForm["targets"] {
-	const internalURL = normalizeOptionalURL(metadataString(asset, "internal_url"))
-	const externalURL = normalizeOptionalURL(metadataString(asset, "external_url"))
-	const defaultURL = normalizeOptionalURL(metadataString(asset, "url"))
-	const candidates: Array<{ scope: TargetScope; url: string }> = []
-	if (internalURL) {
-		candidates.push({ scope: "internal", url: internalURL })
-	}
-	if (externalURL) {
-		candidates.push({ scope: "external", url: externalURL })
-	}
-	if (!candidates.length && defaultURL) {
-		candidates.push({ scope: defaultScopeFromAsset(asset), url: defaultURL })
-	}
-
-	const seenURLs = new Set<string>()
-	return candidates.flatMap((candidate) => {
-		if (!candidate.url || seenURLs.has(candidate.url)) {
-			return []
-		}
-		seenURLs.add(candidate.url)
-		const kind = targetKindForURL(candidate.url, candidate.scope)
-		const parts = splitURL(candidate.url, candidate.scope === "internal" ? "http://" : "https://")
-		return [{ id: kind, kind, protocol: parts.protocol, address: parts.address }]
-	})
-}
-
-function targetKindForURL(rawURL: string, scope: TargetScope): TargetKind {
-	return `${scope}-${urlLooksIPv6(rawURL) ? "ipv6" : "ipv4"}` as TargetKind
-}
-
-function urlLooksIPv6(rawURL: string) {
-	try {
-		return new URL(rawURL).hostname.includes(":")
-	} catch {
-		return rawURL.includes("[") && rawURL.includes("]")
-	}
-}
-
-function defaultScopeFromAsset(asset: AssetRecord): TargetScope {
-	const scope = metadataString(asset, "endpoint_scope").toLowerCase()
-	if (scope.includes("外") || scope.includes("public") || scope.includes("external")) {
-		return "external"
-	}
-	return "internal"
-}
-
-function metadataString(asset: AssetRecord, key: string) {
-	const value = asset.metadata?.[key]
-	if (typeof value === "string") {
-		return value.trim()
-	}
-	if (typeof value === "number" && Number.isFinite(value)) {
-		return String(value)
-	}
-	return ""
-}
-
-function firstNonEmpty(...values: Array<string | undefined>) {
-	return values.map((value) => value?.trim() ?? "").find(Boolean) ?? ""
 }

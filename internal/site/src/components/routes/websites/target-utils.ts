@@ -8,8 +8,8 @@ import type {
 	TargetKind,
 	TargetScope,
 	URLProtocol,
-} from "./types"
-import { targetKindOptions } from "./types"
+} from "./types.ts"
+import { targetKindOptions } from "./types.ts"
 
 export function monitorTargetsForForm(monitor: WebsiteMonitorRecord): MonitorTargetForm[] {
 	const targets = monitorTargetsFromRecord(monitor)
