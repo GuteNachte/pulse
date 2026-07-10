@@ -24,7 +24,7 @@ import {
 	Trash2Icon,
 	UploadIcon,
 } from "lucide-react"
-import { memo, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react"
+import { lazy, memo, Suspense, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react"
 import { $router, Link } from "@/components/router"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -60,6 +60,7 @@ import { pageTitle } from "@/lib/branding"
 import { cn } from "@/lib/utils"
 import { getAssetIcon } from "./components/asset-card"
 import { AssetEditActionBar } from "./components/asset-edit-action-bar"
+import { SuggestionValue } from "./components/asset-enrichment-suggestion-value"
 import {
 	AssetHardwareSpecsColumn,
 	AssetOverviewColumn,
@@ -101,6 +102,7 @@ import {
 } from "./asset-ai-task-summary"
 import { loadLatestAITasksByKind } from "./asset-ai-task-query"
 import { loadLatestReportSuggestions, loadPendingOfficialColorSuggestions } from "./asset-enrichment-suggestion-query"
+import { getEnrichmentReportStatusLabel } from "./asset-enrichment-report"
 import { formatAssetParameterRowDisplay } from "./asset-parameter-display"
 import { escapePocketBaseFilterValue } from "./asset-query"
 import {
@@ -185,6 +187,12 @@ type AssetDetailState = {
 	notificationFailures: NotificationFailureRecord[]
 	notificationStates: AlertNotificationStateRecord[]
 }
+
+const AssetEnrichmentReportDialog = lazy(() =>
+	import("./components/asset-enrichment-report-dialog").then((module) => ({
+		default: module.AssetEnrichmentReportDialog,
+	}))
+)
 
 function getNetworkTopologyFocusHref(params: { asset?: string; relation?: string }) {
 	const search = new URLSearchParams()
@@ -1674,16 +1682,20 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				/>
 			</Dialog>
 
-			<AssetEnrichmentReportDialog
-				reports={state.enrichmentReports}
-				suggestions={state.enrichmentSuggestions}
-				reportDialogOpen={enrichmentReportDialogOpen}
-				onReportDialogOpenChange={setEnrichmentReportDialogOpen}
-				readOnly={readOnly}
-				saving={saving}
-				onAccept={acceptEnrichmentSuggestion}
-				onReject={rejectEnrichmentSuggestion}
-			/>
+			{enrichmentReportDialogOpen && (
+				<Suspense fallback={null}>
+					<AssetEnrichmentReportDialog
+						reports={state.enrichmentReports}
+						suggestions={state.enrichmentSuggestions}
+						reportDialogOpen={enrichmentReportDialogOpen}
+						onReportDialogOpenChange={setEnrichmentReportDialogOpen}
+						readOnly={readOnly}
+						saving={saving}
+						onAccept={acceptEnrichmentSuggestion}
+						onReject={rejectEnrichmentSuggestion}
+					/>
+				</Suspense>
+			)}
 
 			<Dialog
 				open={interfaceDialogOpen}
@@ -3990,306 +4002,6 @@ type AssetCollectionWriteback = {
 	targetLabel: string
 }
 
-function AssetEnrichmentReportDialog({
-	reports,
-	suggestions,
-	reportDialogOpen,
-	onReportDialogOpenChange,
-	readOnly,
-	saving,
-	onAccept,
-	onReject,
-}: {
-	reports: AssetEnrichmentReportRecord[]
-	suggestions: AssetEnrichmentSuggestionRecord[]
-	reportDialogOpen: boolean
-	onReportDialogOpenChange: (open: boolean) => void
-	readOnly: boolean
-	saving: boolean
-	onAccept: (suggestion: AssetEnrichmentSuggestionRecord) => void
-	onReject: (suggestion: AssetEnrichmentSuggestionRecord) => void
-}) {
-	const latestReport = reports[0]
-	const latestSuggestions = useMemo(
-		() => (latestReport ? suggestions.filter((item) => item.report === latestReport.id) : []),
-		[latestReport, suggestions]
-	)
-	const pendingCount = latestSuggestions.filter((item) => item.status === "pending").length
-	const conflictCount = latestSuggestions.filter((item) => item.conflict && item.status === "pending").length
-	const acceptedCount = latestSuggestions.filter((item) => item.status === "accepted").length
-
-	return (
-		<Dialog open={reportDialogOpen} onOpenChange={onReportDialogOpenChange}>
-			<DialogContent className="flex max-h-[88vh] max-w-4xl flex-col overflow-hidden">
-				<DialogHeader>
-					<DialogTitle>智能识别报告</DialogTitle>
-					<DialogDescription>
-						{latestReport
-							? `${formatTime(latestReport.created)} · ${getEnrichmentReportStatusLabel(latestReport.status)}`
-							: "生成报告后会在这里显示完整内容。"}
-					</DialogDescription>
-				</DialogHeader>
-				<div className="min-h-0 overflow-y-auto pr-1">
-					{latestReport ? (
-						<div className="grid gap-3">
-							<div className="grid grid-cols-3 gap-2">
-								<SummaryMini label="待确认" value={pendingCount} />
-								<SummaryMini label="冲突" value={conflictCount} />
-								<SummaryMini label="已写入" value={acceptedCount} />
-							</div>
-							<div className="whitespace-pre-line rounded-md border border-border/70 bg-surface-soft px-3 py-2 text-sm leading-6 text-foreground">
-								{latestReport.report || "该报告没有正文。"}
-							</div>
-							<AssetEnrichmentOnlineSources report={latestReport} />
-							<div className="grid gap-2">
-								<div className="text-sm font-semibold text-foreground">字段建议</div>
-								{latestSuggestions.length === 0 ? (
-									<div className="rounded-md border border-dashed border-border/70 bg-surface-soft px-3 py-2 text-sm text-muted-foreground">
-										本报告没有可写入建议。报告正文仍会长期留档。
-									</div>
-								) : (
-									latestSuggestions.map((suggestion) => (
-										<EnrichmentSuggestionDetail
-											key={suggestion.id}
-											suggestion={suggestion}
-											readOnly={readOnly}
-											saving={saving}
-											onAccept={onAccept}
-											onReject={onReject}
-										/>
-									))
-								)}
-							</div>
-						</div>
-					) : (
-						<EmptyBlock icon={<ListChecksIcon className="size-5" />} text="还没有识别报告。" />
-					)}
-				</div>
-			</DialogContent>
-		</Dialog>
-	)
-}
-
-type EnrichmentOnlineSource = {
-	provider: string
-	type: string
-	title: string
-	url: string
-	snippet: string
-	confidence: number
-}
-
-type EnrichmentOnlineSummary = {
-	status: string
-	query: string
-	detail: string
-	providers: string[]
-	errors: string[]
-	sources: EnrichmentOnlineSource[]
-	aiExtractor?: {
-		status: string
-		provider: string
-		model: string
-		suggestions: number
-		error: string
-	}
-}
-
-function AssetEnrichmentOnlineSources({ report }: { report: AssetEnrichmentReportRecord }) {
-	const summary = getEnrichmentOnlineSummary(report)
-	return (
-		<div className="grid gap-2 rounded-lg border border-border/70 bg-surface-soft p-3">
-			<div className="flex flex-wrap items-center justify-between gap-2">
-				<div className="text-sm font-semibold text-foreground">资料来源</div>
-				<div className="flex flex-wrap items-center gap-1.5">
-					<MetaTag>{getEnrichmentOnlineStatusLabel(summary?.status)}</MetaTag>
-					{summary?.providers.map((provider) => (
-						<MetaTag key={provider}>{getOnlineProviderLabel(provider)}</MetaTag>
-					))}
-					{summary?.aiExtractor && summary.aiExtractor.status !== "disabled" && (
-						<MetaTag>
-							AI：{getEnrichmentAIStatusLabel(summary.aiExtractor.status)}
-							{summary.aiExtractor.suggestions ? ` · ${summary.aiExtractor.suggestions} 条` : ""}
-						</MetaTag>
-					)}
-				</div>
-			</div>
-			{summary?.query && <div className="break-words text-xs text-muted-foreground">查询：{summary.query}</div>}
-			{summary?.aiExtractor && summary.aiExtractor.status !== "disabled" && (
-				<div className="break-words text-xs text-muted-foreground">
-					AI 提取器：{getOnlineProviderLabel(summary.aiExtractor.provider)}
-					{summary.aiExtractor.model ? ` / ${summary.aiExtractor.model}` : ""}
-					{summary.aiExtractor.error ? `；${summary.aiExtractor.error}` : ""}
-				</div>
-			)}
-			{summary?.sources.length ? (
-				<div className="grid gap-2">
-					{summary.sources.map((source) => (
-						<a
-							key={`${source.provider}-${source.url}`}
-							href={source.url}
-							target="_blank"
-							rel="noreferrer"
-							className="group grid gap-1 rounded-md border border-border/70 bg-card px-3 py-2 text-xs transition hover:border-primary/40 hover:bg-surface-soft"
-						>
-							<div className="flex min-w-0 items-center gap-2">
-								<MetaTag>{getOnlineProviderLabel(source.provider)}</MetaTag>
-								<MetaTag>{getOnlineSourceTypeLabel(source.type)}</MetaTag>
-								<ConfidenceTag confidence={source.confidence} />
-								<ExternalLinkIcon className="ms-auto size-3.5 shrink-0 text-muted-foreground transition group-hover:text-primary" />
-							</div>
-							<div className="break-words font-medium text-foreground">{source.title}</div>
-							{source.snippet && <div className="line-clamp-2 break-words text-muted-foreground">{source.snippet}</div>}
-							<div className="break-all font-mono text-[11px] text-muted-foreground">{source.url}</div>
-						</a>
-					))}
-				</div>
-			) : (
-				<div className="rounded-md border border-dashed border-border/70 bg-card px-3 py-2 text-xs leading-5 text-muted-foreground">
-					{getEnrichmentOnlineEmptyText(summary)}
-				</div>
-			)}
-			{!!summary?.errors.length && (
-				<div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-amber-700 dark:text-amber-200">
-					{summary.errors.join("；")}
-				</div>
-			)}
-		</div>
-	)
-}
-
-function EnrichmentSuggestionCompact({
-	suggestion,
-	readOnly,
-	saving,
-	onAccept,
-	onReject,
-}: {
-	suggestion: AssetEnrichmentSuggestionRecord
-	readOnly: boolean
-	saving: boolean
-	onAccept: (suggestion: AssetEnrichmentSuggestionRecord) => void
-	onReject: (suggestion: AssetEnrichmentSuggestionRecord) => void
-}) {
-	return (
-		<>
-			<div className="flex flex-wrap items-center gap-2">
-				{suggestion.conflict ? (
-					<AlertTriangleIcon className="size-4 text-amber-600 dark:text-amber-300" />
-				) : (
-					<ListChecksIcon className="size-4 text-emerald-600 dark:text-emerald-300" />
-				)}
-				<span className="font-medium text-foreground">{suggestion.target_label}</span>
-				<MetaTag>{getEnrichmentSourceLabel(suggestion.source)}</MetaTag>
-				<ConfidenceTag confidence={suggestion.confidence ?? 0} />
-				<MetaTag>{getEnrichmentSuggestionStatusLabel(suggestion.status)}</MetaTag>
-			</div>
-			<div className="mt-2 grid gap-1 text-xs">
-				<div className="truncate text-muted-foreground">当前：{suggestion.current_value || "未填写"}</div>
-				<div className="truncate font-medium text-foreground">建议：{suggestion.recommended_value || "无"}</div>
-			</div>
-			{suggestion.status === "pending" && (
-				<div className="mt-2 flex justify-end gap-2">
-					<Button size="sm" variant="ghost" onClick={() => onReject(suggestion)} disabled={readOnly || saving}>
-						忽略
-					</Button>
-					<Button
-						size="sm"
-						variant="outline"
-						onClick={() => onAccept(suggestion)}
-						disabled={readOnly || saving}
-						className="gap-2"
-					>
-						<PencilIcon className="size-3.5" />
-						写入
-					</Button>
-				</div>
-			)}
-		</>
-	)
-}
-
-function EnrichmentSuggestionDetail({
-	suggestion,
-	readOnly,
-	saving,
-	onAccept,
-	onReject,
-}: {
-	suggestion: AssetEnrichmentSuggestionRecord
-	readOnly: boolean
-	saving: boolean
-	onAccept: (suggestion: AssetEnrichmentSuggestionRecord) => void
-	onReject: (suggestion: AssetEnrichmentSuggestionRecord) => void
-}) {
-	return (
-		<div
-			className={cn(
-				"rounded-lg border bg-surface-soft p-3",
-				suggestion.conflict && suggestion.status === "pending" ? "border-amber-500/25" : "border-border/70"
-			)}
-		>
-			<EnrichmentSuggestionCompact
-				suggestion={suggestion}
-				readOnly={readOnly}
-				saving={saving}
-				onAccept={onAccept}
-				onReject={onReject}
-			/>
-			<div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
-				<SuggestionValue label="资产主档" value={suggestion.current_value || "未填写"} />
-				<SuggestionValue label="本地采集" value={suggestion.collected_value || "无"} />
-				<SuggestionValue label="资料匹配" value={suggestion.online_value || "未接入"} />
-				<SuggestionValue label="推荐写入" value={suggestion.recommended_value || "无"} />
-			</div>
-			{suggestion.notes && (
-				<div className="mt-2 rounded-md border border-border/70 bg-card px-2.5 py-2 text-xs leading-5 text-muted-foreground">
-					{suggestion.notes}
-				</div>
-			)}
-			<EnrichmentSuggestionSources suggestion={suggestion} />
-		</div>
-	)
-}
-
-function EnrichmentSuggestionSources({ suggestion }: { suggestion: AssetEnrichmentSuggestionRecord }) {
-	const links = getEnrichmentSuggestionSourceLinks(suggestion)
-	if (links.length === 0) return null
-	return (
-		<div className="mt-2 rounded-md border border-border/70 bg-card px-2.5 py-2 text-xs">
-			<div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-muted-foreground">
-				<span>资料来源</span>
-				{getMetadataStringArray(suggestion.metadata, "source_provider").map((provider) => (
-					<MetaTag key={provider}>{getOnlineProviderLabel(provider)}</MetaTag>
-				))}
-			</div>
-			<div className="grid gap-1">
-				{links.map((link) => (
-					<a
-						key={link.url}
-						href={link.url}
-						target="_blank"
-						rel="noreferrer"
-						className="flex min-w-0 items-center gap-2 rounded border border-border/70 bg-surface-soft px-2 py-1.5 text-muted-foreground transition hover:border-primary/40 hover:text-primary"
-					>
-						<ExternalLinkIcon className="size-3.5 shrink-0" />
-						<span className="truncate">{link.title || link.url}</span>
-					</a>
-				))}
-			</div>
-		</div>
-	)
-}
-
-function SuggestionValue({ label, value }: { label: string; value: string }) {
-	return (
-		<div className="min-w-0 rounded-md border border-border/70 bg-card px-2.5 py-2">
-			<div className="text-muted-foreground">{label}</div>
-			<div className="mt-1 break-words font-mono text-foreground">{value}</div>
-		</div>
-	)
-}
-
 function AssetAlertPoliciesCard({
 	assetId,
 	systems,
@@ -4923,36 +4635,6 @@ function ConfidenceTag({ confidence }: { confidence: number }) {
 	return <ToneTag tone={tone}>置信度 {confidence}%</ToneTag>
 }
 
-function getEnrichmentReportStatusLabel(status?: AssetEnrichmentReportRecord["status"]) {
-	switch (status) {
-		case "applied":
-			return "已全部写入"
-		case "partially_applied":
-			return "部分处理"
-		case "dismissed":
-			return "已忽略"
-		case "failed":
-			return "失败"
-		case "draft":
-			return "草稿"
-		default:
-			return "待确认"
-	}
-}
-
-function getEnrichmentSuggestionStatusLabel(status?: AssetEnrichmentSuggestionRecord["status"]) {
-	switch (status) {
-		case "accepted":
-			return "已写入"
-		case "rejected":
-			return "已忽略"
-		case "stale":
-			return "已过期"
-		default:
-			return "待确认"
-	}
-}
-
 function getAssetVisualStatusLabel(status?: AssetVisualRecord["status"]) {
 	switch (status) {
 		case "ready":
@@ -4982,170 +4664,6 @@ function getAssetVisualTaskMeta(tasks: AITaskRecord[], visuals: AssetVisualRecor
 		return formatAssetVisualTaskSummary(latestTask)
 	}
 	return visuals.length ? `${visuals.length} 组图片` : "未收集"
-}
-
-function getEnrichmentSourceLabel(source?: AssetEnrichmentSuggestionRecord["source"]) {
-	switch (source) {
-		case "online":
-			return "资料匹配"
-		case "comparison":
-			return "对比报告"
-		case "manual":
-			return "手动"
-		default:
-			return "本地采集"
-	}
-}
-
-function getEnrichmentOnlineSummary(report: AssetEnrichmentReportRecord): EnrichmentOnlineSummary | undefined {
-	const sourceSummary = asRecord(report.source_summary)
-	const onlineMatch = asRecord(sourceSummary?.online_match)
-	if (!onlineMatch) return undefined
-	const sources = getRecordArray(onlineMatch.sources)
-		.map((source) => ({
-			provider: getRecordString(source, "provider"),
-			type: getRecordString(source, "type"),
-			title: getRecordString(source, "title"),
-			url: getRecordString(source, "url"),
-			snippet: getRecordString(source, "snippet"),
-			confidence: getRecordNumber(source, "confidence"),
-		}))
-		.filter((source) => source.url || source.title)
-	const aiExtractor = asRecord(onlineMatch.ai_extractor)
-	return {
-		status: getRecordString(onlineMatch, "status"),
-		query: getRecordString(onlineMatch, "query"),
-		detail: getRecordString(onlineMatch, "detail"),
-		providers: getRecordStringArray(onlineMatch, "providers"),
-		errors: getRecordStringArray(onlineMatch, "errors"),
-		sources,
-		aiExtractor: aiExtractor
-			? {
-					status: getRecordString(aiExtractor, "status"),
-					provider: getRecordString(aiExtractor, "provider"),
-					model: getRecordString(aiExtractor, "model"),
-					suggestions: getRecordNumber(aiExtractor, "suggestions"),
-					error: getRecordString(aiExtractor, "error"),
-				}
-			: undefined,
-	}
-}
-
-function getEnrichmentOnlineStatusLabel(status?: string) {
-	switch (status) {
-		case "ready":
-			return "已命中"
-		case "no_match":
-			return "未命中"
-		case "not_configured":
-			return "未配置"
-		default:
-			return "未查询"
-	}
-}
-
-function getEnrichmentOnlineEmptyText(summary?: EnrichmentOnlineSummary) {
-	if (!summary) return "本报告没有资料来源摘要。"
-	if (summary.status === "not_configured") return "资料补全 Agent 未获得可追溯来源，也没有可用的官方资料页。"
-	if (summary.status === "no_match")
-		return "没有命中可追溯资料。可补充更准确的详细型号、内部型号或厂家资料页后重新收集。"
-	return "本次没有可展示的资料来源。"
-}
-
-function getOnlineProviderLabel(provider?: string) {
-	switch (provider) {
-		case "support_url":
-			return "支持页"
-		case "product_url":
-			return "产品页"
-		case "official_url":
-			return "官网资料"
-		case "wikidata":
-			return "Wikidata"
-		case "duckduckgo":
-			return "资料来源"
-		case "brave":
-			return "资料来源"
-		case "openai-compatible":
-			return "AI 提取"
-		default:
-			return provider || "来源"
-	}
-}
-
-function getEnrichmentAIStatusLabel(status?: string) {
-	switch (status) {
-		case "ready":
-			return "已提取"
-		case "failed":
-			return "失败"
-		case "disabled":
-			return "未启用"
-		default:
-			return "未配置"
-	}
-}
-
-function getOnlineSourceTypeLabel(type?: string) {
-	switch (type) {
-		case "official_support":
-			return "官方支持"
-		case "official_product":
-			return "官方产品"
-		case "structured_profile":
-			return "结构资料"
-		case "spec_database":
-			return "规格库"
-		case "web_result":
-			return "网页结果"
-		default:
-			return type || "资料"
-	}
-}
-
-function getEnrichmentSuggestionSourceLinks(suggestion: AssetEnrichmentSuggestionRecord) {
-	const urls = getMetadataStringArray(suggestion.metadata, "source_urls")
-	const titles = getMetadataStringArray(suggestion.metadata, "source_titles")
-	return urls.map((url, index) => ({
-		url,
-		title: titles[index] || url,
-	}))
-}
-
-function getMetadataStringArray(metadata: Record<string, unknown> | undefined, key: string) {
-	if (!metadata) return []
-	const value = metadata[key]
-	if (Array.isArray(value)) {
-		return value.map((item) => (typeof item === "string" ? item.trim() : "")).filter(Boolean)
-	}
-	if (typeof value === "string" && value.trim()) return [value.trim()]
-	return []
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-	return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
-}
-
-function getRecordArray(value: unknown) {
-	return Array.isArray(value) ? value.map(asRecord).filter(Boolean) : []
-}
-
-function getRecordString(record: Record<string, unknown>, key: string) {
-	const value = record[key]
-	return typeof value === "string" ? value.trim() : ""
-}
-
-function getRecordNumber(record: Record<string, unknown>, key: string) {
-	const value = record[key]
-	return typeof value === "number" && Number.isFinite(value) ? value : 0
-}
-
-function getRecordStringArray(record: Record<string, unknown>, key: string) {
-	const value = record[key]
-	if (Array.isArray(value)) {
-		return value.map((item) => (typeof item === "string" ? item.trim() : "")).filter(Boolean)
-	}
-	return []
 }
 
 function ActionTag({ children, action }: { children: ReactNode; action: AssetChangeAction }) {
