@@ -397,129 +397,143 @@ export default function ContainersTable({ systemId }: { systemId?: string }) {
 				</div>
 			</CardHeader>
 			<div className="min-w-0 space-y-4">
-				{!systemId && (
-					<div className="mb-3 hidden gap-2.5 rounded-lg border border-border/70 bg-surface-soft p-2 shadow-none lg:grid lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-						{systemCards.map((card) => (
-							<button
-								key={card.id}
-								type="button"
-								className={cn(
-									"group rounded-md border border-border/70 bg-card px-3 py-2.5 text-left shadow-none transition-[background-color,border-color,transform] duration-150 ease-out hover:border-foreground/15 hover:bg-surface-soft active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-									selectedSystemId === card.id && "border-foreground/25 bg-card ring-1 ring-foreground/10"
-								)}
-								onClick={() => handleSelectSystem(card.id)}
-							>
-								<div className="flex items-center justify-between gap-2">
-									<div className="min-w-0">
-										<div className="flex min-w-0 items-baseline gap-1.5">
-											<span className="truncate text-sm font-medium">{getSystemDisplayName(systemsById, card.id)}</span>
-											<span className="shrink-0 text-xs text-muted-foreground">容器 {card.total} 个</span>
+				{data && selectedRows.length === 0 ? (
+					<EmptyState
+						loading={false}
+						loadingText="正在加载容器"
+						emptyText="暂未发现容器"
+						description="当前已接入的机器没有上报 Docker 或 Podman 容器。容器开始运行后会自动按编排和独立容器归类显示。"
+						className="min-h-36 bg-card"
+					/>
+				) : (
+					<>
+						{!systemId && (
+							<div className="mb-3 hidden gap-2.5 rounded-lg border border-border/70 bg-surface-soft p-2 shadow-none lg:grid lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+								{systemCards.map((card) => (
+									<button
+										key={card.id}
+										type="button"
+										className={cn(
+											"group rounded-md border border-border/70 bg-card px-3 py-2.5 text-left shadow-none transition-[background-color,border-color,transform] duration-150 ease-out hover:border-foreground/15 hover:bg-surface-soft active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+											selectedSystemId === card.id && "border-foreground/25 bg-card ring-1 ring-foreground/10"
+										)}
+										onClick={() => handleSelectSystem(card.id)}
+									>
+										<div className="flex items-center justify-between gap-2">
+											<div className="min-w-0">
+												<div className="flex min-w-0 items-baseline gap-1.5">
+													<span className="truncate text-sm font-medium">
+														{getSystemDisplayName(systemsById, card.id)}
+													</span>
+													<span className="shrink-0 text-xs text-muted-foreground">容器 {card.total} 个</span>
+												</div>
+											</div>
+											<Badge variant={card.stopped ? "warning" : "outline"} className="h-5 shrink-0 px-1.5 text-[11px]">
+												{card.stopped ? `停止 ${card.stopped}` : "无停止"}
+											</Badge>
 										</div>
-									</div>
-									<Badge variant={card.stopped ? "warning" : "outline"} className="h-5 shrink-0 px-1.5 text-[11px]">
-										{card.stopped ? `停止 ${card.stopped}` : "无停止"}
-									</Badge>
-								</div>
-								<div className="mt-2 grid grid-cols-3 gap-1.5 text-xs">
-									<ContainerCount label="运行" value={card.running} />
-									<ContainerCount label="停止" value={card.stopped} />
-									<ContainerCount label="总数" value={card.total} />
-								</div>
-							</button>
-						))}
-					</div>
-				)}
-
-				{containersHasMore && (
-					<div className="rounded-md border border-amber-500/25 bg-card px-3 py-2 text-sm text-amber-800 shadow-none dark:text-amber-300">
-						当前机器容器数量超过 {data?.length ?? 0} 个，已先显示前 {data?.length ?? 0}{" "}
-						个；为避免误判，后续需要继续分页查看完整清单。
-					</div>
-				)}
-
-				<div className="lg:hidden">
-					<MobileContainersView
-						systemCards={systemCards}
-						selectedSystemId={selectedSystemId}
-						onSelectSystem={handleSelectSystem}
-						stacks={stacks}
-						independentContainers={independentContainers}
-						selectedRows={selectedRows}
-						runningCount={selectedRunning}
-						systemScoped={Boolean(systemId)}
-						onOpenContainer={openContainerSheet}
-						getSystemName={(systemId) => getSystemDisplayName(systemsById, systemId)}
-						renderStackActions={(stack, onShowConfig) => (
-							<StackActionButtons
-								stack={stack}
-								runningKey={runningKey}
-								onRequestOperation={requestStackOperation}
-								onShowConfig={onShowConfig}
-								compact
-							/>
+										<div className="mt-2 grid grid-cols-3 gap-1.5 text-xs">
+											<ContainerCount label="运行" value={card.running} />
+											<ContainerCount label="停止" value={card.stopped} />
+											<ContainerCount label="总数" value={card.total} />
+										</div>
+									</button>
+								))}
+							</div>
 						)}
-						renderContainerActions={(container) => (
-							<StackContainerActionButtons
-								container={container}
-								runningKey={runningKey}
-								onRequestOperation={requestOperation}
-								compact
-							/>
-						)}
-						renderStackConfigDialog={(stack, open, onOpenChange) => (
-							<StackConfigDialog stack={stack} open={open} onOpenChange={onOpenChange} />
-						)}
-						isRunning={isContainerRunningStatus}
-						formatCpu={formatContainerMetricNumber}
-						formatMemory={formatContainerMemory}
-						formatNet={formatContainerNetwork}
-					/>
-				</div>
 
-				<section className="hidden min-w-0 gap-2 lg:grid">
-					<div className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-card px-3 py-2 shadow-none">
-						<h3 className="text-sm font-medium">编排</h3>
-					</div>
-					<ContainerStackOverview
-						stacks={stacks}
-						containerCount={selectedRows.length}
-						onOpenContainer={openContainerSheet}
-						onRequestOperation={requestStackOperation}
-						onRequestContainerOperation={requestOperation}
-						runningKey={runningKey}
-					/>
-				</section>
-
-				<section className="hidden min-w-0 gap-2 lg:grid">
-					<div className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-card px-3 py-2 shadow-none">
-						<h3 className="text-sm font-medium">独立容器</h3>
-						{rows.length > 0 && (
-							<Badge variant="outline" className="h-6 px-2 text-xs">
-								{rows.length} 个
-							</Badge>
+						{containersHasMore && (
+							<div className="rounded-md border border-amber-500/25 bg-card px-3 py-2 text-sm text-amber-800 shadow-none dark:text-amber-300">
+								当前机器容器数量超过 {data?.length ?? 0} 个，已先显示前 {data?.length ?? 0}{" "}
+								个；为避免误判，后续需要继续分页查看完整清单。
+							</div>
 						)}
-					</div>
-					{data && independentContainers.length === 0 ? (
-						<EmptyState
-							loading={false}
-							loadingText="正在加载容器"
-							emptyText="无"
-							description="已归入编排的容器会在上方展开查看。"
-							className="min-h-20 bg-card"
-						/>
-					) : (
-						<div className="min-w-0 overflow-hidden rounded-md">
-							<AllContainersTable
-								table={table}
-								rows={rows}
-								colLength={visibleColumns.length}
-								data={data}
-								emptyText="暂无独立容器"
+
+						<div className="lg:hidden">
+							<MobileContainersView
+								systemCards={systemCards}
+								selectedSystemId={selectedSystemId}
+								onSelectSystem={handleSelectSystem}
+								stacks={stacks}
+								independentContainers={independentContainers}
+								selectedRows={selectedRows}
+								runningCount={selectedRunning}
+								systemScoped={Boolean(systemId)}
 								onOpenContainer={openContainerSheet}
+								getSystemName={(systemId) => getSystemDisplayName(systemsById, systemId)}
+								renderStackActions={(stack, onShowConfig) => (
+									<StackActionButtons
+										stack={stack}
+										runningKey={runningKey}
+										onRequestOperation={requestStackOperation}
+										onShowConfig={onShowConfig}
+										compact
+									/>
+								)}
+								renderContainerActions={(container) => (
+									<StackContainerActionButtons
+										container={container}
+										runningKey={runningKey}
+										onRequestOperation={requestOperation}
+										compact
+									/>
+								)}
+								renderStackConfigDialog={(stack, open, onOpenChange) => (
+									<StackConfigDialog stack={stack} open={open} onOpenChange={onOpenChange} />
+								)}
+								isRunning={isContainerRunningStatus}
+								formatCpu={formatContainerMetricNumber}
+								formatMemory={formatContainerMemory}
+								formatNet={formatContainerNetwork}
 							/>
 						</div>
-					)}
-				</section>
+
+						<section className="hidden min-w-0 gap-2 lg:grid">
+							<div className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-card px-3 py-2 shadow-none">
+								<h3 className="text-sm font-medium">编排</h3>
+							</div>
+							<ContainerStackOverview
+								stacks={stacks}
+								containerCount={selectedRows.length}
+								onOpenContainer={openContainerSheet}
+								onRequestOperation={requestStackOperation}
+								onRequestContainerOperation={requestOperation}
+								runningKey={runningKey}
+							/>
+						</section>
+
+						<section className="hidden min-w-0 gap-2 lg:grid">
+							<div className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-card px-3 py-2 shadow-none">
+								<h3 className="text-sm font-medium">独立容器</h3>
+								{rows.length > 0 && (
+									<Badge variant="outline" className="h-6 px-2 text-xs">
+										{rows.length} 个
+									</Badge>
+								)}
+							</div>
+							{data && independentContainers.length === 0 ? (
+								<EmptyState
+									loading={false}
+									loadingText="正在加载容器"
+									emptyText="无"
+									description="已归入编排的容器会在上方展开查看。"
+									className="min-h-20 bg-card"
+								/>
+							) : (
+								<div className="min-w-0 overflow-hidden rounded-md">
+									<AllContainersTable
+										table={table}
+										rows={rows}
+										colLength={visibleColumns.length}
+										data={data}
+										emptyText="暂无独立容器"
+										onOpenContainer={openContainerSheet}
+									/>
+								</div>
+							)}
+						</section>
+					</>
+				)}
 			</div>
 
 			<ContainerSheet sheetOpen={sheetOpen} setSheetOpen={setSheetOpen} activeContainer={activeContainer} />

@@ -5,7 +5,9 @@ import { ActiveAlerts } from "@/components/active-alerts"
 import { MobileWebsitesPage, MobileWebsiteDetailSheet } from "@/components/mobile/mobile-websites"
 import { useMobileLayout } from "@/components/mobile/mobile-ui"
 import { OperationConfirmDialog } from "@/components/operation-confirm-dialog"
-import { $router } from "@/components/router"
+import { $router, Link } from "@/components/router"
+import { Button } from "@/components/ui/button"
+import { EmptyState } from "@/components/ui/empty-state"
 import { toast } from "@/components/ui/use-toast"
 import { isReadOnlyUser, pb } from "@/lib/api"
 import { pageTitle } from "@/lib/branding"
@@ -97,6 +99,7 @@ export default memo(function Websites() {
 	const readOnly = isReadOnlyUser()
 	const hasWebEndpointAssets = assets.length > 0
 	const waitingForAssets = assetsLoading && !hasWebEndpointAssets
+	const showEmptyMonitorWorkspace = !loading && monitors.length === 0 && !assetsLoading
 
 	useEffect(() => {
 		if (handledInitialAdd.current || readOnly) {
@@ -437,58 +440,83 @@ export default memo(function Websites() {
 
 	const content = (
 		<div className="grid gap-4">
-			<div className="grid gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
-				<WebsiteMonitorListPanel
-					filteredMonitors={filteredMonitors}
-					hasActiveFilter={Boolean(search.trim() || systemFilter || statusFilter !== "all")}
-					selectedId={selected?.id}
-					systems={systems}
-					availableSystemsById={availableSystemsById}
-					statusCounts={statusCounts}
-					statusFilter={statusFilter}
-					systemFilter={systemFilter}
-					search={search}
-					loading={loading}
-					runningId={runningId}
-					readOnly={readOnly}
-					hasWebEndpointAssets={hasWebEndpointAssets}
-					waitingForAssets={waitingForAssets}
-					assetsPath={assetsPath}
-					onLoad={load}
-					onCreate={openCreateDialog}
-					onSelect={selectMonitor}
-					onCheck={setCheckTarget}
-					onEdit={openEditDialog}
-					onToggle={toggleMonitor}
-					onDelete={setDeleteTarget}
-					onSearchChange={setSearch}
-					onStatusFilterChange={setStatusFilter}
-					onSystemFilterChange={setSystemFilter}
-					page={page}
-					pageSize={pageSize}
-					hasMore={hasMore}
-					onPageChange={setPage}
-				/>
+			{showEmptyMonitorWorkspace ? (
+				<EmptyState
+					loading={false}
+					loadingText="正在加载网站监控"
+					emptyText="暂未接入网站监控"
+					description={
+						hasWebEndpointAssets
+							? "从资产中心已有的网页端点接入监控后，这里会显示可用性、响应时间和异常原因。"
+							: "先在资产中心创建网页端点，再为它接入网站监控，确保监控对象始终归属资产主档。"
+					}
+					className="min-h-72 bg-card"
+				>
+					{!readOnly &&
+						(hasWebEndpointAssets ? (
+							<Button type="button" onClick={openCreateDialog}>
+								接入网页端点
+							</Button>
+						) : (
+							<Button asChild>
+								<Link href={assetsPath}>前往资产中心</Link>
+							</Button>
+						))}
+				</EmptyState>
+			) : (
+				<div className="grid gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
+					<WebsiteMonitorListPanel
+						filteredMonitors={filteredMonitors}
+						hasActiveFilter={Boolean(search.trim() || systemFilter || statusFilter !== "all")}
+						selectedId={selected?.id}
+						systems={systems}
+						availableSystemsById={availableSystemsById}
+						statusCounts={statusCounts}
+						statusFilter={statusFilter}
+						systemFilter={systemFilter}
+						search={search}
+						loading={loading}
+						runningId={runningId}
+						readOnly={readOnly}
+						hasWebEndpointAssets={hasWebEndpointAssets}
+						waitingForAssets={waitingForAssets}
+						assetsPath={assetsPath}
+						onLoad={load}
+						onCreate={openCreateDialog}
+						onSelect={selectMonitor}
+						onCheck={setCheckTarget}
+						onEdit={openEditDialog}
+						onToggle={toggleMonitor}
+						onDelete={setDeleteTarget}
+						onSearchChange={setSearch}
+						onStatusFilterChange={setStatusFilter}
+						onSystemFilterChange={setSystemFilter}
+						page={page}
+						pageSize={pageSize}
+						hasMore={hasMore}
+						onPageChange={setPage}
+					/>
 
-				{!isMobile && (
-					<section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card shadow-none">
-						<WebsiteDetailPanel
-							selected={selected}
-							systemName={selected?.system ? getSystemDisplayName(availableSystemsById[selected.system], "") : ""}
-							targets={selectedTargets}
-							checks={selectedChecks}
-							latestChecks={selectedLatestChecks}
-							checksLoading={checksLoading}
-							running={selected ? runningId === selected.id : false}
-							readOnly={readOnly}
-							onCheck={() => selected && setCheckTarget(selected)}
-							onEdit={() => selected && openEditDialog(selected)}
-							onToggle={() => selected && toggleMonitor(selected)}
-							onDelete={() => selected && setDeleteTarget(selected)}
-						/>
-					</section>
-				)}
-			</div>
+					{!isMobile && (
+						<section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card shadow-none">
+							<WebsiteDetailPanel
+								selected={selected}
+								systemName={selected?.system ? getSystemDisplayName(availableSystemsById[selected.system], "") : ""}
+								targets={selectedTargets}
+								checks={selectedChecks}
+								latestChecks={selectedLatestChecks}
+								checksLoading={checksLoading}
+								running={selected ? runningId === selected.id : false}
+								readOnly={readOnly}
+								onCheck={() => selected && setCheckTarget(selected)}
+								onEdit={() => selected && openEditDialog(selected)}
+								onToggle={() => selected && toggleMonitor(selected)}
+								onDelete={() => selected && setDeleteTarget(selected)}
+							/>
+						</section>
+					)}
+				</div>
+			)}
 
 			<MobileWebsiteDetailSheet
 				open={mobileDetailOpen}
