@@ -81,8 +81,6 @@ import {
 	ASSET_TYPE_OPTIONS,
 	getAssetFormSections,
 	getAssetTypeLabel,
-	getAssetWarrantyStatus,
-	getLatestMaintenanceRecord,
 	getMetadataNumber,
 	getMetadataString,
 	getStatusLabel,
@@ -2681,87 +2679,6 @@ function getAssetIdsFilter(assetIds: string[]) {
 	return uniqueIds(assetIds)
 		.map((assetId) => `asset="${escapePocketBaseFilterValue(assetId)}"`)
 		.join(" || ")
-}
-
-function LifecycleCard({ asset, records }: { asset: AssetRecord; records: AssetMaintenanceRecord[] }) {
-	const warranty = getAssetWarrantyStatus(asset)
-	const latestMaintenance = getLatestMaintenanceRecord(records)
-	const purchaseDate = getMetadataString(asset.metadata, "purchase_date")
-	const onlineDate = getMetadataString(asset.metadata, "online_date")
-	return (
-		<Card className="border-border/70 bg-card shadow-none">
-			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
-				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg">生命周期</CardTitle>
-					<ToneTag tone={warranty.tone}>{warranty.label}</ToneTag>
-				</div>
-			</CardHeader>
-			<CardContent className="grid gap-2 p-4">
-				<LifecycleLine
-					label="保修"
-					value={warranty.date ? formatDate(warranty.date) : warranty.detail}
-					note={warranty.detail}
-				/>
-				<LifecycleLine label="购买" value={purchaseDate ? formatDate(purchaseDate) : "未填写"} />
-				<LifecycleLine label="上线" value={onlineDate ? formatDate(onlineDate) : "未填写"} />
-				{latestMaintenance ? (
-					<LifecycleLine
-						label="最近记录"
-						value={latestMaintenance.title}
-						note={[
-							getMaintenanceKindLabel(latestMaintenance.kind),
-							formatDate(latestMaintenance.event_date || latestMaintenance.created),
-						]
-							.filter(Boolean)
-							.join(" · ")}
-					/>
-				) : (
-					<EmptyBlock
-						icon={<CalendarClockIcon className="size-5" />}
-						text="暂无维护记录。添加后会在这里显示最近一次事件。"
-					/>
-				)}
-			</CardContent>
-		</Card>
-	)
-}
-
-function AssetChangeHistoryCard({ records }: { records: AssetChangeRecord[] }) {
-	return (
-		<Card className="border-border/70 bg-card shadow-none">
-			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
-				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg">变更历史</CardTitle>
-					{records.length > 0 && <MetaTag>{records.length} 条</MetaTag>}
-				</div>
-			</CardHeader>
-			<CardContent className="grid gap-2 p-4">
-				{records.length === 0 ? (
-					<EmptyBlock
-						icon={<ListChecksIcon className="size-5" />}
-						text="暂无变更记录。后续资产档案、接口、关系和维护记录变动会自动记录。"
-					/>
-				) : (
-					records.map((record) => (
-						<div key={record.id} className="rounded-lg border border-border/70 bg-surface-soft p-3">
-							<div className="flex items-start justify-between gap-3">
-								<div className="min-w-0">
-									<div className="flex flex-wrap items-center gap-2">
-										<ActionTag action={record.action}>{getAssetChangeActionLabel(record.action)}</ActionTag>
-										<MetaTag>{getAssetChangeSourceLabel(record.source_collection)}</MetaTag>
-									</div>
-									<div className="mt-2 line-clamp-2 text-sm font-medium leading-5 text-foreground">
-										{record.summary || "资产数据已变更"}
-									</div>
-									<div className="mt-1 text-xs text-muted-foreground">{formatTime(record.created)}</div>
-								</div>
-							</div>
-						</div>
-					))
-				)}
-			</CardContent>
-		</Card>
-	)
 }
 
 type AssetCollectionDiff = {

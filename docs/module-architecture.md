@@ -167,7 +167,7 @@ agent/modules/<module-id>/
 - 模块 registry 已从页面级小模块收敛为大模块，旧的 `system-detail`、`smart`、`settings-*` 不再作为独立模块出现。
 - 资产中心已成为核心数据来源：新增 `assets`、`asset_interfaces`、`asset_relations` 和 `asset_locations`，并在 `systems`、`website_monitors` 上使用 `asset` 关联字段绑定资产主数据；公网入口也按 `internet` 资产维护，可支持多条宽带、运营商和上下行带宽信息；房间、区域、机柜和桌面等位置开始收敛为资产中心主数据。
 - 资产中心新增 / 编辑入口按资产类型维护长期稳定参数：字段 schema 放在 `internal/site/src/modules/asset-center/asset-schema.ts`，页面只负责渲染和保存；固定 IP、MAC、管理 URL、端口速率、硬件规格、生命周期和公网带宽等数据进入资产主数据，主网卡 / 管理口 / 公网入口同步到 `asset_interfaces` 供网络拓扑复用。
-- 资产详情页是资产中心第一阶段主数据承载面：`/assets/:id` 集中展示资产档案、网络接口、资产关系、维护记录、资产附件和监控绑定状态；位置管理入口在资产中心维护 `asset_locations`，资产表单的位置字段复用这些主数据并保留手动录入能力；购买、上线、维修、升级、保修、退役等长期事件进入 `asset_maintenance`，设备照片、发票、保修凭证、说明书和配置备份进入 `asset_attachments`；后续保修提醒、告警历史和采集差异也应优先挂在这个页面下，而不是分散到监控模块里。
+- 资产详情页是资产中心第一阶段主数据承载面：`/assets/:id` 浏览态集中展示资产档案、设备图片和已确认硬件规格；接口、关系、维护、附件、监控绑定和长期变更统一由编辑工作台维护，避免浏览页混入操作与重复卡片。位置管理入口在资产中心维护 `asset_locations`，资产表单的位置字段复用这些主数据；购买、上线、维修、升级、保修、退役等长期事件进入 `asset_maintenance`，设备照片、发票、保修凭证、说明书和配置备份进入 `asset_attachments`；后续保修提醒、告警历史和采集差异仍归属资产中心数据模型，而不是分散到监控模块里。
 - 客户端监控和网站监控已具备第一版资产关联骨架；网络拓扑只按 `assets`、`asset_interfaces` 和 `asset_relations` 构图，新增拓扑设备 / 端口 / 链路入口写入资产中心，前端不再读取旧 `network_devices`、`network_ports`、`network_links`，Hub 也拒绝这些旧主数据集合的 API 新增和更新；`network_layouts` 仅作为拓扑布局和节点显示配置保留。
 - 智能家居模块已新增第一版 `/smarthome` 只读总览和 `smarthome` manifest，页面只读取资产中心里的智能家居资产，不做自动发现、不伪造实时控制状态；网关归属优先读取 `asset_relations` 中指向 `smarthome_gateway` 资产的真实关系，没有关系时才回退到 `metadata.gateway_name`，后续接 Home Assistant / Matter / Zigbee 时继续保持资产中心主数据来源。
 - 后续新增大功能必须 module-first。
