@@ -17,7 +17,7 @@ export default function Smart() {
 						<div className="inline-flex h-7 items-center rounded-md border border-border/70 bg-surface-soft px-3 text-xs font-medium text-muted-foreground">
 							硬盘健康
 						</div>
-						<h1 className="mt-3 text-2xl font-semibold tracking-tight">S.M.A.R.T. 设备</h1>
+						<h1 className="mt-3 text-2xl font-semibold ">S.M.A.R.T. 设备</h1>
 						<p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
 							查看 Agent 真实采集到的硬盘健康状态、温度、通电时间和设备属性；未采集到的数据不会用占位值补齐。
 						</p>

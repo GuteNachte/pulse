@@ -26,7 +26,7 @@ export function MobileAndroidHubUrlCard({
 	return (
 		<section className="grid gap-3 rounded-lg border border-border/70 bg-surface-soft p-3 sm:max-w-xl">
 			<div className="rounded-md border border-border/70 bg-card p-3">
-				<h4 className="text-base font-semibold tracking-tight">Android Hub 地址</h4>
+				<h4 className="text-base font-semibold ">Android Hub 地址</h4>
 				<p className="mt-1 text-pretty text-sm leading-relaxed text-muted-foreground">
 					这里保存的是手机 App 连接的 Hub 地址，修改后会立即切换当前会话。
 				</p>

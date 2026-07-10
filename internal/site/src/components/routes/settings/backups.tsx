@@ -182,7 +182,7 @@ export default function Backups() {
 								<ArchiveIcon className="size-4" />
 							</div>
 							<div className="min-w-0">
-								<h3 className="text-lg font-semibold tracking-tight">备份管理</h3>
+								<h3 className="text-lg font-semibold ">备份管理</h3>
 								<p className="mt-1 text-pretty text-sm text-muted-foreground">创建、下载、还原和删除 Hub 数据备份。</p>
 							</div>
 						</div>

@@ -276,7 +276,7 @@ export default function SettingsLayout() {
 							<SettingsIcon className="size-4" />
 						</div>
 						<div className="min-w-0">
-							<CardTitle className="mb-0 tracking-tight">
+							<CardTitle className="mb-0 ">
 								<Trans>Settings</Trans>
 							</CardTitle>
 							<p className="mt-1 text-sm text-muted-foreground">管理通知、Agent、用户、审计、备份和版本信息。</p>

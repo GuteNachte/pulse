@@ -25,7 +25,7 @@ export function MobileGeneralSettingsForm({
 			<section className="grid gap-3 rounded-lg border border-border/70 bg-surface-soft p-3 shadow-none">
 				<div className="rounded-md border border-border/70 bg-card p-3 shadow-none">
 					<div className="text-xs font-medium text-muted-foreground">个人偏好</div>
-					<div className="mt-1 text-[17px] font-semibold leading-tight tracking-tight">常规设置</div>
+					<div className="mt-1 text-[17px] font-semibold leading-tight ">常规设置</div>
 					<p className="mt-1 text-pretty text-xs leading-relaxed text-muted-foreground">
 						设置主题、图表时间、单位和告警颜色阈值。这里只影响当前用户的显示偏好。
 					</p>

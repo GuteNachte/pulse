@@ -108,7 +108,7 @@ function MobileAgentPlatformCard({ item }: { item: MobileAgentPlatformItem }) {
 						<Icon className="size-4 text-muted-foreground" />
 					</div>
 					<div className="min-w-0 flex-1">
-						<div className="text-[15px] font-semibold leading-tight tracking-tight">{item.title}</div>
+						<div className="text-[15px] font-semibold leading-tight ">{item.title}</div>
 						<p className="mt-1 text-pretty text-xs leading-relaxed text-muted-foreground">{item.description}</p>
 						<div className="mt-2 flex flex-wrap gap-1.5">
 							{item.badges.map((badge) => (

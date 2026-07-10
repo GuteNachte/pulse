@@ -103,7 +103,7 @@ export default function OperationAuditSettings() {
 		<div className="grid gap-4">
 			<div className="rounded-lg border border-border/70 bg-surface-soft p-3 sm:flex sm:items-center sm:justify-between sm:gap-4">
 				<div className="min-w-0">
-					<h3 className="text-lg font-semibold tracking-tight">操作审计</h3>
+					<h3 className="text-lg font-semibold ">操作审计</h3>
 					<p className="mt-1 text-sm text-muted-foreground">
 						查看用户、备份、Token、通知测试、告警处理和机器配置等管理动作。
 					</p>
@@ -387,7 +387,7 @@ function DialogCopyButton({ onClick }: { onClick: () => void }) {
 function DetailSection({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
 	return (
 		<section className={cn("grid gap-3 rounded-lg border border-border/70 bg-card p-3", className)}>
-			<div className="text-sm font-semibold tracking-tight">{title}</div>
+			<div className="text-sm font-semibold ">{title}</div>
 			{children}
 		</section>
 	)

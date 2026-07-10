@@ -263,7 +263,7 @@ export function UserAuthForm({
 								<ShieldCheckIcon className="size-5 text-primary" />
 							</div>
 							<div className="grid gap-1">
-								<h2 className="text-base font-semibold tracking-tight">二次验证</h2>
+								<h2 className="text-base font-semibold ">二次验证</h2>
 								<p className="text-pretty text-sm text-muted-foreground">
 									请输入发送到账号邮箱的 6 位验证码。验证码会短时间内过期。
 								</p>

@@ -111,7 +111,7 @@ export default function SystemLogs() {
 		<div className="grid gap-4">
 			<div className="rounded-lg border border-border/70 bg-surface-soft p-3 sm:flex sm:items-center sm:justify-between sm:gap-4">
 				<div className="min-w-0">
-					<h3 className="text-lg font-semibold tracking-tight">系统日志</h3>
+					<h3 className="text-lg font-semibold ">系统日志</h3>
 					<p className="mt-1 text-sm text-muted-foreground">查看 Hub 运行事件、接口请求和诊断字段。</p>
 				</div>
 				<Button
@@ -369,7 +369,7 @@ function LogDialogCopyButton({ onClick }: { onClick: () => void }) {
 function LogDetailSection({ title, children }: { title: string; children: ReactNode }) {
 	return (
 		<section className="grid gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-none">
-			<div className="text-sm font-semibold tracking-tight">{title}</div>
+			<div className="text-sm font-semibold ">{title}</div>
 			{children}
 		</section>
 	)

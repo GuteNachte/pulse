@@ -169,7 +169,7 @@ export default function AISettings() {
 							</div>
 							<div className="min-w-0">
 								<div className="text-xs font-medium text-muted-foreground">资产中心</div>
-								<h3 className="mt-1 text-xl font-semibold tracking-tight text-foreground">AI 与识别</h3>
+								<h3 className="mt-1 text-xl font-semibold text-foreground">AI 与识别</h3>
 								<p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
 									配置资产资料补全 Agent 和设备图片收集能力。管理员可查看当前项目专用 Agnes Key。
 								</p>

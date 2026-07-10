@@ -251,7 +251,7 @@ export default function Users() {
 		<div className="grid gap-4">
 			<div className="hidden rounded-lg border border-border/70 bg-surface-soft p-3 shadow-none md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4">
 				<div className="grid gap-1">
-					<h3 className="text-lg font-semibold tracking-tight">用户管理</h3>
+					<h3 className="text-lg font-semibold ">用户管理</h3>
 					<p className="max-w-2xl text-sm text-muted-foreground">
 						维护登录账号、角色权限和密码重置。管理员和最后一个管理员的保护规则由 Hub 继续强制执行。
 					</p>
@@ -619,7 +619,7 @@ function OverviewCard({ label, value, detail }: { label: string; value: string; 
 	return (
 		<div className="min-w-0 rounded-lg border border-border/70 bg-card p-3 shadow-none">
 			<div className="text-xs text-muted-foreground">{label}</div>
-			<div className="mt-1 truncate text-xl font-semibold tracking-tight tabular-nums">{value}</div>
+			<div className="mt-1 truncate text-xl font-semibold tabular-nums">{value}</div>
 			<div className="mt-1 truncate text-xs text-muted-foreground">{detail}</div>
 		</div>
 	)

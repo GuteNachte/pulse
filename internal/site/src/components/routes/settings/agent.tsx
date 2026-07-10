@@ -220,7 +220,7 @@ export default function AgentSettings() {
 					<div className="flex min-w-0 items-start justify-between gap-4">
 						<div className="min-w-0">
 							<div className="text-xs font-medium text-muted-foreground">Agent 与接入</div>
-							<h3 className="mt-1 text-xl font-semibold tracking-tight text-foreground">Agent 管理</h3>
+							<h3 className="mt-1 text-xl font-semibold text-foreground">Agent 管理</h3>
 							<p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
 								Agent 主动连接 Hub，只需要 `TOKEN` 和 `HUB_URL`。日常接入优先使用客户端页的添加机器向导。
 							</p>

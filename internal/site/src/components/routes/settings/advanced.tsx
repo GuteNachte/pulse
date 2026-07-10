@@ -22,7 +22,7 @@ export default function Advanced() {
 					<div className="flex min-w-0 items-start justify-between gap-4">
 						<div className="min-w-0">
 							<div className="text-xs font-medium text-muted-foreground">系统维护</div>
-							<h3 className="mt-1 text-xl font-semibold tracking-tight text-foreground">高级设置</h3>
+							<h3 className="mt-1 text-xl font-semibold text-foreground">高级设置</h3>
 							<p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
 								这里集中放底层维护和长期接入凭据。日常添加机器、查看日志和备份恢复请优先使用对应功能页。
 							</p>

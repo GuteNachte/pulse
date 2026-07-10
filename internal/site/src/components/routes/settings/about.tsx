@@ -134,7 +134,7 @@ export default function About() {
 							</div>
 							<div className="min-w-0">
 								<div className="text-xs font-medium text-muted-foreground">版本与运行信息</div>
-								<h3 className="mt-1 text-xl font-semibold tracking-tight text-foreground">关于 {APP_NAME}</h3>
+								<h3 className="mt-1 text-xl font-semibold text-foreground">关于 {APP_NAME}</h3>
 								<p className="mt-1 max-w-3xl text-pretty text-sm leading-relaxed text-muted-foreground">
 									查看 Web、Hub、Agent 和 Android App 的同版本状态，以及当前 Hub 运行环境和构建信息。
 								</p>
@@ -260,7 +260,7 @@ function VersionSummaryCard({
 			<div className="flex min-w-0 items-start justify-between gap-3">
 				<div className="min-w-0">
 					<div className="text-xs font-medium text-muted-foreground">{label}</div>
-					<div className="mt-1 truncate text-lg font-semibold tracking-tight tabular-nums text-foreground">{value}</div>
+					<div className="mt-1 truncate text-lg font-semibold tabular-nums text-foreground">{value}</div>
 					<div className="mt-1 text-xs text-muted-foreground">{description}</div>
 				</div>
 				<div className="grid size-9 shrink-0 place-items-center rounded-md border border-border/70 bg-surface-soft text-muted-foreground">

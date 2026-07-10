@@ -53,7 +53,7 @@ export default function SettingsProfilePage({ userSettings }: { userSettings: Us
 								</div>
 								<div className="min-w-0">
 									<div className="text-xs font-medium text-muted-foreground">个人偏好</div>
-									<h3 className="mt-1 text-lg font-semibold tracking-tight text-foreground">常规设置</h3>
+									<h3 className="mt-1 text-lg font-semibold text-foreground">常规设置</h3>
 									<p className="mt-1 max-w-3xl text-pretty text-sm leading-relaxed text-muted-foreground">
 										设置主题、图表时间、单位和阈值颜色。这里只影响当前用户看到的显示偏好。
 									</p>

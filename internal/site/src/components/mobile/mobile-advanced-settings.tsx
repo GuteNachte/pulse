@@ -13,7 +13,7 @@ export function MobileAdvancedSettingsView({
 			<section className="grid gap-3 rounded-lg border border-border/70 bg-surface-soft p-3">
 				<div className="rounded-md border border-border/70 bg-card p-4">
 					<div className="text-xs font-medium text-muted-foreground">系统维护</div>
-					<div className="mt-1 text-[17px] font-semibold leading-tight tracking-tight text-foreground">高级设置</div>
+					<div className="mt-1 text-[17px] font-semibold leading-tight text-foreground">高级设置</div>
 					<p className="mt-1 text-pretty text-xs leading-relaxed text-muted-foreground">
 						这里只放底层维护和长期凭据。日常添加机器、查看日志和备份恢复请优先使用对应功能页。
 					</p>

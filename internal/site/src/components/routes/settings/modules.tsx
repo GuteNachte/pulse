@@ -68,7 +68,7 @@ export default function ModulesSettingsPage() {
 							</div>
 							<div className="min-w-0">
 								<div className="text-xs font-medium text-muted-foreground">Pulse 模块底座</div>
-								<h3 className="mt-1 text-lg font-semibold tracking-tight text-foreground">模块管理</h3>
+								<h3 className="mt-1 text-lg font-semibold text-foreground">模块管理</h3>
 							</div>
 						</div>
 						<div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

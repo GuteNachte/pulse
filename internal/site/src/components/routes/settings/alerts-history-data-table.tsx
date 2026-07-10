@@ -63,7 +63,7 @@ const SectionIntro = memo(() => {
 				</div>
 				<div className="min-w-0">
 					<div className="text-xs font-medium text-muted-foreground">告警记录</div>
-					<h3 className="mt-1 text-lg font-semibold tracking-tight">
+					<h3 className="mt-1 text-lg font-semibold ">
 						<Trans>Alert History</Trans>
 					</h3>
 					<p className="mt-1 text-pretty text-sm leading-relaxed text-muted-foreground">

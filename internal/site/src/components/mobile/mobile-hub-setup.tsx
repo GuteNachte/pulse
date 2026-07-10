@@ -39,7 +39,7 @@ export function MobileHubSetup({ onReady }: { onReady: () => void }) {
 					<div className="flex min-w-0 items-start justify-between gap-3">
 						<div className="min-w-0">
 							<div className="text-xs font-medium text-muted-foreground">Pulse Mobile</div>
-							<CardTitle className="mt-1 text-xl tracking-tight">连接 Hub</CardTitle>
+							<CardTitle className="mt-1 text-xl ">连接 Hub</CardTitle>
 						</div>
 						<div className="grid size-9 shrink-0 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
 							<ServerIcon className="size-4" />

@@ -143,7 +143,7 @@ export default function LineChartDefault({
 						<YAxis
 							direction="ltr"
 							orientation={chartData.orientation}
-							className="tracking-tighter"
+							className=""
 							width={yAxisWidth}
 							domain={domain ?? [0, max ?? "auto"]}
 							tickFormatter={(value, index) => updateYAxisWidth(tickFormatter(value, index))}

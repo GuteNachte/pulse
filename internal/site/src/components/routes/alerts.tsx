@@ -170,7 +170,7 @@ export default function AlertsCenter() {
 								<BellIcon className="size-4" />
 							</div>
 							<div className="min-w-0">
-								<CardTitle className="mb-0 tracking-tight">告警中心</CardTitle>
+								<CardTitle className="mb-0 ">告警中心</CardTitle>
 								<p className="mt-1 text-sm text-muted-foreground">优先处理当前未恢复告警，再查看历史触发和恢复记录。</p>
 							</div>
 						</div>

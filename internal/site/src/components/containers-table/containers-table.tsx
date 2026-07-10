@@ -387,7 +387,7 @@ export default function ContainersTable({ systemId }: { systemId?: string }) {
 			<CardHeader className="mb-4 p-0">
 				<div className="flex flex-wrap items-center justify-between gap-3">
 					<div className="min-w-0">
-						<h2 className="text-base font-semibold leading-none tracking-tight">容器监控</h2>
+						<h2 className="text-base font-semibold leading-none ">容器监控</h2>
 						<div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
 							<span>{selectedRows.length} 个容器</span>
 							<span>{selectedRunning} 运行</span>

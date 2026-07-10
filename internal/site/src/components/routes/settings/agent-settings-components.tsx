@@ -122,7 +122,7 @@ export function AgentPlatformColumn({
 			<div className="border-b border-border/70 bg-card px-4 py-3">
 				<div className="flex flex-wrap items-start justify-between gap-3">
 					<div className="min-w-0">
-						<div className="flex items-center gap-2 text-base font-semibold tracking-tight">
+						<div className="flex items-center gap-2 text-base font-semibold ">
 							<span className="grid size-8 shrink-0 place-items-center rounded-md border border-border/70 bg-surface-soft">
 								<Icon className="size-4 text-muted-foreground" />
 							</span>

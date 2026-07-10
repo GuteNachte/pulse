@@ -147,7 +147,7 @@ export const alertsHistoryColumns: ColumnDef<AlertsHistoryRecord>[] = [
 			</Button>
 		),
 		cell: ({ getValue, row }) => (
-			<span className="ps-1 tabular-nums tracking-tight" title={`${row.original.created} UTC`}>
+			<span className="ps-1 tabular-nums " title={`${row.original.created} UTC`}>
 				{getValue() as string}
 			</span>
 		),
@@ -163,7 +163,7 @@ export const alertsHistoryColumns: ColumnDef<AlertsHistoryRecord>[] = [
 		),
 		cell: ({ row }) =>
 			row.original.resolved ? (
-				<span className="ps-1 tabular-nums tracking-tight" title={`${row.original.resolved} UTC`}>
+				<span className="ps-1 tabular-nums " title={`${row.original.resolved} UTC`}>
 					{alertResolvedLabel(row.original)}
 				</span>
 			) : null,

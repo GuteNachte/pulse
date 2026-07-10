@@ -88,7 +88,7 @@ const SectionIntro = memo(({ stats }: { stats: TokenStats }) => {
 				<div className="rounded-md border border-border/70 bg-card p-3 shadow-none">
 					<div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
 						<div className="min-w-0">
-							<h3 className="text-lg font-semibold tracking-tight">Agent 接入 Token</h3>
+							<h3 className="text-lg font-semibold ">Agent 接入 Token</h3>
 							<p className="mt-1 max-w-2xl text-pretty text-sm text-muted-foreground">
 								管理每台 Agent 的接入凭据、设备绑定和轮换动作。页面默认只显示 Token 摘要，完整 Token
 								仅在复制安装配置时按需读取。
@@ -412,7 +412,7 @@ function TokenStatCard({ label, value, detail }: { label: string; value: string;
 	return (
 		<div className="min-w-0 rounded-md bg-card px-3 py-2.5 shadow-none">
 			<div className="text-xs text-muted-foreground">{label}</div>
-			<div className="mt-1 truncate text-lg font-semibold tracking-tight tabular-nums">{value}</div>
+			<div className="mt-1 truncate text-lg font-semibold tabular-nums">{value}</div>
 			<div className="mt-1 truncate text-xs text-muted-foreground">{detail}</div>
 		</div>
 	)

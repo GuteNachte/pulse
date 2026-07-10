@@ -524,7 +524,7 @@ export default function DisksTable({ systemId, os }: { systemId?: string; os?: O
 			<section className="grid gap-3 rounded-lg border border-border/70 bg-surface-soft p-3">
 				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 					<div className="min-w-0">
-						<h2 className="text-lg font-semibold tracking-tight">{systemId ? "S.M.A.R.T." : "设备列表"}</h2>
+						<h2 className="text-lg font-semibold ">{systemId ? "S.M.A.R.T." : "设备列表"}</h2>
 						<p className="mt-1 text-sm text-muted-foreground">
 							点击设备查看完整属性；缺失字段显示为无数据，不用默认值替代。
 						</p>

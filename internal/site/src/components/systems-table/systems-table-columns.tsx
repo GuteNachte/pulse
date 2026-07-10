@@ -308,7 +308,7 @@ export function SystemsTableColumns(): SystemsTableColumnDef[] {
 					const sent = formatNetworkRate(direction[0], userSettings.unitNet)
 					const received = formatNetworkRate(direction[1], userSettings.unitNet)
 					return (
-						<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 tabular-nums text-xs leading-5 tracking-tight">
+						<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 tabular-nums text-xs leading-5 ">
 							<span className="whitespace-nowrap text-muted-foreground">上行 {sent}</span>
 							<span className="whitespace-nowrap text-muted-foreground">下行 {received}</span>
 						</span>
@@ -385,7 +385,7 @@ export function SystemsTableColumns(): SystemsTableColumnDef[] {
 					<Link
 						tabIndex={-1}
 						href={getPagePath($router, "system", { id: info.row.original.id })}
-						className="flex items-center gap-1 tabular-nums tracking-tight relative z-10"
+						className="flex items-center gap-1 tabular-nums relative z-10"
 						title={stateLabel}
 					>
 						<Icon className={cn("size-3.5", iconColor)} />
@@ -582,7 +582,7 @@ function TableCellWithMeter(info: CellContext<SystemRecord, unknown>) {
 			STATUS_COLORS.down
 	)
 	return (
-		<div className="flex w-full min-w-0 items-center gap-2 tabular-nums tracking-tight">
+		<div className="flex w-full min-w-0 items-center gap-2 tabular-nums ">
 			<span className="w-10 shrink-0 text-right">{decimalString(val, val >= 10 ? 1 : 2)}%</span>
 			<span className="grid h-2.5 min-w-0 flex-1 overflow-hidden rounded-[3px] border border-border/70 bg-card shadow-none">
 				<span className={meterClass} style={{ width: `${meterWidth}%` }}></span>

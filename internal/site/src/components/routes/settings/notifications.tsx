@@ -482,7 +482,7 @@ const SettingsNotificationsPage = ({
 				<>
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 						<div className="min-w-0">
-							<h3 className="text-lg font-semibold tracking-tight">通知设置</h3>
+							<h3 className="text-lg font-semibold ">通知设置</h3>
 							<p className="mt-1 text-sm text-muted-foreground">管理外部通知通道、系统通知权限和发送诊断。</p>
 						</div>
 						<Button
@@ -598,7 +598,7 @@ const SettingsNotificationsPage = ({
 				<section className="grid gap-3 rounded-lg border border-border/70 bg-surface-soft p-3 shadow-none">
 					<div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 						<div className="min-w-0">
-							<h4 className="text-base font-semibold tracking-tight">通知通道</h4>
+							<h4 className="text-base font-semibold ">通知通道</h4>
 							<p className="mt-1 text-sm text-muted-foreground">
 								添加 Shoutrrr URL 后，新告警会同时写入站内记录并推送到这些外部通道。
 							</p>
@@ -725,7 +725,7 @@ function NotificationDiagnosticsPanel({
 		<section className="grid gap-3 rounded-lg border border-border/70 bg-surface-soft p-3 shadow-none">
 			<div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 				<div className="min-w-0">
-					<div className="flex items-center gap-2 text-base font-semibold tracking-tight">
+					<div className="flex items-center gap-2 text-base font-semibold ">
 						<span className="grid size-7 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground shadow-none">
 							<InfoIcon className="size-4" />
 						</span>

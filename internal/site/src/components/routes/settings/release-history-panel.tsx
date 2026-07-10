@@ -46,7 +46,7 @@ function ReleaseNoteCard({
 			<div className="grid gap-3 px-4 py-3 sm:grid-cols-[1fr_auto] sm:items-center">
 				<div className="min-w-0">
 					<div className="flex flex-wrap items-center gap-2">
-						<h5 className="text-sm font-semibold tracking-tight">Pulse {release.version}</h5>
+						<h5 className="text-sm font-semibold ">Pulse {release.version}</h5>
 						<ReleaseMetaTag>{release.date}</ReleaseMetaTag>
 						{latest && <ReleaseMetaTag>最新</ReleaseMetaTag>}
 					</div>
