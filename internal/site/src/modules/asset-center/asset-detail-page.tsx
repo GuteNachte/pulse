@@ -5,7 +5,6 @@ import {
 	BatteryIcon,
 	BellIcon,
 	BoxesIcon,
-	ContainerIcon,
 	CpuIcon,
 	DownloadIcon,
 	ExternalLinkIcon,
@@ -59,8 +58,7 @@ import { formatPolicyCoverage, getPoliciesForAsset } from "@/components/alerts/a
 import { alertInfo } from "@/lib/alerts"
 import { isPocketBaseAutoCancel, isReadOnlyUser, pb } from "@/lib/api"
 import { pageTitle } from "@/lib/branding"
-import { batteryStateTranslations } from "@/lib/i18n"
-import { cn, decimalString, formatTemperature } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import { getAssetIcon } from "./components/asset-card"
 import {
 	AssetFieldCaptureTag,
@@ -105,6 +103,12 @@ import {
 	loadDisplayAssetVisuals,
 } from "./asset-visual-query"
 import { getAssetSourceProfile } from "./asset-source-profile"
+import {
+	formatCollectedNicSummary,
+	formatMemoryModuleSummary,
+	formatSpeed,
+	getSystemDisplayName,
+} from "./asset-runtime-hardware"
 import type {
 	AssetChangeAction,
 	AssetChangeRecord,
@@ -129,7 +133,6 @@ import type {
 	AlertRecord,
 	AlertsHistoryRecord,
 	ContainerRecord,
-	GPUData,
 	NetworkInterfaceDetails,
 	NotificationFailureRecord,
 	SmartDeviceRecord,
@@ -4317,177 +4320,6 @@ function AssetChangeHistoryCard({ records }: { records: AssetChangeRecord[] }) {
 	)
 }
 
-function AssetCollectedHardwareCard({
-	systems,
-	systemDetails,
-}: {
-	systems: SystemRecord[]
-	systemDetails: SystemDetailsRecord[]
-}) {
-	const summaries = useMemo(() => buildCollectedHardwareSummaries(systems, systemDetails), [systems, systemDetails])
-	return (
-		<Card className="border-border/70 bg-card shadow-none">
-			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
-				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg">采集硬件</CardTitle>
-					{summaries.length > 0 && <MetaTag>{summaries.length} 台</MetaTag>}
-				</div>
-			</CardHeader>
-			<CardContent className="grid gap-2 p-4">
-				{summaries.length === 0 ? (
-					<EmptyBlock
-						icon={<BoxesIcon className="size-5" />}
-						text={
-							systems.length === 0
-								? "当前资产还没有绑定 Agent，暂无硬件采集摘要。"
-								: "当前绑定 Agent 还没有上报可展示的硬件详情。"
-						}
-					/>
-				) : (
-					summaries.map((summary) => (
-						<div key={summary.system.id} className="rounded-lg border border-border/70 bg-surface-soft p-3">
-							<div className="flex items-start justify-between gap-3">
-								<div className="min-w-0">
-									<div className="flex min-w-0 flex-wrap items-center gap-2">
-										<span className="truncate font-medium text-foreground">{getSystemDisplayName(summary.system)}</span>
-										<SystemStatusBadge status={summary.system.status} />
-									</div>
-									<div className="mt-2 grid gap-2">
-										{summary.rows.map((row) => (
-											<div key={row.label} className="rounded-md border border-border/70 bg-card px-2.5 py-2">
-												<div className="text-xs text-muted-foreground">{row.label}</div>
-												<div className="mt-1 break-words text-sm font-medium text-foreground">{row.value}</div>
-											</div>
-										))}
-									</div>
-								</div>
-								<Button asChild variant="ghost" size="icon" className="size-9 shrink-0" aria-label="查看机器详情">
-									<Link href={getPagePath($router, "system", { id: summary.system.id })}>
-										<MonitorIcon className="size-4" />
-									</Link>
-								</Button>
-							</div>
-						</div>
-					))
-				)}
-			</CardContent>
-		</Card>
-	)
-}
-
-function AssetRuntimeHardwareCard({
-	systems,
-	systemStats,
-	smartDevices,
-	containers,
-	websites,
-}: {
-	systems: SystemRecord[]
-	systemStats: SystemStatsRecord[]
-	smartDevices: SmartDeviceRecord[]
-	containers: ContainerRecord[]
-	websites: WebsiteMonitorRecord[]
-}) {
-	const summaries = useMemo(
-		() => buildRuntimeHardwareSummaries({ systems, systemStats, smartDevices, containers, websites }),
-		[systems, systemStats, smartDevices, containers, websites]
-	)
-	const visibleSummaries = summaries.filter((summary) => summary.items.length > 0)
-	const totalItems = visibleSummaries.reduce((sum, summary) => sum + summary.items.length, 0)
-	return (
-		<Card className="border-border/70 bg-card shadow-none">
-			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
-				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg">运行状态聚合</CardTitle>
-					{totalItems > 0 && <MetaTag>{totalItems} 项</MetaTag>}
-				</div>
-			</CardHeader>
-			<CardContent className="grid gap-2 p-4">
-				{visibleSummaries.length === 0 ? (
-					<EmptyBlock
-						icon={<ThermometerIcon className="size-5" />}
-						text={
-							systems.length === 0
-								? "当前资产还没有绑定 Agent，暂无运行状态聚合。"
-								: "当前绑定 Agent 还没有上报 SMART、GPU、温度、电池或容器摘要。"
-						}
-					/>
-				) : (
-					visibleSummaries.map((summary) => (
-						<div key={summary.system.id} className="rounded-lg border border-border/70 bg-surface-soft p-3">
-							<div className="flex items-start justify-between gap-3">
-								<div className="min-w-0">
-									<div className="flex min-w-0 flex-wrap items-center gap-2">
-										<span className="truncate font-medium text-foreground">{getSystemDisplayName(summary.system)}</span>
-										<SystemStatusBadge status={summary.system.status} />
-									</div>
-									<div className="mt-2 grid gap-2">
-										{summary.items.map((item) => (
-											<RuntimeSummaryItem key={item.key} item={item} />
-										))}
-									</div>
-								</div>
-								<Button asChild variant="ghost" size="icon" className="size-9 shrink-0" aria-label="查看机器详情">
-									<Link href={getPagePath($router, "system", { id: summary.system.id })}>
-										<MonitorIcon className="size-4" />
-									</Link>
-								</Button>
-							</div>
-						</div>
-					))
-				)}
-			</CardContent>
-		</Card>
-	)
-}
-
-type RuntimeSummaryIcon = typeof HardDriveIcon
-
-type RuntimeSummaryItemData = {
-	key: string
-	label: string
-	value: string
-	detail?: string
-	icon: RuntimeSummaryIcon
-	tone?: "neutral" | "ok" | "warning" | "danger"
-	href?: string
-}
-
-function RuntimeSummaryItem({ item }: { item: RuntimeSummaryItemData }) {
-	const Icon = item.icon
-	const content = (
-		<div className="rounded-md border border-border/70 bg-card px-2.5 py-2 transition-colors hover:bg-surface-card">
-			<div className="flex min-w-0 items-start gap-2">
-				<span
-					className={cn(
-						"mt-0.5 grid size-7 shrink-0 place-items-center rounded-md border",
-						item.tone === "danger"
-							? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
-							: item.tone === "warning"
-								? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
-								: item.tone === "ok"
-									? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
-									: "border-border/70 bg-surface-soft text-muted-foreground"
-					)}
-				>
-					<Icon className="size-4" />
-				</span>
-				<div className="min-w-0">
-					<div className="text-xs text-muted-foreground">{item.label}</div>
-					<div className="mt-1 break-words text-sm font-medium text-foreground">{item.value}</div>
-					{item.detail && <div className="mt-1 break-words text-xs text-muted-foreground">{item.detail}</div>}
-				</div>
-			</div>
-		</div>
-	)
-	if (!item.href) return content
-	return (
-		<Link href={item.href} className="block">
-			{content}
-		</Link>
-	)
-}
-
 type AssetCollectionDiff = {
 	key: string
 	label: string
@@ -5988,6 +5820,19 @@ function SystemStatusBadge({ status }: { status: SystemRecord["status"] }) {
 	)
 }
 
+function systemStatusLabel(status?: SystemRecord["status"]) {
+	switch (status) {
+		case "up":
+			return "在线"
+		case "pending":
+			return "待接入"
+		case "paused":
+			return "暂停"
+		default:
+			return "离线"
+	}
+}
+
 function TextField({
 	name,
 	label,
@@ -6236,409 +6081,6 @@ function yesNoOptions() {
 		{ value: "yes", label: "是" },
 		{ value: "no", label: "否" },
 	]
-}
-
-type AssetCollectedHardwareSummary = {
-	system: SystemRecord
-	rows: { label: string; value: string }[]
-}
-
-type RuntimeHardwareSummary = {
-	system: SystemRecord
-	items: RuntimeSummaryItemData[]
-}
-
-function buildRuntimeHardwareSummaries({
-	systems,
-	systemStats,
-	smartDevices,
-	containers,
-	websites,
-}: {
-	systems: SystemRecord[]
-	systemStats: SystemStatsRecord[]
-	smartDevices: SmartDeviceRecord[]
-	containers: ContainerRecord[]
-	websites: WebsiteMonitorRecord[]
-}): RuntimeHardwareSummary[] {
-	const latestStatsBySystem = newestBySystem(systemStats)
-	const smartBySystem = groupBySystem(smartDevices)
-	const containersBySystem = groupBySystem(containers)
-	const websitesBySystem = groupBySystem(websites.filter((website) => website.system))
-	return systems.map((system) => {
-		const latestStats = latestStatsBySystem.get(system.id)
-		const items = [
-			buildSmartRuntimeItem(system, smartBySystem.get(system.id) ?? []),
-			buildGpuRuntimeItem(system, latestStats),
-			buildTemperatureRuntimeItem(latestStats, smartBySystem.get(system.id) ?? []),
-			buildBatteryRuntimeItem(system, latestStats),
-			buildContainerRuntimeItem(system, containersBySystem.get(system.id) ?? []),
-			buildWebsiteRuntimeItem(websitesBySystem.get(system.id) ?? []),
-		].filter(Boolean) as RuntimeSummaryItemData[]
-		return { system, items }
-	})
-}
-
-function buildSmartRuntimeItem(system: SystemRecord, devices: SmartDeviceRecord[]): RuntimeSummaryItemData | undefined {
-	if (devices.length === 0) return undefined
-	const failed = devices.filter((device) => device.state?.toUpperCase() === "FAILED").length
-	const passed = devices.filter((device) => device.state?.toUpperCase() === "PASSED").length
-	const totalCapacity = devices.reduce((sum, device) => sum + (device.capacity || 0), 0)
-	const mediaSummary = summarizeSmartMedia(devices)
-	const hotDisk = devices
-		.filter((device) => typeof device.temp === "number" && Number.isFinite(device.temp))
-		.sort((a, b) => (b.temp ?? 0) - (a.temp ?? 0))[0]
-	const value = [
-		`${devices.length} 块磁盘`,
-		totalCapacity > 0 ? formatBytes(totalCapacity) : "",
-		failed > 0 ? `${failed} 异常` : passed > 0 ? `${passed} 正常` : "状态未知",
-	].filter(Boolean)
-	const detail = [
-		mediaSummary,
-		hotDisk ? `最高温 ${formatRuntimeTemperature(hotDisk.temp)} · ${hotDisk.model || hotDisk.name}` : "",
-	]
-		.filter(Boolean)
-		.join(" · ")
-	return {
-		key: "smart",
-		label: "SMART / 存储",
-		value: value.join(" · "),
-		detail,
-		icon: HardDriveIcon,
-		tone: failed > 0 ? "danger" : "ok",
-		href: `${getPagePath($router, "smart")}?system=${encodeURIComponent(system.id)}`,
-	}
-}
-
-function buildGpuRuntimeItem(
-	system: SystemRecord,
-	latestStats?: SystemStatsRecord
-): RuntimeSummaryItemData | undefined {
-	const gpus = Object.values(latestStats?.stats?.g ?? {}).filter((gpu) => gpu?.n)
-	if (gpus.length === 0) return undefined
-	const primary = gpus.sort((a, b) => gpuScore(b) - gpuScore(a))[0]
-	const usageValues = gpus.map((gpu) => gpu.u).filter(isFiniteNumber)
-	const usage = usageValues.length ? Math.max(...usageValues) : undefined
-	const totalMemoryMb = gpus.reduce((sum, gpu) => sum + (gpu.mt ?? 0), 0)
-	const usedMemoryMb = gpus.reduce((sum, gpu) => sum + (gpu.mu ?? 0), 0)
-	const temperature = findGpuTemperatureFromStats(latestStats, gpus)
-	const memoryLabel =
-		totalMemoryMb > 0
-			? `显存 ${formatBytes(usedMemoryMb * 1024 * 1024)} / ${formatBytes(totalMemoryMb * 1024 * 1024)}`
-			: usedMemoryMb > 0
-				? `显存 ${formatBytes(usedMemoryMb * 1024 * 1024)}`
-				: ""
-	return {
-		key: "gpu",
-		label: "GPU",
-		value: [
-			gpus.length > 1 ? `${gpus.length} 张 GPU` : primary.n,
-			usage !== undefined ? `负载 ${formatPercent(usage)}` : "",
-		]
-			.filter(Boolean)
-			.join(" · "),
-		detail: [memoryLabel, temperature ? `温度 ${temperature}` : "", gpus.length > 1 ? primary.n : ""]
-			.filter(Boolean)
-			.join(" · "),
-		icon: CpuIcon,
-		tone: usage !== undefined && usage >= 90 ? "warning" : "neutral",
-		href: `${getPagePath($router, "system", { id: system.id })}?view=gpu`,
-	}
-}
-
-function buildTemperatureRuntimeItem(
-	latestStats: SystemStatsRecord | undefined,
-	smartDevices: SmartDeviceRecord[]
-): RuntimeSummaryItemData | undefined {
-	const sensorEntries = Object.entries(latestStats?.stats?.t ?? {}).filter(([, value]) =>
-		isValidRuntimeTemperature(value)
-	)
-	const diskTemps = smartDevices
-		.map((device) => ({ label: device.model || device.name || "磁盘", value: device.temp }))
-		.filter((item): item is { label: string; value: number } => isValidRuntimeTemperature(item.value))
-	const merged = [...sensorEntries.map(([label, value]) => ({ label, value })), ...diskTemps].sort(
-		(a, b) => b.value - a.value
-	)
-	if (merged.length === 0) return undefined
-	const hottest = merged[0]
-	return {
-		key: "temperature",
-		label: "温度",
-		value: `${hottest.label} ${formatRuntimeTemperature(hottest.value)}`,
-		detail: merged
-			.slice(0, 3)
-			.map((item) => `${item.label} ${formatRuntimeTemperature(item.value)}`)
-			.join(" · "),
-		icon: ThermometerIcon,
-		tone: hottest.value >= 80 ? "danger" : hottest.value >= 65 ? "warning" : "ok",
-	}
-}
-
-function buildBatteryRuntimeItem(
-	system: SystemRecord,
-	latestStats?: SystemStatsRecord
-): RuntimeSummaryItemData | undefined {
-	const battery = latestStats?.stats?.bat ?? system.info?.bat
-	if (!battery) return undefined
-	const [percent, state] = battery
-	const stateLabel = batteryStateTranslations[state]?.() ?? "状态未知"
-	return {
-		key: "battery",
-		label: "电池",
-		value: `${formatPercent(percent)} · ${stateLabel}`,
-		detail: latestStats?.created ? `采集时间 ${formatRecordTime(latestStats.created)}` : undefined,
-		icon: BatteryIcon,
-		tone: percent <= 20 ? "warning" : "neutral",
-		href: getPagePath($router, "system", { id: system.id }),
-	}
-}
-
-function buildContainerRuntimeItem(system: SystemRecord, rows: ContainerRecord[]): RuntimeSummaryItemData | undefined {
-	if (rows.length === 0) return undefined
-	const running = rows.filter((container) => isContainerRunningStatus(container.status)).length
-	const stacks = new Set(rows.map((container) => container.stack_project).filter(Boolean)).size
-	const stopped = rows.length - running
-	return {
-		key: "containers",
-		label: "容器",
-		value: `${rows.length} 个 · ${running} 运行${stopped > 0 ? ` · ${stopped} 停止` : ""}`,
-		detail: stacks > 0 ? `${stacks} 个 Compose stack` : "未识别 Compose stack",
-		icon: ContainerIcon,
-		tone: stopped > 0 ? "warning" : "ok",
-		href: `${getPagePath($router, "containers")}?system=${encodeURIComponent(system.id)}`,
-	}
-}
-
-function buildWebsiteRuntimeItem(rows: WebsiteMonitorRecord[]): RuntimeSummaryItemData | undefined {
-	if (rows.length === 0) return undefined
-	const up = rows.filter((monitor) => monitor.last_status === "up").length
-	const down = rows.filter((monitor) => monitor.last_status === "down").length
-	const unknown = rows.length - up - down
-	const latencyValues = rows.map((monitor) => monitor.last_latency_ms).filter(isFiniteNumber)
-	const latency =
-		latencyValues.length > 0
-			? `${Math.round(latencyValues.reduce((sum, value) => sum + value, 0) / latencyValues.length)} ms 平均`
-			: ""
-	return {
-		key: "websites",
-		label: "网页端点",
-		value: `${rows.length} 个 · ${up} 正常${down > 0 ? ` · ${down} 异常` : ""}`,
-		detail: [unknown > 0 ? `${unknown} 未检测` : "", latency].filter(Boolean).join(" · "),
-		icon: Globe2Icon,
-		tone: down > 0 ? "danger" : up > 0 ? "ok" : "neutral",
-		href: getPagePath($router, "websites"),
-	}
-}
-
-function buildCollectedHardwareSummaries(
-	systems: SystemRecord[],
-	systemDetails: SystemDetailsRecord[]
-): AssetCollectedHardwareSummary[] {
-	const detailBySystem = new Map(systemDetails.map((detail) => [detail.system || detail.id, detail]))
-	return systems
-		.map((system) => {
-			const detail = detailBySystem.get(system.id)
-			const rows = buildCollectedHardwareRows(system, detail)
-			return { system, rows }
-		})
-		.filter((summary) => summary.rows.length > 0)
-}
-
-function buildCollectedHardwareRows(system: SystemRecord, detail?: SystemDetailsRecord) {
-	const rows: { label: string; value: string }[] = []
-	const systemLabel = firstNonEmpty(detail?.hostname, system.info?.h, system.name)
-	if (systemLabel) rows.push({ label: "识别主机名", value: systemLabel })
-
-	const cpuParts = [detail?.cpu, formatCoreThreadSummary(detail), formatCpuFrequency(detail?.cpu_frequency_mhz)].filter(
-		Boolean
-	)
-	if (cpuParts.length > 0) rows.push({ label: "CPU", value: cpuParts.join(" · ") })
-
-	if (detail?.memory) {
-		const memoryParts = [formatBytes(detail.memory), formatMemoryModuleSummary(detail)].filter(Boolean)
-		rows.push({ label: "内存", value: memoryParts.join(" · ") })
-	}
-
-	const networkSummary = formatNetworkInterfaceSummary(detail)
-	if (networkSummary) rows.push({ label: "网卡", value: networkSummary })
-
-	const runtimeSummary = [detail?.container_runtime_name, detail?.container_runtime_version].filter(Boolean).join(" ")
-	if (runtimeSummary) rows.push({ label: "容器运行时", value: runtimeSummary })
-
-	const virtualizationSummary = formatVirtualizationSummary(detail)
-	if (virtualizationSummary) rows.push({ label: "虚拟化", value: virtualizationSummary })
-
-	return rows
-}
-
-function formatCoreThreadSummary(detail?: SystemDetailsRecord) {
-	if (!detail?.cores && !detail?.threads) return ""
-	if (detail.cores && detail.threads) return `${detail.cores} 核 / ${detail.threads} 线程`
-	if (detail.cores) return `${detail.cores} 核`
-	return `${detail.threads} 线程`
-}
-
-function formatCpuFrequency(value?: number) {
-	if (!value) return ""
-	if (value >= 1000) {
-		const ghz = value / 1000
-		return `${Number.isInteger(ghz) ? ghz.toFixed(0) : ghz.toFixed(2).replace(/0$/, "").replace(/\.0$/, "")} GHz`
-	}
-	return `${Math.round(value)} MHz`
-}
-
-function formatMemoryModuleSummary(detail?: SystemDetailsRecord) {
-	const modules = detail?.memory_modules ?? []
-	if (modules.length === 0) return ""
-	const speeds = [...new Set(modules.map((item) => item.configured_mhz || item.speed_mhz).filter(Boolean))]
-	const types = [...new Set(modules.map((item) => item.memory_type).filter(Boolean))]
-	return [modules.length ? `${modules.length} 条` : "", types[0], speeds[0] ? `${speeds[0]} MHz` : ""]
-		.filter(Boolean)
-		.join(" · ")
-}
-
-function formatNetworkInterfaceSummary(detail?: SystemDetailsRecord) {
-	const interfaces = detail?.network_interfaces ?? []
-	if (interfaces.length === 0) return ""
-	const connected = interfaces.filter((item) => normalizeComparableText(item.status || "") === "up").length
-	const speedValues = [...new Set(interfaces.map((item) => item.link_speed).filter(Boolean))]
-	const macCount = interfaces.filter((item) => item.mac).length
-	const parts = [`${interfaces.length} 个物理网卡`]
-	if (connected > 0) parts.push(`${connected} 已连接`)
-	if (speedValues.length > 0) parts.push(speedValues.map((value) => formatSpeed(value)).join(" / "))
-	if (macCount > 0) parts.push(`${macCount} 个 MAC`)
-	return parts.join(" · ")
-}
-
-function formatVirtualizationSummary(detail?: SystemDetailsRecord) {
-	const virtualization = detail?.virtualization
-	if (!virtualization) return ""
-	const parts = [virtualization.role, virtualization.type, virtualization.name].filter(Boolean)
-	const vmCount = virtualization.virtual_machines?.length ?? 0
-	if (vmCount > 0) parts.push(`${vmCount} 台虚拟机`)
-	return parts.join(" · ")
-}
-
-function newestBySystem<T extends { system: string; created: string | number }>(records: T[]) {
-	const result = new Map<string, T>()
-	for (const record of records) {
-		const current = result.get(record.system)
-		if (!current || getRecordTime(record.created) > getRecordTime(current.created)) {
-			result.set(record.system, record)
-		}
-	}
-	return result
-}
-
-function groupBySystem<T extends { system?: string }>(records: T[]) {
-	const result = new Map<string, T[]>()
-	for (const record of records) {
-		if (!record.system) continue
-		const rows = result.get(record.system) ?? []
-		rows.push(record)
-		result.set(record.system, rows)
-	}
-	return result
-}
-
-function summarizeSmartMedia(devices: SmartDeviceRecord[]) {
-	const counts = new Map<string, number>()
-	for (const device of devices) {
-		const label = getSmartMediaTypeLabel(device.media_type || device.type)
-		if (!label) continue
-		counts.set(label, (counts.get(label) ?? 0) + 1)
-	}
-	return [...counts.entries()]
-		.sort(([a], [b]) => a.localeCompare(b, "zh-CN"))
-		.map(([label, count]) => `${label} ${count}`)
-		.join(" / ")
-}
-
-function getSmartMediaTypeLabel(value?: string) {
-	const normalized = value?.trim().toLowerCase()
-	if (!normalized) return ""
-	if (normalized === "nvme") return "NVMe"
-	if (normalized === "ssd") return "SSD"
-	if (normalized === "hdd") return "HDD"
-	return normalized.toUpperCase()
-}
-
-function findGpuTemperatureFromStats(latestStats: SystemStatsRecord | undefined, gpus: GPUData[]) {
-	const temps = latestStats?.stats?.t ?? {}
-	const gpuNames = gpus.map((gpu) => normalizeHardwareName(gpu.n)).filter(Boolean)
-	const entries = Object.entries(temps).filter(([name, value]) => {
-		if (!isValidRuntimeTemperature(value)) return false
-		const normalized = normalizeHardwareName(name)
-		return (
-			gpuNames.some((gpuName) => normalized.includes(gpuName) || gpuName.includes(normalized)) ||
-			/\b(gpu|nvidia|geforce|rtx|gtx|radeon|arc)\b/.test(name.toLowerCase())
-		)
-	})
-	if (entries.length === 0) return ""
-	const hottest = entries.reduce((max, item) => (item[1] > max[1] ? item : max))
-	return formatRuntimeTemperature(hottest[1])
-}
-
-function gpuScore(gpu: GPUData) {
-	return (gpu.gt === "discrete" ? 10_000 : 0) + (gpu.mt ?? 0) + (gpu.u ?? 0)
-}
-
-function isContainerRunningStatus(status?: string) {
-	const normalized = (status ?? "").trim().toLowerCase()
-	return normalized.startsWith("up") || normalized.includes("running")
-}
-
-function formatPercent(value: number) {
-	return `${decimalString(value, value >= 10 ? 1 : 2)}%`
-}
-
-function formatRuntimeTemperature(value?: number) {
-	if (!isValidRuntimeTemperature(value)) return ""
-	const formatted = formatTemperature(value)
-	return `${decimalString(formatted.value, formatted.value >= 100 ? 1 : 2)} ${formatted.unit}`
-}
-
-function isValidRuntimeTemperature(value: unknown): value is number {
-	return typeof value === "number" && Number.isFinite(value) && value > 0 && value < 200
-}
-
-function isFiniteNumber(value: unknown): value is number {
-	return typeof value === "number" && Number.isFinite(value)
-}
-
-function normalizeHardwareName(value?: string) {
-	return (value ?? "")
-		.toLowerCase()
-		.replace(/\([^)]*\)/g, " ")
-		.replace(/[^a-z0-9]+/g, " ")
-		.replace(/\b(nvidia|amd|ati|intel|graphics|controller|corporation|inc|ltd)\b/g, " ")
-		.replace(/\s+/g, " ")
-		.trim()
-}
-
-function getRecordTime(value: string | number | undefined | null) {
-	if (typeof value === "number") return value
-	if (!value) return 0
-	const timestamp = new Date(value).getTime()
-	return Number.isFinite(timestamp) ? timestamp : 0
-}
-
-function formatRecordTime(value: string | number | undefined | null) {
-	const timestamp = getRecordTime(value)
-	return timestamp ? formatTime(new Date(timestamp).toISOString()) : ""
-}
-
-function formatBytes(value?: number) {
-	if (!value) return ""
-	const units = ["B", "KB", "MB", "GB", "TB"]
-	let size = value
-	let unitIndex = 0
-	while (size >= 1024 && unitIndex < units.length - 1) {
-		size /= 1024
-		unitIndex += 1
-	}
-	const fixed = size >= 10 || unitIndex === 0 ? size.toFixed(0) : size.toFixed(1)
-	return `${fixed} ${units[unitIndex]}`
 }
 
 function buildCollectionDiffs(
@@ -6935,19 +6377,6 @@ function getPrimaryCollectedNicSpeed(detail: SystemDetailsRecord) {
 	return speeds.length ? Math.max(...speeds) : undefined
 }
 
-function formatCollectedNicSummary(detail: SystemDetailsRecord) {
-	return (detail.network_interfaces ?? [])
-		.map((item) => {
-			const name = firstNonEmpty(item.display_name, item.name)
-			if (!name) return ""
-			const speed = item.link_speed ? ` ${formatSpeed(item.link_speed)}` : ""
-			return `${name}${speed}`
-		})
-		.filter(Boolean)
-		.slice(0, 4)
-		.join(" / ")
-}
-
 function getCollectedIpValues(systemPairs: { system: SystemRecord; detail?: SystemDetailsRecord }[]) {
 	const values = new Set<string>()
 	for (const { system, detail } of systemPairs) {
@@ -7171,23 +6600,6 @@ function isActionableEnrichmentSuggestion(suggestion: AssetEnrichmentSuggestionR
 	return !current || suggestion.conflict || normalizeComparableText(current) !== normalizeComparableText(recommended)
 }
 
-function getSystemDisplayName(system: SystemRecord) {
-	return system.display_name || system.name || system.id
-}
-
-function systemStatusLabel(status?: SystemRecord["status"]) {
-	switch (status) {
-		case "up":
-			return "在线"
-		case "pending":
-			return "待接入"
-		case "paused":
-			return "暂停"
-		default:
-			return "离线"
-	}
-}
-
 function normalizeComparableText(value: string) {
 	return value.trim().toLowerCase()
 }
@@ -7317,15 +6729,6 @@ function getInterfaceSourceLabel(source?: AssetInterfaceSource) {
 		default:
 			return "未知"
 	}
-}
-
-function formatSpeed(value?: number) {
-	if (!value) return ""
-	if (value >= 1000) {
-		const gbps = value / 1000
-		return `${Number.isInteger(gbps) ? gbps.toFixed(0) : gbps.toFixed(1)}G`
-	}
-	return `${value}M`
 }
 
 function formatDate(value: string) {
