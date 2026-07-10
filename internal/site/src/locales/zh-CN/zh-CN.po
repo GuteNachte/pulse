@@ -873,7 +873,7 @@ msgstr "单位偏好"
 msgid "Unknown"
 msgstr "未知"
 
-#: src/components/systems-table/systems-table.tsx:422
+#: src/components/systems-table/systems-table.tsx:425
 msgid "Unsupported"
 msgstr "不支持"
 
