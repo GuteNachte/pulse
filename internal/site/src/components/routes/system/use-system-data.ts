@@ -162,6 +162,7 @@ export function useSystemData(id: string) {
 		if (!system.id) {
 			return
 		}
+		const controller = new AbortController()
 		pb.collection<SystemDetailsRecord>("system_details")
 			.getOne(system.id, {
 				fields:
@@ -169,8 +170,17 @@ export function useSystemData(id: string) {
 				headers: {
 					"Cache-Control": "public, max-age=60",
 				},
+				signal: controller.signal,
 			})
-			.then(setDetails)
+			.then((record) => {
+				if (!controller.signal.aborted) setDetails(record)
+			})
+			.catch((error) => {
+				if (!controller.signal.aborted && !error?.isAbort) {
+					setDetails({} as SystemDetailsRecord)
+				}
+			})
+		return () => controller.abort()
 	}, [system.id])
 
 	useEffect(() => {
