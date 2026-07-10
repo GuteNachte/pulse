@@ -37,6 +37,7 @@ import { pageTitle } from "@/lib/branding"
 import { cn } from "@/lib/utils"
 import { getAssetIcon } from "./components/asset-card"
 import { AssetEditWorkbench } from "./components/asset-edit-workbench"
+import { AssetShowcaseTags } from "./components/asset-showcase-tags"
 import { SelectField, TextAreaField, TextField } from "./components/asset-detail-form-fields"
 import {
 	AssetHardwareSpecsColumn,
@@ -1681,35 +1682,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	)
 })
 
-type AssetShowcaseTag = {
-	label: string
-	value: string
-	tone?: "neutral" | "strong"
-}
-
-function AssetShowcaseTags({ asset }: { asset: AssetRecord }) {
-	const tags = buildAssetShowcaseTags(asset)
-	if (tags.length === 0) return null
-	return (
-		<div className="flex min-w-0 flex-wrap gap-1">
-			{tags.map((tag) => (
-				<span
-					key={`${tag.label}-${tag.value}`}
-					className={cn(
-						"inline-flex h-5 max-w-full items-center gap-1 rounded-md border px-1.5 text-[11px]",
-						tag.tone === "strong"
-							? "border-primary/25 bg-primary/10 text-primary"
-							: "border-border/70 bg-card text-muted-foreground"
-					)}
-				>
-					<span className="shrink-0 text-[10px] text-muted-foreground">{tag.label}</span>
-					<span className="min-w-0 truncate font-medium text-foreground">{tag.value}</span>
-				</span>
-			))}
-		</div>
-	)
-}
-
 function AssetShowcaseWorkspace({ asset, visuals }: { asset: AssetRecord; visuals: AssetVisualRecord[] }) {
 	const parameterGroups = useMemo(() => buildAssetParameterGroups(asset), [asset])
 	const identitySections = useMemo(() => buildAssetIdentitySections(asset), [asset])
@@ -1973,32 +1945,6 @@ function dedupeParameterGroups(groups: AssetParameterGroup[]) {
 		seen.add(signature)
 		return true
 	})
-}
-
-function buildAssetShowcaseTags(asset: AssetRecord) {
-	const tags: AssetShowcaseTag[] = []
-	const seen = new Set<string>()
-	const metadata = asset.metadata ?? {}
-	const owner = getMetadataString(metadata, "owner")
-	const color = firstNonEmpty(getMetadataString(metadata, "color"), getMetadataString(metadata, "device_color"))
-
-	function add(label: string, value?: string, tone?: AssetShowcaseTag["tone"]) {
-		const text = value?.trim()
-		if (!text) return
-		const key = `${label}:${text}`
-		if (seen.has(key)) return
-		seen.add(key)
-		tags.push({ label, value: text, tone })
-	}
-
-	add("位置", asset.location || "未填写", asset.location ? "strong" : "neutral")
-	add("用途", asset.role || "未填写", asset.role ? "strong" : "neutral")
-	add("归属", owner)
-	add("颜色", color)
-	asset.tags?.slice(0, 4).forEach((tag) => {
-		add("标签", tag)
-	})
-	return tags.slice(0, 8)
 }
 
 function DialogFormSection({
