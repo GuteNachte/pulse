@@ -5,9 +5,11 @@ type AssetVisualCollection = {
 	getList: (
 		page: number,
 		perPage: number,
-		options: { filter: string; sort: string; requestKey: null }
+		options: { filter: string; sort: string; fields: string; requestKey: null }
 	) => Promise<{ items: AssetVisualRecord[] }>
 }
+
+const assetVisualDisplayFields = "id,asset,kind,status,primary,frames,metadata,created,updated"
 
 export async function loadDisplayAssetVisuals(collection: AssetVisualCollection, assetId: string) {
 	const escapedAssetId = escapePocketBaseFilterValue(assetId)
@@ -15,16 +17,19 @@ export async function loadDisplayAssetVisuals(collection: AssetVisualCollection,
 		collection.getList(1, 1, {
 			filter: `asset="${escapedAssetId}" && status="ready" && kind="official_reference" && primary=true`,
 			sort: "-created",
+			fields: assetVisualDisplayFields,
 			requestKey: null,
 		}),
 		collection.getList(1, 1, {
 			filter: `asset="${escapedAssetId}" && status="ready" && kind="manual"`,
 			sort: "-primary,-created",
+			fields: assetVisualDisplayFields,
 			requestKey: null,
 		}),
 		collection.getList(1, 3, {
 			filter: `asset="${escapedAssetId}" && status="ready" && kind="official_reference" && primary=false`,
 			sort: "-created",
+			fields: assetVisualDisplayFields,
 			requestKey: null,
 		}),
 	])

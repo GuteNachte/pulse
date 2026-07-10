@@ -45,6 +45,7 @@ assertDeepEqual(
 		perPage: call.perPage,
 		filter: call.options.filter,
 		sort: call.options.sort,
+		fields: call.options.fields,
 	})),
 	[
 		{
@@ -52,18 +53,21 @@ assertDeepEqual(
 			perPage: 1,
 			filter: 'asset="asset-123" && status="ready" && kind="official_reference" && primary=true',
 			sort: "-created",
+			fields: "id,asset,kind,status,primary,frames,metadata,created,updated",
 		},
 		{
 			page: 1,
 			perPage: 1,
 			filter: 'asset="asset-123" && status="ready" && kind="manual"',
 			sort: "-primary,-created",
+			fields: "id,asset,kind,status,primary,frames,metadata,created,updated",
 		},
 		{
 			page: 1,
 			perPage: 3,
 			filter: 'asset="asset-123" && status="ready" && kind="official_reference" && primary=false',
 			sort: "-created",
+			fields: "id,asset,kind,status,primary,frames,metadata,created,updated",
 		},
 	]
 )
