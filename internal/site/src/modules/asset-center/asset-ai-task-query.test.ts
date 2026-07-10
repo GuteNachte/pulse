@@ -36,10 +36,23 @@ assertDeepEqual(
 		perPage: call.perPage,
 		filter: call.options.filter,
 		sort: call.options.sort,
+		fields: call.options.fields,
 	})),
 	[
-		{ page: 1, perPage: 1, filter: 'kind="asset_enrichment"', sort: "-created" },
-		{ page: 1, perPage: 1, filter: 'kind="asset_visual"', sort: "-created" },
+		{
+			page: 1,
+			perPage: 1,
+			filter: 'kind="asset_enrichment"',
+			sort: "-created",
+			fields: "id,asset,kind,status,provider,model,input_summary,output_summary,error,created,updated",
+		},
+		{
+			page: 1,
+			perPage: 1,
+			filter: 'kind="asset_visual"',
+			sort: "-created",
+			fields: "id,asset,kind,status,provider,model,input_summary,output_summary,error,created,updated",
+		},
 	]
 )
 

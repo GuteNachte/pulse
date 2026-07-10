@@ -5,11 +5,12 @@ type AITaskCollection = {
 	getList: (
 		page: number,
 		perPage: number,
-		options: { filter: string; sort: string; requestKey: null }
+		options: { filter: string; sort: string; fields: string; requestKey: null }
 	) => Promise<{ items: AITaskRecord[] }>
 }
 
 const latestTaskKinds = ["asset_enrichment", "asset_visual"] as const
+const latestAITaskFields = "id,asset,kind,status,provider,model,input_summary,output_summary,error,created,updated"
 
 export async function loadLatestAITasksByKind(collection: AITaskCollection, options?: { assetId?: string }) {
 	const results = await Promise.all(
@@ -17,6 +18,7 @@ export async function loadLatestAITasksByKind(collection: AITaskCollection, opti
 			const page = await collection.getList(1, 1, {
 				filter: buildLatestAITaskFilter(kind, options?.assetId),
 				sort: "-created",
+				fields: latestAITaskFields,
 				requestKey: null,
 			})
 			return page.items
