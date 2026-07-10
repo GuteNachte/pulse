@@ -438,7 +438,7 @@ function NetworkTopologyPanel({ systems, mode }: { systems: SystemRecord[]; mode
 			<CardContent className="p-0">
 				<div className={cn("grid", isOverview ? "min-h-[340px]" : "min-h-[620px] lg:grid-cols-[minmax(0,1fr)_20rem]")}>
 					<div className="min-w-0 border-b border-border/70 bg-surface-soft p-2 lg:border-e lg:border-b-0">
-						<div className="mb-2 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
+						<div className="mb-2 grid grid-cols-3 gap-2 xl:grid-cols-6">
 							<TopologyStat label="外网" value={graph.stats.internetAccesses} />
 							<TopologyStat label="设备" value={graph.stats.devices} />
 							<TopologyStat label="机器" value={`${graph.stats.onlineSystems}/${graph.stats.systems}`} />
