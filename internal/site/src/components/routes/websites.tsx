@@ -41,6 +41,7 @@ import {
 import type { IconPreviewState, MonitorForm } from "./websites/types"
 import { createEmptyForm } from "./websites/types"
 import { useWebsiteMonitorData } from "./websites/use-website-monitor-data"
+import { loadWebsiteEndpointAssets } from "@/modules/website-monitoring/endpoint-assets-query"
 
 export default memo(function Websites() {
 	const systemsById = useStore($allSystemsById) as Record<string, SystemRecord>
@@ -89,9 +90,11 @@ export default memo(function Websites() {
 	useEffect(() => {
 		document.title = pageTitle("网站监控")
 		setAssetsLoading(true)
-		pb.collection<AssetRecord>("assets")
-			.getFullList({ sort: "type,name", requestKey: null })
-			.then((records) => setAssets(records.filter((asset) => asset.type === "web_endpoint")))
+		loadWebsiteEndpointAssets(
+			pb.collection<AssetRecord>("assets"),
+			pb.filter("type = {:type}", { type: "web_endpoint" })
+		)
+			.then(setAssets)
 			.catch((error) => console.error("load website assets", error))
 			.finally(() => setAssetsLoading(false))
 	}, [])
