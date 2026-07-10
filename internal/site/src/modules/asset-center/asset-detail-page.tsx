@@ -84,7 +84,6 @@ import {
 	HOST_ASSET_TYPES,
 	NETWORK_ASSET_TYPES,
 	ASSET_TYPE_OPTIONS,
-	getAssetCompleteness,
 	getAssetFormSections,
 	getAssetTypeLabel,
 	getAssetWarrantyStatus,
@@ -117,7 +116,6 @@ import {
 	getAssetVisualGenerationBlockReason,
 	isOfficialColorRequiredForAssetType,
 } from "./asset-visual-color"
-import { getAssetSourceProfile } from "./asset-source-profile"
 import {
 	formatCollectedNicSummary,
 	formatMemoryModuleSummary,
@@ -2810,35 +2808,6 @@ function DialogFormSection({
 	)
 }
 
-function ArchiveCard({ asset }: { asset: AssetRecord }) {
-	const sections = buildArchiveDetailSections(asset)
-	return (
-		<Card className="border-border/70 bg-card shadow-none">
-			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
-				<CardTitle className="text-lg">详细参数</CardTitle>
-			</CardHeader>
-			<CardContent className="grid gap-3 p-3">
-				{sections.map((section) => {
-					if (section.rows.length === 0) return null
-					return (
-						<section
-							key={section.title}
-							className="grid gap-2 border-border/70 border-b pb-3 last:border-b-0 last:pb-0"
-						>
-							<div className="text-xs font-semibold text-muted-foreground">{section.title}</div>
-							<div className="grid gap-x-4 gap-y-1.5 md:grid-cols-2 2xl:grid-cols-3">
-								{section.rows.map((row) => (
-									<ArchiveDetailRow key={row.field.key} field={row.field} value={row.value} />
-								))}
-							</div>
-						</section>
-					)
-				})}
-			</CardContent>
-		</Card>
-	)
-}
-
 type ArchiveDetailSection = {
 	title: string
 	rows: ArchiveDetailRow[]
@@ -2968,177 +2937,6 @@ type HostHardwareProfileGroup = {
 	title: string
 	icon: ReactNode
 	rows: HostHardwareProfileRow[]
-}
-
-function HostHardwareProfileCard({ asset }: { asset: AssetRecord }) {
-	if (!HOST_ASSET_TYPES.includes(asset.type)) return null
-	const groups = buildHostHardwareProfileGroups(asset)
-	const hasRows = groups.some((group) => group.rows.length > 0)
-
-	return (
-		<Card className="border-border/70 bg-card shadow-none">
-			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
-				<div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-					<CardTitle className="text-lg">计算机硬件档案</CardTitle>
-					<div className="flex flex-wrap gap-1.5">
-						<AssetFieldCaptureTag capture="manual" />
-						<AssetFieldCaptureTag capture="agent_collectable" />
-						<AssetFieldCaptureTag capture="future_collectable" />
-					</div>
-				</div>
-			</CardHeader>
-			<CardContent className="grid gap-3 p-4">
-				{hasRows ? (
-					<div className="grid gap-3 lg:grid-cols-2">
-						{groups
-							.filter((group) => group.rows.length > 0)
-							.map((group) => (
-								<section key={group.title} className="rounded-lg border border-border/70 bg-surface-soft p-3">
-									<div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
-										<span className="inline-flex size-7 items-center justify-center rounded-md border border-border/70 bg-card text-muted-foreground">
-											{group.icon}
-										</span>
-										<span>{group.title}</span>
-									</div>
-									<div className="grid gap-2">
-										{group.rows.map((row) => (
-											<HostHardwareProfileLine key={`${group.title}-${row.label}`} row={row} />
-										))}
-									</div>
-								</section>
-							))}
-					</div>
-				) : (
-					<EmptyBlock
-						icon={<CpuIcon className="size-5" />}
-						text="暂无计算机硬件档案。可先手动维护，后续专项识别 Agent 只生成待确认建议。"
-					/>
-				)}
-			</CardContent>
-		</Card>
-	)
-}
-
-function HostHardwareProfileLine({ row }: { row: HostHardwareProfileRow }) {
-	const content = row.href ? (
-		<a
-			href={row.href}
-			target="_blank"
-			rel="noreferrer"
-			className="inline-flex min-w-0 max-w-full items-center gap-1.5 break-all text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
-		>
-			<span className="min-w-0 break-all">{row.value}</span>
-			<ExternalLinkIcon className="size-3.5 shrink-0" />
-		</a>
-	) : (
-		<div className="min-w-0 break-words text-sm font-medium text-foreground">{row.value}</div>
-	)
-
-	return (
-		<div className="grid gap-1 rounded-md border border-border/70 bg-card px-3 py-2">
-			<div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-				<span>{row.label}</span>
-				<AssetFieldCaptureTag capture={row.capture} />
-			</div>
-			{content}
-		</div>
-	)
-}
-
-function ProfileCompletenessCard({ asset }: { asset: AssetRecord }) {
-	const completeness = getAssetCompleteness(asset)
-	const editHref = `${getPagePath($router, "assets")}?edit=${encodeURIComponent(asset.id)}&focus=profile`
-	const visibleMissing = completeness.missing.slice(0, 4)
-	const hiddenMissingCount = Math.max(0, completeness.missing.length - visibleMissing.length)
-	return (
-		<Card className="border-border/70 bg-card shadow-none">
-			<CardHeader className="border-b border-border/70 bg-surface-soft px-3 py-2.5">
-				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-base">资料完整度</CardTitle>
-					<ToneTag tone={completeness.tone}>{completeness.label}</ToneTag>
-				</div>
-			</CardHeader>
-			<CardContent className="grid gap-2.5 p-3">
-				<div className="grid gap-1">
-					<div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-						<span>长期档案关键字段</span>
-						<span className="font-mono text-foreground tabular-nums">{completeness.score}%</span>
-					</div>
-					<div className="h-1.5 overflow-hidden rounded-full bg-surface-soft">
-						<div
-							className={cn(
-								"h-full rounded-full",
-								completeness.tone === "danger"
-									? "bg-red-500"
-									: completeness.tone === "warning"
-										? "bg-amber-500"
-										: completeness.tone === "ok"
-											? "bg-emerald-500"
-											: "bg-muted-foreground"
-							)}
-							style={{ width: `${Math.max(4, Math.min(100, completeness.score))}%` }}
-						/>
-					</div>
-				</div>
-				{completeness.missing.length > 0 ? (
-					<div className="grid gap-2">
-						<div className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
-							<span>待补字段</span>
-							<span>{completeness.missing.length} 项</span>
-						</div>
-						<div className="flex flex-wrap gap-1.5">
-							{visibleMissing.map((field) => (
-								<MetaTag key={field}>{field}</MetaTag>
-							))}
-							{hiddenMissingCount > 0 && <MetaTag>另 {hiddenMissingCount} 项</MetaTag>}
-						</div>
-					</div>
-				) : (
-					<div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-						当前类型的关键长期字段已经补齐。
-					</div>
-				)}
-				<Button asChild variant="outline" size="sm" className="w-full gap-2">
-					<Link href={editHref}>
-						<PencilIcon className="size-4" />
-						补充资产档案
-					</Link>
-				</Button>
-			</CardContent>
-		</Card>
-	)
-}
-
-function AssetSourceProfileCard({ asset }: { asset: AssetRecord }) {
-	const groups = getAssetSourceProfile(asset)
-	return (
-		<Card className="border-border/70 bg-card shadow-none">
-			<CardHeader className="border-b border-border/70 bg-surface-soft px-3 py-2.5">
-				<CardTitle className="flex items-center gap-2 text-base">
-					<ListChecksIcon className="size-4 text-muted-foreground" />
-					资料来源边界
-				</CardTitle>
-			</CardHeader>
-			<CardContent className="grid gap-2 p-3">
-				{groups.map((group) => (
-					<div key={group.capture} className="rounded-md border border-border/70 bg-surface-soft px-3 py-2">
-						<div className="flex min-w-0 items-center justify-between gap-3">
-							<div className="min-w-0">
-								<div className="flex flex-wrap items-center gap-1.5">
-									<span className="text-sm font-medium text-foreground">{group.label}</span>
-									<AssetFieldCaptureTag capture={group.capture} />
-								</div>
-							</div>
-							<div className="shrink-0 rounded-md border border-border/70 bg-card px-2 py-1 text-xs font-medium tabular-nums text-foreground">
-								{group.filled}/{group.total}
-							</div>
-						</div>
-						<div className="mt-1 truncate text-xs text-muted-foreground">{group.brief}</div>
-					</div>
-				))}
-			</CardContent>
-		</Card>
-	)
 }
 
 function InterfacesCard({
