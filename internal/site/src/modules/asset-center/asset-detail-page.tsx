@@ -76,6 +76,7 @@ import {
 	formatAssetVisualTaskMeta as formatAssetVisualTaskSummary,
 } from "./asset-ai-task-summary"
 import { loadLatestAITasksByKind } from "./asset-ai-task-query"
+import { createAssetDetailLoadGuard, type AssetDetailLoadToken } from "./asset-detail-load-guard"
 import { loadAssetEditCatalog } from "./asset-edit-catalog-query"
 import { loadLatestReportSuggestions, loadPendingOfficialColorSuggestions } from "./asset-enrichment-suggestion-query"
 import { formatAssetParameterRowDisplay } from "./asset-parameter-display"
@@ -309,6 +310,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const [saving, setSaving] = useState(false)
 	const secondaryLoadRef = useRef<Promise<void> | null>(null)
 	const editCatalogLoadRef = useRef<Promise<void> | null>(null)
+	const detailLoadGuardRef = useRef(createAssetDetailLoadGuard())
 	const readOnly = isReadOnlyUser()
 	const assetMap = useMemo(() => new Map(state.assets.map((asset) => [asset.id, asset])), [state.assets])
 	const asset = state.asset
@@ -353,6 +355,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const recognitionRequirements = useMemo(() => (asset ? getAssetRecognitionRequirements(asset) : []), [asset])
 
 	async function loadDetail(options?: { waitSecondary?: boolean; waitEditCatalog?: boolean }) {
+		const loadToken = detailLoadGuardRef.current.begin(id)
 		setLoading(true)
 		try {
 			const [assetRecord, interfaces, relations] = await Promise.all([
@@ -368,6 +371,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					requestKey: null,
 				}),
 			])
+			if (!detailLoadGuardRef.current.isCurrent(loadToken)) return
 			setState({
 				...emptyState,
 				asset: assetRecord,
@@ -381,6 +385,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			setLoading(false)
 			const secondaryLoad = startSecondaryDetailDataLoad({
 				assetId: id,
+				loadToken,
 			})
 			if (options?.waitSecondary) {
 				await secondaryLoad
@@ -394,9 +399,11 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					assetId: assetRecord.id,
 					fallbackAsset: assetRecord,
 					interfaces,
+					loadToken,
 				})
 			}
 		} catch (error) {
+			if (!detailLoadGuardRef.current.isCurrent(loadToken)) return
 			if (!isPocketBaseAutoCancel(error)) {
 				console.error("load asset detail", error)
 				toast({ title: "资产详情读取失败", description: "请检查资产是否存在。", variant: "destructive" })
@@ -405,7 +412,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		}
 	}
 
-	function startSecondaryDetailDataLoad(options: { assetId: string }) {
+	function startSecondaryDetailDataLoad(options: { assetId: string; loadToken: AssetDetailLoadToken }) {
 		let secondaryLoad: Promise<void>
 		secondaryLoad = loadSecondaryDetailData(options).finally(() => {
 			if (secondaryLoadRef.current === secondaryLoad) {
@@ -441,6 +448,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			assetId: asset.id,
 			fallbackAsset: asset,
 			interfaces: state.interfaces,
+			loadToken: detailLoadGuardRef.current.current() ?? detailLoadGuardRef.current.begin(asset.id),
 		})
 	}
 
@@ -448,10 +456,12 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		assetId,
 		fallbackAsset,
 		interfaces,
+		loadToken,
 	}: {
 		assetId: string
 		fallbackAsset: AssetRecord
 		interfaces: AssetInterfaceRecord[]
+		loadToken: AssetDetailLoadToken
 	}) {
 		try {
 			const {
@@ -464,7 +474,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				locations: pb.collection<AssetLocationRecord>("asset_locations"),
 			})
 			setState((current) => {
-				if (current.asset?.id !== assetId) return current
+				if (!detailLoadGuardRef.current.isCurrent(loadToken) || current.asset?.id !== assetId) return current
 				const catalogAssets = assets.some((item) => item.id === assetId) ? assets : [fallbackAsset, ...assets]
 				const catalogInterfaces = allInterfaces.length > 0 ? allInterfaces : interfaces
 				return {
@@ -482,7 +492,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		}
 	}
 
-	async function loadSecondaryDetailData({ assetId }: { assetId: string }) {
+	async function loadSecondaryDetailData({ assetId, loadToken }: { assetId: string; loadToken: AssetDetailLoadToken }) {
 		try {
 			const [maintenance, attachments, visuals, aiTasks, changes, enrichmentReports] = await Promise.all([
 				pb.collection<AssetMaintenanceRecord>("asset_maintenance").getFullList({
@@ -519,7 +529,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				),
 			])
 			setState((current) => {
-				if (current.asset?.id !== assetId) return current
+				if (!detailLoadGuardRef.current.isCurrent(loadToken) || current.asset?.id !== assetId) return current
 				return {
 					...current,
 					maintenance,
@@ -532,17 +542,19 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					officialColorSuggestions,
 				}
 			})
-			if (attachments.some((item) => item.files?.length > 0)) {
+			if (attachments.some((item) => item.files?.length > 0) && detailLoadGuardRef.current.isCurrent(loadToken)) {
 				pb.files
 					.getToken({ requestKey: null })
-					.then(setFileToken)
+					.then((token) => {
+						if (detailLoadGuardRef.current.isCurrent(loadToken)) setFileToken(token)
+					})
 					.catch((error) => {
 						if (!isPocketBaseAutoCancel(error)) {
 							console.warn("load asset file token", error)
 						}
-						setFileToken("")
+						if (detailLoadGuardRef.current.isCurrent(loadToken)) setFileToken("")
 					})
-			} else {
+			} else if (detailLoadGuardRef.current.isCurrent(loadToken)) {
 				setFileToken("")
 			}
 		} catch (error) {
