@@ -97,8 +97,11 @@ import { loadLatestReportSuggestions, loadPendingOfficialColorSuggestions } from
 import { formatAssetParameterRowDisplay } from "./asset-parameter-display"
 import { escapePocketBaseFilterValue } from "./asset-query"
 import {
+	getAssetDisplayVisual,
+	getAssetVisualCandidateFrames,
 	getDisplayAssetVisualFrames,
-	isDisplayableAssetVisualFrame,
+	getLatestAssetVisualCandidateSet,
+	groupAssetVisualCandidateFramesByColor,
 	loadDisplayAssetVisuals,
 } from "./asset-visual-query"
 import { getAssetSourceProfile } from "./asset-source-profile"
@@ -4590,86 +4593,6 @@ function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 			</CardContent>
 		</Card>
 	)
-}
-
-function getAssetDisplayVisual(visuals: AssetVisualRecord[]) {
-	return (
-		visuals.find(isFinalReferenceAssetVisual) ??
-		visuals.find((item) => item.kind === "manual" && item.status === "ready" && item.primary !== false) ??
-		visuals.find((item) => item.kind === "manual" && item.status === "ready")
-	)
-}
-
-function isFinalReferenceAssetVisual(visual: AssetVisualRecord) {
-	const metadata = visual.metadata ?? {}
-	return (
-		visual.kind === "official_reference" &&
-		visual.status === "ready" &&
-		visual.primary === true &&
-		metadata.visual_role === "final_reference" &&
-		!metadata.superseded_by
-	)
-}
-
-type AssetVisualCandidateFrame = {
-	visualId: string
-	index: number
-	label: string
-	url: string
-	sourceTitle?: string
-	sourceUrl?: string
-	color?: string
-}
-
-function getLatestAssetVisualCandidateSet(visuals: AssetVisualRecord[]) {
-	return visuals.find((item) => {
-		const metadata = item.metadata ?? {}
-		return (
-			item.kind === "official_reference" &&
-			item.status === "ready" &&
-			item.primary !== true &&
-			metadata.visual_role === "candidate_set"
-		)
-	})
-}
-
-function getAssetVisualCandidateFrames(visual: AssetVisualRecord | undefined): AssetVisualCandidateFrame[] {
-	if (!visual?.frames?.length) return []
-	return visual.frames
-		.map((frame, fallbackIndex) => {
-			if (!isDisplayableAssetVisualFrame(frame) || !frame.url) return undefined
-			const index = typeof frame.index === "number" ? frame.index : fallbackIndex
-			return {
-				visualId: visual.id,
-				index,
-				label: frame.label || `候选 ${index + 1}`,
-				url: frame.url,
-				color: frame.color,
-				sourceTitle: frame.source_title,
-				sourceUrl: frame.source_url,
-			}
-		})
-		.filter((item): item is AssetVisualCandidateFrame => Boolean(item))
-		.slice(0, defaultAssetVisualCandidateCountForUI)
-}
-
-const defaultAssetVisualCandidateCountForUI = 10
-
-function groupAssetVisualCandidateFramesByColor(frames: AssetVisualCandidateFrame[]) {
-	const groups: Array<{ color: string; frames: AssetVisualCandidateFrame[] }> = []
-	const groupMap = new Map<string, AssetVisualCandidateFrame[]>()
-	for (const frame of frames) {
-		const color = frame.color?.trim() || "未识别颜色"
-		const existing = groupMap.get(color)
-		if (existing) {
-			existing.push(frame)
-		} else {
-			const list = [frame]
-			groupMap.set(color, list)
-			groups.push({ color, frames: list })
-		}
-	}
-	return groups
 }
 
 function AssetEnrichmentReportDialog({
