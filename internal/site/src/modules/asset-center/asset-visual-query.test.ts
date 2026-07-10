@@ -1,4 +1,11 @@
-import { getDisplayAssetVisualFrames, loadDisplayAssetVisuals } from "./asset-visual-query.ts"
+import {
+	getAssetDisplayVisual,
+	getAssetVisualCandidateFrames,
+	getDisplayAssetVisualFrames,
+	getLatestAssetVisualCandidateSet,
+	groupAssetVisualCandidateFramesByColor,
+	loadDisplayAssetVisuals,
+} from "./asset-visual-query.ts"
 import type { AssetVisualRecord } from "../../types"
 
 function assertDeepEqual(actual: unknown, expected: unknown) {
@@ -123,4 +130,48 @@ const visualWithRejectedFirstFrame = {
 assertDeepEqual(
 	getDisplayAssetVisualFrames(visualWithRejectedFirstFrame).map((frame) => frame.url),
 	["https://cdn.example.com/redmi-k50-black.jpg"]
+)
+
+const finalReferenceVisual = {
+	id: "visual-final-reference",
+	asset: "asset-123",
+	kind: "official_reference",
+	status: "ready",
+	primary: true,
+	metadata: { visual_role: "final_reference" },
+} as unknown as AssetVisualRecord
+const manualVisual = {
+	id: "visual-manual",
+	asset: "asset-123",
+	kind: "manual",
+	status: "ready",
+	primary: true,
+} as unknown as AssetVisualRecord
+
+assertDeepEqual(getAssetDisplayVisual([manualVisual, finalReferenceVisual])?.id, "visual-final-reference")
+
+const candidateSet = {
+	id: "visual-candidate-set",
+	asset: "asset-123",
+	kind: "official_reference",
+	status: "ready",
+	primary: false,
+	metadata: { visual_role: "candidate_set" },
+	frames: Array.from({ length: 11 }, (_, index) => ({
+		index,
+		label: `候选 ${index + 1}`,
+		url: `https://cdn.example.com/device-${index + 1}.jpg`,
+		color: index < 2 ? "墨羽" : "幽芒",
+	})),
+} as unknown as AssetVisualRecord
+
+assertDeepEqual(getLatestAssetVisualCandidateSet([manualVisual, candidateSet])?.id, "visual-candidate-set")
+const candidateFrames = getAssetVisualCandidateFrames(candidateSet)
+assertDeepEqual(candidateFrames.length, 10)
+assertDeepEqual(
+	groupAssetVisualCandidateFramesByColor(candidateFrames).map((group) => [group.color, group.frames.length]),
+	[
+		["墨羽", 2],
+		["幽芒", 8],
+	]
 )
