@@ -9,7 +9,7 @@ import {
 	PlusIcon,
 	SearchIcon,
 } from "lucide-react"
-import { memo, useEffect, useMemo, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
 	AssetListItem,
 	AssetPreviewPanel,
@@ -43,6 +43,7 @@ import { Input } from "@/components/ui/input"
 import { toast } from "@/components/ui/use-toast"
 import { isReadOnlyUser, pb } from "@/lib/api"
 import { pageTitle } from "@/lib/branding"
+import { createLatestRequestGuard } from "@/lib/latest-request-guard"
 import { cn } from "@/lib/utils"
 import {
 	buildAssetPayload,
@@ -157,6 +158,7 @@ export default memo(function AssetsPage() {
 	const [importText, setImportText] = useState("")
 	const [importPreviewRows, setImportPreviewRows] = useState<AssetImportPreviewRow[]>([])
 	const [activeAssetId, setActiveAssetId] = useState("")
+	const loadGuardRef = useRef(createLatestRequestGuard())
 	const initialFilters = useMemo(getInitialAssetFiltersFromUrl, [])
 	const [search, setSearch] = useState(initialFilters.search)
 	const [typeFilter, setTypeFilter] = useState<AssetType | "all">(initialFilters.typeFilter)
@@ -167,11 +169,6 @@ export default memo(function AssetsPage() {
 	const [lifecycleFilter, setLifecycleFilter] = useState<AssetLifecycleFilter>(initialFilters.lifecycleFilter)
 	const readOnly = isReadOnlyUser()
 	const assetsById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets])
-
-	useEffect(() => {
-		document.title = pageTitle("资产中心")
-		loadAssets()
-	}, [])
 
 	useEffect(() => {
 		if (loading) return
@@ -191,7 +188,8 @@ export default memo(function AssetsPage() {
 		openEditDialog(target, { profileFocus: focus === "profile" })
 	}, [assetsById, loading])
 
-	async function loadAssets() {
+	const loadAssets = useCallback(async () => {
+		const loadToken = loadGuardRef.current.begin()
 		setLoading(true)
 		try {
 			const [records, locationRecords, maintenanceRecords, systemRecords, websiteRecords] = await Promise.all([
@@ -216,18 +214,25 @@ export default memo(function AssetsPage() {
 					requestKey: null,
 				}),
 			])
+			if (!loadGuardRef.current.isCurrent(loadToken)) return
 			setAssets(records)
 			setLocations(locationRecords)
 			setMaintenance(maintenanceRecords)
 			setSystems(systemRecords)
 			setWebsites(websiteRecords)
 		} catch (error) {
+			if (!loadGuardRef.current.isCurrent(loadToken)) return
 			console.error("load assets", error)
 			toast({ title: "资产读取失败", description: "请检查 Hub 日志和资产集合迁移。", variant: "destructive" })
 		} finally {
-			setLoading(false)
+			if (loadGuardRef.current.isCurrent(loadToken)) setLoading(false)
 		}
-	}
+	}, [])
+
+	useEffect(() => {
+		document.title = pageTitle("资产中心")
+		loadAssets()
+	}, [loadAssets])
 
 	const physicalParents = useMemo(
 		() => assets.filter((asset) => !["internet", "vm", "web_endpoint"].includes(asset.type)),

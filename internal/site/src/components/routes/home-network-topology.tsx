@@ -46,6 +46,7 @@ import {
 	useCallback,
 	useEffect,
 	useMemo,
+	useRef,
 	useState,
 	type ComponentProps,
 	type FormEvent,
@@ -74,6 +75,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { toast } from "@/components/ui/use-toast"
 import { isPocketBaseAutoCancel, isReadOnlyUser, pb } from "@/lib/api"
 import { Os } from "@/lib/enums"
+import { createLatestRequestGuard } from "@/lib/latest-request-guard"
 import {
 	buildTopologyGraph,
 	buildTopologyPorts,
@@ -102,6 +104,7 @@ import {
 	getUnlinkedTopologySystems,
 	mapTopologyPortTypeToAssetInterfaceKind,
 } from "@/modules/network-topology/workspace-data"
+import { loadTopologyData } from "@/modules/network-topology/topology-data-query"
 import type {
 	AssetInterfaceRecord,
 	AssetRecord,
@@ -205,6 +208,7 @@ function NetworkTopologyPanel({ systems, mode }: { systems: SystemRecord[]; mode
 		relations: [],
 		details: [],
 	})
+	const loadGuardRef = useRef(createLatestRequestGuard())
 	const [loading, setLoading] = useState(true)
 	const [selectedId, setSelectedId] = useState<string>()
 	const [deviceDialogOpen, setDeviceDialogOpen] = useState(false)
@@ -267,29 +271,29 @@ function NetworkTopologyPanel({ systems, mode }: { systems: SystemRecord[]; mode
 	}, [fitView, focusNodeIds, graph.nodes.length, isOverview, nodesInitialized, overviewCanvasHeight])
 
 	const loadTopology = useCallback(async () => {
+		const loadToken = loadGuardRef.current.begin()
 		try {
 			setLoading(true)
-			const [assets, interfaces, relations, layouts, details] = await Promise.all([
-				pb.collection<AssetRecord>("assets").getFullList({ sort: "created", requestKey: null }),
-				pb.collection<AssetInterfaceRecord>("asset_interfaces").getFullList({ sort: "created", requestKey: null }),
-				pb.collection<AssetRelationRecord>("asset_relations").getFullList({ sort: "created", requestKey: null }),
-				pb.collection<NetworkLayoutRecord>("network_layouts").getFullList({
-					filter: pb.filter("key = {:key}", { key: layoutKey }),
-					requestKey: null,
-				}),
-				pb.collection<SystemDetailsRecord>("system_details").getFullList({
-					fields: "id,network_interfaces",
-					requestKey: null,
-				}),
-			])
-			setTopology({ assets, interfaces, relations, layout: layouts[0], details })
+			const data = await loadTopologyData({
+				collections: {
+					assets: pb.collection<AssetRecord>("assets"),
+					interfaces: pb.collection<AssetInterfaceRecord>("asset_interfaces"),
+					relations: pb.collection<AssetRelationRecord>("asset_relations"),
+					layouts: pb.collection<NetworkLayoutRecord>("network_layouts"),
+					details: pb.collection<SystemDetailsRecord>("system_details"),
+				},
+				layoutFilter: pb.filter("key = {:key}", { key: layoutKey }),
+			})
+			if (!loadGuardRef.current.isCurrent(loadToken)) return
+			setTopology(data)
 		} catch (error) {
+			if (!loadGuardRef.current.isCurrent(loadToken)) return
 			if (!isPocketBaseAutoCancel(error)) {
 				console.error("load network topology", error)
 				toast({ title: "网络拓扑加载失败", description: "请稍后刷新重试。", variant: "destructive" })
 			}
 		} finally {
-			setLoading(false)
+			if (loadGuardRef.current.isCurrent(loadToken)) setLoading(false)
 		}
 	}, [layoutKey])
 
