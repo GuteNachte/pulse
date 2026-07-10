@@ -1526,6 +1526,54 @@ func TestAssetVisualUsesAIModelToDiscoverTraceableImages(t *testing.T) {
 	require.Equal(t, float64(1), summary["model_discovered_images"])
 }
 
+func TestAssetVisualRejectsAgentClaimedOfficialImageFromUntrustedHost(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-untrusted-agent-source@example.com")
+	discoveryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"sources\":[{\"image_url\":\"https://untrusted.example.test/redmi-k50-black.jpg\",\"source_url\":\"https://untrusted.example.test/redmi-k50-black.jpg\",\"title\":\"Redmi K50 墨羽黑官方图\",\"color\":\"墨羽黑\",\"type\":\"official_image\",\"confidence\":98}]}"}}]}`))
+	}))
+	t.Cleanup(discoveryServer.Close)
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_ENDPOINT", discoveryServer.URL+"/v1/chat/completions")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_API_KEY", "visual-test-key")
+	t.Setenv("PULSE_ASSET_VISUAL_AI_MODEL", "visual-search-model")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	delete(metadata, "support_url")
+	delete(metadata, "product_url")
+	delete(metadata, "official_url")
+	delete(metadata, "official_image_url")
+	metadata["internal_model"] = "22041211AC"
+	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
+	asset.Set("type", "phone")
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	requestBody, err := json.Marshal(map[string]any{"color": "墨羽黑"})
+	require.NoError(t, err)
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/turntable", asset.Id),
+		bytes.NewReader(requestBody),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"status":"no_sources"`)
+
+	visuals, err := fixture.hub.FindRecordsByFilter("asset_visuals", "asset = {:asset} && status = 'ready'", "-created", -1, 0, map[string]any{
+		"asset": asset.Id,
+	})
+	require.NoError(t, err)
+	require.Empty(t, visuals)
+}
+
 func TestAssetVisualCollectsUnquotedOfficialPageImages(t *testing.T) {
 	fixture := newAssetEnrichmentFixture(t, "asset-visual-unquoted-html@example.com")
 	referenceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

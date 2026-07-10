@@ -599,7 +599,7 @@ func (h *Hub) collectAssetVisualAISourceDiscovery(asset *core.Record, color stri
 			continue
 		}
 		sourceType := firstNonEmpty(candidate.Type, classifyAssetOnlineURL(imageURL))
-		if config.OfficialOnly && !assetVisualAIReferenceSourceAllowed(imageURL, sourceType) {
+		if config.OfficialOnly && !assetVisualAIReferenceSourceAllowed(imageURL) {
 			continue
 		}
 		result = appendAssetVisualReferenceSource(result, seen, map[string]any{
@@ -619,15 +619,15 @@ func assetVisualEndpointLooksLikeChatEndpoint(endpoint string) bool {
 	return strings.Contains(strings.ToLower(strings.TrimSpace(endpoint)), "/chat/completions")
 }
 
-func assetVisualAIReferenceSourceAllowed(rawURL string, sourceType string) bool {
-	if assetOnlineSourceHasOfficialAuthority(assetOnlineSource{Type: sourceType}) {
-		return true
-	}
+func assetVisualAIReferenceSourceAllowed(rawURL string) bool {
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
-	if err == nil && isLocalAssetOnlineHost(parsed.Hostname()) {
+	if err != nil {
+		return false
+	}
+	if isLocalAssetOnlineHost(parsed.Hostname()) {
 		return true
 	}
-	return false
+	return assetOnlineSourceHasOfficialAuthority(assetOnlineSource{Type: classifyAssetOnlineURL(parsed.String())})
 }
 
 type assetVisualAIReferenceCandidate struct {
