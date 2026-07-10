@@ -61,7 +61,7 @@ import { getAssetIcon } from "./components/asset-card"
 import { AssetEditActionBar } from "./components/asset-edit-action-bar"
 import { SelectField, TextAreaField, TextField } from "./components/asset-detail-form-fields"
 import { AssetEditVisualPanel } from "./components/asset-edit-visual-panel"
-import { SuggestionValue } from "./components/asset-enrichment-suggestion-value"
+import { AssetSuggestionWorkbench } from "./components/asset-suggestion-workbench"
 import {
 	AssetHardwareSpecsColumn,
 	AssetOverviewColumn,
@@ -103,7 +103,6 @@ import {
 import { loadLatestAITasksByKind } from "./asset-ai-task-query"
 import { loadAssetEditCatalog } from "./asset-edit-catalog-query"
 import { loadLatestReportSuggestions, loadPendingOfficialColorSuggestions } from "./asset-enrichment-suggestion-query"
-import { getEnrichmentReportStatusLabel } from "./asset-enrichment-report"
 import { formatAssetParameterRowDisplay } from "./asset-parameter-display"
 import { escapePocketBaseFilterValue } from "./asset-query"
 import { loadDisplayAssetVisuals } from "./asset-visual-query"
@@ -2781,63 +2780,6 @@ function AssetEditCount({ label, value }: { label: string; value: number }) {
 		<div className="rounded-md border border-border/70 bg-card px-2 py-2">
 			<div className="font-mono text-sm font-semibold tabular-nums text-foreground">{value}</div>
 			<div className="mt-0.5 text-muted-foreground">{label}</div>
-		</div>
-	)
-}
-
-function AssetSuggestionWorkbench({
-	latestReport,
-	suggestions,
-	actionableSuggestions,
-	readOnly,
-	saving,
-}: {
-	latestReport?: AssetEnrichmentReportRecord
-	suggestions: AssetEnrichmentSuggestionRecord[]
-	actionableSuggestions: AssetEnrichmentSuggestionRecord[]
-	readOnly: boolean
-	saving: boolean
-}) {
-	if (!latestReport) {
-		return (
-			<div className="rounded-md border border-dashed border-border/70 bg-card px-3 py-3 text-sm text-muted-foreground">
-				还没有智能匹配报告。
-			</div>
-		)
-	}
-	if (actionableSuggestions.length === 0) {
-		return (
-			<div className="rounded-md border border-border/70 bg-card px-3 py-3 text-sm text-muted-foreground">
-				最近报告没有需要替换的参数。报告时间：{formatTime(latestReport.created)}
-			</div>
-		)
-	}
-	return (
-		<div className="grid gap-2">
-			<div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-				<span>
-					{formatTime(latestReport.created)} · {getEnrichmentReportStatusLabel(latestReport.status)}
-				</span>
-				<span>
-					{actionableSuggestions.length} 个可替换参数 / {suggestions.length} 条建议
-				</span>
-			</div>
-			{actionableSuggestions.map((suggestion) => (
-				<div key={suggestion.id} className="rounded-md border border-border/70 bg-card px-3 py-2">
-					<div className="flex min-w-0 flex-wrap items-center gap-2">
-						<span className="font-medium text-foreground">{suggestion.target_label}</span>
-						{suggestion.conflict ? <MetaTag>不一致</MetaTag> : <MetaTag>未填写</MetaTag>}
-						<ConfidenceTag confidence={suggestion.confidence ?? 0} />
-						<span className="ms-auto text-xs text-muted-foreground">
-							{readOnly || saving ? "等待" : "顶部选择后替换"}
-						</span>
-					</div>
-					<div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
-						<SuggestionValue label="当前参数" value={suggestion.current_value || "未填写"} />
-						<SuggestionValue label="新参数" value={suggestion.recommended_value || "无"} />
-					</div>
-				</div>
-			))}
 		</div>
 	)
 }
