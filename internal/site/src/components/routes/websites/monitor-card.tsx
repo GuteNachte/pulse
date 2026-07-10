@@ -66,7 +66,7 @@ export function MonitorCard({
 					<div className="min-w-0">
 						<div className="flex min-w-0 items-center gap-2">
 							<span className={cn("size-2.5 rounded-full", statusDotClass(monitor.last_status))} />
-							<div className="truncate text-sm font-semibold tracking-[-0.01em]">{monitor.name}</div>
+							<div className="truncate text-sm font-semibold">{monitor.name}</div>
 							{!monitor.enabled && (
 								<Badge variant="outline" className="h-5 rounded-md px-1.5 text-[10px]">
 									暂停

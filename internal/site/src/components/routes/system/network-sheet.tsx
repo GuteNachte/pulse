@@ -245,7 +245,7 @@ function NetworkInterfaceInfoCard({ networkInterface }: { networkInterface?: Net
 		<Card className="bg-surface-soft p-4 xl:col-span-2">
 			<div className="grid gap-3">
 				<div className="min-w-0">
-					<h3 className="truncate text-base font-semibold tracking-[-0.01em]">{title}</h3>
+					<h3 className="truncate text-base font-semibold">{title}</h3>
 					{subtitle && <p className="mt-1 truncate text-xs text-muted-foreground">{subtitle}</p>}
 				</div>
 				<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">

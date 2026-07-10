@@ -407,7 +407,7 @@ function NetworkTopologyPanel({ systems, mode }: { systems: SystemRecord[]; mode
 							<span className="grid size-9 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
 								<NetworkIcon className="size-4" />
 							</span>
-							<CardTitle className="text-xl tracking-[-0.02em]">{isOverview ? "家庭网络拓扑" : "网络拓扑"}</CardTitle>
+							<CardTitle className="text-xl">{isOverview ? "家庭网络拓扑" : "网络拓扑"}</CardTitle>
 						</div>
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
@@ -461,7 +461,7 @@ function NetworkTopologyPanel({ systems, mode }: { systems: SystemRecord[]; mode
 										<div className="mx-auto grid size-12 place-items-center rounded-md border border-border/70 bg-surface-soft text-muted-foreground">
 											<GitBranchIcon className="size-5" />
 										</div>
-										<h3 className="mt-4 text-lg font-semibold tracking-[-0.02em]">暂无拓扑节点</h3>
+										<h3 className="mt-4 text-lg font-semibold">暂无拓扑节点</h3>
 										<p className="mt-2 text-sm text-muted-foreground">
 											先在资产中心添加宽带、路由器、交换机或主机资产，再到拓扑页建立连接。
 										</p>
@@ -1091,7 +1091,7 @@ function getTopologyMetaLabel(data: TopologyNodeData, index: number) {
 function TopologyStat({ label, value }: { label: string; value: number | string }) {
 	return (
 		<div className="rounded-md border border-border/70 bg-card px-3 py-2">
-			<div className="text-lg font-semibold tabular-nums tracking-[-0.03em]">{value}</div>
+			<div className="text-lg font-semibold tabular-nums">{value}</div>
 			<div className="mt-0.5 text-[11px] text-muted-foreground">{label}</div>
 		</div>
 	)

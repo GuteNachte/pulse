@@ -118,7 +118,7 @@ export function ChartCard({
 		>
 			<CardHeader className="relative mb-3 gap-1.5 p-0">
 				<div className="flex min-w-0 flex-wrap items-center gap-2">
-					<CardTitle className="min-w-0 truncate text-base tracking-[-0.01em] sm:text-[1.05rem]">{title}</CardTitle>
+					<CardTitle className="min-w-0 truncate text-base sm:text-[1.05rem]">{title}</CardTitle>
 					{titleSuffix}
 				</div>
 				{description && <p className="sr-only">{description}</p>}

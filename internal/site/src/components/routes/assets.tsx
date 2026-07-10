@@ -180,6 +180,7 @@ export default memo(function AssetsPage() {
 	const [profileFilter, setProfileFilter] = useState<AssetProfileFilter>(initialFilters.profileFilter)
 	const [lifecycleFilter, setLifecycleFilter] = useState<AssetLifecycleFilter>(initialFilters.lifecycleFilter)
 	const readOnly = isReadOnlyUser()
+	const assetsById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets])
 
 	useEffect(() => {
 		document.title = pageTitle("资产中心")
@@ -192,7 +193,7 @@ export default memo(function AssetsPage() {
 		const editAssetId = params.get("edit")
 		if (!editAssetId) return
 		const focus = params.get("focus")
-		const target = assets.find((asset) => asset.id === editAssetId)
+		const target = assetsById.get(editAssetId)
 		params.delete("edit")
 		params.delete("focus")
 		const nextSearch = params.toString()
@@ -202,7 +203,7 @@ export default memo(function AssetsPage() {
 			return
 		}
 		openEditDialog(target, { profileFocus: focus === "profile" })
-	}, [assets, loading])
+	}, [assetsById, loading])
 
 	async function loadAssets() {
 		setLoading(true)
@@ -356,9 +357,7 @@ export default memo(function AssetsPage() {
 			profileAttention,
 		}
 	}, [filteredAssets, monitoredAssetIds])
-	const activeAssetParent = activeAsset?.parent_asset
-		? assets.find((asset) => asset.id === activeAsset.parent_asset)
-		: undefined
+	const activeAssetParent = activeAsset?.parent_asset ? assetsById.get(activeAsset.parent_asset) : undefined
 	const numberingSettings = useMemo(() => normalizeAssetNumberingSettings(numberingForm), [numberingForm])
 	const nextAssetTagPreview = useMemo(() => buildNextAssetTag(assets, numberingSettings), [assets, numberingSettings])
 
@@ -851,7 +850,7 @@ export default memo(function AssetsPage() {
 								<BoxesIcon className="size-5" />
 							</div>
 							<div className="min-w-0">
-								<h1 className="truncate text-2xl font-semibold tracking-[-0.03em] text-foreground">资产中心</h1>
+								<h1 className="truncate text-2xl font-semibold text-foreground">资产中心</h1>
 								<p className="mt-1 text-sm text-muted-foreground">统一管理家庭硬件资产，并把可采集设备接入监控</p>
 							</div>
 						</div>
@@ -892,7 +891,7 @@ export default memo(function AssetsPage() {
 				<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
 					<div className="flex min-w-0 flex-wrap items-center gap-2">
 						<div className="mr-auto min-w-40">
-							<CardTitle className="text-lg tracking-[-0.02em]">资产清单</CardTitle>
+							<CardTitle className="text-lg">资产清单</CardTitle>
 							<div className="mt-1 text-xs text-muted-foreground">
 								当前显示 {filteredAssets.length} / {assets.length} 个资产
 							</div>
@@ -1010,7 +1009,7 @@ export default memo(function AssetsPage() {
 										<AssetListItem
 											key={asset.id}
 											asset={asset}
-											parent={asset.parent_asset ? assets.find((item) => item.id === asset.parent_asset) : undefined}
+											parent={asset.parent_asset ? assetsById.get(asset.parent_asset) : undefined}
 											monitored={monitoredAssetIds.has(asset.id)}
 											maintenanceCount={maintenanceByAsset.get(asset.id)?.length ?? 0}
 											active={activeAsset?.id === asset.id}

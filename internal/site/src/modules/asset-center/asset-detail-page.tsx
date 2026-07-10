@@ -1574,9 +1574,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 						<div className="grid size-8 shrink-0 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
 							<AssetIcon className="size-4" />
 						</div>
-						<h1 className="max-w-[18rem] truncate text-lg font-semibold tracking-[-0.02em] text-foreground">
-							{asset.name}
-						</h1>
+						<h1 className="max-w-[18rem] truncate text-lg font-semibold text-foreground">{asset.name}</h1>
 						{assetTag && (
 							<span className="inline-flex h-5 max-w-[9rem] shrink-0 items-center rounded-md border border-border/70 bg-card px-1.5 text-[11px] font-medium text-muted-foreground">
 								{assetTag}
@@ -2029,7 +2027,7 @@ function AssetOverviewColumn({ asset }: { asset: AssetRecord }) {
 		<div className="grid gap-4">
 			<Card className="border-border/70 bg-card shadow-none">
 				<CardHeader className="border-b border-border/70 bg-surface-soft px-3 py-2.5">
-					<CardTitle className="truncate text-base tracking-[-0.02em]">资产信息</CardTitle>
+					<CardTitle className="truncate text-base">资产信息</CardTitle>
 				</CardHeader>
 				<CardContent className="grid gap-3 p-3">
 					{identitySections.map((section) => (
@@ -2053,7 +2051,7 @@ function AssetHardwareSpecsColumn({ parameterGroups }: { parameterGroups: AssetP
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-3 py-2.5">
 				<div className="flex min-w-0 items-center justify-between gap-3">
-					<CardTitle className="truncate text-base tracking-[-0.02em]">硬件参数</CardTitle>
+					<CardTitle className="truncate text-base">硬件参数</CardTitle>
 					{parameterGroups.length > 0 ? <MetaTag>{parameterGroups.length} 类</MetaTag> : null}
 				</div>
 			</CardHeader>
@@ -3324,7 +3322,7 @@ function ArchiveCard({ asset }: { asset: AssetRecord }) {
 	return (
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
-				<CardTitle className="text-lg tracking-[-0.02em]">详细参数</CardTitle>
+				<CardTitle className="text-lg">详细参数</CardTitle>
 			</CardHeader>
 			<CardContent className="grid gap-3 p-3">
 				{sections.map((section) => {
@@ -3488,7 +3486,7 @@ function HostHardwareProfileCard({ asset }: { asset: AssetRecord }) {
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
 				<div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-					<CardTitle className="text-lg tracking-[-0.02em]">计算机硬件档案</CardTitle>
+					<CardTitle className="text-lg">计算机硬件档案</CardTitle>
 					<div className="flex flex-wrap gap-1.5">
 						<AssetFieldCaptureTag capture="manual" />
 						<AssetFieldCaptureTag capture="agent_collectable" />
@@ -3563,7 +3561,7 @@ function ProfileCompletenessCard({ asset }: { asset: AssetRecord }) {
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-3 py-2.5">
 				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-base tracking-[-0.02em]">资料完整度</CardTitle>
+					<CardTitle className="text-base">资料完整度</CardTitle>
 					<ToneTag tone={completeness.tone}>{completeness.label}</ToneTag>
 				</div>
 			</CardHeader>
@@ -3623,7 +3621,7 @@ function AssetSourceProfileCard({ asset }: { asset: AssetRecord }) {
 	return (
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-3 py-2.5">
-				<CardTitle className="flex items-center gap-2 text-base tracking-[-0.02em]">
+				<CardTitle className="flex items-center gap-2 text-base">
 					<ListChecksIcon className="size-4 text-muted-foreground" />
 					资料来源边界
 				</CardTitle>
@@ -3667,7 +3665,7 @@ function InterfacesCard({
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
 				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg tracking-[-0.02em]">网络接口</CardTitle>
+					<CardTitle className="text-lg">网络接口</CardTitle>
 					<Button size="sm" variant="outline" onClick={onAdd} disabled={readOnly} className="gap-2">
 						<PlusIcon className="size-4" />
 						添加接口
@@ -3763,7 +3761,7 @@ function RelationsCard({
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
 				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg tracking-[-0.02em]">资产关系</CardTitle>
+					<CardTitle className="text-lg">资产关系</CardTitle>
 					<div className="flex items-center gap-2">
 						<Button asChild size="sm" variant="outline" className="gap-2">
 							<Link href={getNetworkTopologyFocusHref({ asset: assetId })}>
@@ -3882,7 +3880,7 @@ function MaintenanceCard({
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
 				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg tracking-[-0.02em]">维护记录</CardTitle>
+					<CardTitle className="text-lg">维护记录</CardTitle>
 					<Button size="sm" variant="outline" onClick={onAdd} disabled={readOnly} className="gap-2">
 						<PlusIcon className="size-4" />
 						添加记录
@@ -3961,7 +3959,7 @@ function AttachmentsCard({
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
 				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg tracking-[-0.02em]">资产附件</CardTitle>
+					<CardTitle className="text-lg">资产附件</CardTitle>
 					<Button size="sm" variant="outline" onClick={onAdd} disabled={readOnly} className="gap-2">
 						<UploadIcon className="size-4" />
 						上传附件
@@ -4081,7 +4079,7 @@ function MonitoringCard({
 	return (
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
-				<CardTitle className="text-lg tracking-[-0.02em]">监控绑定</CardTitle>
+				<CardTitle className="text-lg">监控绑定</CardTitle>
 			</CardHeader>
 			<CardContent className="grid gap-3 p-4">
 				{systems.length === 0 && websites.length === 0 && unmonitoredWebsiteEndpoints.length === 0 ? (
@@ -4244,7 +4242,7 @@ function LifecycleCard({ asset, records }: { asset: AssetRecord; records: AssetM
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
 				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg tracking-[-0.02em]">生命周期</CardTitle>
+					<CardTitle className="text-lg">生命周期</CardTitle>
 					<ToneTag tone={warranty.tone}>{warranty.label}</ToneTag>
 				</div>
 			</CardHeader>
@@ -4283,7 +4281,7 @@ function AssetChangeHistoryCard({ records }: { records: AssetChangeRecord[] }) {
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
 				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg tracking-[-0.02em]">变更历史</CardTitle>
+					<CardTitle className="text-lg">变更历史</CardTitle>
 					{records.length > 0 && <MetaTag>{records.length} 条</MetaTag>}
 				</div>
 			</CardHeader>
@@ -4328,7 +4326,7 @@ function AssetCollectedHardwareCard({
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
 				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg tracking-[-0.02em]">采集硬件</CardTitle>
+					<CardTitle className="text-lg">采集硬件</CardTitle>
 					{summaries.length > 0 && <MetaTag>{summaries.length} 台</MetaTag>}
 				</div>
 			</CardHeader>
@@ -4397,7 +4395,7 @@ function AssetRuntimeHardwareCard({
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
 				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg tracking-[-0.02em]">运行状态聚合</CardTitle>
+					<CardTitle className="text-lg">运行状态聚合</CardTitle>
 					{totalItems > 0 && <MetaTag>{totalItems} 项</MetaTag>}
 				</div>
 			</CardHeader>
@@ -4793,7 +4791,7 @@ function AssetEnrichmentReportCard({
 				<CardHeader className="border-b border-border/70 bg-surface-soft px-3 py-2.5">
 					<div className="flex items-center justify-between gap-3">
 						<div className="min-w-0">
-							<CardTitle className="text-base tracking-[-0.02em]">智能识别</CardTitle>
+							<CardTitle className="text-base">智能识别</CardTitle>
 							{latestReport && (
 								<div className="mt-1 text-xs text-muted-foreground">
 									{formatTime(latestReport.created)} · {getEnrichmentReportStatusLabel(latestReport.status)}
@@ -5165,7 +5163,7 @@ function AssetAlertPoliciesCard({
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
 				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg tracking-[-0.02em]">资产告警配置</CardTitle>
+					<CardTitle className="text-lg">资产告警配置</CardTitle>
 					{enabledCount > 0 && <MetaTag>{enabledCount} 已启用</MetaTag>}
 				</div>
 			</CardHeader>
@@ -5235,7 +5233,7 @@ function AssetAlertHistoryCard({ records }: { records: AlertsHistoryRecord[] }) 
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
 				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg tracking-[-0.02em]">告警历史</CardTitle>
+					<CardTitle className="text-lg">告警历史</CardTitle>
 					{records.length > 0 && (
 						<MetaTag>{currentCount > 0 ? `${currentCount} 未恢复` : `${records.length} 条记录`}</MetaTag>
 					)}
@@ -5362,7 +5360,7 @@ function AssetNotificationStatusCard({
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
 				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="text-lg tracking-[-0.02em]">通知状态</CardTitle>
+					<CardTitle className="text-lg">通知状态</CardTitle>
 					{failures.length || activeStates.length ? (
 						<MetaTag>{failures.length ? `${failures.length} 失败` : `${activeStates.length} 冷却`}</MetaTag>
 					) : null}

@@ -24,7 +24,7 @@ export function TargetStatusCard({
 			<div className="flex items-start justify-between gap-3">
 				<div className="min-w-0">
 					<div className="flex min-w-0 items-center gap-2">
-						<span className="truncate font-semibold tracking-[-0.01em]">{displayLabel}</span>
+						<span className="truncate font-semibold">{displayLabel}</span>
 						<IPVersionBadge value={check?.ip_version || target.ip_version} compact />
 					</div>
 					<div className="mt-2 truncate text-xs text-muted-foreground">{target.url || "未配置"}</div>

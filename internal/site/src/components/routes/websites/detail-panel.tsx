@@ -78,7 +78,7 @@ export function WebsiteDetailPanel({
 						<SiteIcon monitor={selected} />
 						<div className="min-w-0">
 							<div className="flex flex-wrap items-center gap-2">
-								<h2 className="truncate text-xl font-semibold leading-tight tracking-[-0.02em]">{selected.name}</h2>
+								<h2 className="truncate text-xl font-semibold leading-tight">{selected.name}</h2>
 								<StatusBadge status={selected.last_status} />
 								{!selected.enabled && (
 									<Badge variant="outline" className="rounded-md">
@@ -158,7 +158,7 @@ export function WebsiteDetailPanel({
 				<div className="min-w-0 rounded-lg border border-border/70 bg-card p-3 shadow-none">
 					<div className="mb-3 flex items-center justify-between gap-3">
 						<div>
-							<div className="font-semibold tracking-[-0.01em]">检测状态条</div>
+							<div className="font-semibold">检测状态条</div>
 						</div>
 						<StatusLegend />
 					</div>

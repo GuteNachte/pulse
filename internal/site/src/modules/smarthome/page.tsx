@@ -126,7 +126,7 @@ export default memo(function SmarthomePage() {
 							<HousePlugIcon className="size-5" strokeWidth={1.9} />
 						</div>
 						<div className="min-w-0">
-							<h1 className="truncate text-2xl font-semibold tracking-[-0.03em] text-foreground">智能家居</h1>
+							<h1 className="truncate text-2xl font-semibold text-foreground">智能家居</h1>
 							<p className="mt-1 text-sm text-muted-foreground">按房间、类型和网关查看资产中心里的智能家居档案</p>
 						</div>
 					</div>
@@ -146,7 +146,7 @@ export default memo(function SmarthomePage() {
 				<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
 					<div className="grid gap-3">
 						<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-							<CardTitle className="text-lg tracking-[-0.02em]">家居资产</CardTitle>
+							<CardTitle className="text-lg">家居资产</CardTitle>
 							<div className="inline-flex w-fit rounded-md border border-border/70 bg-card p-1">
 								<ViewButton active={viewMode === "room"} onClick={() => setViewMode("room")}>
 									房间

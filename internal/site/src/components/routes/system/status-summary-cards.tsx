@@ -154,7 +154,7 @@ function MetricOverviewCard({
 									</Badge>
 								))}
 							</div>
-							<div className="mt-2 truncate text-xl font-semibold tracking-[-0.02em] tabular-nums">{value}</div>
+							<div className="mt-2 truncate text-xl font-semibold tabular-nums">{value}</div>
 							{helper && <div className="mt-1 truncate text-xs text-muted-foreground">{helper}</div>}
 						</div>
 						<div

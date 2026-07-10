@@ -123,7 +123,7 @@ export function CheckLatencyChart({
 function ChartHeader() {
 	return (
 		<div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-surface-soft px-3 py-2.5">
-			<div className="text-sm font-semibold tracking-[-0.01em]">响应趋势</div>
+			<div className="text-sm font-semibold">响应趋势</div>
 			<div className="text-xs text-muted-foreground">按地址分线显示最近检测延迟</div>
 		</div>
 	)

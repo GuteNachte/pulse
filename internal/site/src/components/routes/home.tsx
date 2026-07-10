@@ -239,7 +239,7 @@ export default memo(() => {
 									Pulse 运行总览
 								</div>
 								<div className="grid gap-2">
-									<h1 className="text-3xl font-semibold tracking-[-0.04em] text-foreground xl:text-4xl">今日状态</h1>
+									<h1 className="text-3xl font-semibold text-foreground xl:text-4xl">今日状态</h1>
 									<p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
 										{overviewState}，这里优先展示需要处理的机器、容器、网站和告警。
 									</p>
@@ -320,7 +320,7 @@ export default memo(() => {
 							<CardHeader className="border-b border-border/70 bg-surface-soft px-5 py-4">
 								<div className="flex items-center justify-between gap-3">
 									<div className="grid gap-1">
-										<CardTitle className="text-xl tracking-[-0.02em]">重点机器</CardTitle>
+										<CardTitle className="text-xl">重点机器</CardTitle>
 										<p className="text-sm text-muted-foreground">按离线、暂停和资源压力优先排序</p>
 									</div>
 									{moduleEnabled("client-monitoring") && (
@@ -349,7 +349,7 @@ export default memo(() => {
 						<div className="grid content-start gap-4">
 							<Card className="overflow-hidden border-border/70 bg-card shadow-none">
 								<CardHeader className="border-b border-border/70 bg-surface-soft px-5 py-4">
-									<CardTitle className="text-xl tracking-[-0.02em]">状态分布</CardTitle>
+									<CardTitle className="text-xl">状态分布</CardTitle>
 								</CardHeader>
 								<CardContent className="grid gap-4 p-5">
 									<ProgressRow label="在线" value={onlineSystems} total={Math.max(totalSystems, 1)} variant="success" />
@@ -360,7 +360,7 @@ export default memo(() => {
 
 							<Card className="overflow-hidden border-border/70 bg-card shadow-none">
 								<CardHeader className="border-b border-border/70 bg-surface-soft px-5 py-4">
-									<CardTitle className="text-xl tracking-[-0.02em]">快捷入口</CardTitle>
+									<CardTitle className="text-xl">快捷入口</CardTitle>
 								</CardHeader>
 								<CardContent className="grid gap-2 p-4">
 									{moduleEnabled("client-monitoring") && (
@@ -414,7 +414,7 @@ export default memo(() => {
 function OverviewPill({ label, value }: { label: string; value: string }) {
 	return (
 		<div className="rounded-md border border-border/70 bg-card px-3 py-2">
-			<div className="text-lg font-semibold tracking-[-0.03em] text-foreground tabular-nums">{value}</div>
+			<div className="text-lg font-semibold text-foreground tabular-nums">{value}</div>
 			<div className="mt-0.5 text-[11px] font-medium text-muted-foreground">{label}</div>
 		</div>
 	)
@@ -549,7 +549,7 @@ function MetricCard({
 					<div className="flex items-start justify-between gap-3">
 						<div className="grid min-w-0 gap-2.5">
 							<div className="text-sm font-medium text-muted-foreground">{title}</div>
-							<div className="text-3xl font-semibold tracking-[-0.04em] text-foreground">{value}</div>
+							<div className="text-3xl font-semibold text-foreground">{value}</div>
 							<div
 								className={cn(
 									"w-fit rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground",

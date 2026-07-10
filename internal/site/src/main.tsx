@@ -141,7 +141,7 @@ function ModuleDisabledPage({ moduleId }: { moduleId: ReturnType<typeof getModul
 						<SearchXIcon className="size-5" strokeWidth={1.9} />
 					</div>
 					<div className="mt-5 text-xs font-medium text-muted-foreground">Module disabled</div>
-					<h1 className="mt-2 text-balance text-2xl font-semibold tracking-[-0.03em] text-foreground sm:text-3xl">
+					<h1 className="mt-2 text-balance text-2xl font-semibold text-foreground sm:text-3xl">
 						{module?.name ?? "模块"}已关闭
 					</h1>
 					<p className="mx-auto mt-3 max-w-md text-pretty text-sm leading-relaxed text-muted-foreground">
@@ -178,9 +178,7 @@ function NotFoundPage() {
 						<SearchXIcon className="size-5" strokeWidth={1.9} />
 					</div>
 					<div className="mt-5 text-xs font-medium text-muted-foreground">404 / Not found</div>
-					<h1 className="mt-2 text-balance text-2xl font-semibold tracking-[-0.03em] text-foreground sm:text-3xl">
-						这个页面不存在
-					</h1>
+					<h1 className="mt-2 text-balance text-2xl font-semibold text-foreground sm:text-3xl">这个页面不存在</h1>
 					<p className="mx-auto mt-3 max-w-md text-pretty text-sm leading-relaxed text-muted-foreground">
 						链接可能已经失效，或当前版本没有这个入口。你可以回到首页继续查看监控状态。
 					</p>

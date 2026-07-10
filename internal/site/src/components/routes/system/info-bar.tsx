@@ -190,9 +190,7 @@ export default function InfoBar({
 			<div className="grid gap-4 px-4 py-4 sm:px-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
 				<div className="min-w-0">
 					<div className="flex min-w-0 flex-wrap items-center gap-2">
-						<h1 className="min-w-0 truncate text-2xl font-semibold tracking-[-0.02em] sm:text-[1.65rem]">
-							{displayName}
-						</h1>
+						<h1 className="min-w-0 truncate text-2xl font-semibold sm:text-[1.65rem]">{displayName}</h1>
 						<SystemMetaTags system={system} className="shrink-0" showAlertEnrollment />
 						{virtualizationInfo?.showTag && (
 							<Tooltip delayDuration={100}>

@@ -38,7 +38,7 @@ export const ActiveAlerts = () => {
 			<Card className="overflow-hidden border-border/70 bg-card shadow-none">
 				<CardHeader className="border-b border-border/70 bg-surface-soft px-5 py-4">
 					<div className="grid gap-1">
-						<CardTitle className="text-xl tracking-[-0.02em]">
+						<CardTitle className="text-xl">
 							<Trans>Active Alerts</Trans>
 						</CardTitle>
 						<p className="text-sm text-muted-foreground">当前触发中的告警会优先显示在首页顶部</p>

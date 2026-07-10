@@ -33,7 +33,7 @@ export default function CopyToClipboard({ content }: { content: string }) {
 			>
 				<DialogHeader className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-border/70 px-5 py-4 pr-14">
 					<div className="min-w-0">
-						<DialogTitle className="text-lg font-semibold tracking-[-0.01em]">手动复制命令</DialogTitle>
+						<DialogTitle className="text-lg font-semibold">手动复制命令</DialogTitle>
 						<DialogDescription className="mt-1 text-sm text-muted-foreground">
 							自动复制失败。请复制下面内容，到目标机器的终端里执行。
 						</DialogDescription>

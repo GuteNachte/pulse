@@ -135,7 +135,7 @@ export default function SystemsTable({ headerAction }: { headerAction?: ReactNod
 				<div className="flex flex-wrap items-center gap-x-5 gap-y-3">
 					<div className="min-w-0 flex-1">
 						<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-							<CardTitle className="truncate text-xl tracking-[-0.03em]">
+							<CardTitle className="truncate text-xl">
 								<Trans>All Systems</Trans>
 							</CardTitle>
 							<span className="rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-muted-foreground">
@@ -402,7 +402,7 @@ function StatusSummaryPill({
 		<div className="flex h-9 min-w-16 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 shadow-none">
 			<div
 				className={cn(
-					"text-sm font-semibold leading-none tracking-[-0.03em]",
+					"text-sm font-semibold leading-none",
 					tone === "success" && "text-emerald-600 dark:text-emerald-300",
 					tone === "warning" && "text-amber-600 dark:text-amber-300",
 					tone === "danger" && "text-red-600 dark:text-red-300",

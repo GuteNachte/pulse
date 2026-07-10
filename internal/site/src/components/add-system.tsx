@@ -395,7 +395,7 @@ export const SystemDialog = ({
 		>
 			<Tabs value={activeTab} onValueChange={(value) => !system && setTab(value as InstallTab)}>
 				<DialogHeader className="border-b border-border/70 px-5 py-4 pr-12">
-					<DialogTitle className="max-w-100 truncate text-lg font-semibold tracking-[-0.01em]">
+					<DialogTitle className="max-w-100 truncate text-lg font-semibold">
 						{system ? <Trans>Edit system</Trans> : <Trans>Add system</Trans>}
 					</DialogTitle>
 					<DialogDescription className="sr-only">

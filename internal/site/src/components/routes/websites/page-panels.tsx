@@ -95,7 +95,7 @@ export function WebsiteMonitorListPanel({
 				<div className="flex items-center justify-between gap-3">
 					<div className="min-w-0">
 						<div className="grid min-w-0 gap-2">
-							<div className="shrink-0 text-base font-semibold tracking-[-0.01em]">监控列表</div>
+							<div className="shrink-0 text-base font-semibold">监控列表</div>
 							<div className="flex min-w-0 flex-wrap items-center gap-1 rounded-lg bg-surface-soft p-1 text-[11px]">
 								{statusFilterOptions.map((option) => (
 									<button
