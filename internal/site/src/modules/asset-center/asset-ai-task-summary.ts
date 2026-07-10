@@ -96,9 +96,9 @@ export function formatAssetVisualTaskMeta(task?: AITaskRecord) {
 	}
 	if (task.status === "ready" && (collected > 0 || generated > 0)) {
 		if (generated <= 0) {
-		return `设备图已收集：${collected} 张${suffix}`
-	}
-	return `历史生图 ${generated} 张不再作为主图，已收集设备图 ${collected} 张${suffix}`
+			return `设备图已收集：${collected} 张${suffix}`
+		}
+		return `历史生图 ${generated} 张不再作为主图，已收集设备图 ${collected} 张${suffix}`
 	}
 	return `图片 ${formatAssetDetailTaskStatusLabel(task.status)}${suffix}`
 }

@@ -48,7 +48,7 @@ endif
 # Set executable extension based on target OS
 EXE_EXT := $(if $(filter windows,$(OS)),.exe,)
 
-.PHONY: tidy build-agent build-hub build-hub-dev build clean lint dev-server dev-agent dev-hub dev generate-locales fetch-smartctl-conditional
+.PHONY: tidy build-agent build-hub build-hub-dev build clean lint test vet dev-server dev-agent dev-hub dev generate-locales fetch-smartctl-conditional
 .DEFAULT_GOAL := build
 
 clean:
@@ -60,6 +60,9 @@ lint:
 
 test:
 	go test -tags=testing ./...
+
+vet:
+	go vet -tags=testing ./...
 
 tidy:
 	go mod tidy

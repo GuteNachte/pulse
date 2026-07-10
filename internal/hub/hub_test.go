@@ -12,6 +12,7 @@ import (
 
 func TestMakeLink(t *testing.T) {
 	hub, _ := pulseTests.NewTestHub(t.TempDir())
+	t.Cleanup(hub.Cleanup)
 
 	tests := []struct {
 		name     string

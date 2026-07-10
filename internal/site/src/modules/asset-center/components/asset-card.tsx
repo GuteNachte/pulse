@@ -251,7 +251,18 @@ export function AssetPreviewPanel({ asset, parent, monitored, maintenanceCount, 
 	)
 }
 
-const hiddenPreviewSummaryLabels = new Set(["类型", "状态", "型号", "位置", "IPv4", "固定 IP", "管理 IP", "IP", "接入", "公网"])
+const hiddenPreviewSummaryLabels = new Set([
+	"类型",
+	"状态",
+	"型号",
+	"位置",
+	"IPv4",
+	"固定 IP",
+	"管理 IP",
+	"IP",
+	"接入",
+	"公网",
+])
 
 function AssetLedgerCell({
 	label,

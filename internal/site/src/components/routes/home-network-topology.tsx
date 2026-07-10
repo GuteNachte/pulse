@@ -1248,7 +1248,10 @@ function NodeDetailsDialog({
 									<TopologyDetailRow label="宽带带宽" value={getInternetBandwidthLabel(asset)} />
 								)}
 								{asset && (getMetadataString(asset.metadata, "fixed_ipv4") || asset.management_ip) && (
-									<TopologyDetailRow label="IPv4" value={getMetadataString(asset.metadata, "fixed_ipv4") || asset.management_ip} />
+									<TopologyDetailRow
+										label="IPv4"
+										value={getMetadataString(asset.metadata, "fixed_ipv4") || asset.management_ip}
+									/>
 								)}
 								{asset?.role && <TopologyDetailRow label="角色" value={asset.role} />}
 								{asset?.location && <TopologyDetailRow label="位置" value={asset.location} />}

@@ -158,15 +158,9 @@ assertEqual(
 	"图片失败：参考图全部不可读取。跳过 1 张：参考图响应不是图片。"
 )
 
-assertEqual(
-	formatAITaskSummary(runningVisualTask),
-	"设备图片 Agent · 正在收集参考图 · 55%"
-)
+assertEqual(formatAITaskSummary(runningVisualTask), "设备图片 Agent · 正在收集参考图 · 55%")
 
-assertEqual(
-	formatAssetVisualTaskMeta(runningVisualTask),
-	"图片收集中：正在收集参考图 55%"
-)
+assertEqual(formatAssetVisualTaskMeta(runningVisualTask), "图片收集中：正在收集参考图 55%")
 
 assertEqual(
 	formatAITaskSummary(readyVisualTaskWithModelRejections),
@@ -183,4 +177,7 @@ assertEqual(
 	"设备图片 Agent · 历史生图 2 张（不再作为主图） · 已收集设备图 2 张"
 )
 
-assertEqual(formatAssetVisualTaskMeta(legacyReadyVisualTaskWithThemeImages), "历史生图 2 张不再作为主图，已收集设备图 2 张")
+assertEqual(
+	formatAssetVisualTaskMeta(legacyReadyVisualTaskWithThemeImages),
+	"历史生图 2 张不再作为主图，已收集设备图 2 张"
+)
