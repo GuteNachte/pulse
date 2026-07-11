@@ -8,7 +8,7 @@ export const alertsModule: PulseModuleManifest = {
 	version: "1.0.6",
 	category: "告警",
 	defaultEnabled: true,
-	required: false,
+	required: true,
 	dependencies: ["client-monitoring"],
 	routes: ["/alerts"],
 	collections: ["alerts", "alerts_history", "alert_policies"],

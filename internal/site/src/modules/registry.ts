@@ -1,15 +1,15 @@
-import { accountAccessModule } from "./account-access/manifest"
-import { agentManagementModule } from "./agent-management/manifest"
-import { alertsModule } from "./alerts/manifest"
-import { assetCenterModule } from "./asset-center/manifest"
-import { clientMonitoringModule } from "./client-monitoring/manifest"
-import { foundationModule } from "./foundation/manifest"
-import { maintenanceModule } from "./maintenance/manifest"
-import { networkTopologyModule } from "./network-topology/manifest"
-import { notificationsModule } from "./notifications/manifest"
-import { smarthomeModule } from "./smarthome/manifest"
-import { websiteMonitoringModule } from "./website-monitoring/manifest"
-import type { PulseModuleId, PulseModuleManifest } from "./types"
+import { accountAccessModule } from "./account-access/manifest.ts"
+import { agentManagementModule } from "./agent-management/manifest.ts"
+import { alertsModule } from "./alerts/manifest.ts"
+import { assetCenterModule } from "./asset-center/manifest.ts"
+import { clientMonitoringModule } from "./client-monitoring/manifest.ts"
+import { foundationModule } from "./foundation/manifest.ts"
+import { maintenanceModule } from "./maintenance/manifest.ts"
+import { networkTopologyModule } from "./network-topology/manifest.ts"
+import { notificationsModule } from "./notifications/manifest.ts"
+import { smarthomeModule } from "./smarthome/manifest.ts"
+import { websiteMonitoringModule } from "./website-monitoring/manifest.ts"
+import type { PulseModuleId, PulseModuleManifest } from "./types.ts"
 
 export const pulseModules = [
 	foundationModule,
@@ -84,10 +84,16 @@ export function getModuleForSettingsName(name?: string): PulseModuleId {
 
 export function getModulesByCategory() {
 	const groups = new Map<PulseModuleManifest["category"], PulseModuleManifest[]>()
+	const required: PulseModuleManifest[] = []
 	for (const module of pulseModules) {
+		if (module.required) {
+			required.push(module)
+			continue
+		}
 		const group = groups.get(module.category) ?? []
 		group.push(module)
 		groups.set(module.category, group)
 	}
-	return [...groups.entries()].map(([category, modules]) => ({ category, modules }))
+	const optionalGroups = [...groups.entries()].map(([category, modules]) => ({ category, modules }))
+	return required.length > 0 ? [...optionalGroups, { category: "必需模块", modules: required }] : optionalGroups
 }

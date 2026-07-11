@@ -1,31 +1,13 @@
-import { useStore } from "@nanostores/react"
-import {
-	BlocksIcon,
-	CheckCircle2Icon,
-	CircleOffIcon,
-	Clock3Icon,
-	LockIcon,
-	SearchIcon,
-	ShieldAlertIcon,
-} from "lucide-react"
+import { BlocksIcon, LockIcon, SearchIcon, ShieldAlertIcon } from "lucide-react"
 import { useMemo, useState } from "react"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
-import { isAdmin, isReadOnlyUser } from "@/lib/api"
 import { cn } from "@/lib/utils"
-import { $moduleSettings, $moduleSettingsLoading, $moduleSummary, setModuleEnabled } from "@/modules/module-state"
-import { getModulesByCategory, getPulseModule } from "@/modules/registry"
-import type { PulseModuleId, PulseModuleManifest, PulseModuleRuntimeState } from "@/modules/types"
+import { getModulesByCategory, getPulseModule, pulseModules } from "@/modules/registry"
+import type { PulseModuleManifest } from "@/modules/types"
 
 export default function ModulesSettingsPage() {
-	const state = useStore($moduleSettings)
-	const summary = useStore($moduleSummary)
-	const loading = useStore($moduleSettingsLoading)
 	const [query, setQuery] = useState("")
-	const [pendingModule, setPendingModule] = useState<PulseModuleId | null>(null)
-	const canControl = isAdmin() && !isReadOnlyUser()
 	const groups = useMemo(() => {
 		const keyword = query.trim().toLowerCase()
 		return getModulesByCategory()
@@ -38,24 +20,6 @@ export default function ModulesSettingsPage() {
 			}))
 			.filter((group) => group.modules.length > 0)
 	}, [query])
-
-	const handleToggle = async (module: PulseModuleManifest, nextEnabled: boolean) => {
-		if (!canControl || module.required) {
-			return
-		}
-		if (!nextEnabled) {
-			const confirmed = window.confirm(`关闭 ${module.name} 会隐藏入口并阻止直接访问，对应数据不会删除。确认关闭？`)
-			if (!confirmed) {
-				return
-			}
-		}
-		setPendingModule(module.id)
-		try {
-			await setModuleEnabled(module.id, nextEnabled)
-		} finally {
-			setPendingModule(null)
-		}
-	}
 
 	return (
 		<div className="grid gap-4">
@@ -71,20 +35,21 @@ export default function ModulesSettingsPage() {
 								<h3 className="mt-1 text-lg font-semibold text-foreground">模块管理</h3>
 							</div>
 						</div>
-						<div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-							<SummaryTile label="总模块" value={summary.total} />
-							<SummaryTile label="已启用" value={summary.enabled} tone="success" />
-							<SummaryTile label="已关闭" value={summary.disabled} />
-							<SummaryTile label="被阻塞" value={summary.blocked} tone="warning" />
+						<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+							<SummaryTile label="总模块" value={pulseModules.length} />
+							<SummaryTile label="可选模块" value={pulseModules.filter((module) => !module.required).length} />
+							<SummaryTile
+								label="必需模块"
+								value={pulseModules.filter((module) => module.required).length}
+								tone="success"
+							/>
 						</div>
 					</div>
 				</div>
 				<div className="mt-2 grid gap-2 lg:grid-cols-[minmax(0,1fr)_16rem] lg:items-center">
 					<div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-						<ModuleStatusLegend icon={LockIcon} label={`${summary.required} 个必需`} />
-						<ModuleStatusLegend icon={CheckCircle2Icon} label="启用后入口可见" />
-						<ModuleStatusLegend icon={CircleOffIcon} label="关闭后保留数据" />
-						<ModuleStatusLegend icon={ShieldAlertIcon} label="依赖关闭会阻塞" />
+						<ModuleStatusLegend icon={LockIcon} label="必需模块" />
+						<ModuleStatusLegend icon={ShieldAlertIcon} label="依赖关系只读展示" />
 					</div>
 					<div className="relative block">
 						<SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -109,14 +74,7 @@ export default function ModulesSettingsPage() {
 						<div className="px-1 text-xs font-medium text-muted-foreground">{group.category}</div>
 						<div className="grid gap-2">
 							{group.modules.map((module) => (
-								<ModuleRow
-									key={module.id}
-									module={module}
-									state={state[module.id]}
-									canControl={canControl}
-									loading={loading || pendingModule === module.id}
-									onToggle={handleToggle}
-								/>
+								<ModuleRow key={module.id} module={module} />
 							))}
 						</div>
 					</section>
@@ -126,28 +84,8 @@ export default function ModulesSettingsPage() {
 	)
 }
 
-function ModuleRow({
-	module,
-	state,
-	canControl,
-	loading,
-	onToggle,
-}: {
-	module: PulseModuleManifest
-	state?: PulseModuleRuntimeState
-	canControl: boolean
-	loading: boolean
-	onToggle: (module: PulseModuleManifest, nextEnabled: boolean) => Promise<void>
-}) {
+function ModuleRow({ module }: { module: PulseModuleManifest }) {
 	const Icon = module.icon ?? BlocksIcon
-	const current = state ?? {
-		id: module.id,
-		enabled: module.defaultEnabled,
-		effectiveEnabled: module.defaultEnabled,
-		status: module.required ? "required" : module.defaultEnabled ? "enabled" : "disabled",
-		blockedBy: [],
-	}
-	const disabled = module.required || !canControl || loading
 
 	return (
 		<div className="rounded-lg border border-border/70 bg-card p-3 shadow-none">
@@ -159,7 +97,7 @@ function ModuleRow({
 					<div className="min-w-0">
 						<div className="flex flex-wrap items-center gap-2">
 							<div className="font-semibold">{module.name}</div>
-							<ModuleStatusBadge state={current} required={module.required} />
+							<ModuleKindBadge required={module.required} />
 							<Badge variant="secondary" className="h-6 rounded-md">
 								{module.category}
 							</Badge>
@@ -171,28 +109,6 @@ function ModuleRow({
 							<MetaChip label="任务" value={module.jobs.length} />
 							<MetaChip label="Agent" value={module.agentCapabilities.length} />
 						</div>
-						{current.blockedBy.length > 0 && (
-							<div className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-								依赖未启用：{current.blockedBy.map((id) => getPulseModule(id).name).join("、")}
-							</div>
-						)}
-					</div>
-				</div>
-				<div className="flex flex-wrap items-center gap-2 xl:justify-end">
-					<Button variant="outline" size="sm" className="h-9 gap-1.5" asChild>
-						<a href={`#module-${module.id}`} title={module.sourcePaths.join("\n")}>
-							<Clock3Icon className="size-4" />
-							详情
-						</a>
-					</Button>
-					<div className="flex h-9 items-center gap-2 rounded-md border border-border/70 bg-surface-soft px-2.5">
-						<span className="text-xs text-muted-foreground">{current.enabled ? "开启" : "关闭"}</span>
-						<Switch
-							checked={current.enabled}
-							disabled={disabled}
-							onCheckedChange={(checked) => onToggle(module, checked)}
-							aria-label={`${module.name} 开关`}
-						/>
 					</div>
 				</div>
 			</div>
@@ -215,23 +131,10 @@ function ModuleDetails({ module }: { module: PulseModuleManifest }) {
 	)
 }
 
-function ModuleStatusBadge({ state, required }: { state: PulseModuleRuntimeState; required: boolean }) {
-	if (required || state.status === "required") return <Badge className="h-6 rounded-md">必需</Badge>
-	if (state.status === "blocked")
-		return (
-			<Badge variant="warning" className="h-6 rounded-md">
-				被阻塞
-			</Badge>
-		)
-	if (state.status === "disabled")
-		return (
-			<Badge variant="secondary" className="h-6 rounded-md">
-				已关闭
-			</Badge>
-		)
+function ModuleKindBadge({ required }: { required: boolean }) {
 	return (
-		<Badge variant="success" className="h-6 rounded-md">
-			已启用
+		<Badge variant={required ? "default" : "secondary"} className="h-6 rounded-md">
+			{required ? "必需" : "可选"}
 		</Badge>
 	)
 }

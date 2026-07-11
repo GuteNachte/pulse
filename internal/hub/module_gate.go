@@ -24,11 +24,11 @@ var pulseModulePolicies = map[string]pulseModulePolicy{
 	"client-monitoring":  {Name: "客户端监控", Default: true, Dependencies: []string{"asset-center", "agent-management"}},
 	"website-monitoring": {Name: "网站监控", Default: true, Dependencies: []string{"asset-center"}},
 	"network-topology":   {Name: "网络拓扑", Default: true, Dependencies: []string{"asset-center"}},
-	"alerts":             {Name: "告警中心", Default: true, Dependencies: []string{"asset-center"}},
-	"notifications":      {Name: "通知模块", Default: true, Dependencies: []string{"alerts"}},
-	"agent-management":   {Name: "Agent 管理", Default: true},
+	"alerts":             {Name: "告警中心", Default: true, Required: true, Dependencies: []string{"client-monitoring"}},
+	"notifications":      {Name: "通知模块", Default: true, Required: true, Dependencies: []string{"alerts"}},
+	"agent-management":   {Name: "Agent 管理", Default: true, Required: true},
 	"account-access":     {Name: "账号管理与权限", Default: true, Required: true},
-	"maintenance":        {Name: "备份日志与审计", Default: true},
+	"maintenance":        {Name: "备份日志与审计", Default: true, Required: true},
 }
 
 var pulseCollectionModulePolicies = map[string]string{

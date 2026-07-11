@@ -53,7 +53,7 @@ func TestModuleGateReturnsExplicitDisabledStatus(t *testing.T) {
 	require.Contains(t, collectionResponse.Body, `"module_id":"client-monitoring"`)
 }
 
-func TestAgentPairIsBlockedWhenAgentManagementIsDisabled(t *testing.T) {
+func TestAgentPairRemainsAvailableForRequiredAgentManagement(t *testing.T) {
 	hub, user := pulseTests.GetHubWithUser(t)
 	defer hub.Cleanup()
 
@@ -85,9 +85,8 @@ func TestAgentPairIsBlockedWhenAgentManagementIsDisabled(t *testing.T) {
 		strings.NewReader(`{"code":"111222","hostname":"blocked-agent","fingerprint":"fingerprint","platform":"linux","arch":"amd64","agent_version":"1.0.6","install_method":"docker","run_mode":"linux-container"}`),
 		map[string]string{"X-Forwarded-For": "192.168.1.20"},
 	)
-	require.Equal(t, http.StatusServiceUnavailable, response.Status, response.Body)
-	require.Contains(t, response.Body, `"code":"module_disabled"`)
-	require.Contains(t, response.Body, `"module_id":"agent-management"`)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Contains(t, response.Body, `"agent_id"`)
 }
 
 func TestRealtimeSubscriptionMapsToOwningModule(t *testing.T) {

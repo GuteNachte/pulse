@@ -693,8 +693,8 @@ msgstr "发送"
 msgid "Serial Number"
 msgstr "序列号"
 
-#: src/components/routes/settings/layout.tsx:252
-#: src/components/routes/settings/layout.tsx:280
+#: src/components/routes/settings/layout.tsx:251
+#: src/components/routes/settings/layout.tsx:279
 msgid "Settings"
 msgstr "设置"
 

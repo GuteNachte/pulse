@@ -8,7 +8,7 @@ export const notificationsModule: PulseModuleManifest = {
 	version: "1.0.6",
 	category: "告警",
 	defaultEnabled: true,
-	required: false,
+	required: true,
 	dependencies: ["alerts"],
 	routes: ["/notifications", "/settings/notifications"],
 	collections: ["notification_failures", "notification_channel_health", "alert_notification_states"],

@@ -17,10 +17,11 @@
 		"lint": "biome lint .",
 		"check": "biome check .",
 		"check:fix": "biome check --fix .",
-		"test": "npm run test:asset-center && npm run test:network-topology && npm run test:websites",
+		"test": "npm run test:asset-center && npm run test:modules && npm run test:network-topology && npm run test:websites",
 		"test:asset-center": "node --experimental-strip-types src/lib/latest-request-guard.test.ts && node --experimental-strip-types src/components/routes/settings/ai-settings-load.test.ts && node --experimental-strip-types src/modules/asset-center/asset-ai-task-query.test.ts && node --experimental-strip-types src/modules/asset-center/asset-ai-task-summary.test.ts && node --experimental-strip-types src/modules/asset-center/asset-detail-data.test.ts && node --experimental-strip-types src/modules/asset-center/asset-detail-load-guard.test.ts && node --experimental-strip-types src/modules/asset-center/asset-detail-parameter-groups.test.ts && node --experimental-strip-types src/modules/asset-center/asset-detail-relations.test.ts && node --experimental-strip-types src/modules/asset-center/asset-edit-catalog-query.test.ts && node --experimental-strip-types src/modules/asset-center/asset-edit-profile-sections.test.ts && node --experimental-strip-types src/modules/asset-center/asset-enrichment-report.test.ts && node --experimental-strip-types src/modules/asset-center/asset-enrichment-suggestion-query.test.ts && node --experimental-strip-types src/modules/asset-center/asset-location-dialog.test.ts && node --experimental-strip-types src/modules/asset-center/asset-parameter-display.test.ts && node --experimental-strip-types src/modules/asset-center/asset-profile-summary.test.ts && node --experimental-strip-types src/modules/asset-center/asset-profile-validation.test.ts && node --experimental-strip-types src/modules/asset-center/asset-runtime-hardware.test.ts && node --experimental-strip-types src/modules/asset-center/asset-visual-color.test.ts && node --experimental-strip-types src/modules/asset-center/asset-visual-query.test.ts",
 		"test:network-topology": "node --experimental-strip-types src/lib/latest-request-guard.test.ts && node --experimental-strip-types src/modules/network-topology/topology-data-query.test.ts && node --experimental-strip-types src/modules/network-topology/workspace-data.test.ts",
 		"test:websites": "node --experimental-strip-types src/modules/website-monitoring/endpoint-assets-query.test.ts && node --experimental-strip-types src/components/routes/websites/asset-form.test.ts",
+		"test:modules": "node --experimental-strip-types src/modules/registry.test.ts",
 		"check:versions": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../supplemental/scripts/check-version-consistency.ps1"
 	},
 	"dependencies": {
@@ -73,6 +74,7 @@
 		"@rolldown/plugin-babel": "^0.2.3",
 		"@tailwindcss/container-queries": "^0.1.1",
 		"@tailwindcss/vite": "^4.3.1",
+		"@types/node": "^26.1.1",
 		"@types/react": "^19.2.17",
 		"@types/react-dom": "^19.2.3",
 		"@vitejs/plugin-react": "^6.0.3",

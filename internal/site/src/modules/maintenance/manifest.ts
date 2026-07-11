@@ -8,7 +8,7 @@ export const maintenanceModule: PulseModuleManifest = {
 	version: "1.0.6",
 	category: "维护",
 	defaultEnabled: true,
-	required: false,
+	required: true,
 	dependencies: ["foundation"],
 	routes: [
 		"/settings/backups",

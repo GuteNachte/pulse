@@ -8,7 +8,7 @@ export const agentManagementModule: PulseModuleManifest = {
 	version: "1.0.6",
 	category: "接入",
 	defaultEnabled: true,
-	required: false,
+	required: true,
 	dependencies: ["foundation"],
 	routes: ["/settings/agent", "/settings/tokens"],
 	collections: ["agent_releases", "agent_pairing_codes", "universal_tokens"],

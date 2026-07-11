@@ -183,10 +183,9 @@ export default function SettingsLayout() {
 			href: getPagePath($router, "settings", { name: "modules" }),
 			icon: BlocksIcon,
 			group: "系统维护",
-			description: "模块状态、依赖和启停控制",
-			keywords: ["modules", "module", "模块", "开关", "启停", "依赖"],
+			description: "模块说明、依赖、路由和代码边界",
+			keywords: ["modules", "module", "模块", "说明", "依赖", "路由"],
 			moduleId: "foundation",
-			admin: true,
 			preload: modulesImport,
 		},
 		{

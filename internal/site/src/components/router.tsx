@@ -31,7 +31,7 @@ export const prependBasePath = (path: string) => (basePath + path).replaceAll("/
 
 const routes = Object.fromEntries(
 	Object.entries(routePaths).map(([route, path]) => [route, prependBasePath(path)])
-) as Record<keyof typeof routePaths, string>
+) as typeof routePaths
 
 export const $router = createRouter(routes, { links: false })
 

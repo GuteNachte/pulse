@@ -8,7 +8,7 @@ Pulse 的项目定位是家庭资产管理与监控。所有模块都应围绕�
 
 - 项目后续可能持续变大，功能必须能独立维护、独立开关、独立观测。
 - 所有业务功能都要有清晰模块边界，避免页面、Hub API、Agent 采集、数据库集合和设置入口互相缠在一起。
-- 设置页需要能看到每个模块的状态，并能控制可选模块开启或关闭。
+- 设置页需要能看到每个模块的只读说明、依赖和运行边界；模块启停不在当前页面提供操作入口。
 - 关闭模块时不能破坏已有数据；只停止入口、采集、任务、通知、操作和展示。
 
 ## 模块分层与粒度
@@ -120,7 +120,7 @@ agent/modules/<module-id>/
 - 后台任务、定时检测、通知触发和 Agent 下发操作停止。
 - 不删除数据库集合，不删除历史数据，不清理用户配置。
 - 重新开启后能继续使用已有配置和历史数据。
-- 必需模块不能关闭，包括 `foundation`、`asset-center` 和 `account-access`。
+- 必需模块不能关闭，包括 `foundation`、`asset-center`、`account-access`、`alerts`、`notifications`、`agent-management` 和 `maintenance`。
 
 模块开启必须满足：
 
@@ -138,9 +138,9 @@ agent/modules/<module-id>/
 - 依赖关系和阻塞原因。
 - 最近健康检查时间、成功 / 失败状态和错误摘要。
 - 关联路由、数据库集合、后台任务、Agent 能力。
-- 启用 / 关闭操作，关闭前要提示影响范围。
+- 只读展示模块说明、依赖、路由、集合、任务、Agent 能力和健康检查。
 
-模块管理页面不直接替代各模块自己的设置页。它负责总览、开关和健康检查；具体业务配置仍放在对应模块设置里。
+模块管理页面不直接替代各模块自己的设置页。它负责只读总览、依赖说明和健康检查；具体业务配置仍放在对应模块设置里。
 
 ## 开发验收规则
 
@@ -163,7 +163,7 @@ agent/modules/<module-id>/
 
 ## 当前结论
 
-- `1.0.6` 已落地第一版模块化底座：`module_settings` 保存用户级模块开关，前端 `internal/site/src/modules` 保存大模块 manifest 和 registry，设置页“模块管理”负责模块总览、依赖状态和可选模块启停。
+- `1.0.6` 已落地第一版模块化底座：`module_settings` 保留用户级模块状态兼容数据，前端 `internal/site/src/modules` 保存大模块 manifest 和 registry，设置页“模块管理”负责模块只读总览、依赖状态和代码边界说明。
 - 模块 registry 已从页面级小模块收敛为大模块，旧的 `system-detail`、`smart`、`settings-*` 不再作为独立模块出现。
 - 资产中心已成为核心数据来源：新增 `assets`、`asset_interfaces`、`asset_relations` 和 `asset_locations`，并在 `systems`、`website_monitors` 上使用 `asset` 关联字段绑定资产主数据；公网入口也按 `internet` 资产维护，可支持多条宽带、运营商和上下行带宽信息；房间、区域、机柜和桌面等位置开始收敛为资产中心主数据。
 - 资产中心新增 / 编辑入口按资产类型维护长期稳定参数：字段 schema 放在 `internal/site/src/modules/asset-center/asset-schema.ts`，页面只负责渲染和保存；固定 IP、MAC、管理 URL、端口速率、硬件规格、生命周期和公网带宽等数据进入资产主数据，主网卡 / 管理口 / 公网入口同步到 `asset_interfaces` 供网络拓扑复用。
