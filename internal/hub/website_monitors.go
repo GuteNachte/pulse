@@ -33,6 +33,14 @@ func (h *Hub) checkDueWebsiteMonitors() {
 	}
 	now := time.Now().UTC()
 	for _, record := range records {
+		moduleEnabled, err := h.websiteMonitorModuleEnabled(record)
+		if err != nil {
+			h.Logger().Warn("Unable to resolve website monitoring module state", "monitor", record.Id, "err", err)
+			continue
+		}
+		if !moduleEnabled {
+			continue
+		}
 		if !websiteMonitorDue(record, now) {
 			continue
 		}
@@ -40,6 +48,18 @@ func (h *Hub) checkDueWebsiteMonitors() {
 			h.Logger().Warn("Website monitor check failed", "monitor", record.Id, "err", err)
 		}
 	}
+}
+
+func (h *Hub) websiteMonitorModuleEnabled(record *core.Record) (bool, error) {
+	if record == nil {
+		return false, nil
+	}
+	userID := strings.TrimSpace(record.GetString("user"))
+	if userID == "" {
+		return true, nil
+	}
+	enabled, _, err := h.pulseModuleEnabledForUser(userID, "website-monitoring")
+	return enabled, err
 }
 
 func (h *Hub) bindWebsiteMonitorHooks() {

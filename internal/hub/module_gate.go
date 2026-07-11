@@ -65,6 +65,42 @@ func (h *Hub) bindModuleCollectionGates() {
 		h.App.OnRecordUpdateRequest(collection).BindFunc(h.moduleRecordGate(moduleID))
 		h.App.OnRecordDeleteRequest(collection).BindFunc(h.moduleRecordGate(moduleID))
 	}
+	h.App.OnRealtimeSubscribeRequest().BindFunc(h.moduleRealtimeGate)
+}
+
+// RealtimeSubscriptionModule returns the Pulse module that owns a realtime topic.
+// It is exported so the topic-to-module contract can be tested without starting a server.
+func RealtimeSubscriptionModule(subscription string) (string, bool) {
+	topic := strings.TrimSpace(subscription)
+	if index := strings.IndexByte(topic, '?'); index >= 0 {
+		topic = topic[:index]
+	}
+	if topic == "rt_metrics" {
+		return "client-monitoring", true
+	}
+	collection := topic
+	if index := strings.IndexByte(collection, '/'); index >= 0 {
+		collection = collection[:index]
+	}
+	moduleID, ok := pulseCollectionModulePolicies[collection]
+	return moduleID, ok
+}
+
+func (h *Hub) moduleRealtimeGate(e *core.RealtimeSubscribeRequestEvent) error {
+	for _, subscription := range e.Subscriptions {
+		moduleID, ok := RealtimeSubscriptionModule(subscription)
+		if !ok {
+			continue
+		}
+		allowed, err := h.ensurePulseModuleEnabled(e.RequestEvent, moduleID)
+		if err != nil {
+			return err
+		}
+		if !allowed {
+			return nil
+		}
+	}
+	return e.Next()
 }
 
 func (h *Hub) moduleRecordsListGate(moduleID string) func(*core.RecordsListRequestEvent) error {

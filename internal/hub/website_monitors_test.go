@@ -29,6 +29,51 @@ func TestWebsiteMonitorCheckIPVersionPrefersActualVersion(t *testing.T) {
 	}
 }
 
+func TestWebsiteMonitorDueCheckRequiresOwningModule(t *testing.T) {
+	app, err := pbTests.NewTestApp(t.TempDir())
+	require.NoError(t, err)
+	hub := NewHub(app)
+	defer app.Cleanup()
+
+	users, err := app.FindCachedCollectionByNameOrId("users")
+	require.NoError(t, err)
+	user := core.NewRecord(users)
+	user.Set("email", "website-module-test@example.com")
+	user.Set("password", "password123")
+	require.NoError(t, app.Save(user))
+
+	moduleSettings, err := app.FindCachedCollectionByNameOrId("module_settings")
+	require.NoError(t, err)
+	moduleSetting := core.NewRecord(moduleSettings)
+	moduleSetting.Load(map[string]any{
+		"user":      user.Id,
+		"module_id": "website-monitoring",
+		"enabled":   false,
+	})
+	require.NoError(t, app.Save(moduleSetting))
+
+	monitors, err := app.FindCachedCollectionByNameOrId("website_monitors")
+	require.NoError(t, err)
+	monitor := core.NewRecord(monitors)
+	monitor.Load(map[string]any{
+		"user":             user.Id,
+		"name":             "disabled-monitor",
+		"url":              "https://example.com",
+		"enabled":          true,
+		"interval_seconds": 60,
+		"timeout_seconds":  5,
+	})
+	require.NoError(t, app.Save(monitor))
+
+	allowed, err := hub.websiteMonitorModuleEnabled(monitor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if allowed {
+		t.Fatal("website monitor should be skipped when its owning module is disabled")
+	}
+}
+
 func TestClassifyWebsiteMonitorFailure(t *testing.T) {
 	tests := []struct {
 		name string

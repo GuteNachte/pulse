@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	pulseHub "gutenacht.site/pulse/internal/hub"
 	pulseTests "gutenacht.site/pulse/internal/tests"
 )
 
@@ -84,4 +85,26 @@ func TestAgentPairIsBlockedWhenAgentManagementIsDisabled(t *testing.T) {
 	require.Equal(t, http.StatusServiceUnavailable, response.Status, response.Body)
 	require.Contains(t, response.Body, `"code":"module_disabled"`)
 	require.Contains(t, response.Body, `"module_id":"agent-management"`)
+}
+
+func TestRealtimeSubscriptionMapsToOwningModule(t *testing.T) {
+	tests := []struct {
+		topic  string
+		module string
+		ok     bool
+	}{
+		{topic: "rt_metrics?options={\"query\":{\"system\":\"sys1\"}}", module: "client-monitoring", ok: true},
+		{topic: "systems/*", module: "client-monitoring", ok: true},
+		{topic: "website_monitors/*", module: "website-monitoring", ok: true},
+		{topic: "unknown/*", ok: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.topic, func(t *testing.T) {
+			module, ok := pulseHub.RealtimeSubscriptionModule(tt.topic)
+			if module != tt.module || ok != tt.ok {
+				t.Fatalf("realtimeSubscriptionModule(%q) = (%q, %t), want (%q, %t)", tt.topic, module, ok, tt.module, tt.ok)
+			}
+		})
+	}
 }
