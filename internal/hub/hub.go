@@ -43,6 +43,7 @@ func NewHub(app core.App) *Hub {
 	hub.bindAssetMasterValidationHooks()
 	hub.bindAssetBindingValidationHooks()
 	hub.bindNetworkTopologyLegacyValidationHooks()
+	hub.bindModuleCollectionGates()
 	hub.bindCollectionAuditHooks()
 	hub.bindAssetChangeHooks()
 	_ = onAfterBootstrapAndMigrations(app, hub.initialize)

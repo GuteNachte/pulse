@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -29,27 +30,91 @@ var pulseModulePolicies = map[string]pulseModulePolicy{
 	"maintenance":        {Name: "备份日志与审计", Default: true},
 }
 
+var pulseCollectionModulePolicies = map[string]string{
+	"systems":                     "client-monitoring",
+	"system_details":              "client-monitoring",
+	"system_stats":                "client-monitoring",
+	"containers":                  "client-monitoring",
+	"container_stats":             "client-monitoring",
+	"smart_devices":               "client-monitoring",
+	"monitored_services":          "client-monitoring",
+	"monitored_software":          "client-monitoring",
+	"service_control_rules":       "client-monitoring",
+	"container_monitor_rules":     "client-monitoring",
+	"software_monitor_rules":      "client-monitoring",
+	"website_monitors":            "website-monitoring",
+	"website_monitor_checks":      "website-monitoring",
+	"alerts":                      "alerts",
+	"alerts_history":              "alerts",
+	"alert_policies":              "alerts",
+	"notification_failures":       "notifications",
+	"notification_channel_health": "notifications",
+	"alert_notification_states":   "notifications",
+	"agent_pairing_codes":         "agent-management",
+	"fingerprints":                "agent-management",
+	"universal_tokens":            "agent-management",
+	"network_layouts":             "network-topology",
+	"operation_audit":             "maintenance",
+}
+
+func (h *Hub) bindModuleCollectionGates() {
+	for collection, moduleID := range pulseCollectionModulePolicies {
+		h.App.OnRecordsListRequest(collection).BindFunc(h.moduleRecordsListGate(moduleID))
+		h.App.OnRecordViewRequest(collection).BindFunc(h.moduleRecordGate(moduleID))
+		h.App.OnRecordCreateRequest(collection).BindFunc(h.moduleRecordGate(moduleID))
+		h.App.OnRecordUpdateRequest(collection).BindFunc(h.moduleRecordGate(moduleID))
+		h.App.OnRecordDeleteRequest(collection).BindFunc(h.moduleRecordGate(moduleID))
+	}
+}
+
+func (h *Hub) moduleRecordsListGate(moduleID string) func(*core.RecordsListRequestEvent) error {
+	return func(e *core.RecordsListRequestEvent) error {
+		if err := h.ensurePulseModuleEnabled(e.RequestEvent, moduleID); err != nil {
+			return err
+		}
+		return e.Next()
+	}
+}
+
+func (h *Hub) moduleRecordGate(moduleID string) func(*core.RecordRequestEvent) error {
+	return func(e *core.RecordRequestEvent) error {
+		if err := h.ensurePulseModuleEnabled(e.RequestEvent, moduleID); err != nil {
+			return err
+		}
+		return e.Next()
+	}
+}
+
+func (h *Hub) ensurePulseModuleEnabled(e *core.RequestEvent, moduleID string) error {
+	if e == nil {
+		return errors.New("missing request event")
+	}
+	if e.Auth == nil {
+		return nil
+	}
+	enabled, blockedBy, err := h.pulseModuleEnabledForUser(e.Auth.Id, moduleID)
+	if err != nil {
+		return e.InternalServerError("Failed to load module state.", err)
+	}
+	if enabled {
+		return e.Next()
+	}
+	policy := pulseModulePolicies[moduleID]
+	return e.JSON(http.StatusServiceUnavailable, map[string]any{
+		"code":       "module_disabled",
+		"module_id":  moduleID,
+		"module":     policy.Name,
+		"blocked_by": blockedBy,
+		"message":    policy.Name + "已关闭，当前接口暂不可用。",
+	})
+}
+
 func (h *Hub) requirePulseModule(moduleID string) func(*core.RequestEvent) error {
 	return func(e *core.RequestEvent) error {
-		if e.Auth == nil {
-			return e.UnauthorizedError("The request requires valid record authorization token.", nil)
+		if err := h.ensurePulseModuleEnabled(e, moduleID); err != nil {
+			return err
 		}
-		enabled, blockedBy, err := h.pulseModuleEnabledForUser(e.Auth.Id, moduleID)
-		if err != nil {
-			return e.InternalServerError("Failed to load module state.", err)
-		}
-		if enabled {
-			return e.Next()
-		}
-
-		policy := pulseModulePolicies[moduleID]
-		return e.JSON(http.StatusServiceUnavailable, map[string]any{
-			"code":       "module_disabled",
-			"module_id":  moduleID,
-			"module":     policy.Name,
-			"blocked_by": blockedBy,
-			"message":    policy.Name + "已关闭，当前接口暂不可用。",
-		})
+		return e.Next()
 	}
 }
 

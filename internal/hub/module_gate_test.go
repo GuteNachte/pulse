@@ -34,4 +34,16 @@ func TestModuleGateReturnsExplicitDisabledStatus(t *testing.T) {
 	require.Equal(t, http.StatusServiceUnavailable, response.Status, response.Body)
 	require.Contains(t, response.Body, `"code":"module_disabled"`)
 	require.Contains(t, response.Body, `"module_id":"client-monitoring"`)
+
+	collectionResponse := performTestAPIRequest(
+		t,
+		hub.TestApp,
+		http.MethodGet,
+		"/api/collections/containers/records",
+		nil,
+		map[string]string{"Authorization": token},
+	)
+	require.Equal(t, http.StatusServiceUnavailable, collectionResponse.Status, collectionResponse.Body)
+	require.Contains(t, collectionResponse.Body, `"code":"module_disabled"`)
+	require.Contains(t, collectionResponse.Body, `"module_id":"client-monitoring"`)
 }
