@@ -97,13 +97,13 @@ import {
 import {
 	ASSET_TYPE_OPTIONS,
 	STATUS_OPTIONS,
-	getAssetCompleteness,
 	getAssetFormSections,
 	getMetadataString,
 	isPhoneVariantSpecRequired,
 	type AssetFieldDefinition,
 	type AssetFieldSection,
 } from "@/modules/asset-center/asset-schema"
+import { getAssetCompleteness } from "@/modules/asset-center/asset-profile-summary"
 import { syncPrimaryInterface } from "@/modules/asset-center/asset-interface-sync"
 import type {
 	AssetInterfaceRecord,

@@ -30,9 +30,9 @@ import {
 	getAssetTypeLabel,
 	getMetadataString,
 	getStatusLabel,
-	type AssetLifecycleTone,
 	isPhoneVariantSpecRequired,
 } from "./asset-schema"
+import type { AssetLifecycleTone } from "./asset-profile-summary"
 import {
 	formatAssetDetailTaskStatusLabel,
 	formatAssetVisualTaskMeta as formatAssetVisualTaskSummary,

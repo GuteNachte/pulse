@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 )
 
@@ -66,6 +67,46 @@ func (h *Hub) bindModuleCollectionGates() {
 		h.App.OnRecordDeleteRequest(collection).BindFunc(h.moduleRecordGate(moduleID))
 	}
 	h.App.OnRealtimeSubscribeRequest().BindFunc(h.moduleRealtimeGate)
+}
+
+func (h *Hub) bindModuleRuntimeHooks() {
+	stopDisabledClientMonitoring := func(e *core.RecordEvent) error {
+		if e.Record != nil &&
+			e.Record.GetString("module_id") == "client-monitoring" &&
+			!e.Record.GetBool("enabled") {
+			userID := e.Record.GetString("user")
+			h.sm.DisableRealtimeForUser(userID)
+			h.disableRealtimeSubscriptionsForUser(userID, "client-monitoring")
+		}
+		if e.Record != nil &&
+			e.Record.GetString("module_id") == "website-monitoring" &&
+			!e.Record.GetBool("enabled") {
+			h.disableRealtimeSubscriptionsForUser(e.Record.GetString("user"), "website-monitoring")
+		}
+		return e.Next()
+	}
+	h.App.OnRecordAfterCreateSuccess("module_settings").BindFunc(stopDisabledClientMonitoring)
+	h.App.OnRecordAfterUpdateSuccess("module_settings").BindFunc(stopDisabledClientMonitoring)
+}
+
+func (h *Hub) disableRealtimeSubscriptionsForUser(userID, moduleID string) {
+	userID = strings.TrimSpace(userID)
+	moduleID = strings.TrimSpace(moduleID)
+	if userID == "" || moduleID == "" {
+		return
+	}
+	for _, client := range h.SubscriptionsBroker().Clients() {
+		authRecord, _ := client.Get(apis.RealtimeClientAuthKey).(*core.Record)
+		if authRecord == nil || authRecord.Id != userID {
+			continue
+		}
+		for topic := range client.Subscriptions() {
+			ownedModule, ok := RealtimeSubscriptionModule(topic)
+			if ok && ownedModule == moduleID {
+				client.Unsubscribe(topic)
+			}
+		}
+	}
 }
 
 // RealtimeSubscriptionModule returns the Pulse module that owns a realtime topic.
@@ -174,13 +215,17 @@ func (h *Hub) requirePulseModule(moduleID string) func(*core.RequestEvent) error
 }
 
 func (h *Hub) pulseModuleEnabledForUser(userID string, moduleID string) (bool, []string, error) {
+	return h.pulseModuleEnabledForUserWithApp(h.App, userID, moduleID)
+}
+
+func (h *Hub) pulseModuleEnabledForUserWithApp(app core.App, userID string, moduleID string) (bool, []string, error) {
 	moduleID = strings.TrimSpace(moduleID)
 	policy, ok := pulseModulePolicies[moduleID]
 	if !ok || policy.Required {
 		return true, nil, nil
 	}
 
-	records, err := h.FindRecordsByFilter(
+	records, err := app.FindRecordsByFilter(
 		"module_settings",
 		"user = {:user}",
 		"module_id",
@@ -231,4 +276,22 @@ func (h *Hub) pulseModuleEnabledForUser(userID string, moduleID string) (bool, [
 
 	enabledForModule, blockedBy := resolve(moduleID)
 	return enabledForModule, blockedBy, nil
+}
+
+func (h *Hub) shouldProcessClientMonitoringSystem(app core.App, systemID string) bool {
+	record, err := app.FindRecordById("systems", strings.TrimSpace(systemID))
+	if err != nil {
+		return false
+	}
+	userIDs := record.GetStringSlice("users")
+	if len(userIDs) == 0 {
+		return true
+	}
+	for _, userID := range userIDs {
+		enabled, _, err := h.pulseModuleEnabledForUserWithApp(app, userID, "client-monitoring")
+		if err == nil && enabled {
+			return true
+		}
+	}
+	return false
 }

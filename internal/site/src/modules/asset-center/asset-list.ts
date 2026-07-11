@@ -1,11 +1,11 @@
+import { HOST_ASSET_TYPES } from "@/modules/asset-center/asset-schema"
 import {
-	HOST_ASSET_TYPES,
 	buildAssetSearchText,
 	getAssetCompleteness,
 	getAssetWarrantyStatus,
 	needsAssetProfileAttention,
 	needsLifecycleAttention,
-} from "@/modules/asset-center/asset-schema"
+} from "@/modules/asset-center/asset-profile-summary"
 import {
 	buildLocationPath,
 	getDefaultAssetLocationPresetValues,

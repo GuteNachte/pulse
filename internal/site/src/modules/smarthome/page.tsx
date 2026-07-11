@@ -23,11 +23,11 @@ import { pageTitle } from "@/lib/branding"
 import { cn } from "@/lib/utils"
 import {
 	SMART_HOME_ASSET_TYPES,
-	buildAssetSearchText,
 	getAssetTypeLabel,
 	getMetadataString,
 	getStatusLabel,
 } from "@/modules/asset-center/asset-schema"
+import { buildAssetSearchText } from "@/modules/asset-center/asset-profile-summary"
 import type { AssetRecord, AssetRelationRecord, AssetStatus, AssetType } from "@/types"
 
 type ViewMode = "room" | "type" | "gateway"

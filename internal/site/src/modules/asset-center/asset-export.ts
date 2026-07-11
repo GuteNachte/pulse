@@ -1,9 +1,5 @@
-import {
-	getAssetCompleteness,
-	getAssetTypeLabel,
-	getAssetWarrantyStatus,
-	getStatusLabel,
-} from "@/modules/asset-center/asset-schema"
+import { getAssetTypeLabel, getStatusLabel } from "@/modules/asset-center/asset-schema"
+import { getAssetCompleteness, getAssetWarrantyStatus } from "@/modules/asset-center/asset-profile-summary"
 import type {
 	AssetAttachmentRecord,
 	AssetInterfaceRecord,

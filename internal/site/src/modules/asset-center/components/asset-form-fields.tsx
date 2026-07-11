@@ -4,7 +4,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { isOfficialColorRequiredForAssetType, mergeOfficialColorOptions } from "../asset-visual-color"
-import type { AssetFieldDefinition, AssetLifecycleTone } from "@/modules/asset-center/asset-schema"
+import type { AssetFieldDefinition } from "@/modules/asset-center/asset-schema"
+import type { AssetLifecycleTone } from "@/modules/asset-center/asset-profile-summary"
 
 export const PHONE_MEMORY_OPTIONS = [
 	{ value: "4", label: "4 GB" },

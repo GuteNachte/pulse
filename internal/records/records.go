@@ -15,7 +15,8 @@ import (
 )
 
 type RecordManager struct {
-	app core.App
+	app                    core.App
+	systemProcessingFilter func(app core.App, systemID string) bool
 }
 
 type LongerRecordData struct {
@@ -30,7 +31,22 @@ type RecordIds []struct {
 }
 
 func NewRecordManager(app core.App) *RecordManager {
-	return &RecordManager{app}
+	return &RecordManager{
+		app: app,
+		systemProcessingFilter: func(core.App, string) bool {
+			return true
+		},
+	}
+}
+
+// SetSystemProcessingFilter lets the owning module decide which systems may
+// receive derived monitoring records. A nil filter restores the default.
+func (rm *RecordManager) SetSystemProcessingFilter(filter func(app core.App, systemID string) bool) {
+	if filter == nil {
+		rm.systemProcessingFilter = func(core.App, string) bool { return true }
+		return
+	}
+	rm.systemProcessingFilter = filter
 }
 
 type StatsRecord struct {
@@ -86,6 +102,9 @@ func (rm *RecordManager) CreateLongerRecords() {
 
 		// loop through all active systems, time periods, and collections
 		for _, system := range systems {
+			if rm.systemProcessingFilter != nil && !rm.systemProcessingFilter(txApp, system.Id) {
+				continue
+			}
 			// log.Println("processing system", system.GetString("name"))
 			for i := range longerRecordData {
 				recordData := longerRecordData[i]

@@ -24,16 +24,18 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 import { isAgentMonitorableAsset, isWebsiteMonitorableAsset } from "@/modules/asset-center/asset-list"
 import {
-	getAssetCompleteness,
-	getAssetSummaryRows,
 	getAssetTypeLabel,
-	getAssetWarrantyStatus,
-	getInternetBandwidthLabel,
 	getMetadataNumber,
 	getMetadataString,
 	getStatusLabel,
-	type AssetLifecycleTone,
 } from "@/modules/asset-center/asset-schema"
+import {
+	getAssetCompleteness,
+	getAssetSummaryRows,
+	getAssetWarrantyStatus,
+	getInternetBandwidthLabel,
+	type AssetLifecycleTone,
+} from "@/modules/asset-center/asset-profile-summary"
 import type { AssetRecord, AssetStatus, AssetType } from "@/types"
 
 export type AssetCardProps = {

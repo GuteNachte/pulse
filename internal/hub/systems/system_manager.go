@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -40,6 +41,11 @@ type SystemManager struct {
 	systems       *store.Store[string, *System]         // Thread-safe store of active systems
 	smartFetchMap *expirymap.ExpiryMap[smartFetchState] // Stores last SMART fetch time/result; TTL is only for cleanup
 	shuttingDown  atomic.Bool                           // Prevents new updaters while the manager is being torn down
+
+	realtimeMutex       sync.Mutex
+	activeSubscriptions map[string]*subscriptionInfo
+	workerRunning       bool
+	tickerStopChan      chan struct{}
 }
 
 // hubLike defines the interface requirements for the hub dependency.
@@ -57,9 +63,10 @@ type hubLike interface {
 // The hub must implement the hubLike interface to provide database and alert functionality.
 func NewSystemManager(hub hubLike) *SystemManager {
 	return &SystemManager{
-		systems:       store.New(map[string]*System{}),
-		hub:           hub,
-		smartFetchMap: expirymap.New[smartFetchState](time.Hour),
+		systems:             store.New(map[string]*System{}),
+		hub:                 hub,
+		smartFetchMap:       expirymap.New[smartFetchState](time.Hour),
+		activeSubscriptions: make(map[string]*subscriptionInfo),
 	}
 }
 

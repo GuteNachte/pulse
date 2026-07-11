@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pocketbase/pocketbase/apis"
+	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/subscriptions"
 	"github.com/stretchr/testify/require"
 	pulseHub "gutenacht.site/pulse/internal/hub"
 	pulseTests "gutenacht.site/pulse/internal/tests"
@@ -107,4 +110,38 @@ func TestRealtimeSubscriptionMapsToOwningModule(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDisablingClientMonitoringRemovesExistingRealtimeSubscriptions(t *testing.T) {
+	hub, user := pulseTests.GetHubWithUser(t)
+	defer hub.Cleanup()
+
+	client := subscriptions.NewDefaultClient()
+	client.Set(apis.RealtimeClientAuthKey, user)
+	hub.SubscriptionsBroker().Register(client)
+	topic := `rt_metrics?options={"query":{"system":"system-1"}}`
+	client.Subscribe("systems/*", "website_monitors/*")
+	event := &core.RealtimeSubscribeRequestEvent{
+		RequestEvent:  &core.RequestEvent{App: hub.TestApp, Auth: user},
+		Client:        client,
+		Subscriptions: []string{topic},
+	}
+	err := hub.OnRealtimeSubscribeRequest().Trigger(event, func(e *core.RealtimeSubscribeRequestEvent) error {
+		e.Client.Subscribe(e.Subscriptions...)
+		return nil
+	})
+	require.NoError(t, err)
+	require.True(t, client.HasSubscription(topic))
+	require.True(t, client.HasSubscription("systems/*"))
+	require.True(t, client.HasSubscription("website_monitors/*"))
+
+	_, err = pulseTests.CreateRecord(hub, "module_settings", map[string]any{
+		"user":      user.Id,
+		"module_id": "client-monitoring",
+		"enabled":   false,
+	})
+	require.NoError(t, err)
+	require.False(t, client.HasSubscription(topic))
+	require.False(t, client.HasSubscription("systems/*"))
+	require.True(t, client.HasSubscription("website_monitors/*"))
 }
