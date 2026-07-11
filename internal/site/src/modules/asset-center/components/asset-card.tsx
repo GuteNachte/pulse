@@ -36,6 +36,7 @@ import {
 	getInternetBandwidthLabel,
 	type AssetLifecycleTone,
 } from "@/modules/asset-center/asset-profile-summary"
+import { assetListColumns, assetListDesktopGridClassName } from "@/modules/asset-center/asset-list-layout"
 import type { AssetRecord, AssetStatus, AssetType } from "@/types"
 
 export type AssetCardProps = {
@@ -61,6 +62,21 @@ export type AssetListItemProps = {
 	onActivate: () => void
 }
 
+export function AssetListHeader() {
+	return (
+		<div className="sticky top-0 z-10 hidden grid-cols-[minmax(0,1fr)_2.75rem] border-b border-border/70 bg-surface-soft text-[11px] font-medium text-muted-foreground md:grid">
+			<div className={cn("grid items-center gap-3 px-3 py-2", assetListDesktopGridClassName)}>
+				{assetListColumns.map((column) => (
+					<span key={column.key} className="truncate">
+						{column.label}
+					</span>
+				))}
+			</div>
+			<span className="grid place-items-center border-l border-border/70 px-1 text-[10px]">详情</span>
+		</div>
+	)
+}
+
 export function AssetListItem({ asset, parent, monitored, maintenanceCount, active, onActivate }: AssetListItemProps) {
 	const Icon = getAssetIcon(asset.type)
 	const completeness = getAssetCompleteness(asset)
@@ -84,9 +100,12 @@ export function AssetListItem({ asset, parent, monitored, maintenanceCount, acti
 			<button
 				type="button"
 				onClick={onActivate}
-				className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] items-center gap-3 px-3 py-2.5 text-left sm:grid-cols-[minmax(4.75rem,.42fr)_minmax(12rem,1.25fr)] md:grid-cols-[minmax(5rem,.42fr)_minmax(12rem,1.25fr)_minmax(7.5rem,.72fr)_minmax(8rem,.72fr)_minmax(8rem,.82fr)_minmax(5.5rem,.55fr)]"
+				className={cn(
+					"grid w-full min-w-0 grid-cols-[minmax(0,1fr)] items-center gap-3 px-3 py-2.5 text-left sm:grid-cols-[minmax(4.75rem,.42fr)_minmax(12rem,1.25fr)]",
+					assetListDesktopGridClassName
+				)}
 			>
-				<AssetLedgerCell className="hidden sm:grid" label="编号" value={assetTagLabel} mono={Boolean(assetTag)} />
+				<AssetListValue className="hidden sm:block" value={assetTagLabel} mono={Boolean(assetTag)} />
 				<div className="flex min-w-0 items-center gap-2.5">
 					<span className="grid size-8 shrink-0 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
 						<Icon className="size-4" />
@@ -105,9 +124,9 @@ export function AssetListItem({ asset, parent, monitored, maintenanceCount, acti
 						</span>
 					</span>
 				</div>
-				<AssetLedgerCell className="hidden md:grid" label="位置" value={location} />
-				<AssetLedgerCell className="hidden md:grid" label="IP" value={ip} mono={ip !== "未填写"} />
-				<AssetLedgerCell className="hidden md:grid" label="接入网络" value={network} />
+				<AssetListValue className="hidden md:block" value={location} />
+				<AssetListValue className="hidden md:block" value={ip} mono={ip !== "未填写"} />
+				<AssetListValue className="hidden md:block" value={network} />
 				<div className="hidden min-w-0 justify-items-end gap-1 md:grid">
 					<div className="flex min-w-0 justify-end gap-1">
 						{monitored && <AssetCardMetaTag tone="ok">监控</AssetCardMetaTag>}
@@ -266,20 +285,9 @@ const hiddenPreviewSummaryLabels = new Set([
 	"公网",
 ])
 
-function AssetLedgerCell({
-	label,
-	value,
-	mono,
-	className,
-}: {
-	label: string
-	value: string
-	mono?: boolean
-	className?: string
-}) {
+function AssetListValue({ value, mono, className }: { value: string; mono?: boolean; className?: string }) {
 	return (
 		<span className={cn("min-w-0 content-center", className)}>
-			<span className="block text-[11px] text-muted-foreground">{label}</span>
 			<span className={cn("block truncate text-xs text-foreground", mono && "font-mono tabular-nums")}>{value}</span>
 		</span>
 	)

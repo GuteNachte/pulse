@@ -12,6 +12,7 @@ import {
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
 	AssetListItem,
+	AssetListHeader,
 	AssetPreviewPanel,
 	getAssetIpLabel,
 	getAssetNetworkLabel,
@@ -907,6 +908,7 @@ export default memo(function AssetsPage() {
 									</div>
 								</div>
 								<div className="max-h-[calc(100vh-18rem)] min-h-[24rem] overflow-y-auto bg-card">
+									<AssetListHeader />
 									{filteredAssets.map((asset) => (
 										<AssetListItem
 											key={asset.id}
