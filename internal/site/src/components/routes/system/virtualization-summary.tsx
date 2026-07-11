@@ -33,7 +33,7 @@ export function VirtualizationSummary({ details }: { details?: SystemDetailsReco
 								{getVirtualMachineStatusLabel(machine.status)}
 							</Badge>
 							<span className="text-muted-foreground tabular-nums">
-								{machine.vcpu ? `${machine.vcpu} 核` : "无"} / {machine.memory ? formatBytes(machine.memory) : "无"}
+								{machine.vcpu ? `${machine.vcpu} 核` : "无"} / {formatMachineMemory(machine.memory)}
 							</span>
 						</div>
 					))}
@@ -44,6 +44,12 @@ export function VirtualizationSummary({ details }: { details?: SystemDetailsReco
 			)}
 		</div>
 	)
+}
+
+function formatMachineMemory(memory?: number) {
+	if (!memory) return "无"
+	const formatted = formatBytes(memory)
+	return `${formatted.value} ${formatted.unit}`
 }
 
 function VirtualizationMetric({ value }: { value: string }) {

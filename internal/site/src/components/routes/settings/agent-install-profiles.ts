@@ -53,14 +53,6 @@ export function buildInstallProfiles({
 		version: windowsVersion,
 		url: windowsDownloadUrl,
 	})
-	const linuxCompose = buildLinuxAgentCompose({
-		token: tokenValue,
-		agentHubURL: hubUrl,
-		image: linuxImage,
-		version: linuxVersion,
-		dataDir: DEFAULT_LINUX_AGENT_DATA_DIR,
-		title: "Linux 通用容器版",
-	})
 	const linuxPairCompose = buildLinuxAgentPairCompose({
 		code: tokenValue,
 		agentHubURL: hubUrl,

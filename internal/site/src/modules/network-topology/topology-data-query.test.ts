@@ -1,23 +1,30 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import type {
+	AssetInterfaceRecord,
+	AssetRecord,
+	AssetRelationRecord,
+	NetworkLayoutRecord,
+	SystemDetailsRecord,
+} from "../../types.ts"
 import { loadTopologyData } from "./topology-data-query.ts"
 
 test("loads topology records with only graph-required fields", async () => {
 	const calls: Array<{ collection: string; options: Record<string, unknown> }> = []
-	const collection = (name: string) => ({
+	const collection = <T>(name: string) => ({
 		getFullList(options: Record<string, unknown>) {
 			calls.push({ collection: name, options })
-			return Promise.resolve([{ id: name }])
+			return Promise.resolve([{ id: name }]) as unknown as Promise<T[]>
 		},
 	})
 
 	const data = await loadTopologyData({
 		collections: {
-			assets: collection("assets"),
-			interfaces: collection("asset_interfaces"),
-			relations: collection("asset_relations"),
-			layouts: collection("network_layouts"),
-			details: collection("system_details"),
+			assets: collection<AssetRecord>("assets"),
+			interfaces: collection<AssetInterfaceRecord>("asset_interfaces"),
+			relations: collection<AssetRelationRecord>("asset_relations"),
+			layouts: collection<NetworkLayoutRecord>("network_layouts"),
+			details: collection<SystemDetailsRecord>("system_details"),
 		},
 		layoutFilter: 'key = "network-workspace"',
 	})

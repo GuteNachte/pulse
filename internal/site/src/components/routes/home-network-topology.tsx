@@ -138,6 +138,9 @@ type NetworkTopologyData = {
 	details: SystemDetailsRecord[]
 }
 
+type TopologyNode = Node<TopologyNodeData>
+type TopologyEdge = Edge<TopologyEdgeData>
+
 function getTopologyFocusTarget(isOverview: boolean): TopologyFocusTarget | undefined {
 	if (isOverview || typeof window === "undefined") return undefined
 	const search = new URLSearchParams(window.location.search)
@@ -238,8 +241,8 @@ function NetworkTopologyPanel({ systems, mode }: { systems: SystemRecord[]; mode
 		() => getTopologyFocusNodeIds(graph.nodes, graph.edges, focusTarget),
 		[graph, focusTarget]
 	)
-	const [nodes, setNodes, onNodesChangeBase] = useNodesState<TopologyNodeData>(focusedGraph.nodes)
-	const [edges, setEdges, onEdgesChange] = useEdgesState<TopologyEdgeData>(focusedGraph.edges)
+	const [nodes, setNodes, onNodesChangeBase] = useNodesState<TopologyNode>(focusedGraph.nodes)
+	const [edges, setEdges, onEdgesChange] = useEdgesState<TopologyEdge>(focusedGraph.edges)
 	const nodesInitialized = useNodesInitialized()
 	const { fitView, getViewport } = useReactFlow()
 	const overviewCanvasHeight = useMemo(() => {
@@ -301,7 +304,7 @@ function NetworkTopologyPanel({ systems, mode }: { systems: SystemRecord[]; mode
 		loadTopology()
 	}, [loadTopology])
 
-	const onNodesChange: OnNodesChange<TopologyNodeData> = useCallback(
+	const onNodesChange: OnNodesChange<TopologyNode> = useCallback(
 		(changes) => onNodesChangeBase(changes),
 		[onNodesChangeBase]
 	)
@@ -331,7 +334,7 @@ function NetworkTopologyPanel({ systems, mode }: { systems: SystemRecord[]; mode
 		return () => window.removeEventListener(TOPOLOGY_NODE_DETAILS_EVENT, handleNodeDetails)
 	}, [isOverview])
 
-	const handleSelectionChange = useCallback((params: OnSelectionChangeParams<TopologyNodeData, TopologyEdgeData>) => {
+	const handleSelectionChange = useCallback((params: OnSelectionChangeParams<TopologyNode, TopologyEdge>) => {
 		const selectedNodeId = params.nodes[0]?.id
 		if (selectedNodeId) {
 			setSelectedId(selectedNodeId)
@@ -494,7 +497,7 @@ function NetworkTopologyPanel({ systems, mode }: { systems: SystemRecord[]; mode
 									</div>
 								</div>
 							) : (
-								<ReactFlow<TopologyNodeData, TopologyEdgeData>
+								<ReactFlow<TopologyNode, TopologyEdge>
 									nodes={nodes}
 									edges={edges}
 									nodeTypes={TOPOLOGY_NODE_TYPES}
@@ -1261,7 +1264,7 @@ function NodeDetailsDialog({
 								{asset && (getMetadataString(asset.metadata, "fixed_ipv4") || asset.management_ip) && (
 									<TopologyDetailRow
 										label="IPv4"
-										value={getMetadataString(asset.metadata, "fixed_ipv4") || asset.management_ip}
+										value={getMetadataString(asset.metadata, "fixed_ipv4") || asset.management_ip || ""}
 									/>
 								)}
 								{asset?.role && <TopologyDetailRow label="角色" value={asset.role} />}

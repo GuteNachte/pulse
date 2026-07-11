@@ -8,6 +8,7 @@ import {
 	type MobileAgentReleaseItem,
 	type MobileAgentUpdateItem,
 } from "@/components/mobile/mobile-agent-settings"
+import type { MobileStatusTone } from "@/components/mobile/mobile-ui"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/use-toast"
 import { isPocketBaseAutoCancel, pb } from "@/lib/api"

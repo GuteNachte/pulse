@@ -96,7 +96,7 @@ export function getLatestAssetVisualCandidateSet(visuals: AssetVisualRecord[]) {
 export function getAssetVisualCandidateFrames(visual: AssetVisualRecord | undefined): AssetVisualCandidateFrame[] {
 	if (!visual?.frames?.length) return []
 	return visual.frames
-		.map((frame, fallbackIndex) => {
+		.map((frame, fallbackIndex): AssetVisualCandidateFrame | undefined => {
 			if (!isDisplayableAssetVisualFrame(frame) || !frame.url) return undefined
 			const index = typeof frame.index === "number" ? frame.index : fallbackIndex
 			return {

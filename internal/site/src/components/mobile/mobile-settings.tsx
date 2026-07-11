@@ -13,7 +13,7 @@ export type MobileSettingsNavItem = {
 	description?: string
 	keywords?: string[]
 	danger?: boolean
-	preload?: () => Promise<{ default: ComponentType<object> }>
+	preload?: () => Promise<unknown>
 }
 
 export function MobileSettingsLayout({

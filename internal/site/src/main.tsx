@@ -95,7 +95,9 @@ const App = memo(() => {
 		return <NotFoundPage />
 	}
 
-	const moduleId = getModuleForAppRoute(page.route, page.params?.name)
+	const pageParams = page.params as { id?: string; name?: unknown }
+	const settingsName = typeof pageParams.name === "string" ? pageParams.name : undefined
+	const moduleId = getModuleForAppRoute(page.route, settingsName)
 	if (moduleId && moduleSettings[moduleId]?.effectiveEnabled === false) {
 		return <ModuleDisabledPage moduleId={moduleId} />
 	} else if (page.route === "home") {
@@ -155,7 +157,7 @@ function ModuleDisabledPage({ moduleId }: { moduleId: ReturnType<typeof getModul
 						<Button asChild className="gap-2">
 							<Link href={getPagePath($router, "settings", { name: isAdmin() ? "modules" : "about" })}>
 								<HomeIcon className="size-4" />
-								{isAdmin() ? "打开模块管理" : "打开关于页"}
+								{isAdmin() ? "打开模块说明" : "打开关于页"}
 							</Link>
 						</Button>
 					</div>

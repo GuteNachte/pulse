@@ -1,7 +1,7 @@
 import { t } from "@lingui/core/macro"
 import AreaChartDefault from "@/components/charts/area-chart"
 import { Unit } from "@/lib/enums"
-import type { ChartData, SystemStatsRecord } from "@/types"
+import type { ChartData, ContainerStats, SystemStatsRecord } from "@/types"
 import { ChartCard, SelectAvgMax } from "../chart-card"
 import { dockerOrPodman } from "../chart-data"
 import { decimalString, formatBytes, toFixedFloat } from "@/lib/utils"
@@ -108,7 +108,7 @@ export function ContainerMemoryChart({
 								if (key === "created" || !value || typeof value !== "object") {
 									return total
 								}
-								return total + (Number(value.m) || 0)
+								return total + (Number((value as ContainerStats).m) || 0)
 							}, 0),
 						color: 2,
 						opacity: 0.4,

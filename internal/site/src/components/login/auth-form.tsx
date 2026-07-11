@@ -30,6 +30,14 @@ type MfaChallenge = {
 	otpId: string
 }
 
+type AuthFormOutput = {
+	password: string
+	passwordConfirm?: string
+	username?: string
+	email?: string
+	identity?: string
+}
+
 type MfaAuthError = {
 	status?: number
 	message?: string
@@ -136,7 +144,8 @@ export function UserAuthForm({
 					return
 				}
 				setStage("submitting")
-				const { password, passwordConfirm } = result.output
+				const output = result.output as AuthFormOutput
+				const { password, passwordConfirm } = output
 				if (isFirstRun) {
 					// check that passwords match
 					if (password !== passwordConfirm) {
@@ -145,31 +154,31 @@ export function UserAuthForm({
 						setStage("error")
 						return
 					}
-					const { username, email } = result.output
+					const { username, email } = output
 					await pb.send("/api/pulse/create-user", {
 						method: "POST",
-						body: JSON.stringify({ username, email, password }),
+						body: JSON.stringify({ username: username ?? "", email: email ?? "", password }),
 					})
 					setStage("admin-created")
 					try {
-						await pb.collection("users").authWithPassword(email, password)
+						await pb.collection("users").authWithPassword(email ?? "", password)
 					} catch (err: unknown) {
 						const mfaId = getMfaId(err)
 						if (!mfaId) {
 							throw err
 						}
-						await startMfaChallenge(email, mfaId)
+						await startMfaChallenge(email ?? "", mfaId)
 						return
 					}
 				} else {
 					try {
-						await pb.collection("users").authWithPassword(result.output.identity, password)
+						await pb.collection("users").authWithPassword(output.identity ?? "", password)
 					} catch (err: unknown) {
 						const mfaId = getMfaId(err)
 						if (!mfaId) {
 							throw err
 						}
-						await startMfaChallenge(result.output.identity, mfaId)
+						await startMfaChallenge(output.identity ?? "", mfaId)
 						return
 					}
 				}

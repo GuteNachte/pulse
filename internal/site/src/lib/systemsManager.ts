@@ -117,9 +117,9 @@ async function fetchSystems(): Promise<SystemRecord[] | undefined> {
 /** Normalizes partially populated system records so route-level loading does not blank the page. */
 function normalizeSystem(system: SystemRecord): SystemRecord {
 	system.info = {
-		h: "",
-		v: "",
 		...(system.info ?? {}),
+		h: system.info?.h ?? "",
+		v: system.info?.v ?? "",
 	}
 	return system
 }

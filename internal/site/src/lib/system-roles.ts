@@ -22,7 +22,7 @@ export const primaryUseOptions = [
 
 export type PrimaryUse = (typeof primaryUseOptions)[number]["value"]
 
-export function getSystemRoleLabel(value?: string) {
+export function getSystemRoleLabel(value?: string): string {
 	const normalized = value?.trim() || DEFAULT_SYSTEM_ROLE
 	return (
 		systemRoleOptions.find((option) => option.value === normalized)?.label ?? getSystemRoleLabel(DEFAULT_SYSTEM_ROLE)
@@ -33,7 +33,7 @@ export function getSystemRoleDisplayLabel(role?: string, _customRole?: string, _
 	return getSystemRoleLabel(role)
 }
 
-export function getPrimaryUseLabel(value?: string) {
+export function getPrimaryUseLabel(value?: string): string {
 	const normalized = value?.trim() || DEFAULT_PRIMARY_USE
 	return (
 		primaryUseOptions.find((option) => option.value === normalized)?.label ?? getPrimaryUseLabel(DEFAULT_PRIMARY_USE)

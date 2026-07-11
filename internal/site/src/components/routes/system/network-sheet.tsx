@@ -41,9 +41,7 @@ export default memo(function NetworkSheet({
 	const [internalOpen, setInternalOpen] = useState(false)
 	const netInterfacesOpen = open ?? internalOpen
 	const setNetInterfacesOpen = onOpenChange ?? setInternalOpen
-	const userSettings = useStore($userSettings)
 	const netInterfaces = useNetworkInterfaces(chartData.systemStats.at(-1)?.stats?.ni ?? {})
-	const showNetLegend = netInterfaces.length > 0 && netInterfaces.length < 15
 	const hasOpened = useRef(false)
 
 	if (netInterfacesOpen && !hasOpened.current) {

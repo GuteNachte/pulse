@@ -52,6 +52,8 @@ jobs:
         run: npm ci
       - name: Run Biome check
         run: npm run check
+      - name: Run TypeScript check
+        run: npm run typecheck
       - name: Run web regression tests
         run: npm run test
       - name: Build web app

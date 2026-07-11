@@ -220,7 +220,6 @@ export function AgentInstallWorkbench({ releases, hubUrl }: { releases: AgentRel
 			}
 			return buildWindowsInstallCommand("<TOKEN>", hubUrl, release, windowsOptions)
 		}
-		const meta = linuxInstallTargetMeta[target]
 		const dataDir = dataDirs[target]
 		const defaults = getLinuxInstallDefaults(target)
 		if (target === "unraid") {

@@ -65,7 +65,7 @@ export function GpuPowerChart({
 		}
 		const sorted = Array.from(totals.values()).sort((a, b) => b.total - a.total)
 		return sorted.map(
-			(entry, i): GpuPowerDataPoint => ({
+			(entry, i): DataPoint => ({
 				label: entry.label,
 				dataKey: (data: SystemStatsRecord) => {
 					const gpu = data.stats?.g?.[entry.gpuId]
@@ -96,7 +96,7 @@ export function GpuPowerChart({
 	)
 }
 
-function getGpuPowerTitle(dataPoints: GpuPowerDataPoint[]) {
+function getGpuPowerTitle(dataPoints: DataPoint[]) {
 	const gpuNames = new Set(dataPoints.map((point) => point.label.replace(/ package$/, "")))
 	if (gpuNames.size === 1) {
 		return `${Array.from(gpuNames)[0]} 功耗`
@@ -177,51 +177,5 @@ export function GpuDetailCharts({
 				)
 			})}
 		</div>
-	)
-}
-
-function GpuEnginesChart({ chartData }: { chartData: ChartData }) {
-	// Derive stable engine config key (cheap per render)
-	let enginesKey = ""
-	for (let i = chartData.systemStats.length - 1; i >= 0; i--) {
-		const gpus = chartData.systemStats[i].stats?.g
-		if (!gpus) continue
-		for (const id in gpus) {
-			if (gpus[id].e) {
-				enginesKey = `${id}\0${Object.keys(gpus[id].e).sort().join("\0")}`
-				break
-			}
-		}
-		if (enginesKey) break
-	}
-
-	const { gpuId, dataPoints } = useMemo((): { gpuId: string | null; dataPoints: DataPoint[] } => {
-		if (!enginesKey) return { gpuId: null, dataPoints: [] }
-		const parts = enginesKey.split("\0")
-		const gId = parts[0]
-		const engineNames = parts.slice(1)
-		return {
-			gpuId: gId,
-			dataPoints: engineNames.map((engine, i) => ({
-				label: engine,
-				dataKey: ({ stats }: SystemStatsRecord) => stats?.g?.[gId]?.e?.[engine] ?? 0,
-				color: `hsl(${140 + (((i * 360) / engineNames.length) % 360)}, 65%, 52%)`,
-				opacity: 0.35,
-			})),
-		}
-	}, [enginesKey])
-
-	if (!gpuId) {
-		return null
-	}
-
-	return (
-		<LineChartDefault
-			legend={true}
-			chartData={chartData}
-			dataPoints={dataPoints}
-			tickFormatter={(val) => percentTickString(val)}
-			contentFormatter={({ value }) => percentValueString(value)}
-		/>
 	)
 }

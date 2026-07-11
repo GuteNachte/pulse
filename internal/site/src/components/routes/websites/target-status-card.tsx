@@ -50,7 +50,7 @@ export function TargetStatusCard({
 			</div>
 			<div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
 				{errorLabel ? (
-					<div className="min-w-0 truncate text-xs text-destructive" title={check.error}>
+					<div className="min-w-0 truncate text-xs text-destructive" title={check?.error ?? ""}>
 						{errorLabel}
 					</div>
 				) : (

@@ -25,18 +25,13 @@ import { AssetShowcaseTags } from "./components/asset-showcase-tags"
 import { AssetShowcaseWorkspace } from "./components/asset-showcase-workspace"
 import { SelectField, TextAreaField, TextField } from "./components/asset-detail-form-fields"
 import {
-	HOST_ASSET_TYPES,
 	getAssetFormSections,
 	getAssetTypeLabel,
 	getMetadataString,
 	getStatusLabel,
 	isPhoneVariantSpecRequired,
 } from "./asset-schema"
-import type { AssetLifecycleTone } from "./asset-profile-summary"
-import {
-	formatAssetDetailTaskStatusLabel,
-	formatAssetVisualTaskMeta as formatAssetVisualTaskSummary,
-} from "./asset-ai-task-summary"
+import { formatAssetVisualTaskMeta as formatAssetVisualTaskSummary } from "./asset-ai-task-summary"
 import { loadLatestAITasksByKind } from "./asset-ai-task-query"
 import { createAssetDetailLoadGuard, type AssetDetailLoadToken } from "./asset-detail-load-guard"
 import {
@@ -49,51 +44,37 @@ import {
 } from "./asset-detail-data"
 import { loadAssetEditCatalog } from "./asset-edit-catalog-query"
 import { getAssetRecognitionRequirements, validateAssetProfileForm } from "./asset-profile-validation"
-import { escapePocketBaseFilterValue } from "./asset-query"
 import { getAssetVisualColor } from "./asset-visual-color"
 import {
 	buildRelationMetadata,
 	emptyRelationForm,
 	getAssetInterfaceOptions,
 	getEmptyRelationFormForGuide,
-	getInterfaceKindLabel,
 	getMetadataNotes,
 	getPeerInterfaceOptions,
-	getRelationFormFromRecord,
 	getRelationTargetOptions,
 	interfaceKindOptions,
 	relationGuides,
 	relationKindOptions,
 	relationLinkKindOptions,
 	type RelationFormState,
-	type RelationGuideId,
 } from "./asset-detail-relations"
-import {
-	formatCollectedNicSummary,
-	formatMemoryModuleSummary,
-	formatSpeed,
-	getSystemDisplayName,
-} from "./asset-runtime-hardware"
+
 import type {
-	AssetChangeAction,
 	AssetChangeRecord,
-	AssetChangeSourceCollection,
 	AssetAttachmentKind,
 	AssetAttachmentRecord,
 	AssetVisualRecord,
 	AssetInterfaceRecord,
-	AssetInterfaceSource,
 	AssetEnrichmentReportRecord,
 	AssetEnrichmentSuggestionRecord,
 	AITaskRecord,
 	AssetMaintenanceKind,
 	AssetMaintenanceRecord,
 	AssetRecord,
+	AssetLocationRecord,
 	AssetRelationKind,
 	AssetRelationRecord,
-	NetworkInterfaceDetails,
-	SystemDetailsRecord,
-	SystemRecord,
 } from "@/types"
 
 const AssetEnrichmentReportDialog = lazy(() =>
@@ -101,14 +82,6 @@ const AssetEnrichmentReportDialog = lazy(() =>
 		default: module.AssetEnrichmentReportDialog,
 	}))
 )
-
-function getNetworkTopologyFocusHref(params: { asset?: string; relation?: string }) {
-	const search = new URLSearchParams()
-	if (params.relation) search.set("relation", params.relation)
-	if (params.asset) search.set("asset", params.asset)
-	const query = search.toString()
-	return `${getPagePath($router, "network")}${query ? `?${query}` : ""}`
-}
 
 const maintenanceKindOptions: { value: AssetMaintenanceKind; label: string }[] = [
 	{ value: "purchase", label: "购买" },
@@ -146,7 +119,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const [visualGenerationStage, setVisualGenerationStage] = useState<"idle" | "running" | "ready" | "failed">("idle")
 	const [visualGenerationMessage, setVisualGenerationMessage] = useState("")
 	const [visualColor, setVisualColor] = useState("")
-	const [fileToken, setFileToken] = useState("")
 	const [editingInterface, setEditingInterface] = useState<AssetInterfaceRecord | null>(null)
 	const [editingRelation, setEditingRelation] = useState<AssetRelationRecord | null>(null)
 	const [relationForm, setRelationForm] = useState<RelationFormState>(emptyRelationForm)
@@ -223,7 +195,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				allInterfaces: interfaces,
 				relations,
 			})
-			setFileToken("")
 			document.title = pageTitle(`${assetRecord.name} / 资产详情`)
 			setLoading(false)
 			const secondaryLoad = startSecondaryDetailDataLoad({
@@ -354,21 +325,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					? applyAssetDetailSecondaryData(current, assetId, data)
 					: current
 			)
-			if (data.attachments.some((item) => item.files?.length > 0) && detailLoadGuardRef.current.isCurrent(loadToken)) {
-				pb.files
-					.getToken({ requestKey: null })
-					.then((token) => {
-						if (detailLoadGuardRef.current.isCurrent(loadToken)) setFileToken(token)
-					})
-					.catch((error) => {
-						if (!isPocketBaseAutoCancel(error)) {
-							console.warn("load asset file token", error)
-						}
-						if (detailLoadGuardRef.current.isCurrent(loadToken)) setFileToken("")
-					})
-			} else if (detailLoadGuardRef.current.isCurrent(loadToken)) {
-				setFileToken("")
-			}
 		} catch (error) {
 			if (!isPocketBaseAutoCancel(error)) {
 				console.warn("load secondary asset detail", error)
@@ -420,65 +376,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		} finally {
 			setSaving(false)
 		}
-	}
-
-	async function applyCollectionSuggestion(diff: AssetCollectionDiff) {
-		if (!diff.writeback) return
-		if (readOnly) {
-			toast({ title: "只读账号不能更新资产主档", variant: "destructive" })
-			return
-		}
-		const confirmed = window.confirm(
-			`确认把「${diff.label}」更新到资产主档？\n\n当前值：${diff.archiveValue}\n建议值：${diff.collectedValue}\n\n此操作会写入 ${diff.writeback.targetLabel}，并进入资产变更历史。`
-		)
-		if (!confirmed) return
-		setSaving(true)
-		try {
-			const payload =
-				diff.writeback.collection === "assets" && diff.writeback.field.startsWith("metadata.")
-					? {
-							metadata: {
-								...(asset?.metadata ?? {}),
-								[diff.writeback.field.slice("metadata.".length)]: diff.writeback.value,
-							},
-						}
-					: { [diff.writeback.field]: diff.writeback.value }
-			if (diff.writeback.collection === "assets") {
-				await pb.collection<AssetRecord>("assets").update(diff.writeback.recordId, payload)
-			} else {
-				await pb.collection<AssetInterfaceRecord>("asset_interfaces").update(diff.writeback.recordId, payload)
-			}
-			await loadDetail()
-			toast({ title: "采集建议已写入主档", description: `${diff.label} 已更新。` })
-		} catch (error) {
-			console.error("apply asset collection suggestion", error)
-			toast({ title: "采集建议写入失败", description: "请检查字段、权限或主数据校验规则。", variant: "destructive" })
-		} finally {
-			setSaving(false)
-		}
-	}
-
-	async function generateEnrichmentReport() {
-		if (!asset || readOnly) return
-		setSaving(true)
-		try {
-			await pb.send(`/api/pulse/assets/${asset.id}/enrichment-reports`, { method: "POST" })
-			await loadDetail({ waitSecondary: true })
-			toast({
-				title: "智能识别报告已生成",
-				description: "官方颜色、采集值、建档线索和可追溯资料会整理为待确认建议。",
-			})
-		} catch (error) {
-			console.error("generate asset enrichment report", error)
-			toast({ title: "智能识别失败", description: "请检查资产、Agent 绑定或 Hub 日志。", variant: "destructive" })
-		} finally {
-			setSaving(false)
-		}
-	}
-
-	async function generateAndOpenEnrichmentReport() {
-		await generateEnrichmentReport()
-		setEnrichmentReportDialogOpen(true)
 	}
 
 	async function generateTurntableVisual(options?: { color?: string }) {
@@ -928,43 +825,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		}
 	}
 
-	async function deleteInterface(record: AssetInterfaceRecord) {
-		if (!window.confirm(`确认删除接口「${record.name}」？拓扑里使用这个接口的信息会失效。`)) return
-		try {
-			await pb.collection("asset_interfaces").delete(record.id)
-			await loadDetail()
-			toast({ title: "接口已删除", description: record.name })
-		} catch (error) {
-			console.error("delete asset interface", error)
-			toast({ title: "接口删除失败", variant: "destructive" })
-		}
-	}
-
-	async function deleteRelation(record: AssetRelationRecord) {
-		const peer = assetMap.get(record.source_asset === id ? record.target_asset : record.source_asset)
-		if (!window.confirm(`确认删除和「${peer?.name ?? "目标资产"}」的关系？`)) return
-		try {
-			await pb.collection("asset_relations").delete(record.id)
-			await loadDetail()
-			toast({ title: "关系已删除", description: peer?.name })
-		} catch (error) {
-			console.error("delete asset relation", error)
-			toast({ title: "关系删除失败", variant: "destructive" })
-		}
-	}
-
-	async function deleteMaintenance(record: AssetMaintenanceRecord) {
-		if (!window.confirm(`确认删除记录「${record.title}」？`)) return
-		try {
-			await pb.collection("asset_maintenance").delete(record.id)
-			await loadDetail()
-			toast({ title: "维护记录已删除", description: record.title })
-		} catch (error) {
-			console.error("delete asset maintenance", error)
-			toast({ title: "维护记录删除失败", variant: "destructive" })
-		}
-	}
-
 	async function clearOtherPrimaryInterfaces(assetId: string, keepId: string) {
 		const records = state.interfaces.filter((item) => item.asset === assetId && item.id !== keepId && item.primary)
 		await Promise.all(records.map((record) => pb.collection("asset_interfaces").update(record.id, { primary: false })))
@@ -972,11 +832,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 
 	function openAddInterfaceDialog() {
 		setEditingInterface(null)
-		setInterfaceDialogOpen(true)
-	}
-
-	function openEditInterfaceDialog(record: AssetInterfaceRecord) {
-		setEditingInterface(record)
 		setInterfaceDialogOpen(true)
 	}
 
@@ -988,28 +843,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		})
 		setEditingRelation(null)
 		setRelationForm(getEmptyRelationFormForGuide())
-		setRelationDialogOpen(true)
-	}
-
-	function openGuidedRelationDialog(guideId: RelationGuideId) {
-		ensureAssetEditCatalogLoaded().catch((error) => {
-			if (!isPocketBaseAutoCancel(error)) {
-				console.warn("ensure asset relation catalog", error)
-			}
-		})
-		setEditingRelation(null)
-		setRelationForm(getEmptyRelationFormForGuide(guideId))
-		setRelationDialogOpen(true)
-	}
-
-	function openEditRelationDialog(record: AssetRelationRecord) {
-		ensureAssetEditCatalogLoaded().catch((error) => {
-			if (!isPocketBaseAutoCancel(error)) {
-				console.warn("ensure asset relation catalog", error)
-			}
-		})
-		setEditingRelation(record)
-		setRelationForm(getRelationFormFromRecord(record, asset?.id ?? id))
 		setRelationDialogOpen(true)
 	}
 
@@ -1030,11 +863,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 
 	function openAddMaintenanceDialog() {
 		setEditingMaintenance(null)
-		setMaintenanceDialogOpen(true)
-	}
-
-	function openEditMaintenanceDialog(record: AssetMaintenanceRecord) {
-		setEditingMaintenance(record)
 		setMaintenanceDialogOpen(true)
 	}
 
@@ -1074,36 +902,17 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		}
 	}
 
-	async function deleteAttachment(record: AssetAttachmentRecord) {
-		if (!window.confirm(`确认删除附件「${record.title}」？文件会一起从资产档案中移除。`)) {
-			return
-		}
-		try {
-			await pb.collection("asset_attachments").delete(record.id)
-			await loadDetail()
-			toast({ title: "资产附件已删除", description: record.title })
-		} catch (error) {
-			console.error("delete asset attachment", error)
-			toast({ title: "附件删除失败", variant: "destructive" })
-		}
-	}
-
 	if (loading) {
 		return <EmptyState loading loadingText="正在读取资产详情" emptyText="暂无资产" />
 	}
 
 	if (!asset) {
 		return (
-			<EmptyState
-				loading={false}
-				loadingText="正在读取资产详情"
-				emptyText="资产不存在或没有权限查看"
-				action={
-					<Button asChild variant="outline">
-						<Link href={getPagePath($router, "assets")}>返回资产中心</Link>
-					</Button>
-				}
-			/>
+			<EmptyState loading={false} loadingText="正在读取资产详情" emptyText="资产不存在或没有权限查看">
+				<Button asChild variant="outline">
+					<Link href={getPagePath($router, "assets")}>返回资产中心</Link>
+				</Button>
+			</EmptyState>
 		)
 	}
 	const AssetIcon = getAssetIcon(asset.type)
@@ -1543,119 +1352,6 @@ function DialogFormSection({
 	)
 }
 
-function uniqueIds(ids: string[]) {
-	return [...new Set(ids.filter(Boolean))]
-}
-
-function uniqueAssetRecords(records: AssetRecord[]) {
-	const seen = new Set<string>()
-	return records.filter((record) => {
-		if (!record.id || seen.has(record.id)) return false
-		seen.add(record.id)
-		return true
-	})
-}
-
-function getAssetIdsFilter(assetIds: string[]) {
-	return uniqueIds(assetIds)
-		.map((assetId) => `asset="${escapePocketBaseFilterValue(assetId)}"`)
-		.join(" || ")
-}
-
-type AssetCollectionDiff = {
-	key: string
-	label: string
-	archiveValue: string
-	collectedValue: string
-	source: string
-	confidence: number
-	recommendation: string
-	writeback?: AssetCollectionWriteback
-}
-
-type AssetCollectionWriteback = {
-	collection: "assets" | "asset_interfaces"
-	recordId: string
-	field: string
-	value: string | number
-	targetLabel: string
-}
-
-function EmptyBlock({ icon, text }: { icon: ReactNode; text: string }) {
-	return (
-		<div className="grid place-items-center rounded-lg border border-dashed border-border/70 bg-surface-soft p-6 text-center">
-			<div className="grid size-10 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
-				{icon}
-			</div>
-			<div className="mt-3 text-sm text-muted-foreground">{text}</div>
-		</div>
-	)
-}
-
-function MetaTag({ children }: { children: ReactNode }) {
-	return (
-		<span className="rounded-md border border-border/70 bg-card px-1.5 py-0.5 text-[11px] text-muted-foreground">
-			{children}
-		</span>
-	)
-}
-
-function SummaryMini({ label, value }: { label: string; value: number | string }) {
-	return (
-		<div className="rounded-md border border-border/70 bg-card px-2.5 py-2">
-			<div className="text-[11px] text-muted-foreground">{label}</div>
-			<div className="mt-1 font-mono text-base font-semibold tabular-nums text-foreground">{value}</div>
-		</div>
-	)
-}
-
-function ConfidenceTag({ confidence }: { confidence: number }) {
-	const tone = confidence >= 90 ? "ok" : confidence >= 75 ? "warning" : "neutral"
-	return <ToneTag tone={tone}>置信度 {confidence}%</ToneTag>
-}
-
-function getAssetVisualStatusLabel(status?: AssetVisualRecord["status"]) {
-	switch (status) {
-		case "ready":
-			return "待确认"
-		case "accepted":
-			return "已设为主视觉"
-		case "rejected":
-			return "已忽略"
-		case "failed":
-			return "收集失败"
-		default:
-			return "草稿"
-	}
-}
-
-function getAssetEnrichmentTaskMeta(tasks: AITaskRecord[], reports: AssetEnrichmentReportRecord[]) {
-	const latestTask = tasks.find((task) => task.kind === "asset_enrichment")
-	if (latestTask) {
-		return `Agent ${formatAssetDetailTaskStatusLabel(latestTask.status)}`
-	}
-	return reports.length ? `${reports.length} 份报告` : "未生成"
-}
-
-function ToneTag({ children, tone }: { children: ReactNode; tone: AssetLifecycleTone }) {
-	return (
-		<span
-			className={cn(
-				"rounded-md border px-2 py-1 text-xs font-medium",
-				tone === "danger"
-					? "border-red-200 bg-red-50 text-red-700"
-					: tone === "warning"
-						? "border-amber-200 bg-amber-50 text-amber-700"
-						: tone === "ok"
-							? "border-emerald-200 bg-emerald-50 text-emerald-700"
-							: "border-border/70 bg-card text-muted-foreground"
-			)}
-		>
-			{children}
-		</span>
-	)
-}
-
 function StatusBadge({ status }: { status: "active" | "inactive" | "retired" | "planned" }) {
 	return (
 		<span
@@ -1673,379 +1369,11 @@ function StatusBadge({ status }: { status: "active" | "inactive" | "retired" | "
 	)
 }
 
-function SystemStatusBadge({ status }: { status: SystemRecord["status"] }) {
-	return (
-		<span
-			className={cn(
-				"inline-flex min-h-6 items-center rounded-md border px-2 text-xs font-medium",
-				status === "up"
-					? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
-					: status === "pending"
-						? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
-						: "border-border/70 bg-card text-muted-foreground"
-			)}
-		>
-			{systemStatusLabel(status)}
-		</span>
-	)
-}
-
-function systemStatusLabel(status?: SystemRecord["status"]) {
-	switch (status) {
-		case "up":
-			return "在线"
-		case "pending":
-			return "待接入"
-		case "paused":
-			return "暂停"
-		default:
-			return "离线"
-	}
-}
-
 function yesNoOptions() {
 	return [
 		{ value: "yes", label: "是" },
 		{ value: "no", label: "否" },
 	]
-}
-
-function buildCollectionDiffs(
-	asset: AssetRecord,
-	interfaces: AssetInterfaceRecord[],
-	systems: SystemRecord[],
-	systemDetails: SystemDetailsRecord[]
-) {
-	const diffs: AssetCollectionDiff[] = []
-	const detailBySystem = new Map(systemDetails.map((detail) => [detail.system || detail.id, detail]))
-	const systemPairs = systems.map((system) => ({ system, detail: detailBySystem.get(system.id) }))
-	for (const { system, detail } of systemPairs) {
-		const collectedName = firstNonEmpty(detail?.hostname, system.display_name, system.name)
-		if (asset.name && collectedName && normalizeComparableText(asset.name) !== normalizeComparableText(collectedName)) {
-			diffs.push({
-				key: `name-${system.id}`,
-				label: "主机识别名称",
-				archiveValue: asset.name,
-				collectedValue: collectedName,
-				source: getSystemDisplayName(system),
-				confidence: 80,
-				recommendation:
-					"Agent 上报的主机名和资产名称不同。建议确认这是否只是显示名差异；确认后再手动更新资产名称或保留当前主档。",
-				writeback: {
-					collection: "assets",
-					recordId: asset.id,
-					field: "name",
-					value: collectedName,
-					targetLabel: "资产档案 / 资产名称",
-				},
-			})
-		}
-		if ((HOST_ASSET_TYPES.includes(asset.type) || asset.type === "vm") && detail) {
-			const source = getSystemDisplayName(system)
-			addMetadataCollectionDiff(diffs, asset, {
-				field: "cpu_vendor",
-				label: "CPU 厂商",
-				collectedValue: detail.cpu_vendor,
-				source,
-				confidence: 90,
-				recommendation: "Agent 已采集到 CPU 厂商。该字段通常稳定，可确认后写入资产主档。",
-			})
-			addMetadataCollectionDiff(diffs, asset, {
-				field: "cpu_model",
-				label: "CPU 型号",
-				collectedValue: detail.cpu,
-				source,
-				confidence: 90,
-				recommendation: "Agent 已采集到 CPU 型号。该字段通常稳定，可确认后写入资产主档。",
-			})
-			const memoryGb = bytesToRoundedGb(detail.memory)
-			addMetadataCollectionDiff(diffs, asset, {
-				field: "memory_gb",
-				label: "内存容量",
-				collectedValue: memoryGb,
-				displayValue: memoryGb ? `${memoryGb} GB` : "",
-				source,
-				confidence: 85,
-				recommendation: "Agent 已采集到内存总容量。确认当前内存配置就是长期配置后，可写入资产主档。",
-			})
-			addMetadataCollectionDiff(diffs, asset, {
-				field: "memory_detail",
-				label: "内存条摘要",
-				collectedValue: formatMemoryModuleSummary(detail),
-				source,
-				confidence: 80,
-				recommendation: "Agent 已采集到内存条摘要。它适合做主档备注；更精确的颗粒和套条信息后续由专项识别 Agent 补齐。",
-			})
-			const primaryNicSpeed = getPrimaryCollectedNicSpeed(detail)
-			addMetadataCollectionDiff(diffs, asset, {
-				field: "primary_nic_speed_mbps",
-				label: "主网卡速率",
-				collectedValue: primaryNicSpeed,
-				displayValue: primaryNicSpeed ? formatSpeed(primaryNicSpeed) : "",
-				source,
-				confidence: 80,
-				recommendation:
-					"Agent 已采集到物理网卡链路速率。该值会受交换机端口和线材协商影响，确认长期接入方式后再写入主档。",
-			})
-			addMetadataCollectionDiff(diffs, asset, {
-				field: "nic_detail",
-				label: "物理网卡摘要",
-				collectedValue: formatCollectedNicSummary(detail),
-				source,
-				confidence: 75,
-				recommendation: "Agent 已采集到物理网卡摘要。芯片级品牌和型号后续仍建议通过专项识别 Agent 精准补齐。",
-			})
-		}
-	}
-
-	const collectedIps = getCollectedIpValues(systemPairs)
-	if (asset.management_ip && collectedIps.length > 0 && !hasNormalizedValue(collectedIps, asset.management_ip)) {
-		diffs.push({
-			key: "management-ip",
-			label: "IPv4",
-			archiveValue: asset.management_ip,
-			collectedValue: collectedIps.join(" / "),
-			source: systems.length === 1 ? getSystemDisplayName(systems[0]) : "绑定 Agent",
-			confidence: 85,
-			recommendation:
-				"Agent 上报的地址不包含资产主档里的 IPv4。建议核对 DHCP 保留和当前接入网卡后，再决定是否更新资产主档。",
-			writeback: {
-				collection: "assets",
-				recordId: asset.id,
-				field: "management_ip",
-				value: collectedIps[0],
-				targetLabel: "资产档案 / IPv4",
-			},
-		})
-	}
-
-	const collectedInterfaces = systemPairs.flatMap(({ system, detail }) =>
-		(detail?.network_interfaces ?? []).map((networkInterface) => ({
-			system,
-			networkInterface,
-		}))
-	)
-	for (const assetInterface of interfaces) {
-		if (collectedInterfaces.length === 0) continue
-		const matched = findCollectedInterface(assetInterface, collectedInterfaces)
-		const archiveInterfaceName = assetInterface.name || getInterfaceKindLabel(assetInterface.kind)
-		if (!matched) {
-			if (assetInterface.mac && collectedInterfaces.some((item) => item.networkInterface.mac)) {
-				diffs.push({
-					key: `interface-mac-missing-${assetInterface.id}`,
-					label: `${archiveInterfaceName} MAC`,
-					archiveValue: assetInterface.mac,
-					collectedValue: "Agent 未发现匹配网卡",
-					source: "绑定 Agent",
-					confidence: 65,
-					recommendation:
-						"资产接口里的 MAC 没有在当前 Agent 物理网卡采集中匹配到。建议先确认是否换过网卡、禁用了接口，或当前 Agent 采集权限不足。",
-				})
-			}
-			continue
-		}
-		const source = getSystemDisplayName(matched.system)
-		const collected = matched.networkInterface
-		if (assetInterface.mac && collected.mac && normalizeMac(assetInterface.mac) !== normalizeMac(collected.mac)) {
-			diffs.push({
-				key: `interface-mac-${assetInterface.id}-${matched.system.id}`,
-				label: `${archiveInterfaceName} MAC`,
-				archiveValue: assetInterface.mac,
-				collectedValue: collected.mac,
-				source,
-				confidence: 90,
-				recommendation:
-					"同一接口的 Agent 采集 MAC 与资产接口主档不同。建议确认是否更换过网卡或接口匹配是否正确，确认后再写入资产接口。",
-				writeback: {
-					collection: "asset_interfaces",
-					recordId: assetInterface.id,
-					field: "mac",
-					value: collected.mac,
-					targetLabel: "资产接口 / MAC",
-				},
-			})
-		}
-		if (assetInterface.ipv4 && collected.ipv4?.length && !hasNormalizedValue(collected.ipv4, assetInterface.ipv4)) {
-			diffs.push({
-				key: `interface-ipv4-${assetInterface.id}-${matched.system.id}`,
-				label: `${archiveInterfaceName} IPv4`,
-				archiveValue: assetInterface.ipv4,
-				collectedValue: collected.ipv4.join(" / "),
-				source,
-				confidence: 90,
-				recommendation:
-					"同一接口的 Agent 采集 IPv4 与资产接口主档不同。建议确认固定地址是否已变更，确认后再手动更新资产接口。",
-				writeback: {
-					collection: "asset_interfaces",
-					recordId: assetInterface.id,
-					field: "ipv4",
-					value: collected.ipv4[0],
-					targetLabel: "资产接口 / IPv4",
-				},
-			})
-		}
-		if (assetInterface.ipv6 && collected.ipv6?.length && !hasNormalizedValue(collected.ipv6, assetInterface.ipv6)) {
-			diffs.push({
-				key: `interface-ipv6-${assetInterface.id}-${matched.system.id}`,
-				label: `${archiveInterfaceName} IPv6`,
-				archiveValue: assetInterface.ipv6,
-				collectedValue: collected.ipv6.join(" / "),
-				source,
-				confidence: 75,
-				recommendation: "IPv6 可能随前缀、隐私地址或网络策略变化。建议只在你确定该 IPv6 是长期固定地址时写回资产接口。",
-				writeback: {
-					collection: "asset_interfaces",
-					recordId: assetInterface.id,
-					field: "ipv6",
-					value: collected.ipv6[0],
-					targetLabel: "资产接口 / IPv6",
-				},
-			})
-		}
-		if (
-			assetInterface.speed_mbps &&
-			collected.link_speed &&
-			Number(assetInterface.speed_mbps) !== Number(collected.link_speed)
-		) {
-			diffs.push({
-				key: `interface-speed-${assetInterface.id}-${matched.system.id}`,
-				label: `${archiveInterfaceName} 链路速率`,
-				archiveValue: formatSpeed(assetInterface.speed_mbps),
-				collectedValue: formatSpeed(collected.link_speed),
-				source,
-				confidence: 85,
-				recommendation:
-					"Agent 采集到的链路速率和资产接口档案不同。建议检查交换机端口协商、线材和网卡设置后，再更新接口速率主档。",
-				writeback: {
-					collection: "asset_interfaces",
-					recordId: assetInterface.id,
-					field: "speed_mbps",
-					value: collected.link_speed,
-					targetLabel: "资产接口 / 链路速率",
-				},
-			})
-		}
-	}
-	return diffs
-}
-
-function addMetadataCollectionDiff(
-	diffs: AssetCollectionDiff[],
-	asset: AssetRecord,
-	options: {
-		field: string
-		label: string
-		collectedValue?: string | number
-		displayValue?: string
-		source: string
-		confidence: number
-		recommendation: string
-	}
-) {
-	const collectedValue = normalizeCollectedMetadataValue(options.collectedValue)
-	if (collectedValue === undefined) return
-	const archiveValue = normalizeCollectedMetadataValue(asset.metadata?.[options.field])
-	if (metadataValuesEqual(archiveValue, collectedValue)) return
-	const collectedDisplay = options.displayValue || formatMetadataSuggestionValue(collectedValue)
-	if (!collectedDisplay) return
-	diffs.push({
-		key: `metadata-${options.field}-${normalizeComparableText(options.source) || "agent"}`,
-		label: options.label,
-		archiveValue: archiveValue === undefined ? "未填写" : formatMetadataSuggestionValue(archiveValue),
-		collectedValue: collectedDisplay,
-		source: options.source,
-		confidence: options.confidence,
-		recommendation: options.recommendation,
-		writeback: {
-			collection: "assets",
-			recordId: asset.id,
-			field: `metadata.${options.field}`,
-			value: collectedValue,
-			targetLabel: `资产档案 / ${options.label}`,
-		},
-	})
-}
-
-function normalizeCollectedMetadataValue(value: unknown) {
-	if (typeof value === "number") {
-		return Number.isFinite(value) && value > 0 ? value : undefined
-	}
-	if (typeof value !== "string") return undefined
-	const trimmed = value.trim()
-	return trimmed ? trimmed : undefined
-}
-
-function metadataValuesEqual(left?: string | number, right?: string | number) {
-	if (left === undefined || right === undefined) return false
-	if (typeof left === "number" || typeof right === "number") {
-		return Number(left) === Number(right)
-	}
-	return normalizeComparableText(left) === normalizeComparableText(right)
-}
-
-function formatMetadataSuggestionValue(value: string | number) {
-	if (typeof value === "number") {
-		return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "")
-	}
-	return value
-}
-
-function bytesToRoundedGb(value?: number) {
-	if (!value || !Number.isFinite(value)) return undefined
-	const gb = value / 1024 ** 3
-	if (gb <= 0) return undefined
-	return Math.round(gb)
-}
-
-function getPrimaryCollectedNicSpeed(detail: SystemDetailsRecord) {
-	const speeds = (detail.network_interfaces ?? [])
-		.map((item) => item.link_speed)
-		.filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0)
-	return speeds.length ? Math.max(...speeds) : undefined
-}
-
-function getCollectedIpValues(systemPairs: { system: SystemRecord; detail?: SystemDetailsRecord }[]) {
-	const values = new Set<string>()
-	for (const { system, detail } of systemPairs) {
-		for (const value of [system.info?.ip, system.target_ip, system.connect_ip, ...(system.reported_ips ?? [])]) {
-			addNormalizedDisplayValue(values, value)
-		}
-		for (const networkInterface of detail?.network_interfaces ?? []) {
-			for (const value of networkInterface.ipv4 ?? []) addNormalizedDisplayValue(values, value)
-			for (const value of networkInterface.ipv6 ?? []) addNormalizedDisplayValue(values, value)
-		}
-	}
-	return [...values]
-}
-
-function findCollectedInterface(
-	assetInterface: AssetInterfaceRecord,
-	collectedInterfaces: { system: SystemRecord; networkInterface: NetworkInterfaceDetails }[]
-) {
-	const mac = normalizeMac(assetInterface.mac)
-	if (mac) {
-		return collectedInterfaces.find((item) => normalizeMac(item.networkInterface.mac) === mac)
-	}
-	if (assetInterface.ipv4) {
-		const ipv4 = normalizeIpValue(assetInterface.ipv4)
-		const matched = collectedInterfaces.find((item) =>
-			(item.networkInterface.ipv4 ?? []).some((value) => normalizeIpValue(value) === ipv4)
-		)
-		if (matched) return matched
-	}
-	if (assetInterface.ipv6) {
-		const ipv6 = normalizeIpValue(assetInterface.ipv6)
-		const matched = collectedInterfaces.find((item) =>
-			(item.networkInterface.ipv6 ?? []).some((value) => normalizeIpValue(value) === ipv6)
-		)
-		if (matched) return matched
-	}
-	if (assetInterface.primary && collectedInterfaces.length === 1) return collectedInterfaces[0]
-	return undefined
-}
-
-function firstNonEmpty(...values: (string | undefined)[]) {
-	return values.find((value) => value?.trim())?.trim() ?? ""
 }
 
 function wait(ms: number) {
@@ -2062,92 +1390,6 @@ function isActionableEnrichmentSuggestion(suggestion: AssetEnrichmentSuggestionR
 
 function normalizeComparableText(value: string) {
 	return value.trim().toLowerCase()
-}
-
-function normalizeMac(value?: string) {
-	return value?.replace(/[^a-fA-F0-9]/g, "").toLowerCase() ?? ""
-}
-
-function normalizeIpValue(value?: string) {
-	return value?.trim().toLowerCase().replace(/\s+/g, "").split("%")[0] ?? ""
-}
-
-function hasNormalizedValue(values: string[], target: string) {
-	const normalizedTarget = normalizeIpValue(target)
-	return values.some((value) => normalizeIpValue(value) === normalizedTarget)
-}
-
-function addNormalizedDisplayValue(values: Set<string>, value?: string) {
-	const normalized = normalizeIpValue(value)
-	if (!normalized) return
-	values.add(value?.trim() || normalized)
-}
-
-function getMaintenanceKindLabel(kind?: AssetMaintenanceKind) {
-	return maintenanceKindOptions.find((item) => item.value === kind)?.label ?? kind ?? "未知"
-}
-
-function getAttachmentKindLabel(kind?: AssetAttachmentKind) {
-	return attachmentKindOptions.find((item) => item.value === kind)?.label ?? kind ?? "附件"
-}
-
-function getAssetChangeActionLabel(action?: AssetChangeAction) {
-	switch (action) {
-		case "create":
-			return "新增"
-		case "update":
-			return "更新"
-		case "delete":
-			return "删除"
-		default:
-			return "变更"
-	}
-}
-
-function getAssetChangeSourceLabel(source?: AssetChangeSourceCollection) {
-	switch (source) {
-		case "assets":
-			return "资产档案"
-		case "asset_interfaces":
-			return "网络接口"
-		case "asset_relations":
-			return "资产关系"
-		case "asset_maintenance":
-			return "维护记录"
-		case "asset_attachments":
-			return "资产附件"
-		default:
-			return "资产数据"
-	}
-}
-
-function isImageAttachment(fileName: string) {
-	return /\.(apng|avif|gif|jpe?g|png|webp)$/i.test(fileName)
-}
-
-function getReadableFileName(fileName: string) {
-	return fileName.replace(/_[a-z0-9]{6,}(?=\.[^.]+$|$)/i, "")
-}
-
-function getInterfaceSourceLabel(source?: AssetInterfaceSource) {
-	switch (source) {
-		case "manual":
-			return "手动"
-		case "agent":
-			return "Agent"
-		case "snmp":
-			return "SNMP"
-		case "import":
-			return "导入"
-		default:
-			return "未知"
-	}
-}
-
-function formatDate(value: string) {
-	const date = new Date(value)
-	if (Number.isNaN(date.getTime())) return value
-	return date.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" })
 }
 
 function getDateInputValue(value?: string) {

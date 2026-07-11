@@ -1,7 +1,7 @@
 import { t } from "@lingui/core/macro"
 import AreaChartDefault from "@/components/charts/area-chart"
 import { percentTickString, percentValueString } from "@/lib/utils"
-import type { ChartData } from "@/types"
+import type { ChartData, ContainerStats } from "@/types"
 import { pinnedAxisDomain } from "@/components/ui/chart"
 import { ChartCard, SelectAvgMax } from "../chart-card"
 import { dockerOrPodman } from "../chart-data"
@@ -79,7 +79,7 @@ export function ContainerCpuChart({
 								if (key === "created" || !value || typeof value !== "object") {
 									return total
 								}
-								return total + (Number(value.c) || 0)
+								return total + (Number((value as ContainerStats).c) || 0)
 							}, 0),
 						color: 1,
 						opacity: 0.4,

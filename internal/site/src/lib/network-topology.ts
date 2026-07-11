@@ -4,6 +4,7 @@ import type {
 	AssetInterfaceRecord,
 	AssetRecord,
 	AssetRelationRecord,
+	AssetType,
 	NetworkInterfaceDetails,
 	NetworkLayoutRecord,
 	NetworkLinkRecord,

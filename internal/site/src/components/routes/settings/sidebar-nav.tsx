@@ -11,14 +11,14 @@ interface SidebarNavProps extends React.HTMLAttributes<HTMLElement> {
 	items: {
 		href: string
 		title: string
-		icon?: React.FC<React.SVGProps<SVGSVGElement>>
+		icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>
 		group?: string
 		description?: string
 		keywords?: string[]
 		danger?: boolean
 		admin?: boolean
 		noReadOnly?: boolean
-		preload?: () => Promise<{ default: React.ComponentType<object> }>
+		preload?: () => Promise<unknown>
 	}[]
 }
 

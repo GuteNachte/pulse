@@ -215,7 +215,7 @@ msgstr "充电中"
 msgid "Chart options"
 msgstr "图表选项"
 
-#: src/components/routes/settings/layout.tsx:97
+#: src/components/routes/settings/layout.tsx:102
 msgid "Check logs for more details."
 msgstr "检查日志以获取更多详细信息。"
 
@@ -228,8 +228,8 @@ msgstr "清除"
 msgid "Click to copy"
 msgstr "点击复制"
 
-#: src/components/login/auth-form.tsx:410
-#: src/components/login/auth-form.tsx:411
+#: src/components/login/auth-form.tsx:419
+#: src/components/login/auth-form.tsx:420
 msgid "Confirm password"
 msgstr "确认密码"
 
@@ -276,7 +276,7 @@ msgstr "CPU 时间细分和每核心使用率"
 msgid "CPU Usage"
 msgstr "CPU 使用率"
 
-#: src/components/login/auth-form.tsx:440
+#: src/components/login/auth-form.tsx:449
 msgid "Create account"
 msgstr "创建账户"
 
@@ -289,11 +289,11 @@ msgstr "创建时间"
 msgid "Critical (%)"
 msgstr "临界 (%)"
 
-#: src/components/routes/system/network-sheet.tsx:176
+#: src/components/routes/system/network-sheet.tsx:174
 msgid "Cumulative Download"
 msgstr "累计下载"
 
-#: src/components/routes/system/network-sheet.tsx:199
+#: src/components/routes/system/network-sheet.tsx:197
 msgid "Cumulative Upload"
 msgstr "累计上传"
 
@@ -372,7 +372,7 @@ msgstr "Docker 网络 I/O"
 msgid "Down"
 msgstr "离线"
 
-#: src/components/routes/system/network-sheet.tsx:126
+#: src/components/routes/system/network-sheet.tsx:124
 msgid "Download"
 msgstr "下载"
 
@@ -388,7 +388,7 @@ msgstr "编辑"
 msgid "Edit system"
 msgstr "编辑系统"
 
-#: src/components/login/auth-form.tsx:366
+#: src/components/login/auth-form.tsx:375
 msgid "Email"
 msgstr "电子邮件"
 
@@ -422,7 +422,7 @@ msgstr "华氏度 (°F)"
 msgid "Failed Attributes:"
 msgstr "失败属性："
 
-#: src/components/routes/settings/layout.tsx:96
+#: src/components/routes/settings/layout.tsx:101
 #: src/components/routes/settings/notifications.tsx:371
 msgid "Failed to save settings"
 msgstr "保存设置失败"
@@ -486,7 +486,7 @@ msgctxt "Docker image"
 msgid "Image"
 msgstr "镜像"
 
-#: src/components/login/auth-form.tsx:570
+#: src/components/login/auth-form.tsx:579
 msgid "Invalid email address."
 msgstr "无效的电子邮件地址。"
 
@@ -556,10 +556,10 @@ msgid "Net"
 msgstr "网络"
 
 #: src/components/routes/system/charts/network-charts.tsx:36
-#: src/components/routes/system/network-sheet.tsx:59
-#: src/components/routes/system/network-sheet.tsx:76
-#: src/components/routes/system/network-sheet.tsx:127
-#: src/components/routes/system/network-sheet.tsx:152
+#: src/components/routes/system/network-sheet.tsx:57
+#: src/components/routes/system/network-sheet.tsx:74
+#: src/components/routes/system/network-sheet.tsx:125
+#: src/components/routes/system/network-sheet.tsx:150
 msgid "Network traffic of public interfaces"
 msgstr "公共接口的网络流量"
 
@@ -579,16 +579,16 @@ msgstr "打开菜单"
 msgid "Other"
 msgstr "其他"
 
-#: src/components/login/auth-form.tsx:397
-#: src/components/login/auth-form.tsx:398
+#: src/components/login/auth-form.tsx:406
+#: src/components/login/auth-form.tsx:407
 msgid "Password"
 msgstr "密码"
 
-#: src/components/login/auth-form.tsx:573
+#: src/components/login/auth-form.tsx:582
 msgid "Password must be at least 8 characters."
 msgstr "密码必须至少包含 8 个字符。"
 
-#: src/components/login/auth-form.tsx:574
+#: src/components/login/auth-form.tsx:583
 msgid "Password must be less than 72 bytes."
 msgstr "密码必须小于 72 字节。"
 
@@ -617,7 +617,7 @@ msgstr "在每个状态下花费的时间百分比"
 msgid "Please check logs for more details."
 msgstr "请检查日志以获取更多详细信息。"
 
-#: src/components/login/auth-form.tsx:66
+#: src/components/login/auth-form.tsx:74
 msgid "Please check your credentials and try again"
 msgstr "请检查您的凭据并重试"
 
@@ -693,16 +693,16 @@ msgstr "发送"
 msgid "Serial Number"
 msgstr "序列号"
 
-#: src/components/routes/settings/layout.tsx:251
-#: src/components/routes/settings/layout.tsx:279
+#: src/components/routes/settings/layout.tsx:258
+#: src/components/routes/settings/layout.tsx:286
 msgid "Settings"
 msgstr "设置"
 
-#: src/components/routes/settings/layout.tsx:91
+#: src/components/routes/settings/layout.tsx:96
 msgid "Settings saved"
 msgstr "设置已保存"
 
-#: src/components/login/auth-form.tsx:440
+#: src/components/login/auth-form.tsx:449
 msgid "Sign in"
 msgstr "登录"
 
@@ -785,8 +785,8 @@ msgstr "令牌"
 #: src/components/routes/system/charts/cpu-charts.tsx:76
 #: src/components/routes/system/charts/memory-charts.tsx:105
 #: src/components/routes/system/charts/network-charts.tsx:107
-#: src/components/ui/chart.tsx:146
 #: src/components/ui/chart.tsx:147
+#: src/components/ui/chart.tsx:148
 msgid "Total"
 msgstr "总计"
 
@@ -794,11 +794,11 @@ msgstr "总计"
 msgid "Total CPU utilization of containers"
 msgstr "容器 CPU 总占用"
 
-#: src/components/routes/system/network-sheet.tsx:177
+#: src/components/routes/system/network-sheet.tsx:175
 msgid "Total data received for each interface"
 msgstr "每个接口的总接收数据量"
 
-#: src/components/routes/system/network-sheet.tsx:200
+#: src/components/routes/system/network-sheet.tsx:198
 msgid "Total data sent for each interface"
 msgstr "每个接口的总发送数据量"
 
@@ -888,7 +888,7 @@ msgstr "在线"
 msgid "Updated"
 msgstr "更新于"
 
-#: src/components/routes/system/network-sheet.tsx:151
+#: src/components/routes/system/network-sheet.tsx:149
 msgid "Upload"
 msgstr "上传"
 
@@ -912,23 +912,23 @@ msgstr "根分区的使用"
 msgid "Used"
 msgstr "已用"
 
-#: src/components/login/auth-form.tsx:352
+#: src/components/login/auth-form.tsx:361
 msgid "Username"
 msgstr "用户名"
 
-#: src/components/login/auth-form.tsx:567
+#: src/components/login/auth-form.tsx:576
 msgid "Username can only contain letters, numbers, _.-"
 msgstr "用户名只能包含字母、数字、_、.、-"
 
-#: src/components/login/auth-form.tsx:565
+#: src/components/login/auth-form.tsx:574
 msgid "Username must be at least 3 characters."
 msgstr "用户名至少需要 3 个字符。"
 
-#: src/components/login/auth-form.tsx:566
+#: src/components/login/auth-form.tsx:575
 msgid "Username must be less than 32 characters."
 msgstr "用户名必须少于 32 个字符。"
 
-#: src/components/login/auth-form.tsx:569
+#: src/components/login/auth-form.tsx:578
 msgid "Username or email is required."
 msgstr "请输入用户名或电子邮件。"
 
@@ -943,7 +943,7 @@ msgstr "值"
 
 #: src/components/routes/system/cpu-sheet.tsx:65
 #: src/components/routes/system/disk-io-sheet.tsx:61
-#: src/components/routes/system/network-sheet.tsx:64
+#: src/components/routes/system/network-sheet.tsx:62
 msgid "View more"
 msgstr "查看更多"
 
@@ -971,7 +971,7 @@ msgstr "警告阈值"
 msgid "Write"
 msgstr "写入"
 
-#: src/components/routes/settings/layout.tsx:92
+#: src/components/routes/settings/layout.tsx:97
 msgid "Your user settings have been updated."
 msgstr "您的用户设置已更新。"
 

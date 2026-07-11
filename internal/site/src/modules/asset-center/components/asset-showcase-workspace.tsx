@@ -20,18 +20,20 @@ export function AssetShowcaseWorkspace({ asset, visuals }: { asset: AssetRecord;
 
 function buildAssetIdentitySections(asset: AssetRecord): { title: string; rows: AssetParameterRow[] }[] {
 	const metadata = asset.metadata ?? {}
-	const linkRow = (label: string, value: string): AssetParameterRow | undefined =>
+	const textRow = (label: string, value: string | undefined): AssetParameterRow | undefined =>
+		value ? { label, value } : undefined
+	const linkRow = (label: string, value: string | undefined): AssetParameterRow | undefined =>
 		value ? { label, value, href: /^https?:\/\//i.test(value) ? value : undefined } : undefined
 	const compact = (rows: (AssetParameterRow | undefined)[]) => rows.filter((row) => row?.value) as AssetParameterRow[]
 	return [
 		{
 			title: "身份",
 			rows: compact([
-				{ label: "编号", value: getMetadataString(metadata, "asset_tag") },
-				{ label: "厂商", value: asset.vendor },
-				{ label: "型号", value: asset.model },
-				{ label: "内部型号", value: getMetadataString(metadata, "internal_model") },
-				{ label: "序列号", value: asset.serial_number },
+				textRow("编号", getMetadataString(metadata, "asset_tag")),
+				textRow("厂商", asset.vendor),
+				textRow("型号", asset.model),
+				textRow("内部型号", getMetadataString(metadata, "internal_model")),
+				textRow("序列号", asset.serial_number),
 			]),
 		},
 		{

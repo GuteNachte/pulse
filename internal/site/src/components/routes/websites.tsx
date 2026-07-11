@@ -25,6 +25,7 @@ import { failureCategoryLabel, formatMonitorError } from "./websites/format"
 import { hasMonitorCheckInputsChanged } from "./websites/monitor-save-utils"
 import { MonitorDialog } from "./websites/monitor-dialog"
 import { WebsiteMonitorListPanel } from "./websites/page-panels"
+import type { WebsiteSystemOption } from "./websites/list-utils"
 import { createMonitorFormFromEndpointAsset } from "./websites/asset-form"
 import {
 	buildTargetPayload,
@@ -581,7 +582,9 @@ export default memo(function Websites() {
 				running={Boolean(deletingId)}
 				progressTitle="正在删除网站监控"
 				progressDescription="Hub 正在删除监控配置和相关检测记录。"
-				onConfirm={() => deleteTarget && deleteMonitor(deleteTarget)}
+				onConfirm={async () => {
+					if (deleteTarget) await deleteMonitor(deleteTarget)
+				}}
 			>
 				<WebsiteOperationSummary monitor={deleteTarget} systemsById={availableSystemsById} />
 			</OperationConfirmDialog>
@@ -667,7 +670,7 @@ async function syncWebsiteMonitorHostedOnRelation(
 	endpointAsset: AssetRecord,
 	systemId: string,
 	systemsById: Record<string, SystemRecord>,
-	systems: SystemRecord[]
+	systems: WebsiteSystemOption[]
 ) {
 	const ownRelations = await getWebsiteMonitorHostedOnRelations(endpointAsset.id, monitor.id)
 	const hostSystem = await resolveWebsiteMonitorHostSystem(systemId, systemsById, systems)
@@ -707,7 +710,7 @@ async function syncWebsiteMonitorHostedOnRelation(
 async function resolveWebsiteMonitorHostSystem(
 	systemId: string,
 	systemsById: Record<string, SystemRecord>,
-	systems: SystemRecord[]
+	systems: WebsiteSystemOption[]
 ) {
 	if (!systemId) {
 		return undefined

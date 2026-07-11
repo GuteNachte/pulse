@@ -143,7 +143,6 @@ export default memo(function AssetsPage() {
 	const [websites, setWebsites] = useState<WebsiteMonitorRecord[]>([])
 	const [loading, setLoading] = useState(true)
 	const [saving, setSaving] = useState(false)
-	const [identifyingAssetId, setIdentifyingAssetId] = useState("")
 	const [dialogOpen, setDialogOpen] = useState(false)
 	const [locationDialogOpen, setLocationDialogOpen] = useState(false)
 	const [numberingDialogOpen, setNumberingDialogOpen] = useState(false)
@@ -600,39 +599,6 @@ export default memo(function AssetsPage() {
 		}
 	}
 
-	async function deleteAsset(asset: AssetRecord) {
-		if (!window.confirm(`确认删除资产「${asset.name}」？关联监控不会自动删除，但资产关系会失效。`)) {
-			return
-		}
-		try {
-			await pb.collection("assets").delete(asset.id)
-			await loadAssets()
-			toast({ title: "资产已删除", description: asset.name })
-		} catch (error) {
-			console.error("delete asset", error)
-			toast({ title: "资产删除失败", description: "请先清理关联关系或检查权限。", variant: "destructive" })
-		}
-	}
-
-	async function identifyAsset(asset: AssetRecord) {
-		if (readOnly || identifyingAssetId) {
-			return
-		}
-		setIdentifyingAssetId(asset.id)
-		try {
-			await pb.send(`/api/pulse/assets/${asset.id}/enrichment-reports`, { method: "POST" })
-			toast({
-				title: "智能识别报告已生成",
-				description: "进入资产档案查看并确认建议；联网资料源未接入时不会伪造规格。",
-			})
-		} catch (error) {
-			console.error("identify asset", error)
-			toast({ title: "智能识别失败", description: "请检查资产、权限或 Hub 日志。", variant: "destructive" })
-		} finally {
-			setIdentifyingAssetId("")
-		}
-	}
-
 	function openLocationCreateDialog() {
 		setLocationDialogOpen(true)
 	}
@@ -685,9 +651,11 @@ export default memo(function AssetsPage() {
 						}
 					)
 				)
-				createdOrExisting.set(rootName, rootLocation)
 				createdCount += 1
 			}
+			if (!rootLocation) throw new Error("位置主数据创建失败")
+			createdOrExisting.set(rootName, rootLocation)
+			const parentLocation = rootLocation
 			if (secondName) {
 				const secondPath = `${rootName} / ${secondName}`
 				if (!createdOrExisting.has(secondPath)) {
@@ -698,9 +666,9 @@ export default memo(function AssetsPage() {
 								name: secondName,
 								kind: "room",
 								parentName: rootName,
-								sortOrder: rootLocation.sort_order ? rootLocation.sort_order + 1 : 100,
+								sortOrder: parentLocation.sort_order ? parentLocation.sort_order + 1 : 100,
 							},
-							rootLocation.id
+							parentLocation.id
 						)
 					)
 					createdOrExisting.set(secondPath, created)

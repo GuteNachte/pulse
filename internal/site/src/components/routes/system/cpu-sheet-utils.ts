@@ -1,11 +1,11 @@
 import { t } from "@lingui/core/macro"
 import type { DataPoint } from "@/components/charts/area-chart"
 import { compareSemVer, parseSemVer } from "@/lib/utils"
-import type { ChartData, SystemStatsRecord } from "@/types"
+import type { ChartData, SemVer, SystemStatsRecord } from "@/types"
 
 const minAgentVersion = parseSemVer("0.15.3")
 
-export function supportsCpuBreakdown(agentVersion: string) {
+export function supportsCpuBreakdown(agentVersion: SemVer) {
 	return compareSemVer(agentVersion, minAgentVersion) >= 0
 }
 

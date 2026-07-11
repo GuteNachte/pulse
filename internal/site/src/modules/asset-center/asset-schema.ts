@@ -606,19 +606,6 @@ const vmFields: AssetFieldDefinition[] = [
 	},
 ]
 
-const endpointFields: AssetFieldDefinition[] = [
-	{
-		key: "connection_type",
-		label: "连接方式",
-		source: "metadata",
-		type: "select",
-		options: connectionOptions,
-	},
-	{ key: "wifi_band", label: "无线频段", source: "metadata", placeholder: "2.4G / 5G / 6G" },
-	{ key: "power_mode", label: "供电方式", source: "metadata", placeholder: "电池 / PoE / USB / AC" },
-	{ key: "management_url", label: "管理 URL", source: "metadata", type: "url", placeholder: "可选" },
-]
-
 const personalDeviceFields: AssetFieldDefinition[] = [
 	{ key: "cpu_model", label: "芯片 / SoC", source: "metadata", placeholder: "Snapdragon / Dimensity / Apple A 系列" },
 	{ key: "cpu_vendor", label: "芯片厂商", source: "metadata", placeholder: "MediaTek / Qualcomm / Apple" },

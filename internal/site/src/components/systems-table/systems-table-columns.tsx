@@ -263,7 +263,7 @@ export function SystemsTableColumns(): SystemsTableColumnDef[] {
 				}
 
 				const max = Math.max(...loadAverages)
-				if (max === 0 && (status === SystemStatus.Paused || (major < 1 && minor < 13))) {
+				if (max === 0 && major < 1 && minor < 13) {
 					return null
 				}
 

@@ -79,7 +79,9 @@ export function buildStatusSummaryItems({
 			helper: nonLiveState
 				? getNonLiveMetricHelper(nonLiveState)
 				: getCpuFrequencySummary(details, system, systemStats),
-			badges: [getCpuVendorLabel(details), temperatures.cpu && `温度 ${temperatures.cpu}`].filter(Boolean),
+			badges: [getCpuVendorLabel(details), temperatures.cpu && `温度 ${temperatures.cpu}`].filter(
+				(value): value is string => Boolean(value)
+			),
 			state: nonLiveState ?? getMetricState(system.info.cpu, online),
 		},
 		{
@@ -95,7 +97,9 @@ export function buildStatusSummaryItems({
 			label: "磁盘",
 			value: nonLiveState ? getNonLiveMetricValue(nonLiveState) : formatMetricPercent(system.info.dp),
 			helper: nonLiveState ? getNonLiveMetricHelper(nonLiveState) : getDiskSummary(systemStats, smartTotalCapacity),
-			badges: [getDiskTypeLabel(smartDisks), temperatures.disk && `温度 ${temperatures.disk}`].filter(Boolean),
+			badges: [getDiskTypeLabel(smartDisks), temperatures.disk && `温度 ${temperatures.disk}`].filter(
+				(value): value is string => Boolean(value)
+			),
 			state: nonLiveState ?? getMetricState(system.info.dp, online),
 		},
 		{
@@ -105,7 +109,9 @@ export function buildStatusSummaryItems({
 			helper: nonLiveState
 				? getNonLiveMetricHelper(nonLiveState)
 				: getNetworkUsagePercentSummary(bandwidth, networkSummary.linkSpeed),
-			badges: [networkSummary.linkSpeed > 0 ? networkSummary.speed : "", networkSummary.ipMethodLabel].filter(Boolean),
+			badges: [networkSummary.linkSpeed > 0 ? networkSummary.speed : "", networkSummary.ipMethodLabel].filter(
+				(value): value is string => Boolean(value)
+			),
 			state: nonLiveState ?? (online ? "ok" : "offline"),
 		},
 		{
@@ -122,7 +128,9 @@ export function buildStatusSummaryItems({
 					? getGpuRuntimeSummary(lastGpus)
 					: "未采集到 GPU 数据",
 			badges: hasGpu
-				? [getPrimaryGpuTypeLabel(lastGpus), temperatures.gpu && `温度 ${temperatures.gpu}`].filter(Boolean)
+				? [getPrimaryGpuTypeLabel(lastGpus), temperatures.gpu && `温度 ${temperatures.gpu}`].filter(
+						(value): value is string => Boolean(value)
+					)
 				: undefined,
 			state: nonLiveState ?? (hasGpu ? getMetricState(system.info.g, online) : "muted"),
 			disabledReason: !hasGpu ? "这台机器暂未采集到 GPU 数据。" : undefined,

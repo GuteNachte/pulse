@@ -198,7 +198,9 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 function getRecordArray(value: unknown) {
-	return Array.isArray(value) ? value.map(asRecord).filter(Boolean) : []
+	return Array.isArray(value)
+		? value.map(asRecord).filter((record): record is Record<string, unknown> => Boolean(record))
+		: []
 }
 
 function getRecordString(record: Record<string, unknown>, key: string) {

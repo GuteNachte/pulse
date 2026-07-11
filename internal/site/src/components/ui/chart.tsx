@@ -2,6 +2,9 @@ import type { JSX } from "react"
 import { useLingui } from "@lingui/react/macro"
 import * as React from "react"
 import * as RechartsPrimitive from "recharts"
+import type { Props as LegendContentProps } from "recharts/types/component/DefaultLegendContent"
+import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent"
+import type { TooltipPayload } from "recharts/types/state/tooltipSlice"
 import { chartTimeData, cn } from "@/lib/utils"
 import type { ChartData } from "@/types"
 import { Separator } from "./separator"
@@ -91,31 +94,29 @@ ChartContainer.displayName = "Chart"
 
 const ChartTooltip = RechartsPrimitive.Tooltip
 
-type ChartTooltipItem = {
-	color?: string
-	dataKey?: string | number
-	name?: string | number
-	payload?: unknown
-	value?: unknown
-	[key: string]: unknown
-}
+type ChartTooltipItem = RechartsPrimitive.TooltipPayloadEntry
 
-const ChartTooltipContent = React.forwardRef<
-	HTMLDivElement,
-	React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
-		React.ComponentProps<"div"> & {
-			hideLabel?: boolean
-			indicator?: "line" | "dot" | "dashed"
-			nameKey?: string
-			labelKey?: string
-			unit?: string
-			filter?: string
-			contentFormatter?: (item: ChartTooltipItem, key: string) => React.ReactNode | string
-			truncate?: boolean
-			showTotal?: boolean
-			totalLabel?: React.ReactNode
-		}
->(
+type ChartTooltipContentProps = Omit<
+	RechartsPrimitive.TooltipContentProps<ValueType, NameType>,
+	"active" | "payload" | "coordinate" | "accessibilityLayer" | "activeIndex" | "itemSorter"
+> &
+	React.ComponentProps<"div"> & {
+		active?: boolean
+		payload?: TooltipPayload
+		itemSorter?: (a: ChartTooltipItem, b: ChartTooltipItem) => number
+		hideLabel?: boolean
+		indicator?: "line" | "dot" | "dashed"
+		nameKey?: string
+		labelKey?: string
+		unit?: string
+		filter?: string
+		contentFormatter?: (item: ChartTooltipItem, key: string) => React.ReactNode | string
+		truncate?: boolean
+		showTotal?: boolean
+		totalLabel?: React.ReactNode
+	}
+
+const ChartTooltipContent = React.forwardRef<HTMLDivElement, ChartTooltipContentProps>(
 	(
 		{
 			active,
@@ -146,31 +147,33 @@ const ChartTooltipContent = React.forwardRef<
 		const totalLabelNode = totalLabel ?? t`Total`
 		const totalName = typeof totalLabelNode === "string" ? totalLabelNode : t`Total`
 
-		React.useMemo(() => {
+		const tooltipPayload = React.useMemo<TooltipPayload>(() => {
+			let nextPayload = payload ? [...payload] : []
 			if (filter) {
 				const filterTerms = filter
 					.toLowerCase()
 					.split(" ")
 					.filter((term) => term.length > 0)
-				payload = payload?.filter((item) => {
+				nextPayload = nextPayload.filter((item) => {
 					const itemName = (item.name as string)?.toLowerCase()
 					return filterTerms.some((term) => itemName?.includes(term))
 				})
 			}
 			if (typeof itemSorter === "function") {
-				payload?.sort(itemSorter)
+				nextPayload.sort(itemSorter)
 			}
-		}, [itemSorter, payload])
+			return nextPayload
+		}, [filter, itemSorter, payload])
 
 		const totalValueDisplay = React.useMemo(() => {
-			if (!showTotal || !payload?.length) {
+			if (!showTotal || !tooltipPayload.length) {
 				return null
 			}
 
 			let totalValue = 0
 			let hasNumericValue = false
 
-			for (const item of payload) {
+			for (const item of tooltipPayload) {
 				const numericValue = typeof item.value === "number" ? item.value : Number(item.value)
 				if (Number.isFinite(numericValue)) {
 					totalValue += numericValue
@@ -184,6 +187,7 @@ const ChartTooltipContent = React.forwardRef<
 
 			const totalKey = "__total__"
 			const totalItem: ChartTooltipItem = {
+				graphicalItemId: "__total__",
 				value: totalValue,
 				name: totalName,
 				dataKey: totalKey,
@@ -191,11 +195,11 @@ const ChartTooltipContent = React.forwardRef<
 			}
 
 			if (content) {
-				totalItem.payload = payload[0]?.payload
+				totalItem.payload = tooltipPayload[0]?.payload
 			}
 
 			if (typeof formatter === "function") {
-				return formatter(totalValue, totalName, totalItem, payload.length, totalItem.payload ?? payload[0]?.payload)
+				return formatter(totalValue, totalName, totalItem, tooltipPayload.length, tooltipPayload)
 			}
 
 			if (content) {
@@ -203,20 +207,20 @@ const ChartTooltipContent = React.forwardRef<
 			}
 
 			return `${totalValue.toLocaleString()}${unit ?? ""}`
-		}, [color, content, formatter, nameKey, payload, showTotal, totalName, unit])
+		}, [color, content, formatter, nameKey, showTotal, tooltipPayload, totalName, unit])
 
 		const tooltipLabel = React.useMemo(() => {
-			if (hideLabel || !payload?.length) {
+			if (hideLabel || !tooltipPayload.length) {
 				return null
 			}
 
-			const [item] = payload
+			const [item] = tooltipPayload
 			const key = `${labelKey || item.name || "value"}`
 			const itemConfig = getPayloadConfigFromPayload(config, item, key)
 			const value = !labelKey && typeof label === "string" ? label : itemConfig?.label
 
 			if (labelFormatter) {
-				return <div className={cn("font-medium", labelClassName)}>{labelFormatter(value, payload)}</div>
+				return <div className={cn("font-medium", labelClassName)}>{labelFormatter(value, tooltipPayload)}</div>
 			}
 
 			if (!value) {
@@ -224,9 +228,9 @@ const ChartTooltipContent = React.forwardRef<
 			}
 
 			return <div className={cn("font-medium", labelClassName)}>{value}</div>
-		}, [label, labelFormatter, payload, hideLabel, labelClassName, config, labelKey])
+		}, [label, labelFormatter, tooltipPayload, hideLabel, labelClassName, config, labelKey])
 
-		if (!active || !payload?.length) {
+		if (!active || !tooltipPayload.length) {
 			return null
 		}
 
@@ -243,14 +247,14 @@ const ChartTooltipContent = React.forwardRef<
 			>
 				{!nestLabel ? tooltipLabel : null}
 				<div className="grid gap-1.5">
-					{payload.map((item, index) => {
+					{tooltipPayload.map((item, index) => {
 						const key = `${nameKey || item.name || item.dataKey || "value"}`
 						const itemConfig = getPayloadConfigFromPayload(config, item, key)
-						const indicatorColor = color || item.payload.fill || item.color
+						const indicatorColor = color || (item.payload as { fill?: string } | undefined)?.fill || item.color
 
 						return (
 							<div
-								key={item?.name || item.dataKey}
+								key={`${item.name ?? item.dataKey ?? index}`}
 								className={cn(
 									"flex w-full items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5 [&>svg]:text-muted-foreground",
 									indicator === "dot" && "items-center"
@@ -297,7 +301,7 @@ const ChartTooltipContent = React.forwardRef<
 												<span className="font-medium tabular-nums text-foreground">
 													{content && typeof content === "function"
 														? content(item, key)
-														: item.value.toLocaleString() + (unit ? unit : "")}
+														: String(item.value).toLocaleString() + (unit ? unit : "")}
 												</span>
 											)}
 										</div>
@@ -327,7 +331,7 @@ const ChartLegend = RechartsPrimitive.Legend
 const ChartLegendContent = React.forwardRef<
 	HTMLDivElement,
 	React.ComponentProps<"div"> &
-		Pick<RechartsPrimitive.LegendProps, "payload" | "verticalAlign"> & {
+		Pick<LegendContentProps, "payload" | "verticalAlign"> & {
 			hideIcon?: boolean
 			nameKey?: string
 			reverse?: boolean

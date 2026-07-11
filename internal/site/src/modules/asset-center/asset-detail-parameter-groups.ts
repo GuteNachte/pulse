@@ -361,6 +361,7 @@ type HostHardwareProfileRow = {
 	value: string
 	capture?: AssetFieldDefinition["capture"]
 	href?: string
+	section?: string
 }
 
 type HostHardwareProfileGroup = {
@@ -399,7 +400,7 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 	}
 	const directRow = (
 		label: string,
-		value: string,
+		value: string | undefined,
 		capture: AssetFieldDefinition["capture"] = "manual"
 	): HostHardwareProfileRow | undefined => (value ? { label, value, capture } : undefined)
 	const compact = (rows: (HostHardwareProfileRow | undefined)[]) => rows.filter(Boolean) as HostHardwareProfileRow[]

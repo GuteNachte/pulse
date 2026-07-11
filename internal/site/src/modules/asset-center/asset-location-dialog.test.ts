@@ -1,4 +1,5 @@
 import { buildAssetLocationPresetSelection } from "./asset-location-dialog.ts"
+import type { AssetLocationPreset } from "./asset-location.ts"
 
 function assertDeepEqual(actual: unknown, expected: unknown) {
 	if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -6,11 +7,11 @@ function assertDeepEqual(actual: unknown, expected: unknown) {
 	}
 }
 
-const rootPresets = [
+const rootPresets: AssetLocationPreset[] = [
 	{ name: "家", kind: "area", sortOrder: 10 },
 	{ name: "公司", kind: "area", sortOrder: 20 },
 ]
-const secondPresets = [{ name: "书房", kind: "room", parentName: "家", sortOrder: 130 }]
+const secondPresets: AssetLocationPreset[] = [{ name: "书房", kind: "room", parentName: "家", sortOrder: 130 }]
 
 assertDeepEqual(
 	buildAssetLocationPresetSelection({

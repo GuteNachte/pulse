@@ -29,7 +29,6 @@ export default memo(function SystemDetail({ id }: { id: string }) {
 		chartData,
 		details,
 		smartTotalCapacity,
-		smartDiskModels,
 		smartDisks,
 		grid,
 		activeTab,

@@ -28,7 +28,7 @@ const phone = {
 		power_mode: "电池",
 		warranty_until: "2099-01-01",
 	},
-} as AssetRecord
+} as unknown as AssetRecord
 
 const summary = getAssetSummaryRows(phone)
 assertEqual(summary, [

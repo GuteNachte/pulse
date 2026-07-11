@@ -4,6 +4,8 @@ import { isMonitorStale } from "./format"
 import { monitorTargetsFromRecord } from "./target-utils"
 import type { StatusFilter } from "./types"
 
+export type WebsiteSystemOption = Pick<SystemRecord, "id" | "asset"> & { name: string }
+
 export function buildWebsiteStatusCounts(monitors: WebsiteMonitorRecord[]) {
 	return {
 		all: monitors.length,
@@ -17,7 +19,13 @@ export function buildWebsiteStatusCounts(monitors: WebsiteMonitorRecord[]) {
 export function buildWebsiteSystemOptions(availableSystemsById: Record<string, SystemRecord>) {
 	return Object.values(availableSystemsById)
 		.filter(Boolean)
-		.map((system) => ({ id: system.id, name: getSystemDisplayName(system, system.id) }))
+		.map(
+			(system): WebsiteSystemOption => ({
+				id: system.id,
+				name: getSystemDisplayName(system, system.id),
+				asset: system.asset,
+			})
+		)
 		.sort((a, b) => a.name.localeCompare(b.name))
 }
 

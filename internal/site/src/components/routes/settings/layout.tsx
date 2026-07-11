@@ -47,7 +47,12 @@ const aboutImport = () => import("./about.tsx")
 const GeneralSettings = lazy(generalSettingsImport)
 const FingerprintsSettings = lazy(fingerprintsSettingsImport)
 const AgentSettings = lazy(agentSettingsImport)
-const Notifications = lazy(notificationsImport)
+const Notifications = lazy(
+	() =>
+		notificationsImport() as Promise<{
+			default: ComponentType<{ userSettings: UserSettings; hideTitle?: boolean }>
+		}>
+)
 const SystemLogs = lazy(systemLogsImport)
 const OperationAudit = lazy(operationAuditImport)
 const Backups = lazy(backupsImport)
@@ -68,7 +73,7 @@ type SettingsNavItem = {
 	admin?: boolean
 	noReadOnly?: boolean
 	moduleId?: PulseModuleId
-	preload?: () => Promise<{ default: ComponentType<object> }>
+	preload?: () => Promise<unknown>
 } & MobileSettingsNavItem
 
 export async function saveSettings(newSettings: Partial<UserSettings>) {
@@ -179,12 +184,12 @@ export default function SettingsLayout() {
 			preload: operationAuditImport,
 		},
 		{
-			title: "模块管理",
+			title: "模块说明",
 			href: getPagePath($router, "settings", { name: "modules" }),
 			icon: BlocksIcon,
 			group: "系统维护",
-			description: "模块说明、依赖、路由和代码边界",
-			keywords: ["modules", "module", "模块", "说明", "依赖", "路由"],
+			description: "只读查看模块职责、依赖、路由和代码边界",
+			keywords: ["modules", "module", "模块", "说明", "只读", "依赖", "路由"],
 			moduleId: "foundation",
 			preload: modulesImport,
 		},
@@ -236,7 +241,9 @@ export default function SettingsLayout() {
 	]
 
 	const page = useStore($router)
-	const activeSettingsName = page?.params?.name ?? "general"
+	const pageParams = page?.params as { name?: unknown } | undefined
+	const requestedSettingsName = typeof pageParams?.name === "string" ? pageParams.name : undefined
+	const activeSettingsName = requestedSettingsName ?? "general"
 	const visibleItems = sidebarNavItems.filter((item) => {
 		if ((item.admin && !isAdmin()) || (item.noReadOnly && isReadOnlyUser())) {
 			return false
@@ -249,15 +256,15 @@ export default function SettingsLayout() {
 
 	useEffect(() => {
 		document.title = pageTitle(t`Settings`)
-		if (!page?.params?.name && !isMobile) {
+		if (!requestedSettingsName && !isMobile) {
 			redirectPage($router, "settings", { name: "general" })
 		}
-	}, [isMobile, page?.params?.name, t])
+	}, [isMobile, requestedSettingsName, t])
 
 	if (isMobile) {
 		return (
 			<MobileSettingsLayout
-				activeName={page?.params?.name}
+				activeName={requestedSettingsName}
 				activeTitle={activeItem?.title}
 				items={visibleItems}
 				contentName={activeSettingsName}

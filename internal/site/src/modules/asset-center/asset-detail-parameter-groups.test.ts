@@ -24,7 +24,7 @@ const phone = {
 		screen_size: "6.67 英寸",
 		battery_capacity_mah: 5500,
 	},
-} as AssetRecord
+} as unknown as AssetRecord
 
 assertDeepEqual(
 	buildAssetParameterGroups(phone).map((group) => ({
@@ -51,7 +51,7 @@ const host = {
 		memory_gb: 32,
 		memory_speed_mhz: 4800,
 	},
-} as AssetRecord
+} as unknown as AssetRecord
 
 const hostGroups = buildAssetParameterGroups(host)
 assertDeepEqual(

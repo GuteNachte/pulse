@@ -296,7 +296,7 @@ function MobileAgentUpdateCard({ item }: { item: MobileAgentUpdateItem }) {
 			</div>
 			<div className="mt-3 flex flex-wrap gap-1.5">
 				{item.precheckLabel && (
-					<MobileStatusTag tone={item.precheckTone ?? "default"}>{item.precheckLabel}</MobileStatusTag>
+					<MobileStatusTag tone={item.precheckTone ?? "neutral"}>{item.precheckLabel}</MobileStatusTag>
 				)}
 				{item.lastFailed && <MobileStatusTag tone="danger">上次失败</MobileStatusTag>}
 				<Badge variant="outline">实际 {item.currentVersion || "未知"}</Badge>

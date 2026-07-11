@@ -20,6 +20,7 @@ export const releaseHistory: ReleaseNote[] = [
 				title: "Web / Hub",
 				items: [
 					"模块目录改为只读说明：告警中心、通知模块、Agent 管理和备份日志与审计升级为必需模块，必需模块集中显示在列表底部，设置页不再提供开启 / 关闭控件；依赖、路由、集合、任务、Agent 能力和健康检查继续可查看。",
+					"前端严格类型门禁完成收口：新增 npm run typecheck 并纳入 Quality CI，补齐 Recharts 3 Tooltip、系统图表、网站监控、资产参数、找图候选和测试夹具类型，避免类型错误只在本地开发时暴露。",
 					"前端质量门禁新增模块 registry 回归和 Node 类型依赖，路由表保留路径字面量类型，减少导航调用的类型漂移。",
 					"模块运行态门禁继续收口：关闭模块后，Hub 集合 / 自定义 API 门禁写出 module_disabled 响应即停止后续 Next()，避免响应已返回仍继续执行；无认证的 Agent 配对接口在解析配对码归属用户后也会检查 agent-management，关闭时不会创建系统、指纹或 Token，并新增真实配对回归测试。",
 					"模块运行态门禁覆盖 realtime 与网站监控后台：PocketBase 集合 / rt_metrics realtime 订阅统一按所属模块校验，关闭客户端监控或网站监控后不会建立新的对应订阅；网站监控 cron 按资产所属用户的模块状态跳过已关闭模块，并新增主题映射与模块状态回归测试。",

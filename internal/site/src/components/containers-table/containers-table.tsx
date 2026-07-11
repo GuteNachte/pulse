@@ -340,7 +340,7 @@ export default function ContainersTable({ systemId }: { systemId?: string }) {
 		if (!hideSystemColumn) {
 			return sorting
 		}
-		const next = sorting.filter((sort) => sort.id !== "system")
+		const next = sorting.filter((sort: SortingState[number]) => sort.id !== "system")
 		return next.length > 0 ? next : [{ id: "name", desc: false }]
 	}, [hideSystemColumn, sorting])
 

@@ -22,7 +22,7 @@ const phone = {
 		colors_available: "墨羽黑、银迹 / 墨羽黑",
 		device_color: "墨羽黑",
 	},
-} as AssetRecord
+} as unknown as AssetRecord
 
 const suggestions = [
 	{

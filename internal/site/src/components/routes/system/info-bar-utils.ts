@@ -44,8 +44,6 @@ export function getMemoryHardwareInfo(details: SystemDetailsRecord | null | unde
 		return null
 	}
 
-	const totalValue = formatBytes(total, false, undefined, false)
-	const totalLabel = `${toFixedFloat(totalValue.value, totalValue.value >= 10 ? 1 : 2)} ${totalValue.unit}`
 	const moduleCount = modules.length
 	const moduleTotalValue = formatBytes(moduleBytes, false, undefined, false)
 	const moduleTotalLabel = `${toFixedFloat(moduleTotalValue.value, moduleTotalValue.value >= 10 ? 1 : 2)} ${moduleTotalValue.unit}`

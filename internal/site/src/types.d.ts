@@ -536,7 +536,7 @@ export interface ContainerStatsRecord extends RecordModel {
 	created: string | number
 }
 
-interface ContainerStats {
+export interface ContainerStats {
 	/** name */
 	n: string
 	/** cpu percent */

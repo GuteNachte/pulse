@@ -3,7 +3,7 @@ import AreaChartDefault from "@/components/charts/area-chart"
 import { $userSettings } from "@/lib/stores"
 import { decimalString, formatBytes, toFixedFloat } from "@/lib/utils"
 import { pinnedAxisDomain } from "@/components/ui/chart"
-import type { ChartData, SystemStatsRecord } from "@/types"
+import type { ChartData, ContainerStats, SystemStatsRecord } from "@/types"
 import { ChartCard, SelectAvgMax } from "../chart-card"
 import { dockerOrPodman } from "../chart-data"
 
@@ -110,8 +110,9 @@ export function ContainerNetworkChart({
 								if (key === "created" || !value || typeof value !== "object") {
 									return total
 								}
-								const sent = value.b?.[0] ?? (value.ns ?? 0) * 1024 * 1024
-								const recv = value.b?.[1] ?? (value.nr ?? 0) * 1024 * 1024
+								const container = value as ContainerStats
+								const sent = container.b?.[0] ?? (container.ns ?? 0) * 1024 * 1024
+								const recv = container.b?.[1] ?? (container.nr ?? 0) * 1024 * 1024
 								return total + sent + recv
 							}, 0),
 						color: 5,
