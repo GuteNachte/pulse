@@ -1,6 +1,7 @@
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { cn } from "@/lib/utils"
+import { getEditableAssetTypeOptions } from "@/modules/asset-center/asset-profiles"
 import { ASSET_TYPE_OPTIONS } from "@/modules/asset-center/asset-schema"
 import { getAssetIcon } from "@/modules/asset-center/components/asset-card"
 import type { AssetType } from "@/types"
@@ -97,16 +98,17 @@ export function AssetTypePicker({ selectedType, onSelect }: AssetTypePickerProps
 }
 
 export function AssetTypeRail({ selectedType, onSelect }: AssetTypePickerProps) {
+	const editableTypeOptions = getEditableAssetTypeOptions(selectedType)
 	return (
 		<div className="grid content-start gap-2 rounded-lg border border-border/70 bg-surface-soft p-2">
-			{ASSET_TYPE_OPTIONS.map((item) => {
-				const Icon = getAssetIcon(item.value)
-				const active = selectedType === item.value
+			{editableTypeOptions.map((item) => {
+				const Icon = getAssetIcon(item.type)
+				const active = selectedType === item.type
 				return (
 					<button
-						key={item.value}
+						key={item.type}
 						type="button"
-						onClick={() => onSelect(item.value)}
+						onClick={() => onSelect(item.type)}
 						className={cn(
 							"flex min-h-10 items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors",
 							active ? "bg-card font-medium text-foreground shadow-xs" : "text-muted-foreground hover:bg-card/70"

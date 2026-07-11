@@ -32,7 +32,8 @@ import { buildAssetProfileEditSections, getRequiredAssetProfileFieldKeys } from 
 import { formatAssetVisualTaskMeta } from "../asset-ai-task-summary"
 import { buildNextAssetTag, loadAssetNumberingSettings, normalizeAssetNumberingSettings } from "../asset-numbering"
 import { buildAssetLocationOptions } from "../asset-list"
-import { ASSET_TYPE_OPTIONS, getMetadataNumber, getMetadataString, isPhoneVariantSpecRequired } from "../asset-schema"
+import { getEditableAssetTypeOptions } from "../asset-profiles"
+import { getMetadataNumber, getMetadataString, isPhoneVariantSpecRequired } from "../asset-schema"
 import type { AssetRecognitionRequirement } from "../asset-profile-validation"
 import {
 	getAssetOfficialColorOptions,
@@ -138,6 +139,7 @@ export function AssetEditWorkbench({
 	const missingRequirements = recognitionRequirements.filter((item) => !item.ok)
 	const requiredFieldKeys = getRequiredAssetProfileFieldKeys(selectedType)
 	const formSections = buildAssetProfileEditSections(selectedType, requiredFieldKeys)
+	const editableTypeOptions = getEditableAssetTypeOptions(selectedType)
 
 	return (
 		<DialogContent className="flex max-h-[92vh] max-w-6xl flex-col overflow-hidden">
@@ -178,7 +180,7 @@ export function AssetEditWorkbench({
 								<SelectField
 									name="type"
 									label="所属类型"
-									options={ASSET_TYPE_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
+									options={editableTypeOptions.map((item) => ({ value: item.type, label: item.label }))}
 									value={selectedType}
 									onChange={(value) => setSelectedType(value as AssetRecord["type"])}
 								/>

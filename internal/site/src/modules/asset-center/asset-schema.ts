@@ -1,4 +1,5 @@
 import type { AssetStatus, AssetType } from "@/types"
+import { getAssetProfile, getCreatableAssetTypeOptions } from "./asset-profiles.ts"
 
 export type AssetFieldSource = "asset" | "metadata"
 export type AssetFieldType = "text" | "number" | "date" | "url" | "select"
@@ -21,49 +22,12 @@ export type AssetFieldSection = {
 	fields: AssetFieldDefinition[]
 }
 
-export const ASSET_TYPE_OPTIONS: { value: AssetType; label: string; group: string; description: string }[] = [
-	{ value: "internet", label: "互联网接入", group: "网络", description: "宽带线路、运营商、公网出口" },
-	{ value: "router", label: "路由器", group: "网络", description: "家庭主路由、旁路由、软路由" },
-	{ value: "gateway", label: "网关", group: "网络", description: "默认网关、出口网关、DHCP 网关" },
-	{ value: "ont", label: "光猫 / ONT", group: "网络", description: "运营商入户光猫、桥接设备" },
-	{ value: "switch", label: "交换机", group: "网络", description: "有线交换、PoE、核心或接入交换" },
-	{ value: "ap", label: "无线 AP", group: "网络", description: "独立 AP、Mesh 节点、无线覆盖" },
-	{ value: "firewall", label: "防火墙", group: "网络", description: "硬件防火墙、安全网关" },
-	{
-		value: "physical_host",
-		label: "物理主机",
-		group: "主机",
-		description: "台式机、工作站、实体 Linux / Windows 主机",
-	},
-	{ value: "nas", label: "NAS", group: "主机", description: "飞牛、Unraid、群晖、存储服务器" },
-	{ value: "server", label: "服务器", group: "主机", description: "长期运行的物理服务器" },
-	{ value: "mini_pc", label: "迷你主机", group: "主机", description: "NUC、软路由主机、低功耗主机" },
-	{ value: "phone", label: "手机", group: "移动 / 物联", description: "手机、备用机、移动终端" },
-	{ value: "tablet", label: "平板", group: "移动 / 物联", description: "平板和大屏移动设备" },
-	{ value: "wearable", label: "可穿戴", group: "移动 / 物联", description: "手表、手环、健康设备" },
-	{ value: "ebook", label: "电子阅读器", group: "移动 / 物联", description: "Kindle、墨水屏阅读器" },
-	{ value: "game_console", label: "游戏主机", group: "娱乐设备", description: "主机、电视游戏设备" },
-	{ value: "handheld", label: "游戏掌机", group: "娱乐设备", description: "掌机、便携游戏设备" },
-	{ value: "tv", label: "电视 / 显示", group: "娱乐设备", description: "智能电视、显示器、投影" },
-	{ value: "speaker", label: "音箱 / 音频", group: "娱乐设备", description: "智能音箱、功放、网络音频设备" },
-	{ value: "ups", label: "UPS", group: "电源 / 外设", description: "不间断电源、后备电池" },
-	{ value: "camera", label: "摄像头", group: "移动 / 物联", description: "网络摄像头、NVR 接入设备" },
-	{ value: "printer", label: "打印机", group: "移动 / 物联", description: "网络打印机、扫描仪" },
-	{
-		value: "smarthome_gateway",
-		label: "智能家居网关",
-		group: "智能家居",
-		description: "Matter、Zigbee、蓝牙、米家等网关",
-	},
-	{ value: "sensor", label: "传感器", group: "智能家居", description: "温湿度、门窗、人体、水浸等传感器" },
-	{ value: "light", label: "灯具", group: "智能家居", description: "灯泡、灯带、吸顶灯" },
-	{ value: "plug", label: "插座 / 开关", group: "智能家居", description: "智能插座、墙壁开关、继电器" },
-	{ value: "lock", label: "门锁", group: "智能家居", description: "智能门锁、门禁设备" },
-	{ value: "vacuum", label: "扫地机器人", group: "智能家居", description: "扫地机、拖地机、基站" },
-	{ value: "iot", label: "IoT 设备", group: "智能家居", description: "暂未归类的智能家居或物联设备" },
-	{ value: "web_endpoint", label: "网页端点", group: "服务", description: "后续网站监控可直接选择的网页对象" },
-	{ value: "custom", label: "自定义", group: "其他", description: "暂未归类但需要纳入资产中心的对象" },
-]
+export const ASSET_TYPE_OPTIONS = getCreatableAssetTypeOptions().map((profile) => ({
+	value: profile.type,
+	label: profile.label,
+	group: profile.group,
+	description: profile.description,
+}))
 
 export const STATUS_OPTIONS: { value: AssetStatus; label: string }[] = [
 	{ value: "active", label: "在用" },
@@ -920,8 +884,7 @@ export function getAssetFormSections(type: AssetType): AssetFieldSection[] {
 }
 
 export function getAssetTypeLabel(type: AssetType) {
-	if (type === "vm") return "虚拟机"
-	return ASSET_TYPE_OPTIONS.find((item) => item.value === type)?.label ?? type
+	return getAssetProfile(type)?.label ?? type
 }
 
 export function isFixedSpecAssetType(type: AssetType) {

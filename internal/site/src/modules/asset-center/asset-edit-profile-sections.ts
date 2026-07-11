@@ -1,4 +1,5 @@
-import { getAssetFormSections, isPhoneVariantSpecRequired } from "./asset-schema.ts"
+import { getProfileRequiredFieldKeys } from "./asset-profiles.ts"
+import { getAssetFormSections } from "./asset-schema.ts"
 import type { AssetRecord } from "../../types"
 
 export function getRequiredAssetProfileFieldKeys(type: AssetRecord["type"]) {
@@ -14,9 +15,8 @@ export function getRequiredAssetProfileFieldKeys(type: AssetRecord["type"]) {
 		"management_ip",
 		"fixed_ipv4",
 	])
-	if (isPhoneVariantSpecRequired(type)) {
-		keys.add("memory_gb")
-		keys.add("storage_gb")
+	for (const key of getProfileRequiredFieldKeys(type)) {
+		keys.add(key)
 	}
 	return keys
 }
