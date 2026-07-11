@@ -2,6 +2,7 @@ package hub
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"html"
@@ -130,11 +131,11 @@ func (result assetOnlineEnrichmentResult) ReportLine(fallback string) string {
 	}
 }
 
-func (h *Hub) collectAssetOnlineEnrichment(asset *core.Record, focus string) assetOnlineEnrichmentResult {
+func (h *Hub) collectAssetOnlineEnrichment(ctx context.Context, asset *core.Record, focus string) assetOnlineEnrichmentResult {
 	result := h.collectAssetOnlineReferenceEnrichment(asset)
 	config := h.assetOnlineAIConfig()
 	if len(result.Sources) == 0 && config.SourceDiscoveryEnabled {
-		discovery, discoveredSources, discoveryErrors := h.collectAssetOnlineAISourceDiscovery(asset, focus)
+		discovery, discoveredSources, discoveryErrors := h.collectAssetOnlineAISourceDiscovery(ctx, asset, focus)
 		result.Discovery = discovery
 		result.Errors = append(result.Errors, discoveryErrors...)
 		if len(discoveredSources) > 0 {
@@ -149,7 +150,7 @@ func (h *Hub) collectAssetOnlineEnrichment(asset *core.Record, focus string) ass
 		result.Suggestions = buildAssetOnlineSuggestions(asset, result.Sources, result.Query)
 	}
 	result.Suggestions = filterAssetEnrichmentSuggestionsByFocus(result.Suggestions, focus)
-	aiResult, aiSuggestions := h.collectAssetOnlineAIEnrichment(asset, result.Sources, focus)
+	aiResult, aiSuggestions := h.collectAssetOnlineAIEnrichment(ctx, asset, result.Sources, focus)
 	result.AI = aiResult
 	if len(aiSuggestions) > 0 {
 		aiSuggestions = filterAssetEnrichmentSuggestionsByFocus(aiSuggestions, focus)
@@ -159,7 +160,7 @@ func (h *Hub) collectAssetOnlineEnrichment(asset *core.Record, focus string) ass
 	return result
 }
 
-func (h *Hub) collectAssetOnlineAISourceDiscovery(asset *core.Record, focus string) (assetOnlineAIResult, []assetOnlineSource, []string) {
+func (h *Hub) collectAssetOnlineAISourceDiscovery(ctx context.Context, asset *core.Record, focus string) (assetOnlineAIResult, []assetOnlineSource, []string) {
 	config := h.assetOnlineAIConfig()
 	if !config.Enabled {
 		return assetOnlineAIResult{Status: "disabled"}, nil, nil
@@ -185,7 +186,7 @@ func (h *Hub) collectAssetOnlineAISourceDiscovery(asset *core.Record, focus stri
 		result.Error = "AI 来源发现请求编码失败"
 		return result, nil, nil
 	}
-	rawBody, attempts, errMessage := callAssetOnlineAIModel(config, body)
+	rawBody, attempts, errMessage := callAssetOnlineAIModelContext(ctx, config, body)
 	result.Attempts = attempts
 	if errMessage != "" {
 		result.Error = errMessage
@@ -242,7 +243,7 @@ func (h *Hub) collectAssetOnlineReferenceEnrichment(asset *core.Record) assetOnl
 	return result
 }
 
-func (h *Hub) collectAssetOnlineAIEnrichment(asset *core.Record, sources []assetOnlineSource, focus string) (assetOnlineAIResult, []assetEnrichmentSuggestionInput) {
+func (h *Hub) collectAssetOnlineAIEnrichment(ctx context.Context, asset *core.Record, sources []assetOnlineSource, focus string) (assetOnlineAIResult, []assetEnrichmentSuggestionInput) {
 	config := h.assetOnlineAIConfig()
 	if !config.Enabled {
 		return assetOnlineAIResult{Status: "disabled"}, nil
@@ -262,7 +263,7 @@ func (h *Hub) collectAssetOnlineAIEnrichment(asset *core.Record, sources []asset
 		result.Error = "AI 识别请求编码失败"
 		return result, nil
 	}
-	rawBody, attempts, errMessage := callAssetOnlineAIModel(config, body)
+	rawBody, attempts, errMessage := callAssetOnlineAIModelContext(ctx, config, body)
 	result.Attempts = attempts
 	if errMessage != "" {
 		result.Error = errMessage
@@ -276,13 +277,23 @@ func (h *Hub) collectAssetOnlineAIEnrichment(asset *core.Record, sources []asset
 }
 
 func callAssetOnlineAIModel(config assetOnlineAIConfig, body []byte) ([]byte, int, string) {
+	return callAssetOnlineAIModelContext(context.Background(), config, body)
+}
+
+func callAssetOnlineAIModelContext(ctx context.Context, config assetOnlineAIConfig, body []byte) ([]byte, int, string) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	client := &http.Client{Timeout: 75 * time.Second}
 	var rawBody []byte
 	var lastError string
 	attempts := 0
 	for attempt := 1; attempt <= assetOnlineAIModelMaxAttempts; attempt++ {
+		if ctx.Err() != nil {
+			return nil, attempts, "AI 识别请求已取消"
+		}
 		attempts = attempt
-		req, err := http.NewRequest(http.MethodPost, config.Endpoint, bytes.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, config.Endpoint, bytes.NewReader(body))
 		if err != nil {
 			return nil, attempts, "AI 识别请求创建失败"
 		}
@@ -292,9 +303,14 @@ func callAssetOnlineAIModel(config assetOnlineAIConfig, body []byte) ([]byte, in
 
 		resp, err := client.Do(req)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, attempts, "AI 识别请求已取消"
+			}
 			lastError = "AI 识别请求失败：" + err.Error()
 			if attempt < assetOnlineAIModelMaxAttempts {
-				time.Sleep(assetOnlineAIRetryDelay(attempt, ""))
+				if !waitForAssetOnlineAIRetry(ctx, assetOnlineAIRetryDelay(attempt, "")) {
+					return nil, attempts, "AI 识别请求已取消"
+				}
 				continue
 			}
 			return nil, attempts, lastError
@@ -302,9 +318,14 @@ func callAssetOnlineAIModel(config assetOnlineAIConfig, body []byte) ([]byte, in
 		rawBody, err = io.ReadAll(io.LimitReader(resp.Body, 1024*1024))
 		_ = resp.Body.Close()
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, attempts, "AI 识别请求已取消"
+			}
 			lastError = "AI 识别响应读取失败"
 			if attempt < assetOnlineAIModelMaxAttempts {
-				time.Sleep(assetOnlineAIRetryDelay(attempt, ""))
+				if !waitForAssetOnlineAIRetry(ctx, assetOnlineAIRetryDelay(attempt, "")) {
+					return nil, attempts, "AI 识别请求已取消"
+				}
 				continue
 			}
 			return nil, attempts, lastError
@@ -312,7 +333,9 @@ func callAssetOnlineAIModel(config assetOnlineAIConfig, body []byte) ([]byte, in
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			lastError = "AI 识别返回非成功状态：" + strconvItoa(resp.StatusCode) + formatRemoteErrorBody(rawBody)
 			if attempt < assetOnlineAIModelMaxAttempts && isTransientAssetOnlineAIModelStatus(resp.StatusCode) {
-				time.Sleep(assetOnlineAIRetryDelay(attempt, resp.Header.Get("Retry-After")))
+				if !waitForAssetOnlineAIRetry(ctx, assetOnlineAIRetryDelay(attempt, resp.Header.Get("Retry-After"))) {
+					return nil, attempts, "AI 识别请求已取消"
+				}
 				continue
 			}
 			return nil, attempts, lastError
@@ -320,6 +343,17 @@ func callAssetOnlineAIModel(config assetOnlineAIConfig, body []byte) ([]byte, in
 		return rawBody, attempts, ""
 	}
 	return rawBody, attempts, firstNonEmpty(lastError, "AI 识别请求失败")
+}
+
+func waitForAssetOnlineAIRetry(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }
 
 func isTransientAssetOnlineAIModelStatus(status int) bool {

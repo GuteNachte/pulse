@@ -94,7 +94,7 @@ func (h *Hub) generateAssetEnrichmentReport(e *core.RequestEvent) error {
 	}
 
 	localSuggestions := h.buildAssetEnrichmentSuggestions(asset, systems, details, interfaces)
-	onlineResult := h.collectAssetOnlineEnrichment(asset, focus)
+	onlineResult := h.collectAssetOnlineEnrichment(e.Request.Context(), asset, focus)
 	suggestions := append(localSuggestions, onlineResult.Suggestions...)
 	suggestions = filterAssetEnrichmentSuggestionsByFocus(suggestions, focus)
 	suggestions = dedupeEnrichmentSuggestions(suggestions)
