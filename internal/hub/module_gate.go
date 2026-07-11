@@ -69,8 +69,12 @@ func (h *Hub) bindModuleCollectionGates() {
 
 func (h *Hub) moduleRecordsListGate(moduleID string) func(*core.RecordsListRequestEvent) error {
 	return func(e *core.RecordsListRequestEvent) error {
-		if err := h.ensurePulseModuleEnabled(e.RequestEvent, moduleID); err != nil {
+		allowed, err := h.ensurePulseModuleEnabled(e.RequestEvent, moduleID)
+		if err != nil {
 			return err
+		}
+		if !allowed {
+			return nil
 		}
 		return e.Next()
 	}
@@ -78,41 +82,56 @@ func (h *Hub) moduleRecordsListGate(moduleID string) func(*core.RecordsListReque
 
 func (h *Hub) moduleRecordGate(moduleID string) func(*core.RecordRequestEvent) error {
 	return func(e *core.RecordRequestEvent) error {
-		if err := h.ensurePulseModuleEnabled(e.RequestEvent, moduleID); err != nil {
+		allowed, err := h.ensurePulseModuleEnabled(e.RequestEvent, moduleID)
+		if err != nil {
 			return err
+		}
+		if !allowed {
+			return nil
 		}
 		return e.Next()
 	}
 }
 
-func (h *Hub) ensurePulseModuleEnabled(e *core.RequestEvent, moduleID string) error {
+func (h *Hub) ensurePulseModuleEnabled(e *core.RequestEvent, moduleID string) (bool, error) {
 	if e == nil {
-		return errors.New("missing request event")
+		return false, errors.New("missing request event")
 	}
 	if e.Auth == nil {
-		return nil
+		return true, nil
 	}
-	enabled, blockedBy, err := h.pulseModuleEnabledForUser(e.Auth.Id, moduleID)
+	return h.ensurePulseModuleEnabledForUser(e, moduleID, e.Auth.Id)
+}
+
+func (h *Hub) ensurePulseModuleEnabledForUser(e *core.RequestEvent, moduleID string, userID string) (bool, error) {
+	enabled, blockedBy, err := h.pulseModuleEnabledForUser(userID, moduleID)
 	if err != nil {
-		return e.InternalServerError("Failed to load module state.", err)
+		return false, e.InternalServerError("Failed to load module state.", err)
 	}
 	if enabled {
-		return e.Next()
+		return true, nil
 	}
 	policy := pulseModulePolicies[moduleID]
-	return e.JSON(http.StatusServiceUnavailable, map[string]any{
+	if err := e.JSON(http.StatusServiceUnavailable, map[string]any{
 		"code":       "module_disabled",
 		"module_id":  moduleID,
 		"module":     policy.Name,
 		"blocked_by": blockedBy,
 		"message":    policy.Name + "已关闭，当前接口暂不可用。",
-	})
+	}); err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 func (h *Hub) requirePulseModule(moduleID string) func(*core.RequestEvent) error {
 	return func(e *core.RequestEvent) error {
-		if err := h.ensurePulseModuleEnabled(e, moduleID); err != nil {
+		allowed, err := h.ensurePulseModuleEnabled(e, moduleID)
+		if err != nil {
 			return err
+		}
+		if !allowed {
+			return nil
 		}
 		return e.Next()
 	}

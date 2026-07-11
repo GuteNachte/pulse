@@ -375,6 +375,13 @@ func (h *Hub) pairAgent(e *core.RequestEvent) error {
 	}
 
 	userID := pairingRecord.GetString("user")
+	allowed, err := h.ensurePulseModuleEnabledForUser(e, "agent-management", userID)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return nil
+	}
 	assetID := strings.TrimSpace(pairingRecord.GetString("asset"))
 	if err := h.validateAgentPairingAsset(assetID, userID); err != nil {
 		h.createOperationAuditForUser(e, userID, "", "pair_agent", req.Hostname, "", "failed", err.Error(), operationFailureDenied)
