@@ -39,11 +39,17 @@ import {
 } from "./asset-ai-task-summary"
 import { loadLatestAITasksByKind } from "./asset-ai-task-query"
 import { createAssetDetailLoadGuard, type AssetDetailLoadToken } from "./asset-detail-load-guard"
+import {
+	applyAssetDetailEditCatalog,
+	applyAssetDetailSecondaryData,
+	emptyAssetDetailState,
+	loadAssetDetailPrimaryData,
+	loadAssetDetailSecondaryData,
+	type AssetDetailState,
+} from "./asset-detail-data"
 import { loadAssetEditCatalog } from "./asset-edit-catalog-query"
-import { loadLatestReportSuggestions, loadPendingOfficialColorSuggestions } from "./asset-enrichment-suggestion-query"
 import { getAssetRecognitionRequirements, validateAssetProfileForm } from "./asset-profile-validation"
 import { escapePocketBaseFilterValue } from "./asset-query"
-import { loadDisplayAssetVisuals } from "./asset-visual-query"
 import { getAssetVisualColor } from "./asset-visual-color"
 import {
 	buildRelationMetadata,
@@ -82,7 +88,6 @@ import type {
 	AITaskRecord,
 	AssetMaintenanceKind,
 	AssetMaintenanceRecord,
-	AssetLocationRecord,
 	AssetRecord,
 	AssetRelationKind,
 	AssetRelationRecord,
@@ -90,24 +95,6 @@ import type {
 	SystemDetailsRecord,
 	SystemRecord,
 } from "@/types"
-
-type AssetDetailState = {
-	asset?: AssetRecord
-	assets: AssetRecord[]
-	interfaces: AssetInterfaceRecord[]
-	allInterfaces: AssetInterfaceRecord[]
-	editCatalogLoaded: boolean
-	relations: AssetRelationRecord[]
-	locations: AssetLocationRecord[]
-	maintenance: AssetMaintenanceRecord[]
-	attachments: AssetAttachmentRecord[]
-	visuals: AssetVisualRecord[]
-	aiTasks: AITaskRecord[]
-	changes: AssetChangeRecord[]
-	enrichmentReports: AssetEnrichmentReportRecord[]
-	enrichmentSuggestions: AssetEnrichmentSuggestionRecord[]
-	officialColorSuggestions: AssetEnrichmentSuggestionRecord[]
-}
 
 const AssetEnrichmentReportDialog = lazy(() =>
 	import("./components/asset-enrichment-report-dialog").then((module) => ({
@@ -121,23 +108,6 @@ function getNetworkTopologyFocusHref(params: { asset?: string; relation?: string
 	if (params.asset) search.set("asset", params.asset)
 	const query = search.toString()
 	return `${getPagePath($router, "network")}${query ? `?${query}` : ""}`
-}
-
-const emptyState: AssetDetailState = {
-	assets: [],
-	interfaces: [],
-	allInterfaces: [],
-	editCatalogLoaded: false,
-	relations: [],
-	locations: [],
-	maintenance: [],
-	attachments: [],
-	visuals: [],
-	aiTasks: [],
-	changes: [],
-	enrichmentReports: [],
-	enrichmentSuggestions: [],
-	officialColorSuggestions: [],
 }
 
 const maintenanceKindOptions: { value: AssetMaintenanceKind; label: string }[] = [
@@ -163,7 +133,7 @@ const attachmentKindOptions: { value: AssetAttachmentKind; label: string }[] = [
 ]
 
 export default memo(function AssetDetailPage({ id }: { id: string }) {
-	const [state, setState] = useState<AssetDetailState>(emptyState)
+	const [state, setState] = useState<AssetDetailState>(emptyAssetDetailState)
 	const [loading, setLoading] = useState(true)
 	const [interfaceDialogOpen, setInterfaceDialogOpen] = useState(false)
 	const [relationDialogOpen, setRelationDialogOpen] = useState(false)
@@ -232,22 +202,21 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		const loadToken = detailLoadGuardRef.current.begin(id)
 		setLoading(true)
 		try {
-			const [assetRecord, interfaces, relations] = await Promise.all([
-				pb.collection<AssetRecord>("assets").getOne(id, { requestKey: null }),
-				pb.collection<AssetInterfaceRecord>("asset_interfaces").getFullList({
-					filter: `asset="${id}"`,
-					sort: "-primary,kind,name",
-					requestKey: null,
-				}),
-				pb.collection<AssetRelationRecord>("asset_relations").getFullList({
-					filter: `source_asset="${id}" || target_asset="${id}"`,
-					sort: "kind,created",
-					requestKey: null,
-				}),
-			])
+			const {
+				asset: assetRecord,
+				interfaces,
+				relations,
+			} = await loadAssetDetailPrimaryData(
+				{
+					assets: pb.collection<AssetRecord>("assets"),
+					interfaces: pb.collection<AssetInterfaceRecord>("asset_interfaces"),
+					relations: pb.collection<AssetRelationRecord>("asset_relations"),
+				},
+				id
+			)
 			if (!detailLoadGuardRef.current.isCurrent(loadToken)) return
 			setState({
-				...emptyState,
+				...emptyAssetDetailState,
 				asset: assetRecord,
 				assets: [assetRecord],
 				interfaces,
@@ -301,6 +270,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		assetId: string
 		fallbackAsset: AssetRecord
 		interfaces: AssetInterfaceRecord[]
+		loadToken: AssetDetailLoadToken
 	}) {
 		let catalogLoad: Promise<void>
 		catalogLoad = loadAssetEditCatalogData(options).finally(() => {
@@ -349,15 +319,14 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			})
 			setState((current) => {
 				if (!detailLoadGuardRef.current.isCurrent(loadToken) || current.asset?.id !== assetId) return current
-				const catalogAssets = assets.some((item) => item.id === assetId) ? assets : [fallbackAsset, ...assets]
-				const catalogInterfaces = allInterfaces.length > 0 ? allInterfaces : interfaces
-				return {
-					...current,
-					assets: catalogAssets,
-					allInterfaces: catalogInterfaces,
+				return applyAssetDetailEditCatalog(current, {
+					assetId,
+					fallbackAsset,
+					fallbackInterfaces: interfaces,
+					assets,
+					interfaces: allInterfaces,
 					locations,
-					editCatalogLoaded: true,
-				}
+				})
 			})
 		} catch (error) {
 			if (!isPocketBaseAutoCancel(error)) {
@@ -368,55 +337,24 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 
 	async function loadSecondaryDetailData({ assetId, loadToken }: { assetId: string; loadToken: AssetDetailLoadToken }) {
 		try {
-			const [maintenance, attachments, visuals, aiTasks, changes, enrichmentReports] = await Promise.all([
-				pb.collection<AssetMaintenanceRecord>("asset_maintenance").getFullList({
-					filter: `asset="${assetId}"`,
-					sort: "-event_date,-created",
-					requestKey: null,
-				}),
-				pb.collection<AssetAttachmentRecord>("asset_attachments").getFullList({
-					filter: `asset="${assetId}"`,
-					sort: "kind,title",
-					requestKey: null,
-				}),
-				loadDisplayAssetVisuals(pb.collection<AssetVisualRecord>("asset_visuals"), assetId),
-				loadLatestAITasksByKind(pb.collection<AITaskRecord>("ai_tasks"), { assetId }),
-				pb.collection<AssetChangeRecord>("asset_changes").getList(1, 20, {
-					filter: `asset="${assetId}"`,
-					sort: "-created",
-					requestKey: null,
-				}),
-				pb.collection<AssetEnrichmentReportRecord>("asset_enrichment_reports").getList(1, 10, {
-					filter: `asset="${assetId}"`,
-					sort: "-created",
-					requestKey: null,
-				}),
-			])
-			const [enrichmentSuggestions, officialColorSuggestions] = await Promise.all([
-				loadLatestReportSuggestions(
-					pb.collection<AssetEnrichmentSuggestionRecord>("asset_enrichment_suggestions"),
-					enrichmentReports.items[0]?.id
-				),
-				loadPendingOfficialColorSuggestions(
-					pb.collection<AssetEnrichmentSuggestionRecord>("asset_enrichment_suggestions"),
-					assetId
-				),
-			])
-			setState((current) => {
-				if (!detailLoadGuardRef.current.isCurrent(loadToken) || current.asset?.id !== assetId) return current
-				return {
-					...current,
-					maintenance,
-					attachments,
-					visuals,
-					aiTasks,
-					changes: changes.items,
-					enrichmentReports: enrichmentReports.items,
-					enrichmentSuggestions,
-					officialColorSuggestions,
-				}
-			})
-			if (attachments.some((item) => item.files?.length > 0) && detailLoadGuardRef.current.isCurrent(loadToken)) {
+			const data = await loadAssetDetailSecondaryData(
+				{
+					maintenance: pb.collection<AssetMaintenanceRecord>("asset_maintenance"),
+					attachments: pb.collection<AssetAttachmentRecord>("asset_attachments"),
+					visuals: pb.collection<AssetVisualRecord>("asset_visuals"),
+					aiTasks: pb.collection<AITaskRecord>("ai_tasks"),
+					changes: pb.collection<AssetChangeRecord>("asset_changes"),
+					enrichmentReports: pb.collection<AssetEnrichmentReportRecord>("asset_enrichment_reports"),
+					suggestions: pb.collection<AssetEnrichmentSuggestionRecord>("asset_enrichment_suggestions"),
+				},
+				assetId
+			)
+			setState((current) =>
+				detailLoadGuardRef.current.isCurrent(loadToken)
+					? applyAssetDetailSecondaryData(current, assetId, data)
+					: current
+			)
+			if (data.attachments.some((item) => item.files?.length > 0) && detailLoadGuardRef.current.isCurrent(loadToken)) {
 				pb.files
 					.getToken({ requestKey: null })
 					.then((token) => {
