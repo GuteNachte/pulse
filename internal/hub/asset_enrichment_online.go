@@ -134,14 +134,24 @@ func (result assetOnlineEnrichmentResult) ReportLine(fallback string) string {
 func (h *Hub) collectAssetOnlineEnrichment(ctx context.Context, asset *core.Record, focus string) assetOnlineEnrichmentResult {
 	result := h.collectAssetOnlineReferenceEnrichment(asset)
 	config := h.assetOnlineAIConfig()
-	if len(result.Sources) == 0 && config.SourceDiscoveryEnabled {
+	sourceLimit := normalizeAssetOnlineSourceLimit(config.MaxSources)
+	if config.SourceDiscoveryEnabled && len(result.Sources) < sourceLimit {
 		discovery, discoveredSources, discoveryErrors := h.collectAssetOnlineAISourceDiscovery(ctx, asset, focus)
 		result.Discovery = discovery
 		result.Errors = append(result.Errors, discoveryErrors...)
 		if len(discoveredSources) > 0 {
-			result.Sources = discoveredSources
+			result.Sources = rankAssetOnlineSources(
+				filterAssetOnlineSourcesByVariant(
+					dedupeAssetOnlineSources(append(result.Sources, discoveredSources...)),
+					asset,
+				),
+				asset,
+			)
+			if len(result.Sources) > sourceLimit {
+				result.Sources = result.Sources[:sourceLimit]
+			}
 			result.Status = "ready"
-			for _, source := range discoveredSources {
+			for _, source := range result.Sources {
 				result.Providers = appendProvider(result.Providers, source.Provider)
 			}
 		}

@@ -90,6 +90,64 @@ func TestAssetEnrichmentReportIncludesOnlineSupportSource(t *testing.T) {
 	require.Contains(t, onlineNote.GetString("online_value"), server.URL)
 }
 
+func TestAssetEnrichmentAIAddsSourcesWhenReferenceURLExists(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-ai-supplement@example.com")
+	supportServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方支持</title></head><body>Redmi K50 官方支持资料。</body></html>`))
+	}))
+	t.Cleanup(supportServer.Close)
+	discoveredServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/redmik50/specs" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Redmi K50 官方规格</title></head><body>Redmi K50 官方规格资料，天玑 8100。</body></html>`))
+	}))
+	t.Cleanup(discoveredServer.Close)
+
+	aiCalls := 0
+	aiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		aiCalls++
+		w.Header().Set("Content-Type", "application/json")
+		if aiCalls == 1 {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"source_urls\":[\"` + discoveredServer.URL + `/redmik50/specs\"]}"}}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"suggestions\":[]}"}}]}`))
+	}))
+	t.Cleanup(aiServer.Close)
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENABLED", "true")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENDPOINT", aiServer.URL+"/v1/chat/completions")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_API_KEY", "test-key")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_MODEL", "test-model")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_SOURCE_DISCOVERY_ENABLED", "true")
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	metadata["support_url"] = supportServer.URL + "/support/redmi-k50"
+	metadata["internal_model"] = "22041211AC"
+	asset.Set("vendor", "小米 / Redmi")
+	asset.Set("model", "Redmi K50")
+	asset.Set("metadata", metadata)
+	require.NoError(t, fixture.hub.Save(asset))
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	require.Equal(t, 2, aiCalls, "expected source discovery plus extraction even with a reference URL")
+
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+	sourceSummary := recordJSONField(t, reports[0], "source_summary")
+	onlineMatch, ok := sourceSummary["online_match"].(map[string]any)
+	require.True(t, ok, "online_match: %v", sourceSummary)
+	require.Contains(t, fmt.Sprint(onlineMatch["sources"]), supportServer.URL)
+	require.Contains(t, fmt.Sprint(onlineMatch["sources"]), discoveredServer.URL+"/redmik50/specs")
+}
+
 func TestAssetEnrichmentDiscoversOfficialSourcesWithAIWhenNoReferenceURL(t *testing.T) {
 	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-ai-source-discovery@example.com")
 	sourceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +177,7 @@ func TestAssetEnrichmentDiscoversOfficialSourcesWithAIWhenNoReferenceURL(t *test
 	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENDPOINT", aiServer.URL+"/v1/chat/completions")
 	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_API_KEY", "test-key")
 	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_MODEL", "test-model")
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_SOURCE_DISCOVERY_ENABLED", "true")
 
 	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
 	require.NoError(t, err)
@@ -2757,6 +2816,8 @@ func TestAssetEnrichmentAcceptAllowsStructuredOfficialSourceImageURL(t *testing.
 
 func newAssetEnrichmentFixture(t testing.TB, email string) assetEnrichmentFixture {
 	t.Helper()
+	// Extraction-focused tests opt out explicitly; source-discovery cases enable it below.
+	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_SOURCE_DISCOVERY_ENABLED", "false")
 
 	hub, err := pulseTests.NewTestHub(t.TempDir())
 	require.NoError(t, err)
