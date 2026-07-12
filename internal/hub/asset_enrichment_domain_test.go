@@ -41,3 +41,24 @@ func TestAssetEnrichmentDomainSelectsHardwareStrategy(t *testing.T) {
 	require.Equal(t, "staged_hardware_identification", assetEnrichmentStrategy("physical_host").ID)
 	require.Equal(t, "fixed_spec_model_match", assetEnrichmentStrategy("phone").ID)
 }
+
+func TestAssetEnrichmentProfileFieldAllowlistMatchesAssetType(t *testing.T) {
+	phoneFields := assetEnrichmentAllowedMetadataFieldSet("phone")
+	require.True(t, phoneFields["rear_main_camera"])
+	require.True(t, phoneFields["battery_capacity_mah"])
+
+	televisionFields := assetEnrichmentAllowedMetadataFieldSet("tv")
+	require.True(t, televisionFields["screen_size"])
+	require.True(t, televisionFields["hdr_support"])
+	require.False(t, televisionFields["rear_main_camera"])
+	require.False(t, televisionFields["battery_capacity_mah"])
+
+	switchFields := assetEnrichmentAllowedMetadataFieldSet("switch")
+	require.True(t, switchFields["port_count"])
+	require.True(t, switchFields["vlan_note"])
+	require.False(t, switchFields["wifi_standard"])
+
+	accessPointFields := assetEnrichmentAllowedMetadataFieldSet("ap")
+	require.True(t, accessPointFields["wifi_standard"])
+	require.True(t, accessPointFields["ssid_note"])
+}

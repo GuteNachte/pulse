@@ -130,6 +130,7 @@ func TestAssetEnrichmentAIAddsSourcesWhenReferenceURLExists(t *testing.T) {
 	metadata := recordMetadata(t, asset)
 	metadata["support_url"] = supportServer.URL + "/support/redmi-k50"
 	metadata["internal_model"] = "22041211AC"
+	asset.Set("type", "phone")
 	asset.Set("vendor", "小米 / Redmi")
 	asset.Set("model", "Redmi K50")
 	asset.Set("metadata", metadata)
@@ -186,6 +187,7 @@ func TestAssetEnrichmentDiscoversOfficialSourcesWithAIWhenNoReferenceURL(t *test
 	delete(metadata, "product_url")
 	delete(metadata, "official_url")
 	metadata["internal_model"] = "22041211AC"
+	asset.Set("type", "phone")
 	asset.Set("vendor", "小米 / Redmi")
 	asset.Set("model", "Redmi K50")
 	asset.Set("metadata", metadata)
@@ -2414,6 +2416,48 @@ func TestAssetEnrichmentAcceptRejectsIllegalField(t *testing.T) {
 	)
 	require.Equal(t, http.StatusBadRequest, acceptResponse.Status, acceptResponse.Body)
 	require.Contains(t, acceptResponse.Body, "字段不允许")
+}
+
+func TestAssetEnrichmentAcceptRejectsFieldOutsideAssetProfile(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-profile-field@example.com")
+	fixture.asset.Set("type", "tv")
+	require.NoError(t, fixture.hub.Save(fixture.asset))
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	reports := fixture.findReports(t)
+	require.Len(t, reports, 1)
+
+	illegalSuggestion, err := pulseTests.CreateRecord(fixture.hub, "asset_enrichment_suggestions", map[string]any{
+		"user":              fixture.user.Id,
+		"asset":             fixture.asset.Id,
+		"report":            reports[0].Id,
+		"target_collection": "assets",
+		"target_record":     fixture.asset.Id,
+		"target_field":      "metadata.rear_main_camera",
+		"target_label":      "后置主摄",
+		"current_value":     "",
+		"collected_value":   "5000 万像素",
+		"recommended_value": "5000 万像素",
+		"source":            "online",
+		"confidence":        90,
+		"conflict":          false,
+		"status":            "pending",
+		"notes":             "电视不应接受手机影像字段。",
+		"metadata":          map[string]any{},
+	})
+	require.NoError(t, err)
+
+	acceptResponse := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		"/api/pulse/asset-enrichment-suggestions/"+illegalSuggestion.Id+"/accept",
+		nil,
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusBadRequest, acceptResponse.Status, acceptResponse.Body)
+	require.Contains(t, acceptResponse.Body, "当前资产类型")
 }
 
 func TestAssetEnrichmentAcceptRejectsMetadataFieldWithoutPrefix(t *testing.T) {

@@ -532,22 +532,9 @@ func buildAssetOnlineAIRequestPayload(asset *core.Record, sources []assetOnlineS
 			"excerpt":    text,
 		})
 	}
-	allowedFields := []string{
-		"cpu_model", "cpu_vendor", "cpu_process", "cpu_architecture", "cpu_cores", "cpu_frequency", "gpu_model",
-		"gpu_detail", "memory_gb", "memory_detail", "memory_type", "storage_gb", "storage_detail", "storage_options",
-		"screen_size", "display_type", "display_resolution", "screen_refresh_rate",
-		"touch_sampling_rate", "display_brightness", "display_color_depth", "hdr_support", "display_protection",
-		"battery_capacity_mah", "battery_type", "charging_power_w", "wireless_charging", "battery_life_note",
-		"camera_summary", "rear_camera_detail", "rear_main_camera", "rear_ultrawide_camera", "rear_macro_camera",
-		"rear_telephoto_camera", "front_camera_detail", "video_recording", "image_stabilization", "mobile_network",
-		"sim_detail", "wifi_standard", "bluetooth_version", "positioning", "usb_detail", "nfc", "infrared",
-		"dimensions", "weight", "body_material", "colors_available", "water_resistance", "speaker_detail",
-		"audio_detail", "biometrics", "sensor_detail", "cooling_system", "official_image_url", "online_specs_summary",
-		"support_url", "product_url", "official_url",
-	}
+	allowedFields := assetEnrichmentAllowedMetadataFields(asset.GetString("type"), focus)
 	instruction := "你是 Pulse 资产中心的资料补全 Agent。目标是为家庭资产管理补全长期可信的硬件主档。必须按可信来源优先级工作：1 厂商官网产品页、支持页、规格页、说明书、驱动页、官方图片或官方 CDN 图片；2 权威渠道或运营商资料；3 GSMArena、DeviceSpecifications、Kimovil 等规格库只做交叉验证；4 普通博客、电商、论坛只能作为低置信度线索，若已有官网来源则不要采用。若 sources 提供网页摘录，优先使用 sources；若 sources 为空且你的运行环境具备联网或检索能力，可以按厂商、型号、内部型号搜索上述可信来源。不要凭常识编造，不要把同系列其他变体写入当前设备。手机、平板等固定规格设备要尽量拆细处理器、GPU、内存、存储、屏幕、相机、电池、外观、网络、音频、传感器和官方图片。不要输出操作系统版本、固件版本、软件版本、APP 版本等会变动的软件参数。手机颜色必须提取完整官方配色列表，写入 colors_available，保留官方色名，不要改写成普通黑/白/蓝/银；如果无法确认全部官方配色，就不要输出 colors_available。official_image_url 必须尽量选择官网或官方 CDN 的真实设备图。返回严格 JSON：{\"suggestions\":[{\"field\":\"cpu_model\",\"label\":\"芯片 / SoC\",\"value\":\"...\",\"confidence\":0-100,\"notes\":\"...\",\"source_urls\":[\"...\"]}]}。field 只能从 allowed_fields 选择；value 必须短且可直接写入资产档案；每条建议必须有可追溯 source_urls，没有来源就不要输出。"
 	if focus == "official_colors" {
-		allowedFields = []string{"colors_available", "official_image_url"}
 		instruction = "你是 Pulse 资产中心的资料补全 Agent，这次任务只获取设备官方配色和官方设备图片，不补全其它规格。必须按可信来源优先级工作：1 厂商官网产品页、支持页、规格页、说明书、官方图片或官方 CDN 图片；2 权威渠道；3 规格库只做交叉验证；普通博客、电商、论坛不能作为官方配色依据。若 sources 提供网页摘录，优先使用 sources；若 sources 为空且运行环境具备联网或检索能力，可以按厂商、型号、内部型号搜索官网产品页和官方图片来源。必须输出完整官方配色列表到 colors_available，保留官方色名，不能改写成普通黑/白/蓝/银；如果无法确认完整官方配色列表，就不要输出 colors_available。official_image_url 必须是官网或官方 CDN 的真实设备图。返回严格 JSON：{\"suggestions\":[{\"field\":\"colors_available\",\"label\":\"官方配色\",\"value\":\"墨羽黑, 银迹, 幽芒\",\"confidence\":0-100,\"notes\":\"...\",\"source_urls\":[\"...\"]}]}。field 只能从 allowed_fields 选择；每条建议必须有可追溯 source_urls，没有来源就不要输出。"
 	}
 	return map[string]any{
@@ -780,7 +767,7 @@ func (h *Hub) parseAssetOnlineAISuggestions(asset *core.Record, content string, 
 	result := make([]assetEnrichmentSuggestionInput, 0, len(parsed.Suggestions))
 	for _, item := range parsed.Suggestions {
 		field := strings.TrimSpace(item.Field)
-		if field == "" || !allowedAssetEnrichmentMetadataFields[field] {
+		if field == "" || !assetEnrichmentAllowedMetadataFieldSet(asset.GetString("type"))[field] {
 			continue
 		}
 		value := cleanOnlineSpecValue(item.Value)

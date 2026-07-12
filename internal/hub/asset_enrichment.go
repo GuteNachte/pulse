@@ -556,9 +556,6 @@ func (h *Hub) prepareAssetEnrichmentSuggestionApplication(userID string, suggest
 	targetCollection := suggestion.GetString("target_collection")
 	targetField := suggestion.GetString("target_field")
 	targetRecordID := firstNonEmpty(suggestion.GetString("target_record"), suggestion.GetString("asset"))
-	if !isAllowedAssetEnrichmentField(targetCollection, targetField) {
-		return assetEnrichmentSuggestionApplication{}, fmt.Errorf("字段不允许通过补全建议写入：%s.%s", targetCollection, targetField)
-	}
 	recordKey := targetCollection + ":" + targetRecordID
 	record := records[recordKey]
 	if record == nil {
@@ -572,6 +569,9 @@ func (h *Hub) prepareAssetEnrichmentSuggestionApplication(userID string, suggest
 	assetID := suggestion.GetString("asset")
 	if err := h.validateAssetEnrichmentTargetOwnership(userID, assetID, targetCollection, record); err != nil {
 		return assetEnrichmentSuggestionApplication{}, err
+	}
+	if !isAllowedAssetEnrichmentField(record.GetString("type"), targetCollection, targetField) {
+		return assetEnrichmentSuggestionApplication{}, fmt.Errorf("字段不允许通过当前资产类型的补全建议写入：%s.%s", targetCollection, targetField)
 	}
 	current := currentAssetEnrichmentFieldValue(record, targetField)
 	if strings.TrimSpace(current) != strings.TrimSpace(suggestion.GetString("current_value")) {
@@ -666,7 +666,7 @@ func (h *Hub) validateAssetEnrichmentTargetOwnership(userID string, assetID stri
 	return nil
 }
 
-func isAllowedAssetEnrichmentField(collection string, field string) bool {
+func isAllowedAssetEnrichmentField(assetType string, collection string, field string) bool {
 	switch collection {
 	case "assets":
 		switch field {
@@ -676,7 +676,7 @@ func isAllowedAssetEnrichmentField(collection string, field string) bool {
 			if !strings.HasPrefix(field, "metadata.") {
 				return false
 			}
-			return allowedAssetEnrichmentMetadataFields[strings.TrimPrefix(field, "metadata.")]
+			return assetEnrichmentAllowedMetadataFieldSet(assetType)[strings.TrimPrefix(field, "metadata.")]
 		}
 	case "asset_interfaces":
 		switch field {
@@ -685,93 +685,6 @@ func isAllowedAssetEnrichmentField(collection string, field string) bool {
 		}
 	}
 	return false
-}
-
-var allowedAssetEnrichmentMetadataFields = map[string]bool{
-	"fixed_ipv4":                true,
-	"fixed_ipv6":                true,
-	"mac":                       true,
-	"support_url":               true,
-	"product_url":               true,
-	"official_url":              true,
-	"online_specs_summary":      true,
-	"internal_model":            true,
-	"cpu_process":               true,
-	"cpu_architecture":          true,
-	"cpu_cores":                 true,
-	"cpu_frequency":             true,
-	"gpu_model":                 true,
-	"screen_size":               true,
-	"display_type":              true,
-	"display_resolution":        true,
-	"screen_refresh_rate":       true,
-	"touch_sampling_rate":       true,
-	"display_brightness":        true,
-	"display_color_depth":       true,
-	"hdr_support":               true,
-	"display_protection":        true,
-	"battery_capacity_mah":      true,
-	"battery_type":              true,
-	"charging_power_w":          true,
-	"wireless_charging":         true,
-	"battery_life_note":         true,
-	"camera_summary":            true,
-	"rear_camera_detail":        true,
-	"rear_main_camera":          true,
-	"rear_ultrawide_camera":     true,
-	"rear_macro_camera":         true,
-	"rear_telephoto_camera":     true,
-	"front_camera_detail":       true,
-	"video_recording":           true,
-	"image_stabilization":       true,
-	"bluetooth_version":         true,
-	"wifi_standard":             true,
-	"mobile_network":            true,
-	"sim_detail":                true,
-	"positioning":               true,
-	"usb_detail":                true,
-	"nfc":                       true,
-	"infrared":                  true,
-	"dimensions":                true,
-	"weight":                    true,
-	"body_material":             true,
-	"colors_available":          true,
-	"water_resistance":          true,
-	"speaker_detail":            true,
-	"audio_detail":              true,
-	"biometrics":                true,
-	"sensor_detail":             true,
-	"cooling_system":            true,
-	"official_image_url":        true,
-	"storage_gb":                true,
-	"storage_detail":            true,
-	"storage_options":           true,
-	"cpu_vendor":                true,
-	"cpu_model":                 true,
-	"memory_gb":                 true,
-	"memory_detail":             true,
-	"primary_nic_speed_mbps":    true,
-	"nic_detail":                true,
-	"motherboard_vendor":        true,
-	"motherboard_model":         true,
-	"motherboard_support_url":   true,
-	"bios_vendor":               true,
-	"gpu_vendor":                true,
-	"gpu_detail":                true,
-	"memory_vendor":             true,
-	"memory_model":              true,
-	"memory_type":               true,
-	"memory_speed_mhz":          true,
-	"storage_vendor":            true,
-	"storage_model":             true,
-	"storage_media":             true,
-	"storage_serial_note":       true,
-	"nic_vendor":                true,
-	"nic_model":                 true,
-	"wifi_vendor":               true,
-	"wifi_model":                true,
-	"hardware_fingerprint_note": true,
-	"hardware_match_note":       true,
 }
 
 func (h *Hub) parseAssetEnrichmentRecommendedValue(suggestion *core.Record) (any, error) {
