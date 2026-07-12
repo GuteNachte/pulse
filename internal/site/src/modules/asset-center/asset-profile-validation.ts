@@ -9,6 +9,15 @@ export type AssetRecognitionRequirement = {
 
 export function getAssetRecognitionRequirements(asset: AssetRecord): AssetRecognitionRequirement[] {
 	const metadata = asset.metadata ?? {}
+	if (asset.type === "internet") {
+		const downMbps = getMetadataNumber(metadata, "down_mbps")
+		const upMbps = getMetadataNumber(metadata, "up_mbps")
+		return [
+			{ label: "运营商", value: asset.vendor || "", ok: Boolean(asset.vendor?.trim()) },
+			{ label: "下行带宽", value: downMbps ? `${downMbps} Mbps` : "", ok: Boolean(downMbps) },
+			{ label: "上行带宽", value: upMbps ? `${upMbps} Mbps` : "", ok: Boolean(upMbps) },
+		]
+	}
 	const fixedIpv4 = firstNonEmpty(asset.management_ip, getMetadataString(metadata, "fixed_ipv4"))
 	const requirements: AssetRecognitionRequirement[] = [
 		{ label: "IPv4", value: fixedIpv4, ok: Boolean(fixedIpv4) },
@@ -50,8 +59,16 @@ export function validateAssetProfileForm(values: {
 	ipv4: string
 	memoryGb: string
 	storageGb: string
+	downMbps?: string
+	upMbps?: string
 }) {
 	const errors: string[] = []
+	if (values.type === "internet") {
+		if (!values.vendor.trim()) errors.push("运营商")
+		if (!isPositiveNumberString(values.downMbps)) errors.push("下行带宽")
+		if (!isPositiveNumberString(values.upMbps)) errors.push("上行带宽")
+		return errors
+	}
 	if (!values.name.trim()) errors.push("资产名称")
 	if (!values.ipv4.trim()) {
 		errors.push("IPv4")

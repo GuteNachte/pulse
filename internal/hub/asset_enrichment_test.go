@@ -2460,6 +2460,49 @@ func TestAssetEnrichmentAcceptRejectsFieldOutsideAssetProfile(t *testing.T) {
 	require.Contains(t, acceptResponse.Body, "当前资产类型")
 }
 
+func TestInternetAccessRefreshWritesDetectedPublicAddresses(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "internet-address-refresh@example.com")
+	fixture.asset.Set("type", "internet")
+	fixture.asset.Set("metadata", map[string]any{"down_mbps": 1000, "up_mbps": 100})
+	require.NoError(t, fixture.hub.Save(fixture.asset))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/ipv4" {
+			_, _ = w.Write([]byte("203.0.113.10"))
+			return
+		}
+		if r.URL.Path == "/ipv6" {
+			_, _ = w.Write([]byte("2001:db8::10"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("PULSE_PUBLIC_IPV4_DETECTOR_URL", server.URL+"/ipv4")
+	t.Setenv("PULSE_PUBLIC_IPV6_DETECTOR_URL", server.URL+"/ipv6")
+
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		"/api/pulse/assets/"+fixture.asset.Id+"/internet-addresses/refresh",
+		nil,
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	var body map[string]string
+	require.NoError(t, json.Unmarshal([]byte(response.Body), &body))
+	require.Equal(t, "203.0.113.10", body["ipv4"])
+	require.Equal(t, "2001:db8::10", body["ipv6"])
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	require.Equal(t, "203.0.113.10", metadata["public_ipv4"])
+	require.Equal(t, "2001:db8::10", metadata["public_ipv6"])
+	require.NotEmpty(t, metadata["public_ip_checked_at"])
+}
+
 func TestAssetEnrichmentAcceptRejectsMetadataFieldWithoutPrefix(t *testing.T) {
 	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-metadata-prefix@example.com")
 	response := fixture.generateReport(t)

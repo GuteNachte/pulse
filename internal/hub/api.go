@@ -161,6 +161,7 @@ func (h *Hub) registerApiRouteGroup(se *core.ServeEvent, prefix string) error {
 	apiAuth.DELETE("/important-monitoring/rules/{kind}/{id}", h.deleteImportantMonitoringRule).BindFunc(excludeReadOnlyRole).BindFunc(clientMonitoringModule)
 	apiAuth.DELETE("/systems/{id}", h.deleteSystemAndRelatedData).BindFunc(excludeReadOnlyRole).BindFunc(clientMonitoringModule)
 	apiAuth.POST("/assets/{id}/enrichment-reports", h.generateAssetEnrichmentReport).BindFunc(excludeReadOnlyRole).BindFunc(assetCenterModule)
+	apiAuth.POST("/assets/{id}/internet-addresses/refresh", h.refreshInternetPublicAddresses).BindFunc(excludeReadOnlyRole).BindFunc(assetCenterModule)
 	apiAuth.POST("/assets/{id}/visuals/turntable", h.generateAssetTurntableVisual).BindFunc(excludeReadOnlyRole).BindFunc(assetCenterModule)
 	apiAuth.POST("/assets/{id}/visuals/{visualId}/select", h.selectAssetVisualCandidate).BindFunc(excludeReadOnlyRole).BindFunc(assetCenterModule)
 	apiAuth.GET("/asset-enrichment/config", h.getAssetEnrichmentConfig).BindFunc(requireAdminRole).BindFunc(assetCenterModule)

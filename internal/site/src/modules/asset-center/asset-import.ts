@@ -1,4 +1,8 @@
-import { ASSET_TYPE_OPTIONS, buildFixedSpecAssetName } from "@/modules/asset-center/asset-schema"
+import {
+	ASSET_TYPE_OPTIONS,
+	buildFixedSpecAssetName,
+	buildInternetResourceName,
+} from "@/modules/asset-center/asset-schema"
 import type { AssetRecord, AssetStatus, AssetType } from "@/types"
 
 export type AssetImportPreviewRow = {
@@ -27,7 +31,10 @@ export type AssetFormState = {
 export function buildAssetPayload(user: string, form: AssetFormState) {
 	return {
 		user,
-		name: form.name.trim() || buildFixedSpecAssetName(form.type, form.model, form.metadata.internal_model),
+		name:
+			form.name.trim() ||
+			(form.type === "internet" && buildInternetResourceName(form.vendor)) ||
+			buildFixedSpecAssetName(form.type, form.model, form.metadata.internal_model),
 		type: form.type,
 		status: form.status,
 		parent_asset: form.type === "vm" ? form.parent_asset : "",

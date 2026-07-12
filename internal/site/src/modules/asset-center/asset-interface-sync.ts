@@ -1,9 +1,14 @@
 import { pb } from "@/lib/api"
-import { NETWORK_ASSET_TYPES, getMetadataNumber } from "@/modules/asset-center/asset-schema"
+import {
+	NETWORK_ASSET_TYPES,
+	getMetadataNumber,
+	isInternetResourceAssetType,
+} from "@/modules/asset-center/asset-schema"
 import type { AssetFormState } from "@/modules/asset-center/asset-import"
 import type { AssetInterfaceKind, AssetInterfaceRecord } from "@/types"
 
 export async function syncPrimaryInterface(userId: string, assetId: string, form: AssetFormState) {
+	if (isInternetResourceAssetType(form.type)) return
 	const interfacePayload = buildPrimaryInterfacePayload(userId, assetId, form)
 	if (!interfacePayload) {
 		return
@@ -20,6 +25,7 @@ export async function syncPrimaryInterface(userId: string, assetId: string, form
 }
 
 export function buildPrimaryInterfacePayload(userId: string, assetId: string, form: AssetFormState) {
+	if (isInternetResourceAssetType(form.type)) return null
 	const metadata = form.metadata
 	const speed = getPrimaryInterfaceSpeed(form)
 	const mac = metadata.mac?.trim() || ""
@@ -47,7 +53,6 @@ export function buildPrimaryInterfacePayload(userId: string, assetId: string, fo
 }
 
 function getPrimaryInterfaceName(form: AssetFormState) {
-	if (form.type === "internet") return "公网入口"
 	if (NETWORK_ASSET_TYPES.includes(form.type)) return "管理口"
 	if (form.metadata.connection_type === "wifi") return "无线网卡"
 	if (form.metadata.connection_type === "both") return "主网卡"
@@ -55,19 +60,16 @@ function getPrimaryInterfaceName(form: AssetFormState) {
 }
 
 function getPrimaryInterfaceKind(form: AssetFormState): AssetInterfaceKind {
-	if (form.type === "internet") return "wan"
 	if (NETWORK_ASSET_TYPES.includes(form.type)) return "management"
 	if (form.metadata.connection_type === "wifi") return "wifi"
 	return "ethernet"
 }
 
 function getPrimaryIpv4(form: AssetFormState) {
-	if (form.type === "internet") return form.metadata.public_ipv4?.trim() || ""
 	return form.metadata.fixed_ipv4?.trim() || form.management_ip.trim()
 }
 
 function getPrimaryInterfaceSpeed(form: AssetFormState) {
-	if (form.type === "internet") return getMetadataNumber(form.metadata, "down_mbps")
 	if (NETWORK_ASSET_TYPES.includes(form.type)) return getMetadataNumber(form.metadata, "default_port_speed_mbps")
 	return getMetadataNumber(form.metadata, "primary_nic_speed_mbps")
 }

@@ -15,6 +15,7 @@ export type AssetFieldDefinition = {
 	span?: "full"
 	options?: { value: string; label: string }[]
 	capture?: AssetFieldCapture
+	readOnly?: boolean
 }
 
 export type AssetFieldSection = {
@@ -578,16 +579,25 @@ function getNetworkDeviceFields(type: AssetType) {
 }
 
 const internetFields: AssetFieldDefinition[] = [
-	{ key: "vendor", label: "运营商", source: "asset", placeholder: "联通 / 电信 / 移动" },
-	{ key: "model", label: "套餐 / 线路名称", source: "asset", placeholder: "千兆宽带 / 第二宽带" },
-	{ key: "line_id", label: "线路编号 / 备注", source: "metadata", placeholder: "可选，不存敏感密码" },
-	{ key: "access_mode", label: "接入方式", source: "metadata", placeholder: "桥接 / 路由 / PPPoE / DHCP / 静态 IPv4" },
+	{ key: "vendor", label: "运营商", source: "asset", required: true, placeholder: "联通 / 电信 / 移动" },
 	{ key: "down_mbps", label: "下行 Mbps", source: "metadata", type: "number", placeholder: "1000" },
 	{ key: "up_mbps", label: "上行 Mbps", source: "metadata", type: "number", placeholder: "100" },
-	{ key: "public_ipv4", label: "公网 IPv4", source: "metadata", placeholder: "可选" },
-	{ key: "public_ipv6", label: "公网 IPv6 前缀", source: "metadata", placeholder: "可选" },
-	{ key: "has_public_ip", label: "有公网地址", source: "metadata", type: "select", options: yesNoOptions },
-	{ key: "install_location", label: "入户位置", source: "metadata", placeholder: "弱电箱 / 客厅" },
+	{
+		key: "public_ipv4",
+		label: "公网 IPv4",
+		source: "metadata",
+		placeholder: "保存后自动检测",
+		capture: "agent_collectable",
+		readOnly: true,
+	},
+	{
+		key: "public_ipv6",
+		label: "公网 IPv6",
+		source: "metadata",
+		placeholder: "保存后自动检测",
+		capture: "agent_collectable",
+		readOnly: true,
+	},
 ]
 
 const vmFields: AssetFieldDefinition[] = [
@@ -1019,12 +1029,7 @@ const customFields: AssetFieldDefinition[] = [
 
 export function getAssetFormSections(type: AssetType): AssetFieldSection[] {
 	if (type === "internet") {
-		return [
-			{ title: "基础身份", fields: commonIdentityFields },
-			{ title: "宽带线路", fields: internetFields },
-			{ title: "生命周期", fields: lifecycleFields },
-			{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },
-		]
+		return [{ title: "互联网接入", fields: internetFields }]
 	}
 	if (NETWORK_ASSET_TYPES.includes(type)) {
 		return [
@@ -1132,6 +1137,15 @@ export function getAssetTypeLabel(type: AssetType) {
 
 export function isFixedSpecAssetType(type: AssetType) {
 	return FIXED_SPEC_ASSET_TYPES.includes(type)
+}
+
+export function isInternetResourceAssetType(type: AssetType) {
+	return type === "internet"
+}
+
+export function buildInternetResourceName(vendor: string) {
+	const normalizedVendor = vendor.trim()
+	return normalizedVendor ? `${normalizedVendor}宽带` : ""
 }
 
 export function isPhoneVariantSpecRequired(type: AssetType) {

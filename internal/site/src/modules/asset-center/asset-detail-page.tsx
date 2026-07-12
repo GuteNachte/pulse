@@ -522,6 +522,8 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			ipv4: managementIp,
 			memoryGb: form.get("memory_gb")?.toString().trim() || "",
 			storageGb: form.get("storage_gb")?.toString().trim() || "",
+			downMbps: form.get("down_mbps")?.toString().trim() || "",
+			upMbps: form.get("up_mbps")?.toString().trim() || "",
 		})
 		if (requiredErrors.length > 0) {
 			toast({
@@ -567,6 +569,13 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				notes: form.get("notes")?.toString().trim() || "",
 				metadata,
 			})
+			if (targetType === "internet") {
+				try {
+					await pb.send(`/api/pulse/assets/${asset.id}/internet-addresses/refresh`, { method: "POST" })
+				} catch (error) {
+					console.warn("refresh internet public addresses", error)
+				}
+			}
 			await loadDetail({ waitSecondary: true })
 			toast({ title: "资产主档已保存", description: name })
 		} catch (error) {

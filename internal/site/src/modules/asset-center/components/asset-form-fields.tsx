@@ -56,7 +56,7 @@ export function AssetInput({
 			className={field.span === "full" ? "sm:col-span-2" : undefined}
 		>
 			{field.key === "notes" ? (
-				<Textarea value={value} onChange={(event) => onChange(event.target.value)} />
+				<Textarea value={value} readOnly={field.readOnly} onChange={(event) => onChange(event.target.value)} />
 			) : field.key === "location" ? (
 				<AssetLocationInput
 					idPrefix="asset-location-options"
@@ -83,6 +83,7 @@ export function AssetInput({
 			) : field.type === "select" ? (
 				<select
 					value={value}
+					disabled={field.readOnly}
 					onChange={(event) => onChange(event.target.value)}
 					className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
 				>
@@ -98,6 +99,7 @@ export function AssetInput({
 					type={field.type === "number" || field.type === "date" || field.type === "url" ? field.type : "text"}
 					value={value}
 					placeholder={field.placeholder}
+					readOnly={field.readOnly}
 					onChange={(event) => onChange(event.target.value)}
 				/>
 			)}

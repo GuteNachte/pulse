@@ -515,8 +515,11 @@ export default memo(function AssetsPage() {
 		const name = form.name.trim() || buildSuggestedAssetName(form)
 		if (!name) {
 			toast({
-				title: "型号不能为空",
-				description: "名称可以留空自动生成，但必须填写型号和内部型号作为资产识别线索。",
+				title: form.type === "internet" ? "运营商不能为空" : "型号不能为空",
+				description:
+					form.type === "internet"
+						? "互联网接入资源会按运营商自动生成名称。"
+						: "名称可以留空自动生成，但必须填写型号和内部型号作为资产识别线索。",
 				variant: "destructive",
 			})
 			return
@@ -556,7 +559,7 @@ export default memo(function AssetsPage() {
 		}
 		const normalizedMetadata = normalizeMetadata(form.metadata, form.type)
 		const canonicalIpv4 = getAssetFormIpv4(form)
-		if (!editing && canonicalIpv4 && !normalizedMetadata.fixed_ipv4) {
+		if (!editing && form.type !== "internet" && canonicalIpv4 && !normalizedMetadata.fixed_ipv4) {
 			normalizedMetadata.fixed_ipv4 = canonicalIpv4
 		}
 		if (!editing && !String(normalizedMetadata.asset_tag ?? "").trim()) {
@@ -571,7 +574,7 @@ export default memo(function AssetsPage() {
 			vendor: form.vendor.trim(),
 			model: form.model.trim(),
 			serial_number: form.serial_number.trim(),
-			management_ip: form.management_ip.trim() || canonicalIpv4,
+			management_ip: form.type === "internet" ? "" : form.management_ip.trim() || canonicalIpv4,
 			location: form.location.trim(),
 			role: form.role.trim(),
 			notes: form.notes.trim(),
@@ -588,6 +591,13 @@ export default memo(function AssetsPage() {
 			}
 			if (assetId) {
 				await syncPrimaryInterface(user, assetId, form)
+				if (form.type === "internet") {
+					try {
+						await pb.send(`/api/pulse/assets/${assetId}/internet-addresses/refresh`, { method: "POST" })
+					} catch (error) {
+						console.warn("refresh internet public addresses", error)
+					}
+				}
 			}
 			await loadAssets()
 			setDialogOpen(false)
@@ -1226,6 +1236,12 @@ function countAssetFormFields(sections: AssetFieldSection[]) {
 
 function validateNewAssetRequiredFields(form: AssetFormState, existingAssets: AssetRecord[]) {
 	const errors: string[] = []
+	if (form.type === "internet") {
+		if (!form.vendor.trim()) errors.push("运营商")
+		if (!isPositiveNumberString(form.metadata.down_mbps)) errors.push("下行带宽")
+		if (!isPositiveNumberString(form.metadata.up_mbps)) errors.push("上行带宽")
+		return errors
+	}
 	const ipv4 = getAssetFormIpv4(form)
 	if (!ipv4) {
 		errors.push("IPv4 地址")

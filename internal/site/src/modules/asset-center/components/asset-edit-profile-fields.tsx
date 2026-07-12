@@ -111,6 +111,7 @@ export function AssetProfileEditField({
 				type={field.type === "number" || field.type === "date" || field.type === "url" ? field.type : "text"}
 				defaultValue={defaultValue}
 				placeholder={field.placeholder}
+				readOnly={field.readOnly}
 			/>
 		</div>
 	)

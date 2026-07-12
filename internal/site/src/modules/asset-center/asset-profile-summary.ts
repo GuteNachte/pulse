@@ -206,9 +206,9 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 	if (asset.type === "internet") {
 		checks.push(
 			{ label: "运营商", ok: Boolean(asset.vendor?.trim()) },
-			{ label: "接入方式", ok: Boolean(getMetadataString(metadata, "access_mode")) },
 			{ label: "下行带宽", ok: Boolean(getMetadataNumber(metadata, "down_mbps")) },
-			{ label: "上行带宽", ok: Boolean(getMetadataNumber(metadata, "up_mbps")) }
+			{ label: "上行带宽", ok: Boolean(getMetadataNumber(metadata, "up_mbps")) },
+			{ label: "公网 IPv4", ok: Boolean(getMetadataString(metadata, "public_ipv4")) }
 		)
 		return checks
 	}

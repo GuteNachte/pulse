@@ -61,4 +61,10 @@ func TestAssetEnrichmentProfileFieldAllowlistMatchesAssetType(t *testing.T) {
 	accessPointFields := assetEnrichmentAllowedMetadataFieldSet("ap")
 	require.True(t, accessPointFields["wifi_standard"])
 	require.True(t, accessPointFields["ssid_note"])
+
+	internetFields := assetEnrichmentAllowedMetadataFieldSet("internet")
+	require.True(t, internetFields["down_mbps"])
+	require.True(t, internetFields["public_ipv4"])
+	require.False(t, internetFields["internal_model"])
+	require.False(t, internetFields["official_image_url"])
 }

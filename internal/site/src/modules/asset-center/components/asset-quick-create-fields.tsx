@@ -24,6 +24,36 @@ export function QuickAssetCreateFields({
 	onFormValue: <K extends keyof AssetFormState>(key: K, value: AssetFormState[K]) => void
 	onMetadataValue: (key: string, value: string) => void
 }) {
+	if (form.type === "internet") {
+		return (
+			<AssetFormSection title="互联网接入">
+				<AssetFormField label="运营商" required>
+					<Input
+						value={form.vendor}
+						onChange={(event) => onFormValue("vendor", event.target.value)}
+						placeholder="联通 / 电信 / 移动"
+					/>
+				</AssetFormField>
+				<AssetFormField label="下行带宽 Mbps" required>
+					<Input
+						type="number"
+						value={form.metadata.down_mbps ?? ""}
+						onChange={(event) => onMetadataValue("down_mbps", event.target.value)}
+						placeholder="1000"
+					/>
+				</AssetFormField>
+				<AssetFormField label="上行带宽 Mbps" required>
+					<Input
+						type="number"
+						value={form.metadata.up_mbps ?? ""}
+						onChange={(event) => onMetadataValue("up_mbps", event.target.value)}
+						placeholder="100"
+					/>
+				</AssetFormField>
+			</AssetFormSection>
+		)
+	}
+
 	return (
 		<AssetFormSection title="快速建档">
 			<AssetFormField label="所属类型" required>

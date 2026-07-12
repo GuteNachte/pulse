@@ -148,16 +148,19 @@ var lockEnrichmentMetadataFields = mergeAssetEnrichmentFields(smartHomeBaseEnric
 var vacuumEnrichmentMetadataFields = mergeAssetEnrichmentFields(smartHomeBaseEnrichmentMetadataFields, []string{"battery_capacity_mah", "storage_target", "sensor_detail"})
 var iotEnrichmentMetadataFields = smartHomeBaseEnrichmentMetadataFields
 
-var internetEnrichmentMetadataFields = []string{"line_id", "access_mode", "down_mbps", "up_mbps", "public_ipv4", "public_ipv6", "entry_location", "billing_note"}
+var internetEnrichmentMetadataFields = []string{"down_mbps", "up_mbps", "public_ipv4", "public_ipv6"}
 var webEndpointEnrichmentMetadataFields = []string{"url", "internal_url", "external_url", "endpoint_scope", "expected_owner"}
 var customEnrichmentMetadataFields = assetEnrichmentAddressMetadataFields
 
 func assetEnrichmentAllowedMetadataFieldSet(assetType string) map[string]bool {
+	assetType = strings.TrimSpace(assetType)
 	result := map[string]bool{}
-	for _, field := range assetEnrichmentCommonMetadataFields {
-		result[field] = true
+	if assetType != "internet" {
+		for _, field := range assetEnrichmentCommonMetadataFields {
+			result[field] = true
+		}
 	}
-	for _, field := range assetEnrichmentMetadataFieldsByType[strings.TrimSpace(assetType)] {
+	for _, field := range assetEnrichmentMetadataFieldsByType[assetType] {
 		result[field] = true
 	}
 	return result
