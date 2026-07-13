@@ -10,9 +10,11 @@ export function AssetShowcaseWorkspace({ asset, visuals }: { asset: AssetRecord;
 	const identitySections = useMemo(() => buildAssetIdentitySections(asset), [asset])
 
 	return (
-		<section className="grid gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(0,4fr)_minmax(0,3fr)] xl:items-start">
-			<AssetVisualCard visuals={visuals} />
-			<AssetOverviewColumn sections={identitySections} />
+		<section className="grid items-start gap-5 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.7fr)] 2xl:grid-cols-[minmax(22rem,0.72fr)_minmax(0,1.78fr)]">
+			<aside className="grid content-start gap-5 xl:min-h-0">
+				<AssetVisualCard visuals={visuals} />
+				<AssetOverviewColumn sections={identitySections} />
+			</aside>
 			<AssetHardwareSpecsColumn groups={parameterGroups} />
 		</section>
 	)

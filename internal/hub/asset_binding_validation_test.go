@@ -147,7 +147,7 @@ func TestWebsiteMonitorAssetBindingValidation(t *testing.T) {
 		headers,
 	)
 	require.Equal(t, http.StatusBadRequest, rejectedMissing.Status, rejectedMissing.Body)
-	require.Contains(t, rejectedMissing.Body, "网站监控必须先绑定资产中心")
+	require.Contains(t, rejectedMissing.Body, "互联网服务监控必须先绑定资产中心里的互联网服务监控资产")
 
 	accepted := pulseTests.PerformTestAPIRequest(
 		t,
@@ -169,7 +169,7 @@ func TestWebsiteMonitorAssetBindingValidation(t *testing.T) {
 		headers,
 	)
 	require.Equal(t, http.StatusBadRequest, rejectedClearing.Status, rejectedClearing.Body)
-	require.Contains(t, rejectedClearing.Body, "网站监控必须先绑定资产中心")
+	require.Contains(t, rejectedClearing.Body, "互联网服务监控必须先绑定资产中心里的互联网服务监控资产")
 
 	rejectedType := pulseTests.PerformTestAPIRequest(
 		t,
@@ -180,7 +180,7 @@ func TestWebsiteMonitorAssetBindingValidation(t *testing.T) {
 		headers,
 	)
 	require.Equal(t, http.StatusBadRequest, rejectedType.Status, rejectedType.Body)
-	require.Contains(t, rejectedType.Body, "网站监控只能绑定网页端点资产")
+	require.Contains(t, rejectedType.Body, "互联网服务监控只能绑定资产中心里的互联网服务监控资产")
 
 	rejectedUser := pulseTests.PerformTestAPIRequest(
 		t,

@@ -5,7 +5,9 @@ import {
 	getDisplayAssetVisualFrames,
 	getLatestAssetVisualCandidateSet,
 	groupAssetVisualCandidateFramesByColor,
+	isDisplayableAssetVisualFrame,
 	loadDisplayAssetVisuals,
+	resolveAssetVisualFrameURLs,
 } from "./asset-visual-query.ts"
 import type { AssetVisualRecord } from "../../types"
 
@@ -72,23 +74,47 @@ assertDeepEqual(
 			perPage: 1,
 			filter: 'asset="asset-123" && status="ready" && kind="official_reference" && primary=true',
 			sort: "-created",
-			fields: "id,asset,kind,status,primary,frames,metadata,created,updated",
+			fields: "id,asset,kind,status,primary,files,frames,metadata,created,updated",
 		},
 		{
 			page: 1,
 			perPage: 1,
 			filter: 'asset="asset-123" && status="ready" && kind="manual"',
 			sort: "-primary,-created",
-			fields: "id,asset,kind,status,primary,frames,metadata,created,updated",
+			fields: "id,asset,kind,status,primary,files,frames,metadata,created,updated",
 		},
 		{
 			page: 1,
 			perPage: 3,
 			filter: 'asset="asset-123" && status="ready" && kind="official_reference" && primary=false',
 			sort: "-created",
-			fields: "id,asset,kind,status,primary,frames,metadata,created,updated",
+			fields: "id,asset,kind,status,primary,files,frames,metadata,created,updated",
 		},
 	]
+)
+
+const locallyStoredVisual = {
+	id: "visual-final-reference",
+	asset: "asset-123",
+	kind: "official_reference",
+	status: "ready",
+	files: ["asset-visual-01_local.jpg"],
+	frames: [
+		{
+			index: 0,
+			file: "asset-visual-01_local.jpg",
+			file_record_id: "visual-candidate-set",
+			source_image_url: "https://cdn.example.com/redmi-k50-black.jpg",
+		},
+	],
+} as unknown as AssetVisualRecord
+
+assertDeepEqual(
+	resolveAssetVisualFrameURLs(
+		[locallyStoredVisual],
+		(recordId, file) => `/api/files/asset_visuals/${recordId}/${file}`
+	)[0]?.frames?.[0]?.url,
+	"/api/files/asset_visuals/visual-candidate-set/asset-visual-01_local.jpg"
 )
 assertDeepEqual(
 	visuals.map((visual) => visual.id),
@@ -153,6 +179,14 @@ const visualWithRejectedFirstFrame = {
 assertDeepEqual(
 	getDisplayAssetVisualFrames(visualWithRejectedFirstFrame).map((frame) => frame.url),
 	["https://cdn.example.com/redmi-k50-black.jpg"]
+)
+
+assertDeepEqual(
+	isDisplayableAssetVisualFrame({
+		url: "https://cdn.example.com/china-unicom-logo.png",
+		presentation: "provider_logo",
+	} as never),
+	true
 )
 
 const finalReferenceVisual = {

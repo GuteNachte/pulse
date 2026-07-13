@@ -1,3 +1,5 @@
+import { CheckIcon } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { SuggestionValue } from "./asset-enrichment-suggestion-value"
 import { getEnrichmentReportStatusLabel } from "../asset-enrichment-report"
 import type { AssetEnrichmentReportRecord, AssetEnrichmentSuggestionRecord } from "@/types"
@@ -8,12 +10,16 @@ export function AssetSuggestionWorkbench({
 	actionableSuggestions,
 	readOnly,
 	saving,
+	onAcceptSuggestion,
+	onAcceptAllSuggestions,
 }: {
 	latestReport?: AssetEnrichmentReportRecord
 	suggestions: AssetEnrichmentSuggestionRecord[]
 	actionableSuggestions: AssetEnrichmentSuggestionRecord[]
 	readOnly: boolean
 	saving: boolean
+	onAcceptSuggestion: (suggestion: AssetEnrichmentSuggestionRecord) => void
+	onAcceptAllSuggestions: () => void
 }) {
 	if (!latestReport) {
 		return (
@@ -35,9 +41,14 @@ export function AssetSuggestionWorkbench({
 				<span>
 					{formatTime(latestReport.created)} · {getEnrichmentReportStatusLabel(latestReport.status)}
 				</span>
-				<span>
-					{actionableSuggestions.length} 个可替换参数 / {suggestions.length} 条建议
-				</span>
+				<div className="flex items-center gap-2">
+					<span>
+						{actionableSuggestions.length} 个可替换参数 / {suggestions.length} 条建议
+					</span>
+					<Button type="button" size="sm" onClick={onAcceptAllSuggestions} disabled={readOnly || saving}>
+						全部替换
+					</Button>
+				</div>
 			</div>
 			{actionableSuggestions.map((suggestion) => (
 				<div key={suggestion.id} className="rounded-md border border-border/70 bg-card px-3 py-2">
@@ -45,9 +56,18 @@ export function AssetSuggestionWorkbench({
 						<span className="font-medium text-foreground">{suggestion.target_label}</span>
 						<MetaTag>{suggestion.conflict ? "不一致" : "未填写"}</MetaTag>
 						<ConfidenceTag confidence={suggestion.confidence ?? 0} />
-						<span className="ms-auto text-xs text-muted-foreground">
-							{readOnly || saving ? "等待" : "顶部选择后替换"}
-						</span>
+						<Button
+							type="button"
+							variant="outline"
+							size="icon"
+							className="ms-auto size-7"
+							onClick={() => onAcceptSuggestion(suggestion)}
+							disabled={readOnly || saving}
+							aria-label={`替换${suggestion.target_label}`}
+							title="替换参数"
+						>
+							<CheckIcon className="size-3.5" />
+						</Button>
 					</div>
 					<div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
 						<SuggestionValue label="当前参数" value={suggestion.current_value || "未填写"} />

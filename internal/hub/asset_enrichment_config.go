@@ -30,16 +30,14 @@ type assetEnrichmentConfigUpdateRequest struct {
 		MaxSources             int    `json:"max_sources"`
 	} `json:"ai"`
 	VisualAI struct {
-		Enabled               *bool  `json:"enabled"`
-		Provider              string `json:"provider"`
-		Endpoint              string `json:"endpoint"`
-		APIKey                string `json:"api_key"`
-		ClearAPIKey           bool   `json:"clear_api_key"`
-		Model                 string `json:"model"`
-		FrameCount            int    `json:"frame_count"`
-		ModelDiscoveryEnabled *bool  `json:"model_discovery_enabled"`
-		MaxImages             int    `json:"max_images"`
-		OfficialOnly          *bool  `json:"official_only"`
+		Enabled     *bool  `json:"enabled"`
+		Provider    string `json:"provider"`
+		Endpoint    string `json:"endpoint"`
+		APIKey      string `json:"api_key"`
+		ClearAPIKey bool   `json:"clear_api_key"`
+		Model       string `json:"model"`
+		FrameCount  int    `json:"frame_count"`
+		MaxImages   int    `json:"max_images"`
 	} `json:"visual_ai"`
 }
 
@@ -57,6 +55,7 @@ func (h *Hub) updateAssetEnrichmentConfig(e *core.RequestEvent) error {
 	next := cloneStringAnyMap(current)
 	delete(next, "public_search_enabled")
 	delete(next, "brave_search_api_key")
+	delete(next, "visual_search")
 	if strings.TrimSpace(req.BaseURL) != "" {
 		baseURL, err := normalizeConfigBaseURL(req.BaseURL)
 		if err != nil {
@@ -99,6 +98,8 @@ func (h *Hub) updateAssetEnrichmentConfig(e *core.RequestEvent) error {
 	visualAI := cloneStringAnyMap(anyMap(next["visual_ai"]))
 	visualAI["provider"] = "agnes"
 	delete(visualAI, "endpoint")
+	delete(visualAI, "model_discovery_enabled")
+	delete(visualAI, "official_only")
 	if req.VisualAI.Enabled != nil {
 		visualAI["enabled"] = *req.VisualAI.Enabled
 	}
@@ -108,14 +109,8 @@ func (h *Hub) updateAssetEnrichmentConfig(e *core.RequestEvent) error {
 	if req.VisualAI.FrameCount > 0 {
 		visualAI["frame_count"] = normalizeAssetTurntableFrameCountWithDefault(req.VisualAI.FrameCount, defaultAssetTurntableFrameCount)
 	}
-	if req.VisualAI.ModelDiscoveryEnabled != nil {
-		visualAI["model_discovery_enabled"] = *req.VisualAI.ModelDiscoveryEnabled
-	}
 	if req.VisualAI.MaxImages > 0 {
 		visualAI["max_images"] = normalizeAssetVisualMaxImages(req.VisualAI.MaxImages)
-	}
-	if req.VisualAI.OfficialOnly != nil {
-		visualAI["official_only"] = *req.VisualAI.OfficialOnly
 	}
 	if req.ClearAPIKey {
 		visualAI["api_key"] = ""
@@ -164,19 +159,17 @@ func (h *Hub) assetEnrichmentConfigResponse() map[string]any {
 			"ready":                    aiConfig.Enabled && strings.TrimSpace(aiConfig.Endpoint) != "" && strings.TrimSpace(aiConfig.APIKey) != "" && strings.TrimSpace(aiConfig.Model) != "",
 		},
 		"visual_ai": map[string]any{
-			"enabled":                 visualConfig.Enabled,
-			"provider":                visualConfig.Provider,
-			"endpoint":                safeEditableEndpoint(visualConfig.Endpoint),
-			"endpoint_configured":     strings.TrimSpace(visualConfig.Endpoint) != "",
-			"endpoint_host":           safeAssetOnlineEndpointHost(visualConfig.Endpoint),
-			"api_key":                 visualConfig.APIKey,
-			"api_key_configured":      strings.TrimSpace(visualConfig.APIKey) != "",
-			"model":                   visualConfig.Model,
-			"ready":                   visualConfig.Ready(),
-			"frame_count":             normalizeAssetTurntableFrameCountWithDefault(visualConfig.FrameCount, defaultAssetTurntableFrameCount),
-			"model_discovery_enabled": visualConfig.ModelDiscoveryEnabled,
-			"max_images":              visualConfig.MaxImages,
-			"official_only":           visualConfig.OfficialOnly,
+			"enabled":             visualConfig.Enabled,
+			"provider":            visualConfig.Provider,
+			"endpoint":            safeEditableEndpoint(visualConfig.Endpoint),
+			"endpoint_configured": strings.TrimSpace(visualConfig.Endpoint) != "",
+			"endpoint_host":       safeAssetOnlineEndpointHost(visualConfig.Endpoint),
+			"api_key":             visualConfig.APIKey,
+			"api_key_configured":  strings.TrimSpace(visualConfig.APIKey) != "",
+			"model":               visualConfig.Model,
+			"ready":               visualConfig.Ready(),
+			"frame_count":         normalizeAssetTurntableFrameCountWithDefault(visualConfig.FrameCount, defaultAssetTurntableFrameCount),
+			"max_images":          visualConfig.MaxImages,
 		},
 	}
 }
@@ -245,14 +238,8 @@ func (h *Hub) assetVisualAIConfigFromSettings(settings map[string]any) assetVisu
 	if value, ok := configIntFromMap(section, "frame_count"); ok {
 		config.FrameCount = normalizeAssetTurntableFrameCountWithDefault(value, defaultAssetTurntableFrameCount)
 	}
-	if value, ok := configBoolFromMap(section, "model_discovery_enabled"); ok {
-		config.ModelDiscoveryEnabled = value
-	}
 	if value, ok := configIntFromMap(section, "max_images"); ok {
 		config.MaxImages = normalizeAssetVisualMaxImages(value)
-	}
-	if value, ok := configBoolFromMap(section, "official_only"); ok {
-		config.OfficialOnly = value
 	}
 	config.Provider = "agnes"
 	if envEndpoint := strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_AI_ENDPOINT")); envEndpoint != "" {

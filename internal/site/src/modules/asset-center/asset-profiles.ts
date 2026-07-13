@@ -287,10 +287,10 @@ export const assetProfiles: readonly AssetProfileDefinition[] = [
 	},
 	{
 		type: "web_endpoint",
-		label: "网页端点",
+		label: "互联网服务监控",
 		group: "资源与服务",
 		assetClass: "resource",
-		description: "后续网站监控可直接选择的网页对象",
+		description: "网站、API、中转站、Webhook 和管理后台的可用性监控对象",
 		creatable: true,
 		requiredFieldKeys: [],
 	},

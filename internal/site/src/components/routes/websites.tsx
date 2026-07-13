@@ -89,7 +89,7 @@ export default memo(function Websites() {
 	} = useWebsiteMonitorData(systemsById)
 
 	useEffect(() => {
-		document.title = pageTitle("网站监控")
+		document.title = pageTitle("互联网服务监控")
 		setAssetsLoading(true)
 		loadWebsiteEndpointAssets(
 			pb.collection<AssetRecord>("assets"),
@@ -125,8 +125,8 @@ export default memo(function Websites() {
 				if (!asset) {
 					handledInitialAdd.current = true
 					toast({
-						title: "网页端点资产不可用",
-						description: "URL 指向的资产不存在，或不是资产中心里的网页端点资产。",
+						title: "互联网服务资产不可用",
+						description: "URL 指向的资产不存在，或不是资产中心里的互联网服务监控资产。",
 						variant: "destructive",
 					})
 					return
@@ -145,7 +145,7 @@ export default memo(function Websites() {
 					}
 					setSelectedId(existingMonitor.id)
 					toast({
-						title: "该网页端点已接入网站监控",
+						title: "该互联网服务已接入监控",
 						description: "已为你打开现有监控，避免重复创建同一个资产的监控配置。",
 					})
 					return
@@ -160,8 +160,8 @@ export default memo(function Websites() {
 			if (!asset) {
 				handledInitialAdd.current = true
 				toast({
-					title: "请先添加网页端点资产",
-					description: "网站监控需要从资产中心选择网页端点，避免监控对象游离在资产中心之外。",
+					title: "请先添加互联网服务监控资产",
+					description: "互联网服务监控需要从资产中心选择服务资产，避免监控对象游离在资产中心之外。",
 					variant: "destructive",
 				})
 				return
@@ -176,7 +176,11 @@ export default memo(function Websites() {
 		openFromURL().catch((error) => {
 			console.error("open website monitor from url", error)
 			handledInitialAdd.current = true
-			toast({ title: "读取网站监控失败", description: "无法确认该网页端点是否已接入监控。", variant: "destructive" })
+			toast({
+				title: "读取互联网服务监控失败",
+				description: "无法确认该互联网服务是否已接入监控。",
+				variant: "destructive",
+			})
 		})
 		return () => {
 			cancelled = true
@@ -186,8 +190,8 @@ export default memo(function Websites() {
 	function openCreateDialog() {
 		if (!assets.length) {
 			toast({
-				title: "请先添加网页端点资产",
-				description: "网站监控需要从资产中心选择网页端点，避免监控对象游离在资产中心之外。",
+				title: "请先添加互联网服务监控资产",
+				description: "互联网服务监控需要从资产中心选择服务资产，避免监控对象游离在资产中心之外。",
 				variant: "destructive",
 			})
 			return
@@ -239,8 +243,8 @@ export default memo(function Websites() {
 		const selectedAsset = assets.find((asset) => asset.id === form.asset)
 		if (!selectedAsset) {
 			toast({
-				title: "请选择网页端点资产",
-				description: "网站监控必须绑定资产中心里的网页端点。",
+				title: "请选择互联网服务监控资产",
+				description: "互联网服务监控必须绑定资产中心里的服务资产。",
 				variant: "destructive",
 			})
 			return
@@ -248,7 +252,7 @@ export default memo(function Websites() {
 		if (selectedAsset.type !== "web_endpoint") {
 			toast({
 				title: "资产类型不正确",
-				description: "网站监控只能绑定资产中心里的网页端点资产。",
+				description: "互联网服务监控只能绑定资产中心里的互联网服务监控资产。",
 				variant: "destructive",
 			})
 			return
@@ -446,19 +450,19 @@ export default memo(function Websites() {
 			{showEmptyMonitorWorkspace ? (
 				<EmptyState
 					loading={false}
-					loadingText="正在加载网站监控"
-					emptyText="暂未接入网站监控"
+					loadingText="正在加载互联网服务监控"
+					emptyText="暂未接入互联网服务监控"
 					description={
 						hasWebEndpointAssets
-							? "从资产中心已有的网页端点接入监控后，这里会显示可用性、响应时间和异常原因。"
-							: "先在资产中心创建网页端点，再为它接入网站监控，确保监控对象始终归属资产主档。"
+							? "从资产中心已有的互联网服务接入监控后，这里会显示可用性、响应时间和异常原因。"
+							: "先在资产中心创建互联网服务监控资产，再为它接入监控，确保监控对象始终归属资产主档。"
 					}
 					className="min-h-72 bg-card"
 				>
 					{!readOnly &&
 						(hasWebEndpointAssets ? (
 							<Button type="button" onClick={openCreateDialog}>
-								接入网页端点
+								接入互联网服务
 							</Button>
 						) : (
 							<Button asChild>
@@ -575,12 +579,12 @@ export default memo(function Websites() {
 			<OperationConfirmDialog
 				open={Boolean(deleteTarget)}
 				onOpenChange={(open) => !open && !deletingId && setDeleteTarget(null)}
-				title="确认删除网站监控"
+				title="确认删除互联网服务监控"
 				description="删除后会同时删除这个监控的检测历史，后续不能从页面恢复。"
 				confirmLabel="确认删除"
 				confirmVariant="destructive"
 				running={Boolean(deletingId)}
-				progressTitle="正在删除网站监控"
+				progressTitle="正在删除互联网服务监控"
 				progressDescription="Hub 正在删除监控配置和相关检测记录。"
 				onConfirm={async () => {
 					if (deleteTarget) await deleteMonitor(deleteTarget)
@@ -698,7 +702,7 @@ async function syncWebsiteMonitorHostedOnRelation(
 		source_asset: endpointAsset.id,
 		target_asset: hostAssetId,
 		kind: "hosted_on",
-		label: "网站监控归属",
+		label: "互联网服务监控归属",
 		metadata: {
 			source: "website-monitor",
 			monitor: monitor.id,

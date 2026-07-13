@@ -3,6 +3,12 @@ import { getAssetFormSections } from "./asset-schema.ts"
 import type { AssetRecord } from "../../types"
 
 export function getRequiredAssetProfileFieldKeys(type: AssetRecord["type"]) {
+	if (type === "web_endpoint") {
+		return new Set(["name", "type", "location"])
+	}
+	if (type === "internet") {
+		return new Set(["name", "vendor", "asset_tag"])
+	}
 	const keys = new Set([
 		"name",
 		"type",

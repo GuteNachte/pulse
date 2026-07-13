@@ -154,8 +154,9 @@ export function getAssetSummaryRows(asset: AssetRecord): { label: string; value:
 	}
 	if (asset.type === "web_endpoint") {
 		pushRow(rows, "URL", getMetadataString(metadata, "url") || getMetadataString(metadata, "internal_url"))
-		pushRow(rows, "类型", getMetadataString(metadata, "endpoint_scope"))
-		pushRow(rows, "归属", getMetadataString(metadata, "expected_owner"))
+		pushRow(rows, "服务", getMetadataString(metadata, "service_category"))
+		pushRow(rows, "范围", getMetadataString(metadata, "endpoint_scope"))
+		pushRow(rows, "承载", getMetadataString(metadata, "expected_owner"))
 		return rows
 	}
 	return rows
@@ -258,6 +259,7 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 	}
 	if (asset.type === "web_endpoint") {
 		checks.push(
+			{ label: "服务类型", ok: Boolean(getMetadataString(metadata, "service_category")) },
 			{
 				label: "URL",
 				ok: Boolean(
@@ -266,7 +268,7 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 						getMetadataString(metadata, "external_url")
 				),
 			},
-			{ label: "端点类型", ok: Boolean(getMetadataString(metadata, "endpoint_scope")) },
+			{ label: "检测范围", ok: Boolean(getMetadataString(metadata, "endpoint_scope")) },
 			{ label: "归属资产", ok: Boolean(getMetadataString(metadata, "expected_owner")) }
 		)
 		return checks

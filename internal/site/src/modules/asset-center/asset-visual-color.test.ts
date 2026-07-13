@@ -15,6 +15,7 @@ function assertEqual(actual: unknown, expected: unknown) {
 
 const phone = {
 	id: "asset-redmi-k50",
+	name: "Redmi K50",
 	type: "phone",
 	model: "Redmi K50",
 	metadata: {
@@ -50,12 +51,6 @@ assertEqual(getAssetOfficialColorOptions(phone, suggestions), ["墨羽黑", "银
 assertEqual(mergeOfficialColorOptions(["墨羽黑"], "银迹"), ["银迹", "墨羽黑"])
 assertEqual(isOfficialColorRequiredForAssetType("phone"), true)
 assertEqual(isOfficialColorRequiredForAssetType("router"), false)
-assertEqual(getAssetVisualGenerationBlockReason(phone, "幽芒", ["墨羽黑", "幽芒"]), "")
-assertEqual(
-	getAssetVisualGenerationBlockReason(phone, "蓝色", ["墨羽黑", "幽芒"]),
-	"当前配色不是已采集的官方配色，请从官方配色列表选择。"
-)
-assertEqual(
-	getAssetVisualGenerationBlockReason({ ...phone, metadata: {} }, "", []),
-	"收集设备图需要先保存型号 / 规格和内部型号 / 搜索代码。"
-)
+assertEqual(getAssetVisualGenerationBlockReason(phone), "")
+assertEqual(getAssetVisualGenerationBlockReason({ ...phone, model: "", metadata: {} }), "")
+assertEqual(getAssetVisualGenerationBlockReason({ ...phone, name: "" }), "收集候选图至少需要资产名称。")

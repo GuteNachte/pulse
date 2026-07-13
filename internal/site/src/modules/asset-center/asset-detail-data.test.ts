@@ -1,5 +1,6 @@
 import {
 	applyAssetDetailEditCatalog,
+	applyAssetDetailPrimaryData,
 	applyAssetDetailSecondaryData,
 	loadAssetDetailPrimaryData,
 	loadAssetDetailSecondaryData,
@@ -107,6 +108,32 @@ assertDeepEqual(
 if (applyAssetDetailSecondaryData(baseState, "asset-2", secondary) !== baseState) {
 	throw new Error("Secondary data for another asset must not replace the current page state.")
 }
+
+const refreshedAsset = { id: "asset-1", name: "RedmiK50 已更新" } as unknown as AssetRecord
+const refreshedInterfaces = [{ id: "interface-2", asset: "asset-1" }] as unknown as AssetInterfaceRecord[]
+const refreshedRelations = [{ id: "relation-2", source_asset: "asset-1" }] as unknown as AssetRelationRecord[]
+const refreshState = applyAssetDetailPrimaryData(
+	{ ...baseState, ...secondary, editCatalogLoaded: true },
+	{ asset: refreshedAsset, interfaces: refreshedInterfaces, relations: refreshedRelations },
+	{ preserveSecondaryData: true }
+)
+assertDeepEqual(refreshState.asset?.name, "RedmiK50 已更新")
+assertDeepEqual(
+	refreshState.interfaces.map((item) => item.id),
+	["interface-2"]
+)
+assertDeepEqual(
+	refreshState.relations.map((item) => item.id),
+	["relation-2"]
+)
+assertDeepEqual(
+	refreshState.visuals.map((item) => item.id),
+	["visual-1"]
+)
+assertDeepEqual(
+	refreshState.enrichmentReports.map((item) => item.id),
+	["report-1"]
+)
 
 const catalogState = applyAssetDetailEditCatalog(baseState, {
 	assetId: "asset-1",

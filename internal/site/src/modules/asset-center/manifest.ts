@@ -4,7 +4,7 @@ import type { PulseModuleManifest } from "../types"
 export const assetCenterModule: PulseModuleManifest = {
 	id: "asset-center",
 	name: "资产中心",
-	description: "统一管理硬件、网络设备、虚拟机、移动设备、网页端点和自定义资产，是监控、拓扑和告警的数据来源。",
+	description: "统一管理硬件、网络设备、虚拟机、移动设备、互联网服务和自定义资产，是监控、拓扑和告警的数据来源。",
 	version: "1.0.6",
 	category: "资产",
 	defaultEnabled: true,

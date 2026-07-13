@@ -296,16 +296,28 @@ export interface AssetVisualRecord extends RecordModel {
 	color?: string
 	frame_count?: number
 	primary?: boolean
+	files?: string[]
 	frames?: {
 		index?: number
 		angle?: number
 		view?: string
 		theme?: string
+		presentation?: "device_image" | "provider_logo"
 		label?: string
 		color?: string
 		url?: string
+		file?: string
+		file_record_id?: string
 		source_title?: string
 		source_url?: string
+		source_image_url?: string
+		processing?: {
+			stored_locally?: boolean
+			trimmed?: boolean
+			format?: string
+			width?: number
+			height?: number
+		}
 	}[]
 	sources?: {
 		title?: string

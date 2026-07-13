@@ -17,6 +17,8 @@ import { formatAssetParameterRowDisplay } from "./asset-parameter-display.ts"
 import {
 	HOST_ASSET_TYPES,
 	getAssetFormSections,
+	getHostTypeSpecificFields,
+	getHostTypeSpecificTitle,
 	getMetadataNumber,
 	getMetadataString,
 	getStatusLabel,
@@ -35,7 +37,7 @@ export function buildAssetParameterGroups(asset: AssetRecord): AssetParameterGro
 					}))
 				)
 	const hostGroups = useHostHardwareProfile
-		? buildHostHardwareProfileGroups(asset)
+		? [...buildHostHardwareProfileGroups(asset), ...buildHostTypeSpecificParameterGroups(asset)]
 				.filter((group) => !hiddenHostHardwareParameterGroupTitles.has(group.title))
 				.filter((group) => group.rows.length > 0)
 				.map((group, index) => ({
@@ -53,6 +55,28 @@ export function buildAssetParameterGroups(asset: AssetRecord): AssetParameterGro
 				}))
 		: []
 	return dedupeParameterGroups([...archiveGroups, ...hostGroups])
+}
+
+function buildHostTypeSpecificParameterGroups(asset: AssetRecord): HostHardwareProfileGroup[] {
+	const rows = getHostTypeSpecificFields(asset.type)
+		.map((field) => {
+			const value = getAssetFieldDisplayValue(asset, field)
+			if (!value) return undefined
+			return {
+				label: field.label,
+				value,
+				capture: field.capture,
+			}
+		})
+		.filter(Boolean) as HostHardwareProfileRow[]
+	if (rows.length === 0) return []
+	return [
+		{
+			title: getHostTypeSpecificTitle(asset.type),
+			icon: createElement(BoxesIcon, { className: "size-4" }),
+			rows,
+		},
+	]
 }
 
 const hiddenArchiveParameterGroupTitles = new Set(["基础身份", "硬件识别", "固定地址", "接入信息", "生命周期", "备注"])

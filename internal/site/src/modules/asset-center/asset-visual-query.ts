@@ -9,9 +9,15 @@ type AssetVisualCollection = {
 	) => Promise<{ items: AssetVisualRecord[] }>
 }
 
-const assetVisualDisplayFields = "id,asset,kind,status,primary,frames,metadata,created,updated"
+const assetVisualDisplayFields = "id,asset,kind,status,primary,files,frames,metadata,created,updated"
 
-export async function loadDisplayAssetVisuals(collection: AssetVisualCollection, assetId: string) {
+export type AssetVisualFileURLBuilder = (recordId: string, file: string) => string
+
+export async function loadDisplayAssetVisuals(
+	collection: AssetVisualCollection,
+	assetId: string,
+	buildFileURL?: AssetVisualFileURLBuilder
+) {
 	const escapedAssetId = escapePocketBaseFilterValue(assetId)
 	const [referenceVisualPage, manualVisualPage, candidateVisualPage] = await Promise.all([
 		collection.getList(1, 1, {
@@ -33,7 +39,28 @@ export async function loadDisplayAssetVisuals(collection: AssetVisualCollection,
 			requestKey: null,
 		}),
 	])
-	return [...referenceVisualPage.items, ...manualVisualPage.items, ...candidateVisualPage.items]
+	return resolveAssetVisualFrameURLs(
+		[...referenceVisualPage.items, ...manualVisualPage.items, ...candidateVisualPage.items],
+		buildFileURL
+	)
+}
+
+export function resolveAssetVisualFrameURLs(visuals: AssetVisualRecord[], buildFileURL?: AssetVisualFileURLBuilder) {
+	if (!buildFileURL) return visuals
+	return visuals.map((visual) => {
+		if (!visual.frames?.length) return visual
+		return {
+			...visual,
+			frames: visual.frames.map((frame) => {
+				const file = frame.file?.trim()
+				if (!file) return frame
+				return {
+					...frame,
+					url: buildFileURL(frame.file_record_id?.trim() || visual.id, file),
+				}
+			}),
+		}
+	})
 }
 
 export function getDisplayAssetVisualFrames(visual: AssetVisualRecord | undefined) {
@@ -49,7 +76,11 @@ export function getAssetDisplayVisual(visuals: AssetVisualRecord[]) {
 	)
 }
 
-export function getAssetVisualStageLayout(hasVisual: boolean, useLandscapeImageLayout: boolean) {
+export function getAssetVisualStageLayout(
+	hasVisual: boolean,
+	useLandscapeImageLayout: boolean,
+	isProviderLogo = false
+) {
 	if (!hasVisual) {
 		return {
 			stageClassName: "aspect-[16/10]",
@@ -62,6 +93,13 @@ export function getAssetVisualStageLayout(hasVisual: boolean, useLandscapeImageL
 			stageClassName: "aspect-[4/3]",
 			imageClassName: "object-cover p-0",
 			maxWidth: "100%",
+		}
+	}
+	if (isProviderLogo) {
+		return {
+			stageClassName: "aspect-square",
+			imageClassName: "object-contain p-8",
+			maxWidth: "min(100%, 22rem)",
 		}
 	}
 	return {
@@ -143,6 +181,7 @@ function isFinalReferenceAssetVisual(visual: AssetVisualRecord) {
 
 export function isDisplayableAssetVisualFrame(frame: NonNullable<AssetVisualRecord["frames"]>[number] | undefined) {
 	if (!frame?.url) return false
+	if (frame.presentation === "provider_logo") return true
 	const lower = frame.url.toLowerCase()
 	if (lower.startsWith("data:image/") && lower.includes(";base64,")) return true
 	const rejected = [

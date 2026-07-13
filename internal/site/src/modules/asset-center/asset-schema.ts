@@ -526,6 +526,50 @@ const hostHardwareDetailFields: AssetFieldDefinition[] = [
 	},
 ]
 
+const hostTypeSpecificFields: Partial<Record<AssetType, AssetFieldDefinition[]>> = {
+	physical_host: [
+		{ key: "cpu_socket_count", label: "CPU 插槽数量", source: "metadata", type: "number", placeholder: "1" },
+		{ key: "pcie_slots", label: "PCIe 扩展槽", source: "metadata", placeholder: "x16 / x4 / M.2 插槽摘要" },
+		{ key: "case_form_factor", label: "机箱形态", source: "metadata", placeholder: "ATX 塔式 / ITX / 工作站" },
+	],
+	nas: [
+		{ key: "bay_count", label: "硬盘位数量", source: "metadata", type: "number", placeholder: "4" },
+		{ key: "raid_mode", label: "阵列 / RAID", source: "metadata", placeholder: "RAID 5 / SHR / ZFS RAIDZ" },
+		{ key: "filesystem", label: "文件系统", source: "metadata", placeholder: "Btrfs / ZFS / ext4" },
+		{ key: "hot_swap", label: "热插拔", source: "metadata", type: "select", options: yesNoOptions },
+		{ key: "cache_slots", label: "缓存盘位", source: "metadata", placeholder: "M.2 NVMe x2 / 无" },
+		{ key: "transcode_engine", label: "硬件转码", source: "metadata", placeholder: "Intel Quick Sync / 无" },
+	],
+	server: [
+		{ key: "cpu_socket_count", label: "CPU 插槽数量", source: "metadata", type: "number", placeholder: "2" },
+		{ key: "ecc_memory", label: "ECC 内存", source: "metadata", type: "select", options: yesNoOptions },
+		{ key: "storage_backplane", label: "背板 / 硬盘位", source: "metadata", placeholder: "12 x 3.5 英寸 SAS / SATA" },
+		{ key: "raid_controller", label: "RAID / HBA 控制器", source: "metadata", placeholder: "LSI 9361 / HBA 9300" },
+		{ key: "bmc", label: "带外管理", source: "metadata", placeholder: "iDRAC / iLO / IPMI" },
+		{ key: "redundant_psu", label: "冗余电源", source: "metadata", type: "select", options: yesNoOptions },
+		{ key: "rack_form_factor", label: "机架规格", source: "metadata", placeholder: "1U / 2U / 塔式" },
+	],
+	mini_pc: [
+		{ key: "form_factor", label: "机身形态", source: "metadata", placeholder: "迷你主机 / NUC / 软路由机箱" },
+		{ key: "storage_slots", label: "存储扩展槽", source: "metadata", placeholder: "M.2 2280 x2 / 2.5 英寸 SATA" },
+		{ key: "display_outputs", label: "显示输出", source: "metadata", placeholder: "HDMI 2.1 / USB4 / DP" },
+		{ key: "usb_ports", label: "USB / 扩展接口", source: "metadata", placeholder: "USB4 / USB-A / OCuLink" },
+		{ key: "power_adapter_w", label: "电源适配器", source: "metadata", type: "number", placeholder: "120" },
+		{ key: "mount_support", label: "安装方式", source: "metadata", placeholder: "VESA / 桌面 / 机柜托盘" },
+	],
+}
+
+export function getHostTypeSpecificFields(type: AssetType) {
+	return hostTypeSpecificFields[type] ?? []
+}
+
+export function getHostTypeSpecificTitle(type: AssetType) {
+	if (type === "nas") return "NAS 存储参数"
+	if (type === "server") return "服务器平台参数"
+	if (type === "mini_pc") return "迷你主机扩展参数"
+	return "物理主机平台参数"
+}
+
 const networkDeviceFields: AssetFieldDefinition[] = [
 	{ key: "fixed_ipv4", label: "IPv4", source: "metadata", placeholder: "192.168.1.1" },
 	{ key: "fixed_ipv6", label: "IPv6", source: "metadata", placeholder: "可选" },
@@ -540,6 +584,19 @@ const networkDeviceFields: AssetFieldDefinition[] = [
 	},
 	{ key: "power_mode", label: "供电方式", source: "metadata", placeholder: "AC / PoE / USB-C" },
 	{ key: "wifi_standard", label: "无线标准", source: "metadata", placeholder: "Wi-Fi 6 / Wi-Fi 7" },
+	{ key: "wan_port_count", label: "WAN 端口数量", source: "metadata", type: "number", placeholder: "1" },
+	{ key: "wifi_band", label: "无线频段", source: "metadata", placeholder: "2.4 / 5 / 6 GHz" },
+	{ key: "wifi_streams", label: "空间流", source: "metadata", placeholder: "2x2 / 4x4 MIMO" },
+	{ key: "antenna_type", label: "天线形态", source: "metadata", placeholder: "内置 / 外置 / 可拆卸" },
+	{ key: "poe_standard", label: "PoE 标准", source: "metadata", placeholder: "802.3af / at / bt" },
+	{ key: "poe_budget_w", label: "PoE 供电预算 W", source: "metadata", type: "number", placeholder: "120" },
+	{ key: "switching_capacity_gbps", label: "交换容量 Gbps", source: "metadata", type: "number", placeholder: "56" },
+	{ key: "pon_standard", label: "PON 标准", source: "metadata", placeholder: "GPON / EPON / XG-PON" },
+	{ key: "optical_connector", label: "光纤接口", source: "metadata", placeholder: "SC/APC / SFP+" },
+	{ key: "voice_port_count", label: "语音端口数量", source: "metadata", type: "number", placeholder: "1" },
+	{ key: "security_throughput_gbps", label: "安全吞吐 Gbps", source: "metadata", type: "number", placeholder: "2.5" },
+	{ key: "vpn_throughput_gbps", label: "VPN 吞吐 Gbps", source: "metadata", type: "number", placeholder: "1" },
+	{ key: "session_capacity", label: "并发会话数", source: "metadata", type: "number", placeholder: "100000" },
 	{ key: "ssid_note", label: "SSID 备注", source: "metadata", placeholder: "主 Wi-Fi / IoT Wi-Fi", span: "full" },
 	{ key: "vlan_note", label: "VLAN / 网段备注", source: "metadata", placeholder: "LAN 192.168.1.0/24", span: "full" },
 ]
@@ -553,12 +610,46 @@ const networkDeviceFieldKeysByType: Partial<Record<AssetType, readonly string[]>
 		"default_port_speed_mbps",
 		"power_mode",
 		"wifi_standard",
+		"wan_port_count",
+		"wifi_band",
+		"wifi_streams",
+		"antenna_type",
 		"ssid_note",
 		"vlan_note",
 	],
-	gateway: ["fixed_ipv4", "fixed_ipv6", "mac", "port_count", "default_port_speed_mbps", "power_mode", "vlan_note"],
-	ont: ["fixed_ipv4", "fixed_ipv6", "mac", "port_count", "default_port_speed_mbps", "power_mode"],
-	switch: ["fixed_ipv4", "fixed_ipv6", "mac", "port_count", "default_port_speed_mbps", "power_mode", "vlan_note"],
+	gateway: [
+		"fixed_ipv4",
+		"fixed_ipv6",
+		"mac",
+		"port_count",
+		"wan_port_count",
+		"default_port_speed_mbps",
+		"power_mode",
+		"vlan_note",
+	],
+	ont: [
+		"fixed_ipv4",
+		"fixed_ipv6",
+		"mac",
+		"port_count",
+		"default_port_speed_mbps",
+		"pon_standard",
+		"optical_connector",
+		"voice_port_count",
+		"power_mode",
+	],
+	switch: [
+		"fixed_ipv4",
+		"fixed_ipv6",
+		"mac",
+		"port_count",
+		"default_port_speed_mbps",
+		"poe_standard",
+		"poe_budget_w",
+		"switching_capacity_gbps",
+		"power_mode",
+		"vlan_note",
+	],
 	ap: [
 		"fixed_ipv4",
 		"fixed_ipv6",
@@ -567,10 +658,25 @@ const networkDeviceFieldKeysByType: Partial<Record<AssetType, readonly string[]>
 		"default_port_speed_mbps",
 		"power_mode",
 		"wifi_standard",
+		"wifi_band",
+		"wifi_streams",
+		"antenna_type",
+		"poe_standard",
 		"ssid_note",
 		"vlan_note",
 	],
-	firewall: ["fixed_ipv4", "fixed_ipv6", "mac", "port_count", "default_port_speed_mbps", "power_mode", "vlan_note"],
+	firewall: [
+		"fixed_ipv4",
+		"fixed_ipv6",
+		"mac",
+		"port_count",
+		"default_port_speed_mbps",
+		"security_throughput_gbps",
+		"vpn_throughput_gbps",
+		"session_capacity",
+		"power_mode",
+		"vlan_note",
+	],
 }
 
 function getNetworkDeviceFields(type: AssetType) {
@@ -958,7 +1064,13 @@ function getPersonalDeviceFields(type: AssetType): AssetFieldDefinition[] {
 const cameraFields: AssetFieldDefinition[] = [
 	{ key: "connection_type", label: "连接方式", source: "metadata", type: "select", options: connectionOptions },
 	{ key: "protocol", label: "协议", source: "metadata", placeholder: "RTSP / ONVIF / 私有协议" },
+	{ key: "sensor_size", label: "传感器尺寸", source: "metadata", placeholder: "1/2.8 英寸 / 1/1.8 英寸" },
+	{ key: "lens_spec", label: "镜头规格", source: "metadata", placeholder: "4 mm / F1.6 / 定焦或变焦" },
 	{ key: "resolution", label: "分辨率", source: "metadata", placeholder: "2K / 4K / 1080p" },
+	{ key: "field_of_view", label: "视场角", source: "metadata", placeholder: "水平 110 度" },
+	{ key: "night_vision", label: "夜视能力", source: "metadata", placeholder: "红外 / 全彩 / 补光灯距离" },
+	{ key: "video_codec", label: "视频编码", source: "metadata", placeholder: "H.265 / H.264" },
+	{ key: "weather_rating", label: "防护等级", source: "metadata", placeholder: "IP66 / 室内" },
 	{ key: "stream_url", label: "流地址", source: "metadata", type: "url", placeholder: "rtsp://..." },
 	{ key: "power_mode", label: "供电方式", source: "metadata", placeholder: "PoE / USB / AC / 电池" },
 	{ key: "storage_target", label: "录像归属", source: "metadata", placeholder: "NVR / NAS / SD 卡" },
@@ -967,6 +1079,10 @@ const cameraFields: AssetFieldDefinition[] = [
 const printerFields: AssetFieldDefinition[] = [
 	{ key: "connection_type", label: "连接方式", source: "metadata", type: "select", options: connectionOptions },
 	{ key: "printer_type", label: "类型", source: "metadata", placeholder: "激光 / 喷墨 / 热敏 / 扫描一体机" },
+	{ key: "color_mode", label: "彩色能力", source: "metadata", placeholder: "黑白 / 彩色" },
+	{ key: "print_speed_ppm", label: "打印速度 PPM", source: "metadata", type: "number", placeholder: "30" },
+	{ key: "print_resolution", label: "打印分辨率", source: "metadata", placeholder: "1200 x 1200 dpi" },
+	{ key: "scan_resolution", label: "扫描分辨率", source: "metadata", placeholder: "可选，适用于一体机" },
 	{ key: "supplies", label: "耗材", source: "metadata", placeholder: "硒鼓型号 / 墨盒型号" },
 	{ key: "paper_size", label: "纸张规格", source: "metadata", placeholder: "A4 / A3 / 标签纸" },
 	{ key: "duplex", label: "双面", source: "metadata", type: "select", options: yesNoOptions },
@@ -976,6 +1092,9 @@ const printerFields: AssetFieldDefinition[] = [
 const upsFields: AssetFieldDefinition[] = [
 	{ key: "capacity_va", label: "容量 VA", source: "metadata", type: "number", placeholder: "1500" },
 	{ key: "capacity_w", label: "容量 W", source: "metadata", type: "number", placeholder: "900" },
+	{ key: "topology", label: "拓扑类型", source: "metadata", placeholder: "后备式 / 在线互动式 / 在线式" },
+	{ key: "waveform", label: "输出波形", source: "metadata", placeholder: "正弦波 / 近似正弦波" },
+	{ key: "transfer_time_ms", label: "切换时间 ms", source: "metadata", type: "number", placeholder: "10" },
 	{ key: "battery_model", label: "电池型号", source: "metadata", placeholder: "12V 9Ah x2" },
 	{ key: "battery_count", label: "电池数量", source: "metadata", type: "number", placeholder: "2" },
 	{ key: "outlet_count", label: "输出口数量", source: "metadata", type: "number", placeholder: "6" },
@@ -989,7 +1108,7 @@ const upsFields: AssetFieldDefinition[] = [
 	},
 ]
 
-const smartHomeFields: AssetFieldDefinition[] = [
+const smartHomeCommonFields: AssetFieldDefinition[] = [
 	{ key: "smart_category", label: "家居分类", source: "metadata", placeholder: "灯 / 插座 / 门锁 / 传感器 / 网关" },
 	{ key: "protocol", label: "协议", source: "metadata", placeholder: "Matter / Zigbee / BLE / Wi-Fi / 米家" },
 	{ key: "gateway_name", label: "所属网关", source: "metadata", placeholder: "客厅网关 / Home Assistant" },
@@ -1006,18 +1125,104 @@ const smartHomeFields: AssetFieldDefinition[] = [
 	},
 ]
 
+const smartHomeSpecificFields: Partial<Record<AssetType, AssetFieldDefinition[]>> = {
+	smarthome_gateway: [
+		{ key: "controller_platform", label: "控制平台", source: "metadata", placeholder: "Home Assistant / 米家 / Aqara" },
+		{ key: "radio_protocols", label: "无线协议", source: "metadata", placeholder: "Zigbee / Thread / BLE" },
+		{ key: "max_device_count", label: "最大接入数", source: "metadata", type: "number", placeholder: "128" },
+	],
+	sensor: [
+		{ key: "sensor_kind", label: "传感器类型", source: "metadata", placeholder: "温湿度 / 门窗 / 人体 / 水浸" },
+		{ key: "measurement_range", label: "测量范围", source: "metadata", placeholder: "0-50 C / 0-100% RH" },
+		{ key: "measurement_precision", label: "测量精度", source: "metadata", placeholder: "±0.3 C / ±3% RH" },
+		{ key: "reporting_interval", label: "上报间隔", source: "metadata", placeholder: "60 秒 / 事件触发" },
+		{ key: "installation_position", label: "安装位置", source: "metadata", placeholder: "窗框 / 天花板 / 水槽下" },
+	],
+	light: [
+		{ key: "light_kind", label: "灯具类型", source: "metadata", placeholder: "灯泡 / 灯带 / 吸顶灯" },
+		{ key: "luminous_flux_lm", label: "光通量 lm", source: "metadata", type: "number", placeholder: "800" },
+		{ key: "color_temperature_k", label: "色温 K", source: "metadata", placeholder: "2700-6500" },
+		{ key: "color_rendering_index", label: "显色指数", source: "metadata", placeholder: "Ra 90" },
+		{ key: "color_control", label: "调光 / 调色", source: "metadata", placeholder: "亮度 / RGB / 色温" },
+	],
+	plug: [
+		{ key: "rated_power_w", label: "额定功率 W", source: "metadata", type: "number", placeholder: "2500" },
+		{ key: "rated_current_a", label: "额定电流 A", source: "metadata", type: "number", placeholder: "10" },
+		{ key: "outlet_count", label: "插孔 / 回路数", source: "metadata", type: "number", placeholder: "1" },
+		{ key: "energy_monitoring", label: "电量统计", source: "metadata", type: "select", options: yesNoOptions },
+		{ key: "neutral_wire", label: "零线要求", source: "metadata", placeholder: "需要零线 / 单火线 / 不适用" },
+	],
+	lock: [
+		{ key: "unlock_methods", label: "开锁方式", source: "metadata", placeholder: "指纹 / 密码 / NFC / 钥匙" },
+		{ key: "lock_body", label: "锁体类型", source: "metadata", placeholder: "全自动 / 半自动 / 霸王锁体" },
+		{ key: "door_thickness", label: "适配门厚", source: "metadata", placeholder: "40-120 mm" },
+		{ key: "emergency_power", label: "应急供电", source: "metadata", placeholder: "USB-C / 机械钥匙" },
+	],
+	vacuum: [
+		{ key: "suction_pa", label: "吸力 Pa", source: "metadata", type: "number", placeholder: "7000" },
+		{ key: "navigation", label: "导航避障", source: "metadata", placeholder: "激光 LDS / 结构光 / 视觉" },
+		{ key: "dust_box_ml", label: "尘盒容量 ml", source: "metadata", type: "number", placeholder: "400" },
+		{ key: "water_tank_ml", label: "水箱容量 ml", source: "metadata", type: "number", placeholder: "300" },
+		{ key: "station_features", label: "基站能力", source: "metadata", placeholder: "集尘 / 洗拖布 / 烘干 / 上下水" },
+	],
+	iot: [
+		{ key: "iot_capability", label: "设备能力", source: "metadata", placeholder: "继电器 / 红外 / 显示 / 控制器" },
+		{
+			key: "controller_platform",
+			label: "控制平台",
+			source: "metadata",
+			placeholder: "Home Assistant / 米家 / 自定义",
+		},
+		{ key: "firmware_channel", label: "固件通道", source: "metadata", placeholder: "稳定版 / 开发版" },
+	],
+}
+
+function getSmartHomeFields(type: AssetType) {
+	return [...smartHomeCommonFields, ...(smartHomeSpecificFields[type] ?? [])]
+}
+
 const webEndpointFields: AssetFieldDefinition[] = [
-	{ key: "url", label: "默认 URL", source: "metadata", type: "url", placeholder: "https://example.com" },
-	{ key: "internal_url", label: "内网 URL", source: "metadata", type: "url", placeholder: "http://192.168.1.10:8080" },
+	{
+		key: "service_category",
+		label: "服务类型",
+		source: "metadata",
+		type: "select",
+		options: [
+			{ value: "website", label: "网站 / 门户" },
+			{ value: "api", label: "API 服务" },
+			{ value: "relay", label: "中转站 / 反向代理" },
+			{ value: "webhook", label: "Webhook" },
+			{ value: "admin", label: "管理后台" },
+			{ value: "other", label: "其他 HTTP(S) 服务" },
+		],
+	},
+	{ key: "url", label: "主访问 URL", source: "metadata", type: "url", placeholder: "https://service.example.com" },
+	{
+		key: "internal_url",
+		label: "内网检测 URL",
+		source: "metadata",
+		type: "url",
+		placeholder: "http://192.168.1.10:8080",
+	},
 	{
 		key: "external_url",
-		label: "外网 URL",
+		label: "外网检测 URL",
 		source: "metadata",
 		type: "url",
 		placeholder: "https://service.example.com",
 	},
-	{ key: "endpoint_scope", label: "端点类型", source: "metadata", placeholder: "内网 / 外网 / 双栈 / 管理后台" },
-	{ key: "expected_owner", label: "归属资产备注", source: "metadata", placeholder: "例如 运行在 NAS 上" },
+	{
+		key: "endpoint_scope",
+		label: "检测范围",
+		source: "metadata",
+		type: "select",
+		options: [
+			{ value: "内网", label: "仅内网" },
+			{ value: "外网", label: "仅外网" },
+			{ value: "内外网", label: "内网 + 外网" },
+		],
+	},
+	{ key: "expected_owner", label: "承载 / 归属资产", source: "metadata", placeholder: "例如 运行在 NAS 上" },
 ]
 
 const customFields: AssetFieldDefinition[] = [
@@ -1041,12 +1246,14 @@ export function getAssetFormSections(type: AssetType): AssetFieldSection[] {
 		]
 	}
 	if (HOST_ASSET_TYPES.includes(type)) {
+		const typeSpecificFields = getHostTypeSpecificFields(type)
 		return [
 			{ title: "基础身份", fields: commonIdentityFields },
 			{ title: "硬件识别", fields: hardwareIdentityFields },
 			{ title: "接入信息", fields: agentConnectionFields },
 			{ title: "Agent 可采集规格", fields: hostSpecFields },
 			{ title: "硬件细节", fields: hostHardwareDetailFields },
+			...(typeSpecificFields.length ? [{ title: getHostTypeSpecificTitle(type), fields: typeSpecificFields }] : []),
 			{ title: "生命周期", fields: lifecycleFields },
 			{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },
 		]
@@ -1109,7 +1316,7 @@ export function getAssetFormSections(type: AssetType): AssetFieldSection[] {
 			{ title: "基础身份", fields: commonIdentityFields },
 			{ title: "硬件识别", fields: hardwareIdentityFields },
 			{ title: "固定地址", fields: fixedAddressFields },
-			{ title: "智能家居参数", fields: smartHomeFields },
+			{ title: "智能家居参数", fields: getSmartHomeFields(type) },
 			{ title: "生命周期", fields: lifecycleFields },
 			{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },
 		]
@@ -1117,7 +1324,7 @@ export function getAssetFormSections(type: AssetType): AssetFieldSection[] {
 	if (type === "web_endpoint") {
 		return [
 			{ title: "基础身份", fields: commonIdentityFields },
-			{ title: "网页端点", fields: webEndpointFields },
+			{ title: "互联网服务监控", fields: webEndpointFields },
 			{ title: "生命周期", fields: lifecycleFields },
 			{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },
 		]

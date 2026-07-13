@@ -515,11 +515,18 @@ export default memo(function AssetsPage() {
 		const name = form.name.trim() || buildSuggestedAssetName(form)
 		if (!name) {
 			toast({
-				title: form.type === "internet" ? "运营商不能为空" : "型号不能为空",
+				title:
+					form.type === "internet"
+						? "运营商不能为空"
+						: form.type === "web_endpoint"
+							? "服务名称不能为空"
+							: "型号不能为空",
 				description:
 					form.type === "internet"
 						? "互联网接入资源会按运营商自动生成名称。"
-						: "名称可以留空自动生成，但必须填写型号和内部型号作为资产识别线索。",
+						: form.type === "web_endpoint"
+							? "互联网服务监控需要填写服务名称。"
+							: "名称可以留空自动生成，但必须填写型号和内部型号作为资产识别线索。",
 				variant: "destructive",
 			})
 			return
@@ -1212,6 +1219,7 @@ const quickCreateFieldKeys = new Set([
 	"metadata:color",
 	"metadata:device_color",
 	"metadata:asset_tag",
+	"metadata:url",
 ])
 
 const phoneVariantQuickFieldKeys = new Set(["metadata:memory_gb", "metadata:storage_gb"])
@@ -1240,6 +1248,12 @@ function validateNewAssetRequiredFields(form: AssetFormState, existingAssets: As
 		if (!form.vendor.trim()) errors.push("运营商")
 		if (!isPositiveNumberString(form.metadata.down_mbps)) errors.push("下行带宽")
 		if (!isPositiveNumberString(form.metadata.up_mbps)) errors.push("上行带宽")
+		return errors
+	}
+	if (form.type === "web_endpoint") {
+		if (!form.name.trim()) errors.push("服务名称")
+		if (!hasServiceURL(form.metadata)) errors.push("至少一个服务 URL")
+		if (!form.location.trim()) errors.push("位置")
 		return errors
 	}
 	const ipv4 = getAssetFormIpv4(form)
@@ -1279,6 +1293,10 @@ function isPositiveNumberString(value: string | undefined) {
 
 function getAssetFormIpv4(form: AssetFormState) {
 	return form.management_ip.trim() || form.metadata.fixed_ipv4?.trim() || ""
+}
+
+function hasServiceURL(metadata: AssetFormState["metadata"]) {
+	return Boolean(metadata.url?.trim() || metadata.internal_url?.trim() || metadata.external_url?.trim())
 }
 
 function isValidIpv4(value: string) {

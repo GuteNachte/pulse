@@ -169,7 +169,7 @@ export default function Navbar() {
 						</NavIconLink>
 					)}
 					{moduleEnabled("website-monitoring") && (
-						<NavIconLink href={websitesPath} label="网站监控" active={isActiveRoute("websites", websitesPath)}>
+						<NavIconLink href={websitesPath} label="互联网服务监控" active={isActiveRoute("websites", websitesPath)}>
 							<Globe2Icon className="h-[1.2rem] w-[1.2rem]" />
 						</NavIconLink>
 					)}

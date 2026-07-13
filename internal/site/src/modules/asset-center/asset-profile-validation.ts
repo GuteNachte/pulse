@@ -18,6 +18,23 @@ export function getAssetRecognitionRequirements(asset: AssetRecord): AssetRecogn
 			{ label: "上行带宽", value: upMbps ? `${upMbps} Mbps` : "", ok: Boolean(upMbps) },
 		]
 	}
+	if (asset.type === "web_endpoint") {
+		const serviceURL = firstNonEmpty(
+			getMetadataString(metadata, "url"),
+			getMetadataString(metadata, "internal_url"),
+			getMetadataString(metadata, "external_url")
+		)
+		return [
+			{ label: "服务名称", value: asset.name || "", ok: Boolean(asset.name?.trim()) },
+			{ label: "服务 URL", value: serviceURL, ok: Boolean(serviceURL) },
+			{
+				label: "服务类型",
+				value: getMetadataString(metadata, "service_category"),
+				ok: Boolean(getMetadataString(metadata, "service_category")),
+			},
+			{ label: "位置", value: asset.location || "", ok: Boolean(asset.location?.trim()) },
+		]
+	}
 	const fixedIpv4 = firstNonEmpty(asset.management_ip, getMetadataString(metadata, "fixed_ipv4"))
 	const requirements: AssetRecognitionRequirement[] = [
 		{ label: "IPv4", value: fixedIpv4, ok: Boolean(fixedIpv4) },
@@ -61,12 +78,21 @@ export function validateAssetProfileForm(values: {
 	storageGb: string
 	downMbps?: string
 	upMbps?: string
+	serviceURL?: string
+	internalServiceURL?: string
+	externalServiceURL?: string
 }) {
 	const errors: string[] = []
 	if (values.type === "internet") {
 		if (!values.vendor.trim()) errors.push("运营商")
 		if (!isPositiveNumberString(values.downMbps)) errors.push("下行带宽")
 		if (!isPositiveNumberString(values.upMbps)) errors.push("上行带宽")
+		return errors
+	}
+	if (values.type === "web_endpoint") {
+		if (!values.name.trim()) errors.push("资产名称")
+		if (!hasServiceURL(values)) errors.push("至少一个服务 URL")
+		if (!values.location.trim()) errors.push("位置")
 		return errors
 	}
 	if (!values.name.trim()) errors.push("资产名称")
@@ -85,6 +111,10 @@ export function validateAssetProfileForm(values: {
 		if (!isPositiveNumberString(values.storageGb)) errors.push("存储容量")
 	}
 	return errors
+}
+
+function hasServiceURL(values: { serviceURL?: string; internalServiceURL?: string; externalServiceURL?: string }) {
+	return Boolean(values.serviceURL?.trim() || values.internalServiceURL?.trim() || values.externalServiceURL?.trim())
 }
 
 function firstNonEmpty(...values: (string | undefined)[]) {

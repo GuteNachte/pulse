@@ -1,5 +1,4 @@
 import { ImageIcon } from "lucide-react"
-import { OfficialColorPicker } from "./asset-form-fields"
 import { cn } from "@/lib/utils"
 import type { AssetRecord, AssetVisualRecord } from "@/types"
 import {
@@ -13,30 +12,28 @@ import {
 export function AssetEditVisualPanel({
 	assetType,
 	visuals,
-	visualColor,
-	officialColorOptions,
 	visualBlockReason,
 	visualGenerationStage,
 	visualGenerationMessage,
 	taskSummary,
 	readOnly,
 	saving,
-	onVisualColorChange,
 	onSelectVisualCandidate,
 }: {
 	assetType: AssetRecord["type"]
 	visuals: AssetVisualRecord[]
-	visualColor: string
-	officialColorOptions: string[]
 	visualBlockReason: string
 	visualGenerationStage: "idle" | "running" | "ready" | "failed"
 	visualGenerationMessage: string
 	taskSummary: string
 	readOnly: boolean
 	saving: boolean
-	onVisualColorChange: (value: string) => void
 	onSelectVisualCandidate: (visualId: string, frameIndex: number) => void
 }) {
+	const isProviderLogo = assetType === "internet" || assetType === "web_endpoint"
+	const visualLabel = isProviderLogo ? "服务商 Logo" : "图片候选"
+	const candidateLabel = isProviderLogo ? "Logo 候选" : "候选图"
+	const visualLimit = isProviderLogo ? 1 : 10
 	const latestVisual = getAssetDisplayVisual(visuals)
 	const latestVisualFrame = getDisplayAssetVisualFrames(latestVisual)[0]
 	const visualCandidateSet = getLatestAssetVisualCandidateSet(visuals)
@@ -44,28 +41,23 @@ export function AssetEditVisualPanel({
 	const visualCandidateGroups = groupAssetVisualCandidateFramesByColor(visualCandidateFrames)
 
 	return (
-		<section className="rounded-lg border border-border/70 bg-surface-soft p-3">
+		<section className="rounded-lg border border-border/70 bg-card p-3">
 			<div className="mb-3 flex items-center justify-between gap-3">
 				<div className="min-w-0">
-					<div className="text-sm font-semibold text-foreground">全貌图</div>
-					<div className="mt-1 text-xs text-muted-foreground">官方配色和可追溯设备图片集中在编辑里。</div>
+					<div className="text-sm font-semibold text-foreground">{visualLabel}</div>
+					<div className="mt-1 text-xs text-muted-foreground">获取后由你从候选图中确认详情页主图。</div>
 				</div>
 			</div>
 			<div className="grid gap-3">
-				<OfficialColorPicker
-					value={visualColor}
-					options={officialColorOptions}
-					assetType={assetType}
-					onChange={onVisualColorChange}
-				/>
 				{visualBlockReason ? (
 					<div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-amber-700 dark:text-amber-200">
 						{visualBlockReason}
 					</div>
 				) : (
 					<div className="rounded-md border border-border/70 bg-card px-3 py-2 text-xs leading-5 text-muted-foreground">
-						设备图片 Agent 会从官方 / 可追溯来源收集最多 10
-						张候选图；未选择配色时会按识别到的官方颜色分组，选择配色时优先收集该颜色。
+						{isProviderLogo
+							? "服务 Logo Agent 只从已维护的服务商官网或官方资料页中收集一张可追溯、可本地归档的品牌 Logo。"
+							: "设备图片 Agent 只从已维护的厂商产品页、支持页、官网页或官方图片地址中收集候选图；模型仅审核候选与资产型号、外观和颜色是否一致。"}
 					</div>
 				)}
 				{visualGenerationMessage && (
@@ -82,7 +74,12 @@ export function AssetEditVisualPanel({
 						{visualGenerationMessage}
 					</div>
 				)}
-				<div className="relative grid aspect-[3/4] max-h-[24rem] min-h-[16rem] place-items-center overflow-hidden rounded-md border border-border/70 bg-card">
+				<div
+					className={cn(
+						"relative grid max-h-[24rem] min-h-[16rem] place-items-center overflow-hidden rounded-md border border-border/70 bg-card",
+						isProviderLogo ? "aspect-square" : "aspect-[3/4]"
+					)}
+				>
 					{latestVisualFrame?.url ? (
 						<img src={latestVisualFrame.url} alt="设备全貌图预览" className="h-full w-full object-contain p-4" />
 					) : (
@@ -99,9 +96,9 @@ export function AssetEditVisualPanel({
 				</div>
 				<div className="rounded-md border border-border/70 bg-card p-2">
 					<div className="mb-2 flex items-center justify-between gap-2">
-						<div className="text-xs font-medium text-foreground">候选图</div>
+						<div className="text-xs font-medium text-foreground">{candidateLabel}</div>
 						<div className="text-[11px] text-muted-foreground">
-							{visualCandidateFrames.length ? `${visualCandidateFrames.length} / 10` : taskSummary}
+							{visualCandidateFrames.length ? `${visualCandidateFrames.length} / ${visualLimit}` : taskSummary}
 						</div>
 					</div>
 					{visualCandidateFrames.length > 0 ? (
@@ -127,7 +124,12 @@ export function AssetEditVisualPanel({
 														selected ? "border-ring bg-ring/5" : "border-border/70"
 													)}
 												>
-													<span className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded border border-border/60 bg-card">
+													<span
+														className={cn(
+															"relative grid place-items-center overflow-hidden rounded border border-border/60 bg-card",
+															isProviderLogo ? "aspect-square" : "aspect-[3/4]"
+														)}
+													>
 														<img src={frame.url} alt={frame.label} className="h-full w-full object-contain p-1" />
 													</span>
 													<span className="flex items-center justify-between gap-1 text-[11px]">
@@ -145,7 +147,7 @@ export function AssetEditVisualPanel({
 						</div>
 					) : (
 						<div className="rounded-md border border-dashed border-border/70 px-3 py-6 text-center text-xs text-muted-foreground">
-							点击顶部“找图”后，这里会显示最多 10 张候选图。
+							点击顶部“获取图片”后，这里会显示{isProviderLogo ? "一张服务商 Logo" : "最多 10 张候选图"}。
 						</div>
 					)}
 				</div>

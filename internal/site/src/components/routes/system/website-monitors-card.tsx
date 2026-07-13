@@ -51,7 +51,7 @@ export function SystemWebsiteMonitorsCard({ systemId }: { systemId: string }) {
 			setChecks(checkRecords.filter((check) => monitorIds.has(check.monitor)))
 		} catch (error) {
 			console.error("load system website monitors", error)
-			toast({ title: "加载失败", description: "这台机器的网站监控读取失败。", variant: "destructive" })
+			toast({ title: "加载失败", description: "这台机器的互联网服务监控读取失败。", variant: "destructive" })
 		} finally {
 			setLoading(false)
 		}
@@ -86,7 +86,7 @@ export function SystemWebsiteMonitorsCard({ systemId }: { systemId: string }) {
 					<div className="min-w-0">
 						<CardTitle className="flex items-center gap-2 text-base">
 							<Globe2Icon className="size-4" />
-							网站监控
+							互联网服务监控
 							<Badge variant="outline">{summary.total} 项</Badge>
 						</CardTitle>
 						<div className="mt-2 grid w-fit grid-cols-2 gap-1 rounded-lg border border-border/70 bg-card p-1 text-xs text-muted-foreground sm:flex">
@@ -116,7 +116,7 @@ export function SystemWebsiteMonitorsCard({ systemId }: { systemId: string }) {
 			</CardHeader>
 			<CardContent className="p-3 sm:p-4">
 				{loading ? (
-					<EmptyState loading loadingText="正在读取网站监控" emptyText="暂无归属网站" className="min-h-32" />
+					<EmptyState loading loadingText="正在读取互联网服务监控" emptyText="暂无归属服务" className="min-h-32" />
 				) : monitors.length ? (
 					<div className="grid gap-3">
 						{monitors.map((monitor) => (
@@ -132,7 +132,7 @@ export function SystemWebsiteMonitorsCard({ systemId }: { systemId: string }) {
 				) : (
 					<EmptyState
 						loading={false}
-						loadingText="正在读取网站监控"
+						loadingText="正在读取互联网服务监控"
 						emptyText="暂无归属网站，从这里添加后会自动归属到当前机器。"
 						className="min-h-32"
 					>

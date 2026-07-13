@@ -295,7 +295,7 @@ export default memo(() => {
 							{moduleEnabled("website-monitoring") && (
 								<MetricCard
 									href={getPagePath($router, "websites")}
-									title="网站监控"
+									title="互联网服务监控"
 									value={`${summary.websitesUp}/${summary.websites}`}
 									detail={websiteState.detail}
 									icon={Globe2Icon}
@@ -370,7 +370,7 @@ export default memo(() => {
 										<QuickLink href={getPagePath($router, "containers")} icon={ContainerIcon} label="容器监控" />
 									)}
 									{moduleEnabled("website-monitoring") && (
-										<QuickLink href={getPagePath($router, "websites")} icon={Globe2Icon} label="网站监控" />
+										<QuickLink href={getPagePath($router, "websites")} icon={Globe2Icon} label="互联网服务监控" />
 									)}
 								</CardContent>
 							</Card>

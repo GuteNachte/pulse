@@ -53,6 +53,40 @@ export function QuickAssetCreateFields({
 			</AssetFormSection>
 		)
 	}
+	if (form.type === "web_endpoint") {
+		return (
+			<AssetFormSection title="互联网服务监控">
+				<AssetFormField label="所属类型" required>
+					<div className="flex h-10 items-center rounded-md border border-border/70 bg-surface-soft px-3 text-sm text-foreground">
+						{getAssetTypeLabel(form.type)}
+					</div>
+				</AssetFormField>
+				<AssetFormField label="服务名称" required>
+					<Input
+						value={form.name}
+						onChange={(event) => onFormValue("name", event.target.value)}
+						placeholder="例如 家庭门户 / API 网关 / 中转站"
+					/>
+				</AssetFormField>
+				<AssetFormField label="主访问 URL" required>
+					<Input
+						type="url"
+						value={form.metadata.url ?? ""}
+						onChange={(event) => onMetadataValue("url", event.target.value)}
+						placeholder="https://service.example.com"
+					/>
+				</AssetFormField>
+				<AssetFormField label="位置" required>
+					<AssetLocationInput
+						idPrefix="quick-service-location-options"
+						value={form.location}
+						locationOptions={locationOptions}
+						onChange={(value) => onFormValue("location", value)}
+					/>
+				</AssetFormField>
+			</AssetFormSection>
+		)
+	}
 
 	return (
 		<AssetFormSection title="快速建档">

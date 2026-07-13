@@ -35,9 +35,7 @@ type AssetEnrichmentConfig = {
 	}
 	visual_ai: AIProviderConfig & {
 		frame_count: number
-		model_discovery_enabled: boolean
 		max_images: number
-		official_only: boolean
 	}
 }
 
@@ -64,9 +62,7 @@ type AISettingsForm = {
 	visualEnabled: boolean
 	visualModel: string
 	visualApiKey: string
-	visualModelDiscoveryEnabled: boolean
 	visualMaxImages: number
-	visualOfficialOnly: boolean
 }
 
 const defaultForm: AISettingsForm = {
@@ -80,9 +76,7 @@ const defaultForm: AISettingsForm = {
 	visualEnabled: false,
 	visualModel: "agnes-2.0-flash",
 	visualApiKey: "",
-	visualModelDiscoveryEnabled: true,
-	visualMaxImages: 8,
-	visualOfficialOnly: true,
+	visualMaxImages: 10,
 }
 
 export default function AISettings() {
@@ -147,9 +141,7 @@ export default function AISettings() {
 						provider: "agnes",
 						model: form.visualModel,
 						api_key: form.visualApiKey,
-						model_discovery_enabled: form.visualModelDiscoveryEnabled,
 						max_images: form.visualMaxImages,
-						official_only: form.visualOfficialOnly,
 					},
 				},
 			})
@@ -270,7 +262,7 @@ export default function AISettings() {
 							<SettingsPanel
 								icon={ImageIcon}
 								title="设备图片 Agent"
-								description="只配置这个 Agent 的任务行为。它从官方 / 可追溯来源收集合适的真实设备图片，不再调用图片模型重绘外观。"
+								description="它只从官方页面收集真实图片；模型仅负责审核候选是否匹配资产型号、外观和颜色，不生成图片或查找链接。"
 							>
 								<div className="grid gap-4">
 									<ToggleRow
@@ -280,35 +272,29 @@ export default function AISettings() {
 										onCheckedChange={(value) => setForm((current) => ({ ...current, visualEnabled: value }))}
 									/>
 									<AgentModelField
-										label="找图策略模型"
+										label="图片准确性校验模型"
 										value={form.visualModel}
 										onChange={(value) => setForm((current) => ({ ...current, visualModel: value }))}
 										placeholder="agnes-2.0-flash"
 									/>
 									<ToggleRow
-										label="启用模型找图"
-										description="已有主档 URL 不够时，让找图策略模型返回官方图片或官方 CDN 候选 URL。"
-										checked={form.visualModelDiscoveryEnabled}
-										onCheckedChange={(value) =>
-											setForm((current) => ({ ...current, visualModelDiscoveryEnabled: value }))
-										}
-									/>
-									<ToggleRow
-										label="只收官方 / 可追溯图片"
-										description="开启后会拒绝低可信页面图片；Hub 仍会下载并按图片字节校验。"
-										checked={form.visualOfficialOnly}
-										onCheckedChange={(value) => setForm((current) => ({ ...current, visualOfficialOnly: value }))}
+										label="官方来源规则"
+										description="图片只会从厂商或服务商官网的产品页、支持页、媒体资源或已确认官方图片地址中采集。"
+										checked
+										onCheckedChange={() => undefined}
+										disabled
 									/>
 									<NumberSetting
-										label="候选筛选上限"
+										label="候选图片数量"
 										value={form.visualMaxImages}
 										min={2}
 										max={12}
 										onChange={(value) => setForm((current) => ({ ...current, visualMaxImages: value }))}
 									/>
 									<div className="rounded-md border border-border/70 bg-surface-soft p-3 text-xs leading-relaxed text-muted-foreground">
-										执行口径：候选图只作为筛选池，Agent 会尽量按官方颜色分类；最终由用户在资产编辑里选择 1
-										张作为设备主图。
+										执行口径：Hub
+										只从已维护的官方页面提取图片，先做图片解码、尺寸、重复、水印与型号规则校验；配置模型后，模型只负责判断候选是否与当前资产的型号、外观和颜色一致。最终由用户选择
+										1 张作为设备主图。
 									</div>
 								</div>
 							</SettingsPanel>
@@ -384,9 +370,7 @@ function formFromConfig(config: AssetEnrichmentConfig): AISettingsForm {
 		visualEnabled: config.visual_ai.enabled,
 		visualModel: config.visual_ai.model || defaultForm.visualModel,
 		visualApiKey: config.api_key || config.visual_ai.api_key || "",
-		visualModelDiscoveryEnabled: config.visual_ai.model_discovery_enabled ?? defaultForm.visualModelDiscoveryEnabled,
 		visualMaxImages: config.visual_ai.max_images || defaultForm.visualMaxImages,
-		visualOfficialOnly: config.visual_ai.official_only ?? defaultForm.visualOfficialOnly,
 	}
 }
 
@@ -505,11 +489,13 @@ function ToggleRow({
 	description,
 	checked,
 	onCheckedChange,
+	disabled = false,
 }: {
 	label: string
 	description: string
 	checked: boolean
 	onCheckedChange: (value: boolean) => void
+	disabled?: boolean
 }) {
 	return (
 		<div className="flex items-start justify-between gap-4 rounded-lg border border-border/70 bg-surface-soft p-3">
@@ -517,7 +503,7 @@ function ToggleRow({
 				<div className="text-sm font-semibold text-foreground">{label}</div>
 				<p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
 			</div>
-			<Switch checked={checked} onCheckedChange={onCheckedChange} />
+			<Switch checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
 		</div>
 	)
 }

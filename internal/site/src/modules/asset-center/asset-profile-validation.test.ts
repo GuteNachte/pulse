@@ -34,6 +34,23 @@ assertDeepEqual(getAssetRecognitionRequirements(phoneAsset), [
 	{ label: "存储容量", value: "256 GB", ok: true },
 ])
 
+const serviceAsset = {
+	type: "web_endpoint",
+	name: "家庭 API",
+	location: "家 / 书房",
+	metadata: {
+		url: "https://api.example.com/health",
+		service_category: "api",
+	},
+} as unknown as AssetRecord
+
+assertDeepEqual(getAssetRecognitionRequirements(serviceAsset), [
+	{ label: "服务名称", value: "家庭 API", ok: true },
+	{ label: "服务 URL", value: "https://api.example.com/health", ok: true },
+	{ label: "服务类型", value: "api", ok: true },
+	{ label: "位置", value: "家 / 书房", ok: true },
+])
+
 assertDeepEqual(
 	validateAssetProfileForm({
 		type: "phone",
@@ -49,4 +66,22 @@ assertDeepEqual(
 		storageGb: "",
 	}),
 	["IPv4 格式不正确", "运行内存", "存储容量"]
+)
+
+assertDeepEqual(
+	validateAssetProfileForm({
+		type: "web_endpoint",
+		name: "家庭 API",
+		vendor: "",
+		model: "",
+		internalModel: "",
+		color: "",
+		assetTag: "",
+		location: "家 / 书房",
+		ipv4: "",
+		memoryGb: "",
+		storageGb: "",
+		serviceURL: "https://api.example.com/health",
+	}),
+	[]
 )

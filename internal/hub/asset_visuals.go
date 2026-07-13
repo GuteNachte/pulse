@@ -1,11 +1,18 @@
 package hub
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
-	_ "image/jpeg"
-	_ "image/png"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"image/png"
+	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,7 +22,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/disintegration/imaging"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/filesystem"
 	_ "golang.org/x/image/webp"
 	nethtml "golang.org/x/net/html"
 )
@@ -24,6 +33,11 @@ const defaultAssetTurntableFrameCount = 1
 const defaultAssetVisualCandidateCount = 10
 const defaultAssetVisualMaxImages = 12
 const assetVisualRunningTaskStaleAfter = 15 * time.Minute
+const assetVisualMaxDownloadBytes int64 = 8 << 20
+const assetVisualMaxDimension = 1600
+const assetVisualMinLogoDimension = 16
+const assetVisualMinLogoCanvas = 128
+const assetVisualVerificationBatchSize = 4
 
 type assetTurntableVisualRequest struct {
 	Color      string `json:"color"`
@@ -32,12 +46,14 @@ type assetTurntableVisualRequest struct {
 }
 
 type assetVisualAIConfig struct {
-	Enabled               bool
-	Provider              string
-	Endpoint              string
-	APIKey                string
-	Model                 string
-	FrameCount            int
+	Enabled    bool
+	Provider   string
+	Endpoint   string
+	APIKey     string
+	Model      string
+	FrameCount int
+	// Deprecated source-discovery settings are retained only for stored-setting compatibility.
+	// The collection path no longer reads them.
 	ModelDiscoveryEnabled bool
 	MaxImages             int
 	OfficialOnly          bool
@@ -57,6 +73,9 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 	_ = json.NewDecoder(e.Request.Body).Decode(&req)
 	config := h.assetVisualAIConfig()
 	frameCount := defaultAssetVisualCandidateCount
+	if assetUsesProviderLogoVisual(asset) {
+		frameCount = 1
+	}
 	color := firstNonEmpty(strings.TrimSpace(req.Color), recordMetadataString(asset, "color"), recordMetadataString(asset, "device_color"))
 	if message := validateAssetVisualGenerationPrerequisites(asset, color, config); message != "" {
 		task, visual, createErr := h.createFailedAssetVisualTaskAndRecord(e.Auth.Id, asset, config, frameCount, color, message, "blocked")
@@ -77,9 +96,13 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 		return e.InternalServerError("Failed to create asset visual.", err)
 	}
 
-	frames := h.buildCollectedAssetVisualFrames(asset, references, frameCount, color)
+	frames, files, processingSummary := h.archiveCollectedAssetVisualFrames(asset, references, frameCount, color, config)
 	if len(frames) == 0 {
-		message := "没有找到可追溯设备图片。请先补充厂家支持页、官方图片 URL，或运行资料补全 Agent 后再收集。"
+		message := assetVisualCollectionEmptyMessage(asset)
+		reason := "no_archivable_images"
+		if len(references) == 0 {
+			reason = "official_sources_required"
+		}
 		task.Set("status", "failed")
 		task.Set("error", message)
 		_ = mergeAssetVisualTaskSummary(task, map[string]any{
@@ -87,7 +110,8 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 			"phase_label":      "收集失败",
 			"progress_percent": 100,
 			"collected_images": 0,
-			"reason":           "no_traceable_images",
+			"reason":           reason,
+			"processing":       processingSummary,
 		})
 		referenceVisual.Set("status", "failed")
 		referenceVisual.Set("metadata", map[string]any{
@@ -103,14 +127,29 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 		return e.JSON(http.StatusOK, map[string]any{"task": task, "visual": referenceVisual, "status": "no_sources"})
 	}
 
+	referenceVisual.Set("files", files)
+	if err := h.Save(referenceVisual); err != nil {
+		return e.InternalServerError("Failed to archive asset visual files.", err)
+	}
+	storedFiles := referenceVisual.GetStringSlice("files")
+	if len(storedFiles) != len(frames) {
+		return e.InternalServerError("Failed to archive all asset visual files.", errors.New("stored asset visual file count mismatch"))
+	}
+	for index := range frames {
+		frames[index]["file"] = storedFiles[index]
+		frames[index]["file_record_id"] = referenceVisual.Id
+		frames[index]["url"] = ""
+	}
 	referenceVisual.Set("status", "ready")
 	referenceVisual.Set("frames", frames)
 	referenceVisual.Set("frame_count", len(frames))
 	referenceVisual.Set("metadata", map[string]any{
 		"collection_status": "ready",
 		"visual_role":       "candidate_set",
+		"presentation":      assetVisualPresentation(asset),
 		"candidate_count":   len(frames),
-		"note":              "设备图片来自官方 / 可追溯来源，作为用户选择主图的候选集。",
+		"processing":        processingSummary,
+		"note":              assetVisualCollectionNote(asset),
 	})
 	referenceVisual.Set("primary", false)
 	if err := h.Save(referenceVisual); err != nil {
@@ -118,7 +157,7 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 	}
 	if err := h.updateAssetVisualTaskProgress(task, map[string]any{
 		"phase":            "references_ready",
-		"phase_label":      "已收集设备图",
+		"phase_label":      assetVisualCollectionReadyLabel(asset),
 		"progress_percent": 100,
 		"collected_images": len(frames),
 		"reference_visual": referenceVisual.Id,
@@ -126,6 +165,7 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 		"mode":             "reference_image_collection",
 		"selected_color":   color,
 		"candidate_count":  len(frames),
+		"processing":       processingSummary,
 	}); err != nil {
 		return e.InternalServerError("Failed to update AI task.", err)
 	}
@@ -134,8 +174,8 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 	if err := h.Save(task); err != nil {
 		return e.InternalServerError("Failed to update AI task.", err)
 	}
-	h.createOperationAudit(e, "", "asset_visual_collect", asset.Id, "", "success", "资产设备候选图片已收集")
-	return e.JSON(http.StatusOK, map[string]any{"task": task, "visual": referenceVisual, "status": "ready", "message": "设备候选图片已收集，请在编辑资产右侧选择主图。"})
+	h.createOperationAudit(e, "", "asset_visual_collect", asset.Id, "", "success", assetVisualCollectionAuditDetail(asset))
+	return e.JSON(http.StatusOK, map[string]any{"task": task, "visual": referenceVisual, "status": "ready", "message": assetVisualCollectionSuccessMessage(asset)})
 }
 
 type selectAssetVisualCandidateRequest struct {
@@ -161,14 +201,17 @@ func (h *Hub) selectAssetVisualCandidate(e *core.RequestEvent) error {
 	var frames []map[string]any
 	_ = visual.UnmarshalJSONField("frames", &frames)
 	if len(frames) == 0 {
-		return e.BadRequestError("候选图为空，请重新找图。", nil)
+		return e.BadRequestError("候选图为空，请重新获取图片。", nil)
 	}
 	if req.FrameIndex < 0 || req.FrameIndex >= len(frames) {
 		return e.BadRequestError("候选图序号无效。", nil)
 	}
 	selectedFrame := cloneStringAnyMap(frames[req.FrameIndex])
-	if !isLikelyAssetVisualImageURL(stringFromAny(selectedFrame["url"])) {
+	if !isSelectableAssetVisualFrame(selectedFrame) {
 		return e.BadRequestError("候选图不是可用图片。", nil)
+	}
+	if stringFromAny(selectedFrame["file"]) != "" && stringFromAny(selectedFrame["file_record_id"]) == "" {
+		selectedFrame["file_record_id"] = visual.Id
 	}
 	selectedFrame["index"] = 0
 	selectedFrame["label"] = "主图"
@@ -341,10 +384,6 @@ func assetVisualAIConfigFromEnv() assetVisualAIConfig {
 		enabled = false
 	}
 	rawEndpoint := strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_AI_ENDPOINT"))
-	modelDiscoveryDefault := true
-	if strings.Contains(strings.ToLower(rawEndpoint), "/images/") {
-		modelDiscoveryDefault = false
-	}
 	return assetVisualAIConfig{
 		Enabled:               enabled,
 		Provider:              firstNonEmpty(strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_AI_PROVIDER")), "agnes"),
@@ -352,9 +391,9 @@ func assetVisualAIConfigFromEnv() assetVisualAIConfig {
 		APIKey:                key,
 		Model:                 firstNonEmpty(strings.TrimSpace(os.Getenv("PULSE_ASSET_VISUAL_AI_MODEL")), "agnes-2.0-flash"),
 		FrameCount:            normalizeAssetTurntableFrameCount(0),
-		ModelDiscoveryEnabled: configBoolEnvDefault("PULSE_ASSET_VISUAL_AI_MODEL_DISCOVERY_ENABLED", modelDiscoveryDefault),
+		ModelDiscoveryEnabled: false,
 		MaxImages:             normalizeAssetVisualMaxImages(configIntEnvDefault("PULSE_ASSET_VISUAL_AI_MAX_IMAGES", defaultAssetVisualMaxImages)),
-		OfficialOnly:          configBoolEnvDefault("PULSE_ASSET_VISUAL_AI_OFFICIAL_ONLY", true),
+		OfficialOnly:          true,
 	}
 }
 
@@ -388,12 +427,11 @@ func (h *Hub) createAssetAITask(userID string, assetID string, config assetVisua
 		"style":             "traceable_device_images",
 	})
 	record.Set("output_summary", map[string]any{
-		"phase":                   "reference_collecting",
-		"phase_label":             "正在收集参考图",
-		"progress_percent":        10,
-		"model_discovery_enabled": config.ModelDiscoveryEnabled,
-		"model_discovered_images": countAssetVisualReferencesByProvider(references, "asset_visual_agent"),
-		"official_only":           config.OfficialOnly,
+		"phase":                          "reference_collecting",
+		"phase_label":                    "正在收集官方图片",
+		"progress_percent":               10,
+		"source_policy":                  "official_only",
+		"visual_verification_configured": config.Ready(),
 		"phase_history": []map[string]any{
 			{
 				"phase": "reference_collecting",
@@ -499,9 +537,9 @@ func (h *Hub) collectAssetVisualReferenceSources(asset *core.Record) []map[strin
 func (h *Hub) collectAssetVisualReferenceSourcesForColor(asset *core.Record, config assetVisualAIConfig, color string) []map[string]any {
 	result := make([]map[string]any, 0, defaultAssetTurntableFrameCount*6)
 	seen := map[string]bool{}
-	candidateLimit := normalizeAssetVisualMaxImages(config.MaxImages)
+	candidateLimit := assetVisualReferenceLimit(asset, config.MaxImages)
 	if officialImageURL := recordMetadataString(asset, "official_image_url"); isLikelyImageURL(officialImageURL) {
-		result = appendAssetVisualReferenceSource(result, seen, map[string]any{
+		result = appendAssetVisualReferenceSource(asset, result, seen, map[string]any{
 			"title":      "已确认官方设备图片",
 			"url":        officialImageURL,
 			"image_url":  officialImageURL,
@@ -513,33 +551,6 @@ func (h *Hub) collectAssetVisualReferenceSourcesForColor(asset *core.Record, con
 	}
 	if len(result) < candidateLimit {
 		result = h.collectAssetVisualPageImageSources(asset, result, seen, candidateLimit)
-	}
-	if len(result) >= candidateLimit {
-		return result
-	}
-	online := h.collectAssetOnlineReferenceEnrichment(asset)
-	for _, source := range online.Sources {
-		if source.URL == "" {
-			continue
-		}
-		if source.ImageURL == "" && !isLikelyImageURL(source.URL) {
-			continue
-		}
-		result = appendAssetVisualReferenceSource(result, seen, map[string]any{
-			"title":      source.Title,
-			"url":        source.URL,
-			"image_url":  source.ImageURL,
-			"type":       source.Type,
-			"provider":   source.Provider,
-			"color":      inferAssetVisualSourceColor(asset, color, strings.Join(nonEmptyStrings(source.Title, source.URL, source.ImageURL), " ")),
-			"confidence": source.Confidence,
-		})
-		if len(result) >= candidateLimit {
-			break
-		}
-	}
-	if len(result) < candidateLimit {
-		result = h.collectAssetVisualAISourceDiscovery(asset, color, config, result, seen, candidateLimit)
 	}
 	return result
 }
@@ -555,6 +566,67 @@ func normalizeAssetVisualMaxImages(value int) int {
 		return 12
 	}
 	return value
+}
+
+func assetUsesProviderLogoVisual(asset *core.Record) bool {
+	if asset == nil {
+		return false
+	}
+	switch strings.TrimSpace(asset.GetString("type")) {
+	case "internet", "web_endpoint":
+		return true
+	default:
+		return false
+	}
+}
+
+func assetVisualReferenceLimit(asset *core.Record, configuredLimit int) int {
+	if assetUsesProviderLogoVisual(asset) {
+		return 1
+	}
+	return normalizeAssetVisualMaxImages(configuredLimit)
+}
+
+func assetVisualPresentation(asset *core.Record) string {
+	if assetUsesProviderLogoVisual(asset) {
+		return "provider_logo"
+	}
+	return "device_image"
+}
+
+func assetVisualCollectionEmptyMessage(asset *core.Record) string {
+	if assetUsesProviderLogoVisual(asset) {
+		return "没有找到可归档的官方服务商 Logo。请先维护服务商官网或官方资料链接后重试。"
+	}
+	return "没有找到可归档的官方设备图片。请先维护厂家产品页、支持页或官方图片 URL 后重试。"
+}
+
+func assetVisualCollectionNote(asset *core.Record) string {
+	if assetUsesProviderLogoVisual(asset) {
+		return "只接受服务商官方页面中的 Logo，已归档到本地存储并保留来源用于追溯。"
+	}
+	return "只接受厂商官方页面或官方图片地址，图片已归档到本地存储并保留来源用于追溯。"
+}
+
+func assetVisualCollectionReadyLabel(asset *core.Record) string {
+	if assetUsesProviderLogoVisual(asset) {
+		return "已收集服务商 Logo"
+	}
+	return "已收集设备图"
+}
+
+func assetVisualCollectionAuditDetail(asset *core.Record) string {
+	if assetUsesProviderLogoVisual(asset) {
+		return "资产服务商 Logo 已收集"
+	}
+	return "资产设备候选图片已收集"
+}
+
+func assetVisualCollectionSuccessMessage(asset *core.Record) string {
+	if assetUsesProviderLogoVisual(asset) {
+		return "服务商 Logo 已收集，请在编辑资产右侧选择主图。"
+	}
+	return "设备候选图片已收集，请在编辑资产右侧选择主图。"
 }
 
 func countAssetVisualReferencesByProvider(references []map[string]any, provider string) int {
@@ -595,14 +667,14 @@ func (h *Hub) collectAssetVisualAISourceDiscovery(asset *core.Record, color stri
 			break
 		}
 		imageURL := firstNonEmpty(candidate.ImageURL, candidate.URL)
-		if imageURL == "" || !isLikelyAssetVisualImageURL(imageURL) {
+		if imageURL == "" || !assetVisualImageURLAccepted(asset, imageURL) {
 			continue
 		}
 		sourceType := firstNonEmpty(candidate.Type, classifyAssetOnlineURL(imageURL))
 		if config.OfficialOnly && !assetVisualAIReferenceSourceAllowed(asset, imageURL) {
 			continue
 		}
-		result = appendAssetVisualReferenceSource(result, seen, map[string]any{
+		result = appendAssetVisualReferenceSource(asset, result, seen, map[string]any{
 			"title":      firstNonEmpty(candidate.Title, "资料补全 Agent 找到的设备图"),
 			"url":        firstNonEmpty(candidate.SourceURL, imageURL),
 			"image_url":  imageURL,
@@ -627,10 +699,57 @@ func assetVisualAIReferenceSourceAllowed(asset *core.Record, rawURL string) bool
 	if isLocalAssetOnlineHost(parsed.Hostname()) {
 		return true
 	}
+	if assetUsesProviderLogoVisual(asset) {
+		return assetVisualServiceLogoHostAllowed(asset, parsed.Hostname())
+	}
 	if !assetOnlineSourceHasOfficialAuthority(assetOnlineSource{Type: classifyAssetOnlineURL(parsed.String())}) {
 		return false
 	}
 	return assetVisualOfficialHostMatchesVendor(asset.GetString("vendor"), parsed.Hostname())
+}
+
+func assetVisualServiceLogoHostAllowed(asset *core.Record, rawHost string) bool {
+	host := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(rawHost), "www."))
+	if host == "" {
+		return false
+	}
+	for _, trustedHost := range assetVisualServiceProviderHosts(asset.GetString("vendor")) {
+		if assetVisualHostMatches(host, trustedHost) {
+			return true
+		}
+	}
+	for _, metadataKey := range []string{"support_url", "product_url", "official_url", "service_url", "public_url", "external_url", "internal_url", "check_url", "url"} {
+		candidate, err := url.Parse(recordMetadataString(asset, metadataKey))
+		if err == nil && assetVisualHostMatches(host, candidate.Hostname()) {
+			return true
+		}
+	}
+	return isKnownOfficialAssetHost(host) && assetVisualOfficialHostMatchesVendor(asset.GetString("vendor"), host)
+}
+
+func assetVisualServiceProviderHosts(vendor string) []string {
+	normalized := strings.ToLower(strings.TrimSpace(vendor))
+	for marker, hosts := range map[string][]string{
+		"联通":        {"10010.com", "chinaunicom.cn", "chinaunicom.com"},
+		"unicom":    {"10010.com", "chinaunicom.cn", "chinaunicom.com"},
+		"移动":        {"10086.cn", "chinamobile.com"},
+		"mobile":    {"10086.cn", "chinamobile.com"},
+		"电信":        {"189.cn", "chinatelecom.com.cn"},
+		"telecom":   {"189.cn", "chinatelecom.com.cn"},
+		"广电":        {"cbn.cn", "cbn.net.cn"},
+		"broadcast": {"cbn.cn", "cbn.net.cn"},
+	} {
+		if strings.Contains(normalized, marker) {
+			return hosts
+		}
+	}
+	return nil
+}
+
+func assetVisualHostMatches(host string, trustedHost string) bool {
+	host = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(host), "www."))
+	trustedHost = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(trustedHost), "www."))
+	return host != "" && trustedHost != "" && (host == trustedHost || strings.HasSuffix(host, "."+trustedHost))
 }
 
 func assetVisualOfficialHostMatchesVendor(vendor string, host string) bool {
@@ -778,14 +897,39 @@ func dedupeAssetVisualAIReferenceCandidates(candidates []assetVisualAIReferenceC
 }
 
 func buildAssetVisualAISourceDiscoveryPayload(asset *core.Record, color string, model string, limit int) (map[string]any, error) {
-	limit = normalizeAssetVisualMaxImages(limit)
+	if assetUsesProviderLogoVisual(asset) {
+		limit = 1
+	} else {
+		limit = normalizeAssetVisualMaxImages(limit)
+	}
+	searchKeywords := buildAssetVisualSearchKeywords(asset, color)
+	systemPrompt := "你是 Pulse 资产中心的设备图片找图 Agent。先使用提供的 search_keywords 组合多组检索词，再收集同一资产适合作为档案主图的真实图片候选。不要生成图片，不要返回产品页截图、营销横幅、海报、色卡、图标、Logo、相机样张、带水印图片或明显不同型号。目标是尽可能返回 10 张高适配候选，并按可识别颜色分类；颜色未知时可留空。优先级：厂商官网产品图库、官方 CDN、支持页和说明书，其次是可追溯规格库、可信媒体或零售产品图。厂商、型号和内部型号用于提高匹配度，不完整时应结合资产名称和类型继续检索，不得因此拒绝任务。返回严格 JSON：{\"search_keywords\":[\"...\"],\"sources\":[{\"image_url\":\"https://...\",\"source_url\":\"https://...\",\"title\":\"...\",\"color\":\"可选颜色\",\"type\":\"official_image|reference_image\",\"confidence\":90}]}。"
+	policy := map[string]any{
+		"must_be_real_device_photo_or_render": true,
+		"required_result_count":               limit,
+		"must_match_selected_color":           false,
+		"group_by_detected_color":             true,
+		"color_required_per_source":           false,
+		"preferred_sources":                   []string{"official product gallery", "official specs page image", "official support image", "official CDN image", "traceable product reference"},
+		"reject":                              []string{"AI generated image", "marketing banner", "poster", "color chart", "icon", "logo", "camera sample", "watermark", "watermarked", "带水印", "different variant"},
+	}
+	if assetUsesProviderLogoVisual(asset) {
+		systemPrompt = "你是 Pulse 资产中心的服务商 Logo 找图 Agent。根据服务商和服务名称，只收集一张可作为资产档案主图的官方品牌 Logo。不要生成图片，不要返回营销横幅、海报、截图、水印图、应用下载码或第三方改色 Logo。必须优先返回服务商官网、官方 CDN 或官方媒体资料中的可下载 PNG、JPG、WEBP 或 AVIF 图片，且 source_url 必须可追溯。返回严格 JSON：{\"search_keywords\":[\"...\"],\"sources\":[{\"image_url\":\"https://...\",\"source_url\":\"https://...\",\"title\":\"...\",\"type\":\"official_brand_logo\",\"confidence\":90}]}。"
+		policy = map[string]any{
+			"must_be_official_provider_logo": true,
+			"required_result_count":          1,
+			"preferred_sources":              []string{"official provider website", "official provider CDN", "official media kit"},
+			"accepted_formats":               []string{"png", "jpg", "jpeg", "webp", "avif"},
+			"reject":                         []string{"AI generated image", "marketing banner", "poster", "website screenshot", "watermark", "watermarked", "二维码", "QR code"},
+		}
+	}
 	return map[string]any{
 		"model":       model,
 		"temperature": 0,
 		"messages": []map[string]string{
 			{
 				"role":    "system",
-				"content": "你是 Pulse 资产中心的设备图片找图 Agent。你只返回官方或可追溯真实设备图片 URL，不生成图片，不返回产品页截图，不返回营销海报、色卡、图标、Logo、相机样张或不同型号图片。目标是找到最多 10 张同一设备的候选图，并按官方颜色分类。若用户提供 selected_color，优先找这个官方颜色；若 selected_color 为空，必须覆盖官方可确认的不同颜色并给每张图标注官方色名。优先级：1 厂商官网产品图库、规格页、支持页、官方 CDN；2 官方说明书或资料包；3 权威规格库只作兜底。必须匹配厂商、型号和内部型号，不能混入同系列不同型号或电商改色图。返回严格 JSON：{\"sources\":[{\"image_url\":\"https://...\",\"source_url\":\"https://...\",\"title\":\"...\",\"color\":\"官方色名\",\"type\":\"official_image\",\"confidence\":90}]}；每条 sources 都尽量填写 color。",
+				"content": systemPrompt,
 			},
 			{
 				"role": "user",
@@ -802,16 +946,9 @@ func buildAssetVisualAISourceDiscoveryPayload(asset *core.Record, color string, 
 						"product_url":    recordMetadataString(asset, "product_url"),
 						"official_url":   recordMetadataString(asset, "official_url"),
 					},
-					"max_images": limit,
-					"source_policy": map[string]any{
-						"must_be_real_device_photo_or_render": true,
-						"required_result_count":               limit,
-						"must_match_selected_color":           strings.TrimSpace(color) != "",
-						"group_by_official_color":             true,
-						"color_required_per_source":           true,
-						"preferred_sources":                   []string{"official product gallery", "official specs page image", "official support image", "official CDN image"},
-						"reject":                              []string{"AI generated image", "marketing banner", "poster", "color chart", "icon", "logo", "camera sample", "different variant", "ecommerce-only image when official source exists"},
-					},
+					"max_images":      limit,
+					"search_keywords": searchKeywords,
+					"source_policy":   policy,
 				}),
 			},
 		},
@@ -819,12 +956,44 @@ func buildAssetVisualAISourceDiscoveryPayload(asset *core.Record, color string, 
 	}, nil
 }
 
-func appendAssetVisualReferenceSource(result []map[string]any, seen map[string]bool, source map[string]any) []map[string]any {
+func buildAssetVisualSearchKeywords(asset *core.Record, color string) []string {
+	identity := nonEmptyStrings(
+		asset.GetString("vendor"),
+		asset.GetString("model"),
+		recordMetadataString(asset, "internal_model"),
+		asset.GetString("name"),
+	)
+	base := strings.Join(identity, " ")
+	if base == "" {
+		base = asset.GetString("type")
+	}
+	if assetUsesProviderLogoVisual(asset) {
+		return dedupeStrings([]string{
+			strings.TrimSpace(base + " 官方 Logo PNG"),
+			strings.TrimSpace(base + " official brand logo PNG"),
+			strings.TrimSpace(base + " 品牌标识 PNG"),
+		})
+	}
+	keywords := []string{
+		strings.TrimSpace(base + " product image"),
+		strings.TrimSpace(base + " official render"),
+		strings.TrimSpace(base + " device photo"),
+	}
+	if typeName := strings.TrimSpace(asset.GetString("type")); typeName != "" {
+		keywords = append(keywords, strings.TrimSpace(base+" "+typeName+" image"))
+	}
+	if color = strings.TrimSpace(color); color != "" {
+		keywords = append([]string{strings.TrimSpace(base + " " + color + " image")}, keywords...)
+	}
+	return dedupeStrings(keywords)
+}
+
+func appendAssetVisualReferenceSource(asset *core.Record, result []map[string]any, seen map[string]bool, source map[string]any) []map[string]any {
 	imageURL, _ := source["image_url"].(string)
 	if imageURL == "" {
 		imageURL, _ = source["url"].(string)
 	}
-	if !isLikelyAssetVisualImageURL(imageURL) {
+	if !assetVisualReferenceSourceAccepted(asset, source) {
 		return result
 	}
 	key := strings.ToLower(strings.TrimSpace(imageURL))
@@ -839,7 +1008,10 @@ func appendAssetVisualReferenceSource(result []map[string]any, seen map[string]b
 }
 
 func (h *Hub) collectAssetVisualPageImageSources(asset *core.Record, result []map[string]any, seen map[string]bool, limit int) []map[string]any {
-	pageInputs := assetVisualReferencePageInputs(asset)
+	return h.collectAssetVisualPageImageSourcesFromInputs(asset, assetVisualReferencePageInputs(asset), result, seen, limit, false)
+}
+
+func (h *Hub) collectAssetVisualPageImageSourcesFromInputs(asset *core.Record, pageInputs []assetVisualReferencePageInput, result []map[string]any, seen map[string]bool, limit int, allowReferencePages bool) []map[string]any {
 	for _, page := range pageInputs {
 		if len(result) >= limit {
 			break
@@ -854,8 +1026,13 @@ func (h *Hub) collectAssetVisualPageImageSources(asset *core.Record, result []ma
 		}
 		title := firstNonEmpty(extractHTMLTitle(body), parsed.Host)
 		sourceType := assetVisualReferencePageSourceType(parsed, title, body)
-		if !assetOnlineSourceHasOfficialAuthority(assetOnlineSource{Type: sourceType}) {
+		isOfficial := assetOnlineSourceHasOfficialAuthority(assetOnlineSource{Type: sourceType})
+		if !isOfficial && !allowReferencePages {
 			continue
+		}
+		imageType := "search_reference_page_image"
+		if isOfficial {
+			imageType = "official_page_image"
 		}
 		result = h.collectAssetVisualBundleImageSources(asset, parsed, body, page.Provider, result, seen, limit)
 		if len(result) >= limit {
@@ -865,11 +1042,11 @@ func (h *Hub) collectAssetVisualPageImageSources(asset *core.Record, result []ma
 			if !assetVisualHTMLCandidateMatchesAsset(asset, candidate) {
 				continue
 			}
-			result = appendAssetVisualReferenceSource(result, seen, map[string]any{
+			result = appendAssetVisualReferenceSource(asset, result, seen, map[string]any{
 				"title":      title,
 				"url":        parsed.String(),
 				"image_url":  candidate.URL,
-				"type":       "official_page_image",
+				"type":       imageType,
 				"provider":   page.Provider,
 				"color":      inferAssetVisualSourceColor(asset, "", strings.Join(nonEmptyStrings(title, candidate.Context, candidate.URL), " ")),
 				"confidence": 90,
@@ -946,7 +1123,7 @@ func (h *Hub) collectAssetVisualBundleImageSources(asset *core.Record, pageURL *
 			continue
 		}
 		for _, imageURL := range extractAssetVisualProductBundleImageURLs(scriptBody) {
-			result = appendAssetVisualReferenceSource(result, seen, map[string]any{
+			result = appendAssetVisualReferenceSource(asset, result, seen, map[string]any{
 				"title":      "官方产品资源",
 				"url":        scriptURL,
 				"image_url":  imageURL,
@@ -1289,6 +1466,9 @@ func extractAssetVisualNearbyText(body string, start int, end int) string {
 }
 
 func assetVisualHTMLCandidateMatchesAsset(asset *core.Record, candidate assetVisualHTMLImageCandidate) bool {
+	if assetUsesProviderLogoVisual(asset) {
+		return assetVisualHTMLCandidateMatchesProvider(asset, candidate)
+	}
 	if candidate.Width > 0 && candidate.Height > 0 && (candidate.Width < 240 || candidate.Height < 160) {
 		return false
 	}
@@ -1313,6 +1493,23 @@ func assetVisualHTMLCandidateMatchesAsset(asset *core.Record, candidate assetVis
 	return candidate.Width == 0 || candidate.Width >= 480 || candidate.Height >= 360
 }
 
+func assetVisualHTMLCandidateMatchesProvider(asset *core.Record, candidate assetVisualHTMLImageCandidate) bool {
+	if candidate.Width > 0 && candidate.Height > 0 && (candidate.Width < 24 || candidate.Height < 24) {
+		return false
+	}
+	context := normalizeAssetVisualMatchText(strings.Join(nonEmptyStrings(candidate.Context, candidate.URL), " "))
+	terms := assetVisualServiceMatchTerms(asset)
+	if len(terms) == 0 {
+		return strings.Contains(context, "logo") || strings.Contains(context, "brand") || strings.Contains(context, "标识")
+	}
+	for _, term := range terms {
+		if strings.Contains(context, term) {
+			return true
+		}
+	}
+	return false
+}
+
 func assetVisualMatchTerms(asset *core.Record) []string {
 	values := nonEmptyStrings(
 		asset.GetString("name"),
@@ -1328,6 +1525,18 @@ func assetVisualMatchTerms(asset *core.Record) []string {
 		noSpaces := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(value)), " ", "")
 		if len(noSpaces) >= 4 {
 			result = append(result, normalizeAssetVisualMatchText(noSpaces))
+		}
+	}
+	return dedupeStrings(result)
+}
+
+func assetVisualServiceMatchTerms(asset *core.Record) []string {
+	values := nonEmptyStrings(asset.GetString("vendor"), asset.GetString("name"), asset.GetString("model"))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		term := normalizeAssetVisualMatchText(value)
+		if len([]rune(term)) >= 2 {
+			result = append(result, term)
 		}
 	}
 	return dedupeStrings(result)
@@ -1402,14 +1611,8 @@ func classifyAssetVisualOfficialColor(color string) string {
 }
 
 func validateAssetVisualGenerationPrerequisites(asset *core.Record, color string, config assetVisualAIConfig) string {
-	if strings.TrimSpace(asset.GetString("model")) == "" || strings.TrimSpace(recordMetadataString(asset, "internal_model")) == "" {
-		return "收集设备图片需要型号 / 规格和内部型号 / 搜索代码。"
-	}
-	if strings.TrimSpace(color) != "" && assetRequiresOfficialColorSelection(asset) {
-		options := assetOfficialColorOptions(asset)
-		if len(options) > 0 && !assetColorInOptions(color, options) {
-			return "当前颜色不在已采集的官方配色中。请先从官方配色列表里选择。"
-		}
+	if strings.TrimSpace(asset.GetString("name")) == "" {
+		return "收集候选图至少需要资产名称。"
 	}
 	return ""
 }
@@ -1543,6 +1746,9 @@ func assetVisualReferenceLooksLikeNonDeviceImage(source map[string]any) bool {
 		}
 	}
 	for _, marker := range []string{
+		"watermark",
+		"watermarked",
+		"带水印",
 		"banner",
 		"hero",
 		"/kv",
@@ -1588,18 +1794,20 @@ func (h *Hub) buildCollectedAssetVisualFrames(asset *core.Record, references []m
 		if imageURL == "" {
 			imageURL, _ = source["url"].(string)
 		}
-		if !isLikelyAssetVisualImageURL(imageURL) {
+		if !assetVisualReferenceSourceAccepted(asset, source) {
 			continue
 		}
 		title, _ := source["title"].(string)
 		sourceURL, _ := source["url"].(string)
 		candidates = append(candidates, map[string]any{
-			"url":          imageURL,
-			"source_title": title,
-			"source_url":   sourceURL,
-			"color":        firstNonEmpty(stringFromAny(source["color"]), inferAssetVisualSourceColor(asset, color, strings.Join(nonEmptyStrings(title, sourceURL, imageURL), " "))),
-			"theme_score":  scoreAssetVisualNightCandidate(source),
-			"visual_score": scoreAssetVisualDisplayCandidate(source),
+			"url":              imageURL,
+			"source_title":     title,
+			"source_url":       sourceURL,
+			"source_image_url": imageURL,
+			"color":            firstNonEmpty(stringFromAny(source["color"]), inferAssetVisualSourceColor(asset, color, strings.Join(nonEmptyStrings(title, sourceURL, imageURL), " "))),
+			"presentation":     assetVisualPresentation(asset),
+			"theme_score":      scoreAssetVisualNightCandidate(source),
+			"visual_score":     scoreAssetVisualDisplayCandidate(source),
 		})
 	}
 	if len(preferredURLSet) > 0 {
@@ -1620,25 +1828,478 @@ func (h *Hub) buildCollectedAssetVisualFrames(asset *core.Record, references []m
 	if len(candidates) == 0 {
 		return nil
 	}
-	if limit > len(candidates) {
-		limit = len(candidates)
+	frameLimit := limit
+	if assetUsesProviderLogoVisual(asset) {
+		// 服务商 Logo 只保存一张，但先保留多个可归档来源逐一尝试，避免模型猜错单个图片 URL 时直接失败。
+		frameLimit = len(candidates)
+	} else if frameLimit > len(candidates) {
+		frameLimit = len(candidates)
 	}
-	frames := make([]map[string]any, 0, limit)
-	orderedCandidates := orderAssetVisualThemeCandidates(candidates, limit)
-	for index := 0; index < limit; index++ {
+	frames := make([]map[string]any, 0, frameLimit)
+	orderedCandidates := orderAssetVisualThemeCandidates(candidates, frameLimit)
+	for index := 0; index < frameLimit; index++ {
 		source := orderedCandidates[index%len(orderedCandidates)]
 		frames = append(frames, map[string]any{
-			"index":        index,
-			"view":         "candidate",
-			"theme":        "candidate",
-			"label":        fmt.Sprintf("候选 %d", index+1),
-			"color":        stringFromAny(source["color"]),
-			"url":          source["url"],
-			"source_title": source["source_title"],
-			"source_url":   source["source_url"],
+			"index":            index,
+			"view":             "candidate",
+			"theme":            "candidate",
+			"presentation":     stringFromAny(source["presentation"]),
+			"label":            fmt.Sprintf("候选 %d", index+1),
+			"color":            stringFromAny(source["color"]),
+			"url":              source["url"],
+			"source_title":     source["source_title"],
+			"source_url":       source["source_url"],
+			"source_image_url": source["source_image_url"],
 		})
 	}
 	return frames
+}
+
+type normalizedAssetVisualImage struct {
+	Bytes       []byte
+	ContentType string
+	Extension   string
+	Width       int
+	Height      int
+	Trimmed     bool
+}
+
+func (h *Hub) archiveCollectedAssetVisualFrames(asset *core.Record, references []map[string]any, limit int, color string, config assetVisualAIConfig) ([]map[string]any, []*filesystem.File, map[string]any) {
+	candidates := h.buildCollectedAssetVisualFrames(asset, references, limit, color)
+	frames := make([]map[string]any, 0, len(candidates))
+	files := make([]*filesystem.File, 0, len(candidates))
+	verificationInputs := make([]assetVisualVerificationInput, 0, len(candidates))
+	skipped := make([]map[string]string, 0)
+	for _, candidate := range candidates {
+		if len(frames) >= limit {
+			break
+		}
+		sourceImageURL := stringFromAny(candidate["source_image_url"])
+		body, err := h.fetchAssetVisualImage(sourceImageURL, assetVisualMaxDownloadBytes)
+		if err != nil {
+			skipped = append(skipped, map[string]string{"source_image_url": sourceImageURL, "reason": "download_failed"})
+			continue
+		}
+		var processed normalizedAssetVisualImage
+		if assetUsesProviderLogoVisual(asset) {
+			processed, err = normalizeAssetServiceLogoImage(body, sourceImageURL)
+		} else {
+			processed, err = normalizeAssetVisualImage(body, sourceImageURL)
+		}
+		if err != nil {
+			skipped = append(skipped, map[string]string{"source_image_url": sourceImageURL, "reason": "image_processing_failed"})
+			continue
+		}
+		file, err := filesystem.NewFileFromBytes(processed.Bytes, fmt.Sprintf("asset-visual-%02d.%s", len(frames)+1, processed.Extension))
+		if err != nil {
+			skipped = append(skipped, map[string]string{"source_image_url": sourceImageURL, "reason": "file_archive_failed"})
+			continue
+		}
+		frame := cloneStringAnyMap(candidate)
+		frame["processing"] = map[string]any{
+			"stored_locally": true,
+			"trimmed":        processed.Trimmed,
+			"format":         processed.Extension,
+			"width":          processed.Width,
+			"height":         processed.Height,
+		}
+		frames = append(frames, frame)
+		files = append(files, file)
+		if dataURI, err := assetVisualVerificationDataURI(processed); err == nil {
+			verificationInputs = append(verificationInputs, assetVisualVerificationInput{Index: len(frames) - 1, DataURI: dataURI})
+		}
+	}
+	verificationSummary := map[string]any{"status": "official_rules_only"}
+	if config.Ready() && len(verificationInputs) > 0 {
+		verdicts, summary := h.verifyArchivedAssetVisualCandidates(asset, color, config, verificationInputs)
+		verificationSummary = summary
+		if len(verdicts) > 0 {
+			acceptedFrames := make([]map[string]any, 0, len(frames))
+			acceptedFiles := make([]*filesystem.File, 0, len(files))
+			for index, frame := range frames {
+				verdict, found := verdicts[index]
+				if !found || !verdict.Accepted || verdict.Confidence < 85 {
+					skipped = append(skipped, map[string]string{"source_image_url": stringFromAny(frame["source_image_url"]), "reason": "ai_accuracy_rejected"})
+					continue
+				}
+				if verdict.Color != "" {
+					frame["color"] = verdict.Color
+				}
+				frame["verification"] = map[string]any{"accepted": true, "confidence": verdict.Confidence, "reason": verdict.Reason, "color": verdict.Color}
+				acceptedFrames = append(acceptedFrames, frame)
+				acceptedFiles = append(acceptedFiles, files[index])
+			}
+			frames = acceptedFrames
+			files = acceptedFiles
+		}
+	}
+	for index := range frames {
+		frames[index]["index"] = index
+		frames[index]["label"] = fmt.Sprintf("候选 %d", index+1)
+	}
+	return frames, files, map[string]any{
+		"stored_locally": len(files),
+		"skipped":        skipped,
+		"verification":   verificationSummary,
+	}
+}
+
+type assetVisualVerificationInput struct {
+	Index   int
+	DataURI string
+}
+
+type assetVisualVerificationResult struct {
+	Accepted   bool
+	Confidence int
+	Reason     string
+	Color      string
+}
+
+func assetVisualVerificationDataURI(processed normalizedAssetVisualImage) (string, error) {
+	decoded, _, err := image.Decode(bytes.NewReader(processed.Bytes))
+	if err != nil {
+		return "", err
+	}
+	thumbnail := imaging.Fit(decoded, 512, 512, imaging.Lanczos)
+	var output bytes.Buffer
+	if err := jpeg.Encode(&output, thumbnail, &jpeg.Options{Quality: 82}); err != nil {
+		return "", err
+	}
+	return "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(output.Bytes()), nil
+}
+
+func buildAssetVisualVerificationPayload(asset *core.Record, color string, inputs []assetVisualVerificationInput, model string) (map[string]any, error) {
+	if len(inputs) == 0 {
+		return nil, errors.New("no visual verification inputs")
+	}
+	content := make([]any, 0, len(inputs)+1)
+	content = append(content, map[string]any{
+		"type": "text",
+		"text": mustJSON(map[string]any{
+			"task": "只判断已归档的官方候选图片是否准确匹配当前资产，不搜索、不生成、不返回 URL。",
+			"asset": map[string]any{
+				"name":           asset.GetString("name"),
+				"type":           asset.GetString("type"),
+				"vendor":         asset.GetString("vendor"),
+				"model":          asset.GetString("model"),
+				"internal_model": recordMetadataString(asset, "internal_model"),
+				"selected_color": color,
+			},
+			"rules":  []string{"拒绝错误型号、不同变体、带水印、横幅、海报、色卡、Logo（实体设备）和非设备主体图", "只接受完整、清晰、与型号和颜色一致的设备图或服务商官方 Logo"},
+			"output": `{"candidates":[{"index":0,"accepted":true,"confidence":0,"reason":"","color":""}]}`,
+		}),
+	})
+	for _, input := range inputs {
+		content = append(content, map[string]any{
+			"type":      "image_url",
+			"image_url": map[string]any{"url": input.DataURI, "detail": "low"},
+		})
+	}
+	return map[string]any{
+		"model":       model,
+		"temperature": 0,
+		"messages": []map[string]any{
+			{"role": "system", "content": "你是资产图片准确性审核器。只能返回 JSON，不得查找、生成或猜测图片 URL。"},
+			{"role": "user", "content": content},
+		},
+		"response_format": map[string]string{"type": "json_object"},
+	}, nil
+}
+
+func (h *Hub) verifyArchivedAssetVisualCandidates(asset *core.Record, color string, config assetVisualAIConfig, inputs []assetVisualVerificationInput) (map[int]assetVisualVerificationResult, map[string]any) {
+	allVerdicts := map[int]assetVisualVerificationResult{}
+	attempts := 0
+	for _, batch := range splitAssetVisualVerificationInputs(inputs) {
+		payload, err := buildAssetVisualVerificationPayload(asset, color, batch, config.Model)
+		if err != nil {
+			return allVerdicts, map[string]any{"status": "request_build_failed", "attempts": attempts}
+		}
+		body, err := json.Marshal(payload)
+		if err != nil {
+			return allVerdicts, map[string]any{"status": "request_encode_failed", "attempts": attempts}
+		}
+		rawBody, batchAttempts, message := callAssetOnlineAIModel(assetOnlineAIConfig{Enabled: config.Enabled, Provider: config.Provider, Endpoint: config.Endpoint, APIKey: config.APIKey, Model: config.Model}, body)
+		attempts += batchAttempts
+		if message != "" {
+			return allVerdicts, map[string]any{"status": "unavailable", "attempts": attempts, "error": truncateAssetVisualVerificationError(message)}
+		}
+		verdicts := parseAssetVisualVerificationResults(extractAssetOnlineAIContent(rawBody))
+		if len(verdicts) == 0 {
+			return allVerdicts, map[string]any{"status": "invalid_response", "attempts": attempts}
+		}
+		for index, verdict := range verdicts {
+			allVerdicts[index] = verdict
+		}
+	}
+	return allVerdicts, map[string]any{"status": "verified", "attempts": attempts, "accepted": countAcceptedAssetVisualVerificationResults(allVerdicts), "batches": len(splitAssetVisualVerificationInputs(inputs))}
+}
+
+func splitAssetVisualVerificationInputs(inputs []assetVisualVerificationInput) [][]assetVisualVerificationInput {
+	if len(inputs) == 0 {
+		return nil
+	}
+	result := make([][]assetVisualVerificationInput, 0, (len(inputs)+assetVisualVerificationBatchSize-1)/assetVisualVerificationBatchSize)
+	for start := 0; start < len(inputs); start += assetVisualVerificationBatchSize {
+		end := start + assetVisualVerificationBatchSize
+		if end > len(inputs) {
+			end = len(inputs)
+		}
+		result = append(result, inputs[start:end])
+	}
+	return result
+}
+
+func truncateAssetVisualVerificationError(message string) string {
+	message = cleanOnlineText(message)
+	if len([]rune(message)) <= 240 {
+		return message
+	}
+	return string([]rune(message)[:240]) + "..."
+}
+
+func parseAssetVisualVerificationResults(content string) map[int]assetVisualVerificationResult {
+	content = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(content, "```json"), "```"), "```"))
+	var parsed struct {
+		Candidates []struct {
+			Index      int    `json:"index"`
+			Accepted   bool   `json:"accepted"`
+			Confidence int    `json:"confidence"`
+			Reason     string `json:"reason"`
+			Color      string `json:"color"`
+		} `json:"candidates"`
+	}
+	if err := json.Unmarshal([]byte(content), &parsed); err != nil {
+		return nil
+	}
+	result := make(map[int]assetVisualVerificationResult, len(parsed.Candidates))
+	for _, candidate := range parsed.Candidates {
+		if candidate.Index < 0 || candidate.Confidence < 0 || candidate.Confidence > 100 {
+			continue
+		}
+		result[candidate.Index] = assetVisualVerificationResult{Accepted: candidate.Accepted, Confidence: candidate.Confidence, Reason: cleanOnlineText(candidate.Reason), Color: cleanOnlineText(candidate.Color)}
+	}
+	return result
+}
+
+func countAcceptedAssetVisualVerificationResults(results map[int]assetVisualVerificationResult) int {
+	count := 0
+	for _, result := range results {
+		if result.Accepted && result.Confidence >= 85 {
+			count++
+		}
+	}
+	return count
+}
+
+func (h *Hub) fetchAssetVisualImage(rawURL string, maxBytes int64) ([]byte, error) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return nil, errors.New("invalid image URL")
+	}
+	req, err := http.NewRequest(http.MethodGet, parsed.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
+	req.Header.Set("User-Agent", "PulseAssetVisual/1.0")
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, http.ErrNotSupported
+	}
+	if maxBytes > 0 && resp.ContentLength > maxBytes {
+		return nil, errAssetOnlineResponseTooLarge
+	}
+	if contentType := strings.TrimSpace(resp.Header.Get("Content-Type")); contentType != "" {
+		mediaType, _, parseErr := mime.ParseMediaType(contentType)
+		if parseErr == nil && !strings.HasPrefix(strings.ToLower(mediaType), "image/") {
+			return nil, errors.New("unsupported image content type")
+		}
+	}
+	reader := io.Reader(resp.Body)
+	if maxBytes > 0 {
+		reader = io.LimitReader(resp.Body, maxBytes+1)
+	}
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+	if len(body) == 0 || (maxBytes > 0 && int64(len(body)) > maxBytes) {
+		return nil, errAssetOnlineResponseTooLarge
+	}
+	return body, nil
+}
+
+func normalizeAssetVisualImage(source []byte, sourceName string) (normalizedAssetVisualImage, error) {
+	return normalizeAssetVisualImageWithMinimumDimension(source, sourceName, 24, false)
+}
+
+func normalizeAssetServiceLogoImage(source []byte, sourceName string) (normalizedAssetVisualImage, error) {
+	return normalizeAssetVisualImageWithMinimumDimension(source, sourceName, assetVisualMinLogoDimension, true)
+}
+
+func normalizeAssetVisualImageWithMinimumDimension(source []byte, sourceName string, minimumDimension int, expandSmallSquare bool) (normalizedAssetVisualImage, error) {
+	_ = sourceName
+	decoded, _, err := image.Decode(bytes.NewReader(source))
+	if err != nil {
+		return normalizedAssetVisualImage{}, err
+	}
+	if decoded.Bounds().Dx() < minimumDimension || decoded.Bounds().Dy() < minimumDimension {
+		return normalizedAssetVisualImage{}, errors.New("image is too small")
+	}
+	trimmedImage, trimmed := trimUniformAssetVisualPadding(decoded)
+	resized := imaging.Fit(trimmedImage, assetVisualMaxDimension, assetVisualMaxDimension, imaging.Lanczos)
+	if expandSmallSquare && resized.Bounds().Dx() < assetVisualMinLogoCanvas && resized.Bounds().Dy() < assetVisualMinLogoCanvas {
+		resized = imaging.Resize(resized, assetVisualMinLogoCanvas, assetVisualMinLogoCanvas, imaging.NearestNeighbor)
+	}
+	result := normalizedAssetVisualImage{
+		Width:   resized.Bounds().Dx(),
+		Height:  resized.Bounds().Dy(),
+		Trimmed: trimmed,
+	}
+	var output bytes.Buffer
+	if assetVisualImageHasTransparency(resized) {
+		result.ContentType = "image/png"
+		result.Extension = "png"
+		err = png.Encode(&output, resized)
+	} else {
+		result.ContentType = "image/jpeg"
+		result.Extension = "jpg"
+		err = jpeg.Encode(&output, resized, &jpeg.Options{Quality: 88})
+	}
+	if err != nil {
+		return normalizedAssetVisualImage{}, err
+	}
+	result.Bytes = output.Bytes()
+	return result, nil
+}
+
+func trimUniformAssetVisualPadding(source image.Image) (image.Image, bool) {
+	bounds := source.Bounds()
+	background, ok := uniformAssetVisualBorderColor(source, bounds)
+	if !ok {
+		return source, false
+	}
+	content := image.Rectangle{Min: image.Point{X: bounds.Max.X, Y: bounds.Max.Y}, Max: bounds.Min}
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			if assetVisualPixelDiffersFromBackground(source.At(x, y), background) {
+				if x < content.Min.X {
+					content.Min.X = x
+				}
+				if y < content.Min.Y {
+					content.Min.Y = y
+				}
+				if x+1 > content.Max.X {
+					content.Max.X = x + 1
+				}
+				if y+1 > content.Max.Y {
+					content.Max.Y = y + 1
+				}
+			}
+		}
+	}
+	if content.Empty() || content.Dx()*content.Dy()*8 < bounds.Dx()*bounds.Dy() {
+		return source, false
+	}
+	padding := max(8, max(bounds.Dx(), bounds.Dy())/40)
+	content = content.Inset(-padding)
+	if content.Min.X < bounds.Min.X {
+		content.Min.X = bounds.Min.X
+	}
+	if content.Min.Y < bounds.Min.Y {
+		content.Min.Y = bounds.Min.Y
+	}
+	if content.Max.X > bounds.Max.X {
+		content.Max.X = bounds.Max.X
+	}
+	if content.Max.Y > bounds.Max.Y {
+		content.Max.Y = bounds.Max.Y
+	}
+	if content.Dx()*100 >= bounds.Dx()*96 && content.Dy()*100 >= bounds.Dy()*96 {
+		return source, false
+	}
+	return imaging.Crop(source, content), true
+}
+
+func uniformAssetVisualBorderColor(source image.Image, bounds image.Rectangle) (color.NRGBA, bool) {
+	points := []image.Point{
+		{X: bounds.Min.X, Y: bounds.Min.Y},
+		{X: bounds.Max.X - 1, Y: bounds.Min.Y},
+		{X: bounds.Min.X, Y: bounds.Max.Y - 1},
+		{X: bounds.Max.X - 1, Y: bounds.Max.Y - 1},
+	}
+	var totalR, totalG, totalB, totalA uint32
+	colors := make([]color.NRGBA, 0, len(points))
+	for _, point := range points {
+		r, g, b, a := source.At(point.X, point.Y).RGBA()
+		pixel := color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: uint8(a >> 8)}
+		colors = append(colors, pixel)
+		totalR += uint32(pixel.R)
+		totalG += uint32(pixel.G)
+		totalB += uint32(pixel.B)
+		totalA += uint32(pixel.A)
+	}
+	background := color.NRGBA{
+		R: uint8(totalR / uint32(len(colors))),
+		G: uint8(totalG / uint32(len(colors))),
+		B: uint8(totalB / uint32(len(colors))),
+		A: uint8(totalA / uint32(len(colors))),
+	}
+	if !(background.A < 16 || (background.R > 245 && background.G > 245 && background.B > 245) || (background.R < 12 && background.G < 12 && background.B < 12)) {
+		return color.NRGBA{}, false
+	}
+	for _, pixel := range colors {
+		if assetVisualColorDistance(pixel, background) > 14 {
+			return color.NRGBA{}, false
+		}
+	}
+	return background, true
+}
+
+func assetVisualPixelDiffersFromBackground(value color.Color, background color.NRGBA) bool {
+	r, g, b, a := value.RGBA()
+	pixel := color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: uint8(a >> 8)}
+	return assetVisualColorDistance(pixel, background) > 26
+}
+
+func assetVisualColorDistance(left color.NRGBA, right color.NRGBA) int {
+	return assetVisualAbs(int(left.R)-int(right.R)) + assetVisualAbs(int(left.G)-int(right.G)) + assetVisualAbs(int(left.B)-int(right.B)) + assetVisualAbs(int(left.A)-int(right.A))
+}
+
+func assetVisualAbs(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
+}
+
+func assetVisualImageHasTransparency(source image.Image) bool {
+	bounds := source.Bounds()
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			_, _, _, alpha := source.At(x, y).RGBA()
+			if alpha < 0xffff {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isSelectableAssetVisualFrame(frame map[string]any) bool {
+	if stringFromAny(frame["file"]) != "" {
+		return true
+	}
+	if stringFromAny(frame["presentation"]) == "provider_logo" {
+		return isLikelyAssetServiceLogoURL(stringFromAny(frame["url"]))
+	}
+	return isLikelyAssetVisualImageURL(stringFromAny(frame["url"]))
 }
 
 func (h *Hub) preferredAssetVisualReferenceURLs(referenceURLs []string, color string) []string {
@@ -1840,6 +2501,9 @@ func isLikelyAssetVisualImageURL(rawURL string) bool {
 		"googleplay",
 		"playstore",
 		"share",
+		"watermark",
+		"watermarked",
+		"带水印",
 	}
 	for _, marker := range rejected {
 		if strings.Contains(lower, marker) {
@@ -1847,6 +2511,42 @@ func isLikelyAssetVisualImageURL(rawURL string) bool {
 		}
 	}
 	return true
+}
+
+func isLikelyAssetServiceLogoURL(rawURL string) bool {
+	if !isLikelyImageURL(rawURL) {
+		return false
+	}
+	lower := strings.ToLower(strings.TrimSpace(rawURL))
+	for _, marker := range []string{"appdownload", "download.png", "qrcode", "qr-code", "/qr", "wechat", "weixin", "sprite", "avatar", "placeholder", "loading", "blank", "appstore", "googleplay", "playstore", "share", "watermark", "watermarked", "带水印"} {
+		if strings.Contains(lower, marker) {
+			return false
+		}
+	}
+	return true
+}
+
+func assetVisualImageURLAccepted(asset *core.Record, rawURL string) bool {
+	if assetUsesProviderLogoVisual(asset) {
+		return isLikelyAssetServiceLogoURL(rawURL) || isKnownAssetServiceLogoFallbackURL(rawURL)
+	}
+	return isLikelyAssetVisualImageURL(rawURL)
+}
+
+func isKnownAssetServiceLogoFallbackURL(rawURL string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed.Scheme != "https" || !assetVisualHostMatches(parsed.Hostname(), "google.com") {
+		return false
+	}
+	return parsed.Path == "/s2/favicons" && parsed.Query().Get("domain") != "" && parsed.Query().Get("sz") != ""
+}
+
+func assetVisualReferenceSourceAccepted(asset *core.Record, source map[string]any) bool {
+	imageURL := assetVisualReferenceImageURL(source)
+	if !assetVisualImageURLAccepted(asset, imageURL) {
+		return false
+	}
+	return !assetVisualReferenceLooksLikeNonDeviceImage(source)
 }
 
 func formatRemoteErrorBody(rawBody []byte) string {

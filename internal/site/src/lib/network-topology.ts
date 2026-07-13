@@ -407,7 +407,7 @@ export function getAssetTypeLabel(type: AssetType) {
 		vacuum: "扫地机器人",
 		iot: "IoT",
 		vm: "虚拟机",
-		web_endpoint: "网页端点",
+		web_endpoint: "互联网服务监控",
 		custom: "自定义资产",
 	}
 	return labels[type] ?? "资产"

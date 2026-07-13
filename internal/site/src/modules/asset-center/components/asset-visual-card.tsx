@@ -20,7 +20,12 @@ export function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 	const activeImageRatio =
 		activeImageSize && activeImageSize.height > 0 ? activeImageSize.width / activeImageSize.height : 0
 	const useLandscapeImageLayout = activeImageRatio > 1.12
-	const visualStageLayout = getAssetVisualStageLayout(Boolean(activeFrame?.url), useLandscapeImageLayout)
+	const isProviderLogo = activeFrame?.presentation === "provider_logo"
+	const visualStageLayout = getAssetVisualStageLayout(
+		Boolean(activeFrame?.url),
+		useLandscapeImageLayout,
+		isProviderLogo
+	)
 
 	useEffect(() => {
 		if (theme !== "system" || typeof window === "undefined") return

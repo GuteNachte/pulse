@@ -35,7 +35,7 @@ export function MobileWebsitesPage({
 	const subtitle =
 		statusCounts.all > 0
 			? `${statusCounts.up} 正常 / ${statusCounts.unknown} 待检测 / ${statusCounts.all} 总数`
-			: "暂无网站监控"
+			: "暂无互联网服务监控"
 
 	return (
 		<MobilePageShell
@@ -96,7 +96,7 @@ export function MobileWebsiteDetailSheet({
 				)}
 			>
 				<SheetHeader className="sr-only">
-					<SheetTitle>{selected?.name || "网站监控详情"}</SheetTitle>
+					<SheetTitle>{selected?.name || "互联网服务监控详情"}</SheetTitle>
 					<SheetDescription>查看网站检测地址、状态、历史趋势和操作入口。</SheetDescription>
 				</SheetHeader>
 				<WebsiteDetailPanel

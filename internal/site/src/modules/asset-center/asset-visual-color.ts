@@ -27,15 +27,8 @@ export function isOfficialColorRequiredForAssetType(type: AssetRecord["type"]) {
 	return ["phone", "tablet", "wearable", "handheld", "ebook", "game_console", "tv", "speaker"].includes(type)
 }
 
-export function getAssetVisualGenerationBlockReason(asset: AssetRecord, color: string, officialColorOptions: string[]) {
-	if (!asset.model?.trim() || !getMetadataString(asset.metadata, "internal_model")) {
-		return "收集设备图需要先保存型号 / 规格和内部型号 / 搜索代码。"
-	}
-	if (color.trim() && isOfficialColorRequiredForAssetType(asset.type) && officialColorOptions.length > 0) {
-		if (!officialColorOptions.some((option) => normalizeComparableText(option) === normalizeComparableText(color))) {
-			return "当前配色不是已采集的官方配色，请从官方配色列表选择。"
-		}
-	}
+export function getAssetVisualGenerationBlockReason(asset: AssetRecord) {
+	if (!asset.name?.trim()) return "收集候选图至少需要资产名称。"
 	return ""
 }
 

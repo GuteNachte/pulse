@@ -20,6 +20,7 @@ import { isPocketBaseAutoCancel, isReadOnlyUser, pb } from "@/lib/api"
 import { pageTitle } from "@/lib/branding"
 import { cn } from "@/lib/utils"
 import { getAssetIcon } from "./components/asset-card"
+import { AssetDetailActionMenu } from "./components/asset-detail-action-menu"
 import { AssetEditWorkbench } from "./components/asset-edit-workbench"
 import { AssetShowcaseTags } from "./components/asset-showcase-tags"
 import { AssetShowcaseWorkspace } from "./components/asset-showcase-workspace"
@@ -36,6 +37,7 @@ import { loadLatestAITasksByKind } from "./asset-ai-task-query"
 import { createAssetDetailLoadGuard, type AssetDetailLoadToken } from "./asset-detail-load-guard"
 import {
 	applyAssetDetailEditCatalog,
+	applyAssetDetailPrimaryData,
 	applyAssetDetailSecondaryData,
 	emptyAssetDetailState,
 	loadAssetDetailPrimaryData,
@@ -44,7 +46,6 @@ import {
 } from "./asset-detail-data"
 import { loadAssetEditCatalog } from "./asset-edit-catalog-query"
 import { getAssetRecognitionRequirements, validateAssetProfileForm } from "./asset-profile-validation"
-import { getAssetVisualColor } from "./asset-visual-color"
 import {
 	buildRelationMetadata,
 	emptyRelationForm,
@@ -118,7 +119,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const [recognitionMessage, setRecognitionMessage] = useState("")
 	const [visualGenerationStage, setVisualGenerationStage] = useState<"idle" | "running" | "ready" | "failed">("idle")
 	const [visualGenerationMessage, setVisualGenerationMessage] = useState("")
-	const [visualColor, setVisualColor] = useState("")
 	const [editingInterface, setEditingInterface] = useState<AssetInterfaceRecord | null>(null)
 	const [editingRelation, setEditingRelation] = useState<AssetRelationRecord | null>(null)
 	const [relationForm, setRelationForm] = useState<RelationFormState>(emptyRelationForm)
@@ -137,7 +137,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 
 	useEffect(() => {
 		if (!asset) return
-		setVisualColor(getAssetVisualColor(asset))
 		setRecognitionStage("idle")
 		setRecognitionMessage("")
 		setVisualGenerationStage("idle")
@@ -170,9 +169,16 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	)
 	const recognitionRequirements = useMemo(() => (asset ? getAssetRecognitionRequirements(asset) : []), [asset])
 
-	async function loadDetail(options?: { waitSecondary?: boolean; waitEditCatalog?: boolean }) {
+	async function loadDetail(options?: {
+		waitSecondary?: boolean
+		waitEditCatalog?: boolean
+		preserveContent?: boolean
+	}) {
 		const loadToken = detailLoadGuardRef.current.begin(id)
-		setLoading(true)
+		const preserveContent = options?.preserveContent === true
+		if (!preserveContent) {
+			setLoading(true)
+		}
 		try {
 			const {
 				asset: assetRecord,
@@ -187,16 +193,17 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				id
 			)
 			if (!detailLoadGuardRef.current.isCurrent(loadToken)) return
-			setState({
-				...emptyAssetDetailState,
-				asset: assetRecord,
-				assets: [assetRecord],
-				interfaces,
-				allInterfaces: interfaces,
-				relations,
-			})
+			setState((current) =>
+				applyAssetDetailPrimaryData(
+					current,
+					{ asset: assetRecord, interfaces, relations },
+					{ preserveSecondaryData: preserveContent }
+				)
+			)
 			document.title = pageTitle(`${assetRecord.name} / 资产详情`)
-			setLoading(false)
+			if (!preserveContent) {
+				setLoading(false)
+			}
 			const secondaryLoad = startSecondaryDetailDataLoad({
 				assetId: id,
 				loadToken,
@@ -222,7 +229,9 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				console.error("load asset detail", error)
 				toast({ title: "资产详情读取失败", description: "请检查资产是否存在。", variant: "destructive" })
 			}
-			setLoading(false)
+			if (!preserveContent) {
+				setLoading(false)
+			}
 		}
 	}
 
@@ -313,6 +322,8 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					maintenance: pb.collection<AssetMaintenanceRecord>("asset_maintenance"),
 					attachments: pb.collection<AssetAttachmentRecord>("asset_attachments"),
 					visuals: pb.collection<AssetVisualRecord>("asset_visuals"),
+					buildAssetVisualFileURL: (recordId, file) =>
+						pb.files.getURL({ id: recordId, collectionName: "asset_visuals" }, file),
 					aiTasks: pb.collection<AITaskRecord>("ai_tasks"),
 					changes: pb.collection<AssetChangeRecord>("asset_changes"),
 					enrichmentReports: pb.collection<AssetEnrichmentReportRecord>("asset_enrichment_reports"),
@@ -368,7 +379,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			}
 			setEditingInterface(null)
 			setInterfaceDialogOpen(false)
-			await loadDetail()
+			await loadDetail({ preserveContent: true })
 			toast({ title: editingInterface ? "接口已更新" : "接口已添加", description: name })
 		} catch (error) {
 			console.error("save asset interface", error)
@@ -378,21 +389,20 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		}
 	}
 
-	async function generateTurntableVisual(options?: { color?: string }) {
+	async function generateTurntableVisual() {
 		if (!asset || readOnly) return
-		const color = options?.color ?? getAssetVisualColor(asset)
 		setVisualGenerationStage("running")
-		setVisualGenerationMessage("正在从官方 / 可追溯来源收集合适的设备图片。")
+		setVisualGenerationMessage("设备图片 Agent 正在生成检索关键词并收集 10 张高适配候选图。")
 		setSaving(true)
 		try {
 			const response = await pb.send<{ status?: string; message?: string; task?: AITaskRecord }>(
 				`/api/pulse/assets/${asset.id}/visuals/turntable`,
 				{
 					method: "POST",
-					body: { async: true, color: color.trim() },
+					body: { async: true, broad_search: true },
 				}
 			)
-			await loadDetail({ waitSecondary: true })
+			await loadDetail({ waitSecondary: true, preserveContent: true })
 			if (response.status === "running" || response.status === "queued") {
 				setSaving(false)
 				setVisualGenerationMessage(
@@ -403,17 +413,21 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			}
 			if (response.status === "blocked" || response.status === "failed") {
 				setVisualGenerationStage("failed")
-				setVisualGenerationMessage(response.message || "设备图片未收集成功，请检查官方配色或参考图来源。")
+				setVisualGenerationMessage(response.message || "设备图片未收集成功，请检查资产名称或参考图来源。")
 				toast({
 					title: "设备图片未收集成功",
-					description: response.message || "请先补齐官方配色或参考图来源。",
+					description: response.message || "请检查资产名称或参考图来源。",
 				})
 			} else if (response.status === "no_sources") {
+				const isServiceAsset = asset.type === "internet" || asset.type === "web_endpoint"
+				const message = isServiceAsset
+					? "暂未找到可本地归档的服务商 Logo。请检查运营商或服务商名称后再次获取。"
+					: "暂未找到足够适配的候选图。可补充厂商、型号或内部型号后再次获取。"
 				setVisualGenerationStage("failed")
-				setVisualGenerationMessage("没有找到可追溯设备图片。请先补充厂家资料页、官方图片 URL，或运行资料补全 Agent。")
+				setVisualGenerationMessage(message)
 				toast({
-					title: "未找到可用设备图片",
-					description: "请先补充厂家资料页、官方图片 URL，或运行资料补全 Agent 后再收集。",
+					title: isServiceAsset ? "未找到可用服务商 Logo" : "未找到可用设备图片",
+					description: message,
 				})
 			} else {
 				setVisualGenerationStage("ready")
@@ -423,10 +437,10 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		} catch (error) {
 			console.error("collect asset visual images", error)
 			setVisualGenerationStage("failed")
-			setVisualGenerationMessage("设备图片收集失败。请检查官方配色、参考图来源或 Hub 日志。")
+			setVisualGenerationMessage("设备图片收集失败。请检查资产信息、参考图来源或 Hub 日志。")
 			toast({
 				title: "设备图片收集失败",
-				description: "请检查官方配色、参考图来源或 Hub 日志。",
+				description: "请检查资产信息、参考图来源或 Hub 日志。",
 				variant: "destructive",
 			})
 		} finally {
@@ -443,14 +457,14 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				setVisualGenerationMessage(formatAssetVisualTaskSummary(task))
 				if (task.status === "ready") {
 					setVisualGenerationStage("ready")
-					await loadDetail({ waitSecondary: true })
+					await loadDetail({ waitSecondary: true, preserveContent: true })
 					setVisualGenerationMessage("候选图已收集。请在右侧候选区选择要显示在详情页的主图。")
 					toast({ title: "候选图已收集", description: "请在编辑窗口右侧选择要显示的主图。" })
 					return
 				}
 				if (task.status === "failed") {
 					setVisualGenerationStage("failed")
-					await loadDetail({ waitSecondary: true })
+					await loadDetail({ waitSecondary: true, preserveContent: true })
 					toast({
 						title: "设备图片收集失败",
 						description: task.error || "请检查官方配色、参考图来源或 Hub 日志。",
@@ -460,7 +474,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				}
 			}
 			if (attempt % 3 === 2) {
-				await loadDetail({ waitSecondary: true })
+				await loadDetail({ waitSecondary: true, preserveContent: true })
 			}
 		}
 		setVisualGenerationMessage("设备图片 Agent 仍在后台运行，可以稍后回到编辑窗口查看最新进度。")
@@ -489,7 +503,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				method: "POST",
 				body: { frame_index: frameIndex },
 			})
-			await loadDetail({ waitSecondary: true })
+			await loadDetail({ waitSecondary: true, preserveContent: true })
 			setVisualGenerationStage("ready")
 			setVisualGenerationMessage("已选择设备主图。详情页会显示你选中的这一张。")
 			toast({ title: "设备主图已更新", description: "详情页会显示你选中的候选图。" })
@@ -524,6 +538,9 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			storageGb: form.get("storage_gb")?.toString().trim() || "",
 			downMbps: form.get("down_mbps")?.toString().trim() || "",
 			upMbps: form.get("up_mbps")?.toString().trim() || "",
+			serviceURL: form.get("url")?.toString().trim() || "",
+			internalServiceURL: form.get("internal_url")?.toString().trim() || "",
+			externalServiceURL: form.get("external_url")?.toString().trim() || "",
 		})
 		if (requiredErrors.length > 0) {
 			toast({
@@ -576,7 +593,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					console.warn("refresh internet public addresses", error)
 				}
 			}
-			await loadDetail({ waitSecondary: true })
+			await loadDetail({ waitSecondary: true, preserveContent: true })
 			toast({ title: "资产主档已保存", description: name })
 		} catch (error) {
 			console.error("save asset profile", error)
@@ -605,7 +622,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		try {
 			await pb.send(`/api/pulse/assets/${asset.id}/enrichment-reports`, { method: "POST" })
 			setRecognitionMessage("识别完成，正在刷新待替换参数。")
-			await loadDetail({ waitSecondary: true })
+			await loadDetail({ waitSecondary: true, preserveContent: true })
 			setRecognitionStage("ready")
 			setRecognitionMessage("已生成智能识别报告，可在下方逐项替换或一键替换。")
 			toast({ title: "智能匹配完成", description: "新的参数建议已经整理到编辑工作台。" })
@@ -927,47 +944,66 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const AssetIcon = getAssetIcon(asset.type)
 	const assetTag = getMetadataString(asset.metadata, "asset_tag")
 	return (
-		<div className="grid gap-4">
-			<section className="rounded-lg border border-border/70 bg-card p-1.5 shadow-none">
-				<div className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-md bg-surface-soft px-3 py-2">
-					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1.5">
-						<Button asChild variant="ghost" size="sm" className="-ms-2 h-7 w-fit gap-1.5 px-2 text-xs">
+		<div className="grid gap-5 xl:h-[calc(100dvh-7rem)] xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden">
+			<section className="rounded-lg border border-border/70 bg-card px-4 py-3 shadow-none">
+				<div className="flex min-w-0 items-start justify-between gap-4">
+					<div className="min-w-0">
+						<Button
+							asChild
+							variant="ghost"
+							size="sm"
+							className="-ms-2 h-7 w-fit gap-1.5 px-2 text-xs text-muted-foreground"
+						>
 							<Link href={getPagePath($router, "assets")}>
 								<ArrowLeftIcon className="size-3.5" />
 								资产中心
 							</Link>
 						</Button>
-						<div className="grid size-8 shrink-0 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
-							<AssetIcon className="size-4" />
+						<div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-2">
+							<div className="grid size-9 shrink-0 place-items-center rounded-md border border-border/70 bg-surface-soft text-muted-foreground">
+								<AssetIcon className="size-4" />
+							</div>
+							<h1 className="max-w-[min(24rem,70vw)] truncate text-xl font-semibold text-foreground">{asset.name}</h1>
+							{assetTag && (
+								<span className="inline-flex h-6 max-w-[10rem] shrink-0 items-center rounded-md border border-border/70 bg-surface-soft px-2 font-mono text-[11px] font-medium text-muted-foreground">
+									{assetTag}
+								</span>
+							)}
+							<Badge variant="secondary" className="h-6 rounded-md px-2 text-[11px]">
+								{getAssetTypeLabel(asset.type)}
+							</Badge>
+							<StatusBadge status={asset.status || "active"} />
 						</div>
-						<h1 className="max-w-[18rem] truncate text-lg font-semibold text-foreground">{asset.name}</h1>
-						{assetTag && (
-							<span className="inline-flex h-5 max-w-[9rem] shrink-0 items-center rounded-md border border-border/70 bg-card px-1.5 text-[11px] font-medium text-muted-foreground">
-								{assetTag}
-							</span>
-						)}
-						<Badge variant="secondary" className="h-5 rounded-md px-1.5 text-[11px]">
-							{getAssetTypeLabel(asset.type)}
-						</Badge>
-						<StatusBadge status={asset.status || "active"} />
-						<AssetShowcaseTags asset={asset} />
 					</div>
-					<Button
-						variant="outline"
-						size="sm"
-						className="h-7 shrink-0 gap-1.5 px-2 text-xs"
-						onClick={() => {
-							setManagementDialogOpen(true)
-							ensureAssetEditCatalogLoaded().catch((error) => {
-								if (!isPocketBaseAutoCancel(error)) {
-									console.warn("ensure asset edit catalog", error)
-								}
-							})
-						}}
-					>
-						<PencilIcon className="size-3.5" />
-						编辑
-					</Button>
+					<div className="flex shrink-0 items-center gap-2">
+						<AssetDetailActionMenu
+							readOnly={readOnly}
+							onOpenInterface={openAddInterfaceDialog}
+							onOpenRelation={openAddRelationDialog}
+							onOpenMaintenance={openAddMaintenanceDialog}
+							onOpenAttachment={openAddAttachmentDialog}
+							onDelete={deleteAsset}
+						/>
+						<Button
+							variant="outline"
+							size="sm"
+							className="gap-1.5"
+							onClick={() => {
+								setManagementDialogOpen(true)
+								ensureAssetEditCatalogLoaded().catch((error) => {
+									if (!isPocketBaseAutoCancel(error)) {
+										console.warn("ensure asset edit catalog", error)
+									}
+								})
+							}}
+						>
+							<PencilIcon className="size-3.5" />
+							编辑
+						</Button>
+					</div>
+				</div>
+				<div className="mt-3 border-t border-border/70 pt-3">
+					<AssetShowcaseTags asset={asset} />
 				</div>
 			</section>
 
@@ -987,35 +1023,14 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					latestReport={latestEnrichmentReport}
 					latestSuggestions={latestEnrichmentSuggestions}
 					actionableSuggestions={actionableEnrichmentSuggestions}
-					visualColor={visualColor}
-					onVisualColorChange={setVisualColor}
 					onSaveProfile={saveAssetProfile}
 					onRunSmartRecognition={runSmartRecognition}
 					onAcceptSuggestion={(suggestion) => acceptEnrichmentSuggestionDirect(suggestion)}
 					onAcceptAllSuggestions={acceptAllActionableSuggestions}
 					onGenerateVisual={() =>
-						generateTurntableVisual({ color: visualColor }).catch((error) =>
-							console.error("collect asset visual images", error)
-						)
+						generateTurntableVisual().catch((error) => console.error("collect asset visual images", error))
 					}
 					onSelectVisualCandidate={selectAssetVisualCandidate}
-					onOpenInterface={() => {
-						setManagementDialogOpen(false)
-						openAddInterfaceDialog()
-					}}
-					onOpenRelation={() => {
-						setManagementDialogOpen(false)
-						openAddRelationDialog()
-					}}
-					onOpenMaintenance={() => {
-						setManagementDialogOpen(false)
-						openAddMaintenanceDialog()
-					}}
-					onOpenAttachment={() => {
-						setManagementDialogOpen(false)
-						openAddAttachmentDialog()
-					}}
-					onDelete={deleteAsset}
 				/>
 			</Dialog>
 

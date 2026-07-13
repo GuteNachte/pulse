@@ -104,7 +104,7 @@ export function useWebsiteMonitorData(systemsById: Record<string, SystemRecord>)
 					return
 				}
 				console.error("load website monitors", error)
-				toast({ title: "加载失败", description: "网站监控数据读取失败。", variant: "destructive" })
+				toast({ title: "加载失败", description: "互联网服务监控数据读取失败。", variant: "destructive" })
 			} finally {
 				if (requestId === listRequestId.current) {
 					setLoading(false)

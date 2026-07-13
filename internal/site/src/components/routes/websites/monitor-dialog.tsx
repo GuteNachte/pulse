@@ -73,7 +73,7 @@ export function MonitorDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-h-[calc(100dvh-2rem)] max-w-[44rem] overflow-hidden p-0">
 				<DialogHeader className="border-b border-border/70 bg-card px-5 py-4 sm:px-6">
-					<DialogTitle>{form.id ? "编辑网站监控" : "添加网站监控"}</DialogTitle>
+					<DialogTitle>{form.id ? "编辑互联网服务监控" : "添加互联网服务监控"}</DialogTitle>
 					<DialogDescription>每个地址都会独立检测，并在卡片里显示独立状态条。</DialogDescription>
 				</DialogHeader>
 				<div className="grid max-h-[calc(100dvh-12rem)] gap-3 overflow-y-auto bg-surface-soft px-4 py-4 sm:px-6">
@@ -129,7 +129,7 @@ export function MonitorDialog({
 									</SelectTrigger>
 									<SelectContent>
 										<SelectItem value="none" disabled>
-											{assets.length ? "请选择网页端点资产" : "资产中心暂无网页端点资产"}
+											{assets.length ? "请选择互联网服务监控资产" : "资产中心暂无互联网服务监控资产"}
 										</SelectItem>
 										{assets.map((asset) => (
 											<SelectItem key={asset.id} value={asset.id}>

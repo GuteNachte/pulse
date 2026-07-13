@@ -1,4 +1,5 @@
 import { buildAssetParameterGroups } from "./asset-detail-parameter-groups.ts"
+import { getAssetFormSections } from "./asset-schema.ts"
 import type { AssetRecord } from "@/types"
 
 function assertDeepEqual(actual: unknown, expected: unknown) {
@@ -64,4 +65,41 @@ assertDeepEqual(
 		["内存容量", "32 GB"],
 		["内存频率", "4800 MHz"],
 	]
+)
+
+const nas = {
+	...host,
+	id: "nas-1",
+	type: "nas",
+	metadata: {
+		bay_count: 4,
+		raid_mode: "RAID 5",
+		filesystem: "Btrfs",
+	},
+} as unknown as AssetRecord
+
+assertDeepEqual(
+	buildAssetParameterGroups(nas)
+		.filter((group) => group.title === "NAS 存储参数")
+		.flatMap((group) => group.rows.map((row) => [row.label, row.value])),
+	[
+		["硬盘位数量", "4"],
+		["阵列 / RAID", "RAID 5"],
+		["文件系统", "Btrfs"],
+	]
+)
+
+const nasEditFieldLabels = new Set(
+	getAssetFormSections("nas")
+		.find((section) => section.title === "NAS 存储参数")
+		?.fields.map((field) => field.label)
+)
+const nasDetailFieldLabels = new Set(
+	buildAssetParameterGroups(nas)
+		.find((group) => group.title === "NAS 存储参数")
+		?.rows.map((row) => row.label)
+)
+assertDeepEqual(
+	[...nasDetailFieldLabels].sort(),
+	[...nasEditFieldLabels].filter((label) => ["硬盘位数量", "阵列 / RAID", "文件系统"].includes(label)).sort()
 )

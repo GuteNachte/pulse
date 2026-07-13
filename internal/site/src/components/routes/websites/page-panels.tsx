@@ -249,7 +249,7 @@ function CreateMonitorButton({
 	}
 	return (
 		<Button asChild className="h-10 px-3">
-			<Link href={assetsPath}>先添加网页端点</Link>
+			<Link href={assetsPath}>先添加互联网服务</Link>
 		</Button>
 	)
 }
@@ -269,14 +269,14 @@ function EmptyMonitorList({
 	assetsPath: string
 	onCreate: () => void
 }) {
-	const title = hasActiveFilter ? "没有匹配结果" : "暂无网站监控"
-	const description = hasActiveFilter ? "换个关键词或筛选条件再试。" : "先在资产中心添加网页端点，再为它启用网站监控。"
+	const title = hasActiveFilter ? "没有匹配结果" : "暂无互联网服务监控"
+	const description = hasActiveFilter ? "换个关键词或筛选条件再试。" : "先在资产中心添加互联网服务，再为它启用监控。"
 
 	return (
 		<div className="sm:col-span-2 xl:col-span-1">
 			<EmptyState
 				loading={false}
-				loadingText="正在读取网站监控"
+				loadingText="正在读取互联网服务监控"
 				emptyText={title}
 				description={description}
 				className="min-h-72"

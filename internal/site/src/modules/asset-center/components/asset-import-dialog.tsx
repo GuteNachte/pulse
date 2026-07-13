@@ -93,7 +93,7 @@ export function AssetImportDialog({
 						<ImportSummaryPill label="可导入" value={validRows.length} />
 						<ImportSummaryPill label="需处理" value={invalidRows.length} />
 						<div className="rounded-md border border-border/70 bg-card p-3 text-xs leading-5 text-muted-foreground">
-							可用字段：name、type、status、location、vendor、model、serial_number、management_ip、role、notes、parent_asset、metadata.*。模板已包含宽带、路由器、交换机、NAS、网页端点和智能家居示例。
+							可用字段：name、type、status、location、vendor、model、serial_number、management_ip、role、notes、parent_asset、metadata.*。模板已包含宽带、路由器、交换机、NAS、互联网服务监控和智能家居示例。
 						</div>
 					</div>
 				</div>

@@ -89,7 +89,7 @@ func (h *Hub) validateWebsiteMonitorAssetBindingRequest(e *core.RecordRequestEve
 	assetID := strings.TrimSpace(e.Record.GetString("asset"))
 	if assetID == "" {
 		if requireAsset || requestClearsAsset(e) {
-			return e.BadRequestError("网站监控必须先绑定资产中心里的网页端点资产。", nil)
+			return e.BadRequestError("互联网服务监控必须先绑定资产中心里的互联网服务监控资产。", nil)
 		}
 		return nil
 	}
@@ -98,7 +98,7 @@ func (h *Hub) validateWebsiteMonitorAssetBindingRequest(e *core.RecordRequestEve
 		return e.BadRequestError("关联资产不存在。", err)
 	}
 	if strings.TrimSpace(assetRecord.GetString("type")) != "web_endpoint" {
-		return e.BadRequestError("网站监控只能绑定网页端点资产。", nil)
+		return e.BadRequestError("互联网服务监控只能绑定资产中心里的互联网服务监控资产。", nil)
 	}
 	if strings.TrimSpace(e.Record.GetString("user")) != strings.TrimSpace(assetRecord.GetString("user")) {
 		return e.BadRequestError("关联资产不属于当前用户。", nil)

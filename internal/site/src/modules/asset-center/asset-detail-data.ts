@@ -17,7 +17,7 @@ import {
 	loadPendingOfficialColorSuggestions,
 } from "./asset-enrichment-suggestion-query.ts"
 import { escapePocketBaseFilterValue } from "./asset-query.ts"
-import { loadDisplayAssetVisuals } from "./asset-visual-query.ts"
+import { loadDisplayAssetVisuals, type AssetVisualFileURLBuilder } from "./asset-visual-query.ts"
 
 export type AssetDetailState = {
 	asset?: AssetRecord
@@ -76,6 +76,37 @@ export type AssetDetailPrimaryData = {
 	relations: AssetRelationRecord[]
 }
 
+export function applyAssetDetailPrimaryData(
+	state: AssetDetailState,
+	data: AssetDetailPrimaryData,
+	options?: { preserveSecondaryData?: boolean }
+): AssetDetailState {
+	if (!options?.preserveSecondaryData) {
+		return {
+			...emptyAssetDetailState,
+			asset: data.asset,
+			assets: [data.asset],
+			interfaces: data.interfaces,
+			allInterfaces: data.interfaces,
+			relations: data.relations,
+		}
+	}
+	const assets = state.assets.some((item) => item.id === data.asset.id)
+		? state.assets.map((item) => (item.id === data.asset.id ? data.asset : item))
+		: [data.asset, ...state.assets]
+	const allInterfaces = state.editCatalogLoaded
+		? [...state.allInterfaces.filter((item) => item.asset !== data.asset.id), ...data.interfaces]
+		: data.interfaces
+	return {
+		...state,
+		asset: data.asset,
+		assets,
+		interfaces: data.interfaces,
+		allInterfaces,
+		relations: data.relations,
+	}
+}
+
 export async function loadAssetDetailPrimaryData(
 	collections: {
 		assets: PrimaryAssetCollection
@@ -127,6 +158,7 @@ export async function loadAssetDetailSecondaryData(
 		maintenance: FilteredCollection<AssetMaintenanceRecord>
 		attachments: FilteredCollection<AssetAttachmentRecord>
 		visuals: { getList: Parameters<typeof loadDisplayAssetVisuals>[0]["getList"] }
+		buildAssetVisualFileURL?: AssetVisualFileURLBuilder
 		aiTasks: LatestAITaskCollection
 		changes: PagedCollection<AssetChangeRecord>
 		enrichmentReports: PagedCollection<AssetEnrichmentReportRecord>
@@ -145,7 +177,7 @@ export async function loadAssetDetailSecondaryData(
 			sort: "kind,title",
 			requestKey: null,
 		}),
-		loadDisplayAssetVisuals(collections.visuals, assetId),
+		loadDisplayAssetVisuals(collections.visuals, assetId, collections.buildAssetVisualFileURL),
 		loadLatestAITasksByKind(collections.aiTasks, { assetId }),
 		collections.changes.getList(1, 20, {
 			filter: `asset="${escapePocketBaseFilterValue(assetId)}"`,
