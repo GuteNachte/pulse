@@ -25,10 +25,12 @@ assert.equal(miniPcIdentityFields.includes("product_url"), false)
 const purchaseInfoFields = getSectionFieldKeys("mini_pc", "购买信息")
 assert.deepEqual(purchaseInfoFields, ["purchase_date", "purchase_price_cny"])
 assert.equal(getSectionFieldKeys("mini_pc", "生命周期").length, 0)
-assert.deepEqual(getSectionFieldKeys("internet", "订阅与续费"), [
-	"renewal_date",
+assert.deepEqual(getSectionFieldKeys("internet", "套餐与续费"), [
+	"package_name",
 	"recurring_price_cny",
 	"billing_cycle",
+	"renewal_date",
+	"auto_renew",
 ])
 assert.equal(getSectionFieldKeys("internet", "购买信息").length, 0)
 

@@ -51,6 +51,16 @@ assert.equal(internetRequiredFields.has("location"), false)
 assert.equal(internetRequiredFields.has("management_ip"), false)
 assert.equal(internetRequiredFields.has("fixed_ipv4"), false)
 
+const internetSections = buildAssetProfileEditSections("internet", internetRequiredFields)
+assert.deepEqual(
+	internetSections.map((section) => section.title),
+	["线路参数", "动态公网地址", "套餐与续费", "备注"]
+)
+assert.deepEqual(
+	internetSections.find((section) => section.title === "线路参数")?.fields.map((field) => field.key),
+	["access_technology", "auth_mode", "down_mbps", "up_mbps"]
+)
+
 const phoneSections = buildAssetProfileEditSections("phone", phoneRequiredFields)
 assert.equal(
 	phoneSections.every((section) => section.fields.every((field) => !phoneRequiredFields.has(field.key))),

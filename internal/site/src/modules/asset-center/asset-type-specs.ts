@@ -224,6 +224,16 @@ export function getAssetTypeSpec(type: AssetType) {
 	return type === "internet" ? internetAssetTypeSpec : undefined
 }
 
+export function getAssetTypeCapabilities(type: AssetType) {
+	const notApplicable = getAssetTypeSpec(type)?.notApplicable
+	return {
+		showLocation: !notApplicable?.location,
+		showRole: !notApplicable?.role,
+		showHardware: !notApplicable?.hardware,
+		showInterfaces: !notApplicable?.interfaces,
+	}
+}
+
 export function normalizeInternetProvider(value: string) {
 	const normalized = value.trim()
 	const aliases: Record<string, string> = {
@@ -250,4 +260,26 @@ export function getInternetStatusLabel(status: AssetStatus) {
 export function getInternetOptionLabel(fieldKey: string, value: string) {
 	const field = internetAssetTypeSpec.sections.flatMap((section) => section.fields).find((item) => item.key === fieldKey)
 	return field?.options?.find((option) => option.value === value)?.label ?? value
+}
+
+export function validateInternetAssetValues(values: {
+	name: string
+	provider: string
+	status: AssetStatus
+	accessTechnology: string
+	authMode: string
+	downMbps?: number
+	upMbps?: number
+}) {
+	const errors: string[] = []
+	if (!values.name.trim()) errors.push("资源名称")
+	if (!internetProviderOptions.some((option) => option.value === normalizeInternetProvider(values.provider))) {
+		errors.push("运营商")
+	}
+	if (!internetStatusOptions.some((option) => option.value === values.status)) errors.push("使用状态")
+	if (!accessTechnologyOptions.some((option) => option.value === values.accessTechnology)) errors.push("线路接入技术")
+	if (!authModeOptions.some((option) => option.value === values.authMode)) errors.push("联网认证方式")
+	if (!values.downMbps || values.downMbps <= 0) errors.push("下行带宽")
+	if (!values.upMbps || values.upMbps <= 0) errors.push("上行带宽")
+	return errors
 }

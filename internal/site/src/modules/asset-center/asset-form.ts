@@ -1,5 +1,5 @@
 import type { AssetFormState } from "@/modules/asset-center/asset-import"
-import { buildFixedSpecAssetName, buildInternetResourceName } from "@/modules/asset-center/asset-schema"
+import { buildFixedSpecAssetName } from "@/modules/asset-center/asset-schema"
 import type { AssetFieldDefinition, AssetFieldSection } from "@/modules/asset-center/asset-schema"
 
 export const emptyAssetForm: AssetFormState = {
@@ -130,7 +130,7 @@ export function getAssetFormFieldValue(form: AssetFormState, field: AssetFieldDe
 
 export function buildSuggestedAssetName(form: AssetFormState) {
 	if (form.type === "internet") {
-		return buildInternetResourceName(form.vendor)
+		return ""
 	}
 	const internalModel = form.type === "phone" ? form.metadata.internal_model : undefined
 	const fixedSpecName = buildFixedSpecAssetName(form.type, form.model, internalModel)

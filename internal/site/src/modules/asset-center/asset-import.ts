@@ -4,6 +4,7 @@ import {
 	buildInternetResourceName,
 } from "@/modules/asset-center/asset-schema"
 import type { AssetRecord, AssetStatus, AssetType } from "@/types"
+import { normalizeInternetProvider } from "./asset-type-specs"
 
 export type AssetImportPreviewRow = {
 	index: number
@@ -38,7 +39,7 @@ export function buildAssetPayload(user: string, form: AssetFormState) {
 		type: form.type,
 		status: form.status,
 		parent_asset: form.type === "vm" ? form.parent_asset : "",
-		vendor: form.vendor.trim(),
+		vendor: form.type === "internet" ? normalizeInternetProvider(form.vendor) : form.vendor.trim(),
 		model: form.model.trim(),
 		serial_number: form.serial_number.trim(),
 		management_ip: form.management_ip.trim(),

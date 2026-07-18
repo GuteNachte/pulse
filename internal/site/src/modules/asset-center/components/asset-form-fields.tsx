@@ -98,6 +98,7 @@ export function AssetInput({
 			) : (
 				<Input
 					type={field.type === "number" || field.type === "date" || field.type === "url" ? field.type : "text"}
+					min={field.type === "number" && ["down_mbps", "up_mbps"].includes(field.key) ? "1" : undefined}
 					value={value}
 					placeholder={field.placeholder}
 					readOnly={field.readOnly}

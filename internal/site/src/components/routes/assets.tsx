@@ -102,6 +102,7 @@ import {
 	type AssetFieldDefinition,
 	type AssetFieldSection,
 } from "@/modules/asset-center/asset-schema"
+import { normalizeInternetProvider, validateInternetAssetValues } from "@/modules/asset-center/asset-type-specs"
 import { getAssetCompleteness } from "@/modules/asset-center/asset-profile-summary"
 import { buildAssetInterfaceDisplay, groupAssetInterfacesByAsset } from "@/modules/asset-center/asset-interface-display"
 import { syncPrimaryInterface } from "@/modules/asset-center/asset-interface-sync"
@@ -507,24 +508,39 @@ export default memo(function AssetsPage() {
 	}
 
 	async function saveAsset() {
-		const name = form.name.trim() || buildSuggestedAssetName(form)
+		const name = form.name.trim() || (form.type === "internet" ? "" : buildSuggestedAssetName(form))
 		if (!name) {
 			toast({
 				title:
 					form.type === "internet"
-						? "运营商不能为空"
+						? "资源名称不能为空"
 						: form.type === "web_endpoint"
 							? "服务名称不能为空"
 							: "型号不能为空",
 				description:
 					form.type === "internet"
-						? "互联网接入资源会按运营商自动生成名称。"
+						? "请填写便于识别的宽带资源名称，例如“宽带”。"
 						: form.type === "web_endpoint"
 							? "互联网服务监控需要填写服务名称。"
 							: "名称可以留空自动生成，但必须填写型号和内部型号作为资产识别线索。",
 				variant: "destructive",
 			})
 			return
+		}
+		if (form.type === "internet") {
+			const errors = validateInternetAssetValues({
+				name,
+				provider: form.vendor,
+				status: form.status,
+				accessTechnology: form.metadata.access_technology ?? "",
+				authMode: form.metadata.auth_mode ?? "",
+				downMbps: Number(form.metadata.down_mbps),
+				upMbps: Number(form.metadata.up_mbps),
+			})
+			if (errors.length > 0) {
+				toast({ title: "宽带资料未填完整", description: errors.join("、"), variant: "destructive" })
+				return
+			}
 		}
 		if (!editing) {
 			const createErrors = validateNewAssetRequiredFields(form, assets)
@@ -573,7 +589,7 @@ export default memo(function AssetsPage() {
 			type: form.type,
 			status: form.status,
 			parent_asset: form.type === "vm" ? form.parent_asset : "",
-			vendor: form.vendor.trim(),
+			vendor: form.type === "internet" ? normalizeInternetProvider(form.vendor) : form.vendor.trim(),
 			model: form.model.trim(),
 			serial_number: form.serial_number.trim(),
 			management_ip: form.type === "internet" ? "" : form.management_ip.trim() || canonicalIpv4,

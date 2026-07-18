@@ -2,8 +2,10 @@ import assert from "node:assert/strict"
 import {
 	formatInternetBandwidth,
 	getInternetStatusLabel,
+	getAssetTypeCapabilities,
 	internetAssetTypeSpec,
 	normalizeInternetProvider,
+	validateInternetAssetValues,
 } from "./asset-type-specs.ts"
 
 assert.deepEqual(
@@ -37,5 +39,41 @@ assert.equal(formatInternetBandwidth(300), "300 Mbps")
 assert.equal(getInternetStatusLabel("active"), "使用中")
 assert.equal(getInternetStatusLabel("inactive"), "暂停服务")
 assert.equal(getInternetStatusLabel("retired"), "已注销")
+assert.deepEqual(getAssetTypeCapabilities("internet"), {
+	showLocation: false,
+	showRole: false,
+	showHardware: false,
+	showInterfaces: false,
+})
+assert.deepEqual(getAssetTypeCapabilities("mini_pc"), {
+	showLocation: true,
+	showRole: true,
+	showHardware: true,
+	showInterfaces: true,
+})
+assert.deepEqual(
+	validateInternetAssetValues({
+		name: "宽带",
+		provider: "中国联通",
+		status: "active",
+		accessTechnology: "ftth",
+		authMode: "pppoe",
+		downMbps: 1000,
+		upMbps: 300,
+	}),
+	[]
+)
+assert.deepEqual(
+	validateInternetAssetValues({
+		name: "",
+		provider: "广电",
+		status: "planned",
+		accessTechnology: "",
+		authMode: "",
+		downMbps: 0,
+		upMbps: -1,
+	}),
+	["资源名称", "运营商", "使用状态", "线路接入技术", "联网认证方式", "下行带宽", "上行带宽"]
+)
 
 console.log("asset type specs contract passed")

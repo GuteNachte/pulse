@@ -35,6 +35,7 @@ import {
 	getStatusLabel,
 	isPhoneVariantSpecRequired,
 } from "./asset-schema"
+import { normalizeInternetProvider, validateInternetAssetValues } from "./asset-type-specs"
 import { formatAssetVisualTaskMeta as formatAssetVisualTaskSummary } from "./asset-ai-task-summary"
 import { loadLatestAITasksByKind } from "./asset-ai-task-query"
 import { createAssetDetailLoadGuard, type AssetDetailLoadToken } from "./asset-detail-load-guard"
@@ -589,18 +590,36 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			metadata.memory_gb = Number(form.get("memory_gb")?.toString().trim())
 			metadata.storage_gb = Number(form.get("storage_gb")?.toString().trim())
 		}
+		if (targetType === "internet") {
+			const errors = validateInternetAssetValues({
+				name,
+				provider: form.get("vendor")?.toString() ?? "",
+				status: (form.get("status")?.toString() as AssetRecord["status"]) ?? asset.status ?? "active",
+				accessTechnology: String(metadata.access_technology ?? ""),
+				authMode: String(metadata.auth_mode ?? ""),
+				downMbps: Number(metadata.down_mbps),
+				upMbps: Number(metadata.up_mbps),
+			})
+			if (errors.length > 0) {
+				toast({ title: "宽带资料未填完整", description: errors.join("、"), variant: "destructive" })
+				return
+			}
+		}
 		setSaving(true)
 		try {
 			await pb.collection("assets").update(asset.id, {
 				name,
 				type: targetType,
 				status: form.get("status")?.toString() || asset.status || "active",
-				vendor: form.get("vendor")?.toString().trim() || "",
+				vendor:
+					targetType === "internet"
+						? normalizeInternetProvider(form.get("vendor")?.toString() ?? "")
+						: form.get("vendor")?.toString().trim() || "",
 				model: form.get("model")?.toString().trim() || "",
 				serial_number: form.get("serial_number")?.toString().trim() || "",
 				management_ip: managementIp,
-				location: form.get("location")?.toString().trim() || "",
-				role: form.get("role")?.toString().trim() || "",
+				location: targetType === "internet" ? asset.location || "" : form.get("location")?.toString().trim() || "",
+				role: targetType === "internet" ? asset.role || "" : form.get("role")?.toString().trim() || "",
 				notes: form.get("notes")?.toString().trim() || "",
 				metadata,
 			})

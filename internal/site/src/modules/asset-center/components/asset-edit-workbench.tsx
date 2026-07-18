@@ -44,6 +44,7 @@ import {
 import { buildAssetLocationOptions } from "../asset-list"
 import { isAssetLocationNotApplicable } from "../asset-location"
 import { getEditableAssetTypeOptions } from "../asset-profiles"
+import { getAssetTypeCapabilities, internetAssetTypeSpec } from "../asset-type-specs"
 import {
 	HOST_ASSET_TYPES,
 	getAssetFormSections,
@@ -145,6 +146,7 @@ export function AssetEditWorkbench({
 	const isInternetService = selectedType === "web_endpoint"
 	const isInternetResource = selectedType === "internet"
 	const locationNotApplicable = isAssetLocationNotApplicable(selectedType)
+	const capabilities = getAssetTypeCapabilities(selectedType)
 	const formSections = buildAssetProfileEditSections(selectedType, getRequiredAssetProfileFieldKeys(selectedType))
 	const enrichmentCandidates = useMemo(() => buildAssetEnrichmentCandidateMap(latestSuggestions), [latestSuggestions])
 	const universalArchiveFields = useMemo(
@@ -158,6 +160,7 @@ export function AssetEditWorkbench({
 	)
 	const editableTypeOptions = getEditableAssetTypeOptions(selectedType)
 	const statusField = universalArchiveFields.get("status")
+	const statusOptions = isInternetResource ? [...internetAssetTypeSpec.statusOptions] : (statusField?.options ?? [])
 	const connectionFieldKeys = getAssetConnectionFieldKeys(selectedType)
 	const renderUniversalArchiveField = (key: string) => {
 		const field = universalArchiveFields.get(key)
@@ -197,7 +200,7 @@ export function AssetEditWorkbench({
 					}
 					archiveCounts={
 						<>
-							<AssetEditHeaderCount label="接口" value={state.interfaces.length} />
+							{capabilities.showInterfaces ? <AssetEditHeaderCount label="接口" value={state.interfaces.length} /> : null}
 							<AssetEditHeaderCount label="关系" value={state.relations.length} />
 							<AssetEditHeaderCount label="维护" value={state.maintenance.length} />
 							<AssetEditHeaderCount label="附件" value={state.attachments.length} />
@@ -209,10 +212,14 @@ export function AssetEditWorkbench({
 						<section className="rounded-md border border-border/70 bg-card p-2">
 							<div className="mb-1 flex items-center justify-between gap-2">
 								<div className="min-w-0">
-									<div className="text-sm font-semibold text-foreground">通用档案</div>
+								<div className="text-sm font-semibold text-foreground">
+									{isInternetResource ? "基础资料" : "通用档案"}
+								</div>
+								{!isInternetResource ? (
 									<div className="mt-0.5 text-xs text-muted-foreground">
 										身份、状态、位置和用途；网络接入信息在下方维护。
 									</div>
+								) : null}
 								</div>
 								<Button
 									type="button"
@@ -240,15 +247,12 @@ export function AssetEditWorkbench({
 									/>
 								)}
 								{isInternetResource && (
-									<>
-										<AssetCandidateTextField
-											name="vendor"
-											label="运营商"
-											defaultValue={asset.vendor}
-											candidates={enrichmentCandidates.vendor}
-										/>
-										<AssetCandidateTextField name="role" label="用途" defaultValue={asset.role} />
-									</>
+									<SelectField
+										name="vendor"
+										label="运营商"
+										options={[...internetAssetTypeSpec.providerOptions]}
+										defaultValue={asset.vendor}
+									/>
 								)}
 								{!isInternetService && !isInternetResource && (
 									<>
@@ -286,17 +290,17 @@ export function AssetEditWorkbench({
 								)}
 								{!isInternetService && (
 									<>
-										{statusField && (
+										{(statusField || isInternetResource) && (
 											<SelectField
 												name="status"
-												label={statusField.label}
-												options={statusField.options ?? []}
+												label={statusField?.label ?? "使用状态"}
+												options={statusOptions}
 												value={statusValue}
 												onChange={(value) => setStatusValue(value as NonNullable<AssetRecord["status"]>)}
 											/>
 										)}
-										{renderUniversalArchiveField("role")}
-										{renderUniversalArchiveField("official_url")}
+										{capabilities.showRole ? renderUniversalArchiveField("role") : null}
+										{capabilities.showHardware ? renderUniversalArchiveField("official_url") : null}
 									</>
 								)}
 								{isPhoneVariantSpecRequired(selectedType) && (
@@ -317,7 +321,7 @@ export function AssetEditWorkbench({
 										/>
 									</>
 								)}
-								<div className="grid gap-2">
+								{capabilities.showLocation ? <div className="grid gap-2">
 									<Label>位置</Label>
 									<AssetLocationInput
 										idPrefix="asset-detail-edit-location"
@@ -327,7 +331,7 @@ export function AssetEditWorkbench({
 										allowNone={locationNotApplicable}
 									/>
 									<input type="hidden" name="location" value={locationValue} />
-								</div>
+								</div> : null}
 							</div>
 						</section>
 
@@ -372,7 +376,7 @@ export function AssetEditWorkbench({
 							<section key={section.title} className="rounded-md border border-border/70 bg-card p-2">
 								<div className="mb-1 flex items-center justify-between gap-2">
 									<div className="text-sm font-semibold text-foreground">{section.title}</div>
-									{section.title === "互联网接入" && (
+									{section.title === "动态公网地址" && (
 										<Button
 											type="button"
 											variant="outline"
