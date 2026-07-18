@@ -1,4 +1,5 @@
 import type { AssetType } from "../../types"
+import { internetAssetTypeSpec } from "./asset-type-specs.ts"
 
 export type AssetClass =
 	| "compute"
@@ -22,6 +23,10 @@ export type AssetProfileDefinition = {
 }
 
 const phoneRequiredFieldKeys = ["memory_gb", "storage_gb"] as const
+const internetRequiredFieldKeys = internetAssetTypeSpec.sections
+	.flatMap((section) => section.fields)
+	.filter((field) => field.inputMode === "manual_required" || ["vendor", "access_technology", "auth_mode"].includes(field.key))
+	.map((field) => field.key)
 
 export const assetProfiles: readonly AssetProfileDefinition[] = [
 	{
@@ -283,7 +288,7 @@ export const assetProfiles: readonly AssetProfileDefinition[] = [
 		assetClass: "resource",
 		description: "宽带线路、运营商、公网出口",
 		creatable: true,
-		requiredFieldKeys: [],
+		requiredFieldKeys: internetRequiredFieldKeys,
 	},
 	{
 		type: "web_endpoint",

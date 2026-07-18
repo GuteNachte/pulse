@@ -1,5 +1,6 @@
 import type { AssetStatus, AssetType } from "@/types"
 import { getAssetProfile, getCreatableAssetTypeOptions } from "./asset-profiles.ts"
+import { internetAssetTypeSpec, normalizeInternetProvider } from "./asset-type-specs.ts"
 
 export type AssetFieldSource = "asset" | "metadata"
 export type AssetFieldType = "text" | "number" | "date" | "url" | "select"
@@ -625,26 +626,21 @@ function getNetworkDeviceFields(type: AssetType) {
 	return networkDeviceFields.filter((field) => keys.has(field.key))
 }
 
-const internetFields: AssetFieldDefinition[] = [
-	{ key: "vendor", label: "运营商", source: "asset", required: true, placeholder: "联通 / 电信 / 移动" },
-	{ key: "down_mbps", label: "下行 Mbps", source: "metadata", type: "number", placeholder: "1000" },
-	{ key: "up_mbps", label: "上行 Mbps", source: "metadata", type: "number", placeholder: "100" },
-	{
-		key: "public_ipv4",
-		label: "公网 IPv4",
-		source: "metadata",
-		placeholder: "例如 203.0.113.10",
-		capture: "manual",
-	},
-	{
-		key: "public_ipv6",
-		label: "公网 IPv6",
-		source: "metadata",
-		placeholder: "保存后自动检测",
-		capture: "agent_collectable",
-		readOnly: true,
-	},
-]
+const internetSections: AssetFieldSection[] = internetAssetTypeSpec.sections.map((section) => ({
+	title: section.title,
+	fields: section.fields.map((field) => ({
+		key: field.key,
+		label: field.label,
+		source: field.source,
+		type: field.type,
+		required: field.inputMode === "manual_required" || field.key === "vendor",
+		placeholder: field.placeholder,
+		span: field.span,
+		options: field.options ? [...field.options] : undefined,
+		capture: field.inputMode === "captured_candidate" ? "agent_collectable" : "manual",
+		readOnly: field.readOnly,
+	})),
+}))
 
 const vmFields: AssetFieldDefinition[] = [
 	{ key: "virtualization_platform", label: "虚拟化平台", source: "metadata", placeholder: "PVE / Hyper-V / Docker VM" },
@@ -1167,10 +1163,7 @@ const customFields: AssetFieldDefinition[] = [
 
 export function getAssetFormSections(type: AssetType): AssetFieldSection[] {
 	if (type === "internet") {
-		return [
-			{ title: "互联网接入", fields: internetFields },
-			{ title: "订阅与续费", fields: serviceSubscriptionFields },
-		]
+		return internetSections
 	}
 	if (NETWORK_ASSET_TYPES.includes(type)) {
 		return [
@@ -1287,7 +1280,7 @@ export function isInternetResourceAssetType(type: AssetType) {
 }
 
 export function buildInternetResourceName(vendor: string) {
-	const normalizedVendor = vendor.trim()
+	const normalizedVendor = normalizeInternetProvider(vendor)
 	return normalizedVendor ? `${normalizedVendor}宽带` : ""
 }
 
