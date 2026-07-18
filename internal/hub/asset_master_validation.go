@@ -343,8 +343,70 @@ func (h *Hub) validateAssetRelationRequest(e *core.RecordRequestEvent) error {
 	if err := h.validateAssetRelationInterfaceEndpoint(e, "target_interface", targetID, "目标接口"); err != nil {
 		return err
 	}
+	if err := h.validateInternetAssetRelation(e, sourceRecord, targetRecord); err != nil {
+		return err
+	}
 	if h.hasDuplicateAssetRelation(e.Record) {
 		return e.BadRequestError("资产关系已存在，请不要重复添加同一条关系。", nil)
+	}
+	return nil
+}
+
+func (h *Hub) validateInternetAssetRelation(e *core.RecordRequestEvent, sourceRecord *core.Record, targetRecord *core.Record) error {
+	if e == nil || e.Record == nil || sourceRecord == nil || targetRecord == nil {
+		return nil
+	}
+	kind := strings.TrimSpace(e.Record.GetString("kind"))
+	linkKind := recordMetadataString(e.Record, "link_kind")
+	sourceIsInternet := strings.TrimSpace(sourceRecord.GetString("type")) == "internet"
+	targetIsInternet := strings.TrimSpace(targetRecord.GetString("type")) == "internet"
+	if linkKind == "internet" && (!sourceIsInternet || kind != "connected_to") {
+		return e.BadRequestError("外网链路必须从互联网接入资源指向内网接入设备。", nil)
+	}
+	if !sourceIsInternet || kind != "connected_to" {
+		if targetIsInternet && linkKind == "internet" {
+			return e.BadRequestError("外网链路方向必须从互联网接入指向内网设备。", nil)
+		}
+		return nil
+	}
+	if linkKind != "internet" {
+		return e.BadRequestError("互联网接入资源只能创建外网接入关系。", nil)
+	}
+	if recordMetadataString(e.Record, "source_interface") != "" {
+		return e.BadRequestError("互联网接入资源没有来源接口。", nil)
+	}
+	switch strings.TrimSpace(targetRecord.GetString("type")) {
+	case "ont", "router", "gateway":
+	default:
+		return e.BadRequestError("互联网接入只能关联光猫、路由器或网关。", nil)
+	}
+	targetInterfaceID := recordMetadataString(e.Record, "target_interface")
+	if targetInterfaceID == "" {
+		return e.BadRequestError("互联网接入关系必须选择目标设备的 PON 或 WAN 接口。", nil)
+	}
+	targetInterface, err := h.FindRecordById("asset_interfaces", targetInterfaceID)
+	if err != nil {
+		return e.BadRequestError("目标接口不存在。", err)
+	}
+	targetInterfaceKind := strings.TrimSpace(targetInterface.GetString("kind"))
+	if targetInterfaceKind != "pon" && targetInterfaceKind != "wan" {
+		return e.BadRequestError("互联网接入关系必须选择目标设备的 PON 或 WAN 接口。", nil)
+	}
+	records, err := h.FindRecordsByFilter(
+		"asset_relations",
+		"source_asset = {:source} && kind = 'connected_to'",
+		"",
+		-1,
+		0,
+		map[string]any{"source": sourceRecord.Id},
+	)
+	if err != nil {
+		return err
+	}
+	for _, existing := range records {
+		if existing.Id != e.Record.Id && recordMetadataString(existing, "link_kind") == "internet" {
+			return e.BadRequestError("一条宽带只能关联一个当前接入设备。", nil)
+		}
 	}
 	return nil
 }

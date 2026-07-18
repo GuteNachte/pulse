@@ -11,6 +11,7 @@ import type {
 export const interfaceKindOptions: { value: AssetInterfaceKind; label: string }[] = [
 	{ value: "ethernet", label: "有线" },
 	{ value: "wifi", label: "无线" },
+	{ value: "pon", label: "PON 光纤" },
 	{ value: "wan", label: "WAN" },
 	{ value: "lan", label: "LAN" },
 	{ value: "management", label: "管理口" },
@@ -37,7 +38,7 @@ export const relationLinkKindOptions = [
 	{ value: "custom", label: "自定义链路" },
 ]
 
-export type RelationGuideId = "network" | "wifi" | "power" | "host"
+export type RelationGuideId = "internet" | "network" | "wifi" | "power" | "host"
 
 export type RelationFormState = {
 	kind: AssetRelationKind
@@ -68,6 +69,14 @@ export const relationGuides: {
 	linkKind: string
 	labelPlaceholder: string
 }[] = [
+	{
+		id: "internet",
+		label: "关联接入设备",
+		description: "宽带线路连接到光猫、路由器或网关的 PON / WAN 接口",
+		kind: "connected_to",
+		linkKind: "internet",
+		labelPlaceholder: "例如 宽带 -> 光猫 PON",
+	},
 	{
 		id: "network",
 		label: "连接网络设备",
@@ -148,6 +157,8 @@ export function getRelationTargetOptions(assets: AssetRecord[], currentAssetId: 
 function isRelationGuideTarget(asset: AssetRecord, guideId?: RelationGuideId) {
 	if (!guideId) return true
 	switch (guideId) {
+		case "internet":
+			return asset.type === "ont" || asset.type === "router" || asset.type === "gateway"
 		case "network":
 			return asset.type === "internet" || NETWORK_ASSET_TYPES.includes(asset.type)
 		case "wifi":
@@ -191,12 +202,13 @@ export function getPeerInterfaceOptions(
 	interfaces: AssetInterfaceRecord[],
 	assets: AssetRecord[],
 	currentAssetId: string,
-	targetAssetId: string
+	targetAssetId: string,
+	guideId?: RelationGuideId
 ) {
 	const assetMap = new Map(assets.map((item) => [item.id, item]))
-	const peerInterfaces = interfaces.filter((item) =>
-		targetAssetId ? item.asset === targetAssetId : item.asset !== currentAssetId
-	)
+	const peerInterfaces = interfaces
+		.filter((item) => (targetAssetId ? item.asset === targetAssetId : item.asset !== currentAssetId))
+		.filter((item) => guideId !== "internet" || item.kind === "pon" || item.kind === "wan")
 	return [
 		{ value: "", label: "不指定" },
 		...peerInterfaces.map((item) => ({

@@ -193,12 +193,24 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		[relationForm.guide]
 	)
 	const relationTargetOptions = useMemo(
-		() => getRelationTargetOptions(state.assets, asset?.id ?? id, relationForm.guide),
-		[asset?.id, id, relationForm.guide, state.assets]
+		() =>
+			getRelationTargetOptions(
+				state.assets,
+				asset?.id ?? id,
+				asset?.type === "internet" ? "internet" : relationForm.guide
+			),
+		[asset?.id, asset?.type, id, relationForm.guide, state.assets]
 	)
 	const relationPeerInterfaceOptions = useMemo(
-		() => getPeerInterfaceOptions(state.allInterfaces, state.assets, asset?.id ?? id, relationForm.target_asset),
-		[asset?.id, id, relationForm.target_asset, state.allInterfaces, state.assets]
+		() =>
+			getPeerInterfaceOptions(
+				state.allInterfaces,
+				state.assets,
+				asset?.id ?? id,
+				relationForm.target_asset,
+				asset?.type === "internet" ? "internet" : relationForm.guide
+			),
+		[asset?.id, asset?.type, id, relationForm.guide, relationForm.target_asset, state.allInterfaces, state.assets]
 	)
 	const latestEnrichmentSuggestions = useMemo(() => {
 		const latestReport = state.enrichmentReports[0]
@@ -912,7 +924,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			}
 		})
 		setEditingRelation(null)
-		setRelationForm(getEmptyRelationFormForGuide())
+		setRelationForm(getEmptyRelationFormForGuide(asset?.type === "internet" ? "internet" : undefined))
 		setRelationDialogOpen(true)
 	}
 
@@ -1231,7 +1243,9 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 							<div className="grid gap-2 rounded-lg border border-border/70 bg-surface-soft p-3">
 								<div className="text-xs font-medium text-muted-foreground">常用关系场景</div>
 								<div className="grid gap-2 sm:grid-cols-2">
-									{relationGuides.map((guide) => (
+									{relationGuides
+										.filter((guide) => (asset.type === "internet" ? guide.id === "internet" : guide.id !== "internet"))
+										.map((guide) => (
 										<button
 											key={guide.id}
 											type="button"
@@ -1246,7 +1260,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 											<div className="text-sm font-medium">{guide.label}</div>
 											<div className="mt-1 text-xs leading-5">{guide.description}</div>
 										</button>
-									))}
+										))}
 								</div>
 							</div>
 						)}
@@ -1256,13 +1270,21 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 								title="关系端点"
 								description="先确定连接对象，再选择两端接口；拓扑会优先使用这里的端点。"
 							>
-								<SelectField
-									name="kind"
-									label="关系类型"
-									options={relationKindOptions}
-									value={relationForm.kind}
-									onChange={(value) => updateRelationFormValue("kind", value as AssetRelationKind)}
-								/>
+								{asset.type === "internet" ? (
+									<div className="grid gap-2">
+										<Label>关系类型</Label>
+										<div className="flex h-10 items-center rounded-md border border-border/70 bg-surface-soft px-3 text-sm">网络连接</div>
+										<input type="hidden" name="kind" value="connected_to" />
+									</div>
+								) : (
+									<SelectField
+										name="kind"
+										label="关系类型"
+										options={relationKindOptions}
+										value={relationForm.kind}
+										onChange={(value) => updateRelationFormValue("kind", value as AssetRelationKind)}
+									/>
+								)}
 								<SelectField
 									name="target_asset"
 									label="目标资产"
@@ -1271,13 +1293,13 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 									value={relationForm.target_asset}
 									onChange={updateRelationTarget}
 								/>
-								<SelectField
+								{asset.type !== "internet" ? <SelectField
 									name="current_interface"
 									label="本资产接口"
 									options={getAssetInterfaceOptions(state.allInterfaces, asset.id)}
 									value={relationForm.current_interface}
 									onChange={(value) => updateRelationFormValue("current_interface", value)}
-								/>
+								/> : null}
 								<SelectField
 									name="peer_interface"
 									label="对端接口"
@@ -1291,13 +1313,21 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 								title="显示与链路"
 								description="只影响这条关系在拓扑和资产详情里的显示方式。"
 							>
-								<SelectField
-									name="link_kind"
-									label="链路类型"
-									options={relationLinkKindOptions}
-									value={relationForm.link_kind}
-									onChange={(value) => updateRelationFormValue("link_kind", value)}
-								/>
+								{asset.type === "internet" ? (
+									<div className="grid gap-2">
+										<Label>链路类型</Label>
+										<div className="flex h-10 items-center rounded-md border border-border/70 bg-surface-soft px-3 text-sm">外网链路</div>
+										<input type="hidden" name="link_kind" value="internet" />
+									</div>
+								) : (
+									<SelectField
+										name="link_kind"
+										label="链路类型"
+										options={relationLinkKindOptions}
+										value={relationForm.link_kind}
+										onChange={(value) => updateRelationFormValue("link_kind", value)}
+									/>
+								)}
 								<TextField
 									name="label"
 									label="显示名称"

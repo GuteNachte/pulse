@@ -41,9 +41,73 @@ func TestAssetMasterValidation(t *testing.T) {
 	t.Run("RejectsRelationInterfaceEndpointMismatch", func(t *testing.T) {
 		testAssetRelationValidationRejectsInterfaceEndpointMismatch(t, hub)
 	})
+	t.Run("EnforcesInternetRelationBoundary", func(t *testing.T) {
+		testAssetRelationValidationEnforcesInternetBoundary(t, hub)
+	})
 	t.Run("RejectsCrossUserLocationParentAndCycles", func(t *testing.T) {
 		testAssetLocationValidationRejectsCrossUserParentAndCycles(t, hub)
 	})
+}
+
+func testAssetRelationValidationEnforcesInternetBoundary(t *testing.T, hub *pulseTests.TestHub) {
+	user, err := pulseTests.CreateUser(hub, "asset-internet-relation@example.com", "password")
+	require.NoError(t, err)
+	token, err := user.NewAuthToken()
+	require.NoError(t, err)
+	headers := map[string]string{"Authorization": token}
+
+	internet, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user": user.Id, "name": "验收宽带", "type": "internet", "status": "active",
+	})
+	require.NoError(t, err)
+	ont, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user": user.Id, "name": "验收光猫", "type": "ont", "status": "active",
+	})
+	require.NoError(t, err)
+	router, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user": user.Id, "name": "验收路由器", "type": "router", "status": "active",
+	})
+	require.NoError(t, err)
+	switchAsset, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user": user.Id, "name": "验收交换机", "type": "switch", "status": "active",
+	})
+	require.NoError(t, err)
+
+	ontPon, err := pulseTests.CreateRecord(hub, "asset_interfaces", map[string]any{
+		"user": user.Id, "asset": ont.Id, "name": "PON", "kind": "pon", "source": "manual",
+	})
+	require.NoError(t, err)
+	routerWan, err := pulseTests.CreateRecord(hub, "asset_interfaces", map[string]any{
+		"user": user.Id, "asset": router.Id, "name": "WAN", "kind": "wan", "source": "manual",
+	})
+	require.NoError(t, err)
+	switchWan, err := pulseTests.CreateRecord(hub, "asset_interfaces", map[string]any{
+		"user": user.Id, "asset": switchAsset.Id, "name": "WAN", "kind": "wan", "source": "manual",
+	})
+	require.NoError(t, err)
+
+	accepted := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/asset_relations/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","source_asset":"%s","target_asset":"%s","kind":"connected_to","metadata":{"link_kind":"internet","target_interface":"%s"}}`, user.Id, internet.Id, ont.Id, ontPon.Id)), headers)
+	require.Equal(t, http.StatusOK, accepted.Status, accepted.Body)
+
+	rejectedSecond := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/asset_relations/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","source_asset":"%s","target_asset":"%s","kind":"connected_to","metadata":{"link_kind":"internet","target_interface":"%s"}}`, user.Id, internet.Id, router.Id, routerWan.Id)), headers)
+	require.Equal(t, http.StatusBadRequest, rejectedSecond.Status, rejectedSecond.Body)
+	require.Contains(t, rejectedSecond.Body, "只能关联一个当前接入设备")
+
+	otherInternet, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user": user.Id, "name": "验收第二宽带", "type": "internet", "status": "active",
+	})
+	require.NoError(t, err)
+	rejectedTarget := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/asset_relations/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","source_asset":"%s","target_asset":"%s","kind":"connected_to","metadata":{"link_kind":"internet","target_interface":"%s"}}`, user.Id, otherInternet.Id, switchAsset.Id, switchWan.Id)), headers)
+	require.Equal(t, http.StatusBadRequest, rejectedTarget.Status, rejectedTarget.Body)
+	require.Contains(t, rejectedTarget.Body, "光猫、路由器或网关")
+
+	rejectedMissingInterface := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/asset_relations/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","source_asset":"%s","target_asset":"%s","kind":"connected_to","metadata":{"link_kind":"internet"}}`, user.Id, otherInternet.Id, router.Id)), headers)
+	require.Equal(t, http.StatusBadRequest, rejectedMissingInterface.Status, rejectedMissingInterface.Body)
+	require.Contains(t, rejectedMissingInterface.Body, "PON 或 WAN")
 }
 
 func testAssetMasterValidationRejectsCrossUserAssetReferences(t *testing.T, hub *pulseTests.TestHub) {
