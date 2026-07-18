@@ -45,6 +45,7 @@ import { buildAssetLocationOptions } from "../asset-list"
 import { isAssetLocationNotApplicable } from "../asset-location"
 import { getEditableAssetTypeOptions } from "../asset-profiles"
 import { getAssetTypeCapabilities, internetAssetTypeSpec } from "../asset-type-specs"
+import { getInternetAddressDisplayState } from "../asset-internet-address-status"
 import {
 	HOST_ASSET_TYPES,
 	getAssetFormSections,
@@ -84,6 +85,7 @@ type AssetEditWorkbenchProps = {
 	onSaveProfile: (event: FormEvent<HTMLFormElement>) => void
 	onRunSmartRecognition: () => void
 	onRefreshInternetAddresses: () => void
+	onConfirmInternetAddress: (protocol: "ipv4" | "ipv6") => void
 	onAddInterface: () => void
 	onEditInterface: (record: AssetInterfaceRecord) => void
 	onDeleteInterface: (record: AssetInterfaceRecord) => void
@@ -104,6 +106,7 @@ export function AssetEditWorkbench({
 	onSaveProfile,
 	onRunSmartRecognition,
 	onRefreshInternetAddresses,
+	onConfirmInternetAddress,
 	onAddInterface,
 	onEditInterface,
 	onDeleteInterface,
@@ -390,6 +393,13 @@ export function AssetEditWorkbench({
 										</Button>
 									)}
 								</div>
+								{section.title === "动态公网地址" ? (
+									<InternetAddressStatusPanel
+										metadata={metadata}
+										readOnly={readOnly || saving}
+										onConfirm={onConfirmInternetAddress}
+									/>
+								) : null}
 								<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
 									{section.fields.map((field) => (
 										<AssetProfileEditField
@@ -434,6 +444,40 @@ export function AssetEditWorkbench({
 				</div>
 			</form>
 		</DialogContent>
+	)
+}
+
+function InternetAddressStatusPanel({
+	metadata,
+	readOnly,
+	onConfirm,
+}: {
+	metadata: Record<string, unknown>
+	readOnly: boolean
+	onConfirm: (protocol: "ipv4" | "ipv6") => void
+}) {
+	const states = (["ipv4", "ipv6"] as const).map((protocol) => ({
+		protocol,
+		state: getInternetAddressDisplayState(metadata, protocol),
+	}))
+	return (
+		<div className="mb-2 grid gap-2 sm:grid-cols-2">
+			{states.map(({ protocol, state }) => (
+				<div key={protocol} className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border/70 bg-surface-soft px-3 py-2">
+					<div className="min-w-0">
+						<div className="text-xs font-medium text-foreground">{protocol.toUpperCase()} · {state.sourceLabel}</div>
+						<div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+							{state.candidate ? `新地址 ${state.candidate}` : state.address || "尚未获取"}
+						</div>
+					</div>
+					{state.address && (state.sourceLabel !== "手动确认" || state.needsConfirmation) ? (
+						<Button type="button" variant="outline" size="sm" className="h-7 shrink-0 px-2 text-xs" disabled={readOnly} onClick={() => onConfirm(protocol)}>
+							{state.needsConfirmation ? "确认新地址" : "标记为已确认"}
+						</Button>
+					) : null}
+				</div>
+			))}
+		</div>
 	)
 }
 

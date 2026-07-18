@@ -1,9 +1,28 @@
 import assert from "node:assert/strict"
-import { getInternetAddressRefreshFeedback } from "./asset-internet-address-status.ts"
+import { getInternetAddressDisplayState, getInternetAddressRefreshFeedback } from "./asset-internet-address-status.ts"
 
 assert.deepEqual(
 	getInternetAddressRefreshFeedback({ ipv4: "203.0.113.10", ipv6: "2001:db8::10" }),
 	{ title: "公网地址已刷新" }
+)
+
+assert.deepEqual(
+	getInternetAddressDisplayState(
+		{
+			public_ipv4: "198.51.100.8",
+			public_ipv4_source: "manual",
+			public_ipv4_candidate: "203.0.113.10",
+			public_ip_checked_at: "2026-07-19T00:00:00Z",
+		},
+		"ipv4"
+	),
+	{
+		address: "198.51.100.8",
+		sourceLabel: "手动确认",
+		candidate: "203.0.113.10",
+		checkedAt: "2026-07-19T00:00:00Z",
+		needsConfirmation: true,
+	}
 )
 
 assert.deepEqual(

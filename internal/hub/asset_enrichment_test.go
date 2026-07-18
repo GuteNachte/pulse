@@ -2565,6 +2565,54 @@ func TestInternetAccessRefreshWritesDetectedPublicAddresses(t *testing.T) {
 	require.Equal(t, "203.0.113.10", metadata["public_ipv4"])
 	require.Equal(t, "2001:db8::10", metadata["public_ipv6"])
 	require.NotEmpty(t, metadata["public_ip_checked_at"])
+	require.Equal(t, "dynamic", metadata["public_ipv4_source"])
+}
+
+func TestInternetAccessRefreshKeepsManualAddressUntilConfirmation(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "internet-address-confirm@example.com")
+	fixture.asset.Set("type", "internet")
+	fixture.asset.Set("metadata", map[string]any{
+		"down_mbps": 1000, "up_mbps": 300,
+		"public_ipv4": "198.51.100.8", "public_ipv4_source": "manual",
+	})
+	require.NoError(t, fixture.hub.Save(fixture.asset))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/ipv4" {
+			_, _ = w.Write([]byte("203.0.113.10"))
+			return
+		}
+		if r.URL.Path == "/ipv6" {
+			_, _ = w.Write([]byte("2001:db8::10"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("PULSE_PUBLIC_IPV4_DETECTOR_URL", server.URL+"/ipv4")
+	t.Setenv("PULSE_PUBLIC_IPV6_DETECTOR_URL", server.URL+"/ipv6")
+
+	refresh := pulseTests.PerformTestAPIRequest(t, fixture.hub.TestApp, http.MethodPost,
+		"/api/pulse/assets/"+fixture.asset.Id+"/internet-addresses/refresh", nil, fixture.headers)
+	require.Equal(t, http.StatusOK, refresh.Status, refresh.Body)
+
+	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata := recordMetadata(t, asset)
+	require.Equal(t, "198.51.100.8", metadata["public_ipv4"])
+	require.Equal(t, "203.0.113.10", metadata["public_ipv4_candidate"])
+
+	confirm := pulseTests.PerformTestAPIRequest(t, fixture.hub.TestApp, http.MethodPost,
+		"/api/pulse/assets/"+fixture.asset.Id+"/internet-addresses/confirm",
+		strings.NewReader(`{"protocol":"ipv4"}`), fixture.headers)
+	require.Equal(t, http.StatusOK, confirm.Status, confirm.Body)
+
+	asset, err = fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata = recordMetadata(t, asset)
+	require.Equal(t, "203.0.113.10", metadata["public_ipv4"])
+	require.Equal(t, "manual", metadata["public_ipv4_source"])
+	require.NotContains(t, metadata, "public_ipv4_candidate")
 }
 
 func TestAssetEnrichmentAcceptRejectsMetadataFieldWithoutPrefix(t *testing.T) {

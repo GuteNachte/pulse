@@ -99,6 +99,7 @@ func (h *Hub) StartHub() error {
 		if err := h.registerCronJobs(e); err != nil {
 			return err
 		}
+		go h.refreshActiveInternetAddresses()
 		// start server
 		if err := h.startServer(e); err != nil {
 			return err
@@ -143,6 +144,8 @@ func (h *Hub) registerCronJobs(_ *core.ServeEvent) error {
 	h.Cron().MustAdd("create longer records", "*/10 * * * *", h.rm.CreateLongerRecords)
 	// check due website monitors once per minute
 	h.Cron().MustAdd("check website monitors", "* * * * *", h.checkDueWebsiteMonitors)
+	// refresh active internet resources every 30 minutes
+	h.Cron().MustAdd("refresh internet public addresses", internetAddressRefreshSchedule, h.refreshActiveInternetAddresses)
 	return nil
 }
 

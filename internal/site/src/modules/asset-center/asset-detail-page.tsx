@@ -652,6 +652,24 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		}
 	}
 
+	async function confirmInternetAddress(protocol: "ipv4" | "ipv6") {
+		if (!asset || readOnly || saving) return
+		setSaving(true)
+		try {
+			await pb.send(`/api/pulse/assets/${asset.id}/internet-addresses/confirm`, {
+				method: "POST",
+				body: { protocol },
+			})
+			await loadDetail({ waitSecondary: true, preserveContent: true })
+			toast({ title: `${protocol.toUpperCase()} 已手动确认` })
+		} catch (error) {
+			console.error("confirm internet public address", error)
+			toast({ title: "公网地址确认失败", description: "请稍后重试。", variant: "destructive" })
+		} finally {
+			setSaving(false)
+		}
+	}
+
 	async function runSmartRecognition() {
 		if (!asset || readOnly || saving) return
 		const missing = recognitionRequirements.filter((item) => !item.ok)
@@ -1089,6 +1107,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					onSaveProfile={saveAssetProfile}
 					onRunSmartRecognition={runSmartRecognition}
 					onRefreshInternetAddresses={refreshInternetAddresses}
+					onConfirmInternetAddress={confirmInternetAddress}
 					onAddInterface={openAddInterfaceDialog}
 					onEditInterface={openEditInterfaceDialog}
 					onDeleteInterface={(record) => {
