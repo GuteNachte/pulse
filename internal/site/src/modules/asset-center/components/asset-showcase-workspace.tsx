@@ -1,38 +1,91 @@
 import { useMemo } from "react"
-import type { AssetRecord } from "@/types"
+import type { AssetInterfaceRecord, AssetRecord, AssetRelationRecord } from "@/types"
 import { buildAssetParameterGroups } from "../asset-detail-parameter-groups"
 import { getMetadataString } from "../asset-schema"
+import { getInternetStatusLabel } from "../asset-type-specs"
 import { AssetHardwareSpecsColumn, AssetOverviewColumn, type AssetParameterRow } from "./asset-parameter-columns"
 import { AssetMediaShowcase, type AssetMediaShowcaseItem } from "./asset-media-showcase"
 
 export function AssetShowcaseWorkspace({
 	asset,
 	media,
+	assets = [],
+	interfaces = [],
+	relations = [],
 }: {
 	asset: AssetRecord
 	media?: { covers: AssetMediaShowcaseItem[] }
+	assets?: AssetRecord[]
+	interfaces?: AssetInterfaceRecord[]
+	relations?: AssetRelationRecord[]
 }) {
 	const parameterGroups = useMemo(() => buildAssetParameterGroups(asset), [asset])
-	const identitySections = useMemo(() => buildAssetIdentitySections(asset), [asset])
+	const identitySections = useMemo(
+		() => buildAssetIdentitySections(asset, assets, interfaces, relations),
+		[asset, assets, interfaces, relations]
+	)
 
 	return (
 		<section className="grid items-start gap-5 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.7fr)] 2xl:grid-cols-[minmax(22rem,0.72fr)_minmax(0,1.78fr)]">
 			<aside className="grid content-start gap-5 xl:min-h-0">
 				{media?.covers.length ? <AssetMediaShowcase covers={media.covers} /> : null}
-				<AssetOverviewColumn sections={identitySections} />
+				<AssetOverviewColumn
+					sections={identitySections}
+					title={asset.type === "internet" ? "线路档案" : "设备档案"}
+					subtitle={asset.type === "internet" ? "基础资料" : "主档与接入信息"}
+				/>
 			</aside>
-			<AssetHardwareSpecsColumn groups={parameterGroups} />
+			<AssetHardwareSpecsColumn
+				groups={parameterGroups}
+				title={asset.type === "internet" ? "线路参数" : "硬件档案"}
+				emptyLabel={asset.type === "internet" ? "暂无已确认的线路参数。" : "暂无已确认的硬件参数。"}
+			/>
 		</section>
 	)
 }
 
-function buildAssetIdentitySections(asset: AssetRecord): { title: string; rows: AssetParameterRow[] }[] {
+function buildAssetIdentitySections(
+	asset: AssetRecord,
+	assets: AssetRecord[],
+	interfaces: AssetInterfaceRecord[],
+	relations: AssetRelationRecord[]
+): { title: string; rows: AssetParameterRow[] }[] {
 	const metadata = asset.metadata ?? {}
 	const textRow = (label: string, value: string | undefined): AssetParameterRow | undefined =>
 		value ? { label, value } : undefined
 	const linkRow = (label: string, value: string | undefined): AssetParameterRow | undefined =>
 		value ? { label, value, href: /^https?:\/\//i.test(value) ? value : undefined } : undefined
 	const compact = (rows: (AssetParameterRow | undefined)[]) => rows.filter((row) => row?.value) as AssetParameterRow[]
+	if (asset.type === "internet") {
+		const uplink = relations.find(
+			(relation) =>
+				relation.source_asset === asset.id &&
+				relation.kind === "connected_to" &&
+				getMetadataString(relation.metadata, "link_kind") === "internet"
+		)
+		const expandedTarget = uplink?.expand?.target_asset as AssetRecord | undefined
+		const target = assets.find((item) => item.id === uplink?.target_asset) ?? expandedTarget
+		const targetInterface = interfaces.find(
+			(item) => item.id === getMetadataString(uplink?.metadata, "target_interface")
+		)
+		const relationLabel = target
+			? [target.name, targetInterface?.name].filter(Boolean).join(" · ")
+			: "待关联接入设备"
+		return [
+			{
+				title: "基础资料",
+				rows: compact([
+					textRow("编号", getMetadataString(metadata, "asset_tag")),
+					textRow("运营商", asset.vendor),
+					textRow("状态", getInternetStatusLabel(asset.status || "active")),
+				]),
+			},
+			{
+				title: "接入关系",
+				rows: [{ label: "当前接入", value: relationLabel }],
+			},
+		]
+	}
 	return [
 		{
 			title: "身份",

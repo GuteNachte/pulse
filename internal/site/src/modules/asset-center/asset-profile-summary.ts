@@ -10,6 +10,7 @@ import {
 	getMetadataString,
 	isPhoneVariantSpecRequired,
 } from "./asset-schema.ts"
+import { formatInternetBandwidth, getInternetOptionLabel } from "./asset-type-specs.ts"
 
 export function getInternetBandwidthLabel(asset: AssetRecord) {
 	const down = getMetadataNumber(asset.metadata, "down_mbps")
@@ -17,7 +18,7 @@ export function getInternetBandwidthLabel(asset: AssetRecord) {
 	if (!down && !up) {
 		return ""
 	}
-	return `↓ ${formatBandwidth(down)} / ↑ ${formatBandwidth(up)}`
+	return `下行 ${formatInternetBandwidth(down)} / 上行 ${formatInternetBandwidth(up)}`
 }
 
 export function getAssetLocationLabel(asset: AssetRecord) {
@@ -75,8 +76,9 @@ export function getAssetSummaryRows(asset: AssetRecord): { label: string; value:
 	const metadata = asset.metadata
 	if (asset.type === "internet") {
 		pushRow(rows, "运营商", asset.vendor)
+		pushRow(rows, "线路技术", getInternetOptionLabel("access_technology", getMetadataString(metadata, "access_technology")))
+		pushRow(rows, "认证方式", getInternetOptionLabel("auth_mode", getMetadataString(metadata, "auth_mode")))
 		pushRow(rows, "带宽", getInternetBandwidthLabel(asset), true)
-		pushRow(rows, "接入", getMetadataString(metadata, "access_mode"))
 		pushRow(
 			rows,
 			"公网",
@@ -344,7 +346,3 @@ function formatSpeed(value?: number) {
 	return `${value}M`
 }
 
-function formatBandwidth(value?: number) {
-	if (!value) return "未设"
-	return formatSpeed(value)
-}

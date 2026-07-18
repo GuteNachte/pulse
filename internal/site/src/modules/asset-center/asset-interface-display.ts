@@ -1,6 +1,7 @@
 import type { AssetInterfaceKind, AssetInterfaceRecord, AssetRecord } from "@/types"
 import { getInternetBandwidthLabel } from "./asset-profile-summary.ts"
 import { getMetadataString } from "./asset-schema.ts"
+import { getInternetOptionLabel } from "./asset-type-specs.ts"
 
 export type AssetInterfaceSpeedItem = {
 	id: string
@@ -31,11 +32,18 @@ export function buildAssetInterfaceDisplay(
 	options: { loadFailed?: boolean } = {}
 ): AssetInterfaceDisplay {
 	if (asset.type === "internet" || asset.type === "web_endpoint") {
-		const accessMode = getMetadataString(asset.metadata, "access_mode")
+		const accessTechnology = getMetadataString(asset.metadata, "access_technology")
+		const authMode = getMetadataString(asset.metadata, "auth_mode")
 		const bandwidth = asset.type === "internet" ? getInternetBandwidthLabel(asset) : ""
 		return {
-			accessLabel: accessMode || (asset.type === "internet" ? "互联网接入" : "服务访问"),
-			secondaryLabel: bandwidth || undefined,
+			accessLabel:
+				asset.type === "internet"
+					? getInternetOptionLabel("access_technology", accessTechnology) || "未设置线路技术"
+					: "服务访问",
+			secondaryLabel:
+				asset.type === "internet"
+					? [getInternetOptionLabel("auth_mode", authMode), bandwidth].filter(Boolean).join(" · ") || undefined
+					: undefined,
 			speedMode: "not_applicable",
 			speedItems: [],
 		}

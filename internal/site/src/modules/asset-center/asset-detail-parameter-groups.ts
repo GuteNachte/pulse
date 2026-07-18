@@ -59,6 +59,7 @@ export function buildAssetParameterGroups(asset: AssetRecord): AssetParameterGro
 }
 
 const hiddenArchiveParameterGroupTitles = new Set([
+	"基础资料",
 	"基础身份",
 	"硬件识别",
 	"固定地址",

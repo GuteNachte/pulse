@@ -34,6 +34,7 @@ import {
 } from "@/modules/asset-center/asset-profile-summary"
 import { assetListColumns, assetListDesktopGridClassName } from "@/modules/asset-center/asset-list-layout"
 import { buildAssetInterfaceDisplay, type AssetInterfaceDisplay } from "@/modules/asset-center/asset-interface-display"
+import { getInternetStatusLabel } from "@/modules/asset-center/asset-type-specs"
 import type { AssetInterfaceRecord, AssetRecord, AssetStatus, AssetType } from "@/types"
 
 export type AssetCardProps = {
@@ -343,6 +344,7 @@ function AssetInterfaceSpeedList({ display, className }: { display: AssetInterfa
 
 export function getAssetIpLabel(asset: AssetRecord) {
 	const metadata = asset.metadata
+	if (asset.type === "internet") return getMetadataString(metadata, "public_ipv4") || "未获取"
 	return (
 		getMetadataString(metadata, "fixed_ipv4") ||
 		asset.management_ip ||
@@ -476,7 +478,9 @@ export function AssetCard({
 					{parent && <AssetCardMetaTag>宿主: {parent.name}</AssetCardMetaTag>}
 				</div>
 				<div className="mt-auto flex items-center justify-between border-t border-border/70 pt-2">
-					<span className="text-xs">{getStatusLabel(asset.status || "active")}</span>
+					<span className="text-xs">
+						{asset.type === "internet" ? getInternetStatusLabel(asset.status || "active") : getStatusLabel(asset.status || "active")}
+					</span>
 					<div className="flex items-center gap-3 text-xs font-medium">
 						{onIdentify && !readOnly && (
 							<button

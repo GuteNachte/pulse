@@ -7,6 +7,8 @@ for (const label of ["接口", "关系", "维护", "附件"]) {
 	assert.equal(menu.includes(label), true, `missing direct action ${label}`)
 }
 assert.equal(menu.includes("更多"), true)
+assert.equal(menu.includes("showInterface"), true)
+assert.equal(menu.includes("relationLabel"), true)
 assert.equal(menu.indexOf("删除资产") > menu.indexOf("DropdownMenuContent"), true)
 assert.equal(
 	menu.lastIndexOf("{editAction}") < menu.lastIndexOf("<DropdownMenuTrigger"),
@@ -16,6 +18,8 @@ assert.equal(
 
 const page = readFileSync(new URL("../asset-detail-page.tsx", import.meta.url), "utf8")
 assert.equal(page.includes("editAction={"), true)
+assert.equal(page.includes('showInterface={asset.type !== "internet"}'), true)
+assert.equal(page.includes('relationLabel={asset.type === "internet" ? "接入关系" : "关系"}'), true)
 assert.equal(
 	page.includes('className="flex min-w-0 flex-wrap items-start justify-between gap-3"'),
 	true,

@@ -59,7 +59,7 @@ type PrimaryAssetCollection = {
 }
 
 type FilteredCollection<T> = {
-	getFullList: (options: { filter: string; sort: string; requestKey: null }) => Promise<T[]>
+	getFullList: (options: { filter: string; sort: string; requestKey: null; expand?: string }) => Promise<T[]>
 }
 
 type PagedCollection<T> = {
@@ -125,6 +125,7 @@ export async function loadAssetDetailPrimaryData(
 		collections.relations.getFullList({
 			filter: `source_asset="${escapePocketBaseFilterValue(assetId)}" || target_asset="${escapePocketBaseFilterValue(assetId)}"`,
 			sort: "kind,created",
+			expand: "source_asset,target_asset",
 			requestKey: null,
 		}),
 	])

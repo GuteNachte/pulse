@@ -198,3 +198,48 @@ assertDeepEqual(
 	[...nasDetailFieldLabels].sort(),
 	[...nasEditFieldLabels].filter((label) => ["硬盘位数量", "阵列 / RAID", "文件系统"].includes(label)).sort()
 )
+
+const internet = {
+	id: "internet-1",
+	type: "internet",
+	name: "宽带",
+	vendor: "中国联通",
+	status: "active",
+	metadata: {
+		access_technology: "ftth",
+		auth_mode: "pppoe",
+		down_mbps: 1000,
+		up_mbps: 300,
+		public_ipv4: "203.0.113.10",
+		package_name: "联通千兆融合套餐",
+		recurring_price_cny: 165,
+		billing_cycle: "monthly",
+	},
+} as unknown as AssetRecord
+
+assertDeepEqual(
+	buildAssetParameterGroups(internet).map((group) => ({
+		title: group.title,
+		rows: group.rows.map((row) => [row.label, row.value]),
+	})),
+	[
+		{
+			title: "线路参数",
+			rows: [
+				["线路接入技术", "家庭光纤宽带（FTTH）"],
+				["联网认证方式", "PPPoE 拨号"],
+				["下行带宽", "1000 Mbps"],
+				["上行带宽", "300 Mbps"],
+			],
+		},
+		{ title: "动态公网地址", rows: [["公网 IPv4", "203.0.113.10"]] },
+		{
+			title: "套餐与续费",
+			rows: [
+				["套餐名称", "联通千兆融合套餐"],
+				["套餐费用（元）", "165"],
+				["计费周期", "月付"],
+			],
+		},
+	]
+)

@@ -35,7 +35,7 @@ import {
 	getStatusLabel,
 	isPhoneVariantSpecRequired,
 } from "./asset-schema"
-import { normalizeInternetProvider, validateInternetAssetValues } from "./asset-type-specs"
+import { getInternetStatusLabel, normalizeInternetProvider, validateInternetAssetValues } from "./asset-type-specs"
 import { formatAssetVisualTaskMeta as formatAssetVisualTaskSummary } from "./asset-ai-task-summary"
 import { loadLatestAITasksByKind } from "./asset-ai-task-query"
 import { createAssetDetailLoadGuard, type AssetDetailLoadToken } from "./asset-detail-load-guard"
@@ -1016,7 +1016,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 							<Badge variant="secondary" className="h-6 rounded-md px-2 text-[11px]">
 								{getAssetTypeLabel(asset.type)}
 							</Badge>
-							<StatusBadge status={asset.status || "active"} />
+							<StatusBadge status={asset.status || "active"} internet={asset.type === "internet"} />
 						</div>
 					</div>
 					<div className="ms-auto min-w-0 shrink-0">
@@ -1044,7 +1044,9 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 							onOpenRelation={openAddRelationDialog}
 							onOpenMaintenance={openAddMaintenanceDialog}
 							onOpenAttachment={openAddAttachmentDialog}
-							onDelete={deleteAsset}
+								onDelete={deleteAsset}
+								showInterface={asset.type !== "internet"}
+								relationLabel={asset.type === "internet" ? "接入关系" : "关系"}
 						/>
 					</div>
 				</div>
@@ -1053,7 +1055,13 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				</div>
 			</section>
 
-			<AssetShowcaseWorkspace asset={asset} media={assetMedia} />
+			<AssetShowcaseWorkspace
+				asset={asset}
+				media={assetMedia}
+				assets={state.assets}
+				interfaces={state.allInterfaces}
+				relations={state.relations}
+			/>
 
 			<Dialog open={managementDialogOpen} onOpenChange={setManagementDialogOpen}>
 				<AssetEditWorkbench
@@ -1441,7 +1449,13 @@ function DialogFormSection({
 	)
 }
 
-function StatusBadge({ status }: { status: "active" | "inactive" | "retired" | "planned" }) {
+function StatusBadge({
+	status,
+	internet = false,
+}: {
+	status: "active" | "inactive" | "retired" | "planned"
+	internet?: boolean
+}) {
 	return (
 		<span
 			className={cn(
@@ -1453,7 +1467,7 @@ function StatusBadge({ status }: { status: "active" | "inactive" | "retired" | "
 						: "border-border/70 bg-card text-muted-foreground"
 			)}
 		>
-			{getStatusLabel(status)}
+			{internet ? getInternetStatusLabel(status) : getStatusLabel(status)}
 		</span>
 	)
 }

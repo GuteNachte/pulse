@@ -25,13 +25,21 @@ export type AssetIdentitySection = {
 	rows: AssetParameterRow[]
 }
 
-export function AssetOverviewColumn({ sections }: { sections: AssetIdentitySection[] }) {
+export function AssetOverviewColumn({
+	sections,
+	title = "设备档案",
+	subtitle = "主档与接入信息",
+}: {
+	sections: AssetIdentitySection[]
+	title?: string
+	subtitle?: string
+}) {
 	return (
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 px-4 py-3">
 				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="truncate text-base">设备档案</CardTitle>
-					<span className="text-[11px] text-muted-foreground">主档与接入信息</span>
+					<CardTitle className="truncate text-base">{title}</CardTitle>
+					<span className="text-[11px] text-muted-foreground">{subtitle}</span>
 				</div>
 			</CardHeader>
 			<CardContent className="grid gap-4 p-4">
@@ -50,13 +58,21 @@ export function AssetOverviewColumn({ sections }: { sections: AssetIdentitySecti
 	)
 }
 
-export function AssetHardwareSpecsColumn({ groups }: { groups: AssetParameterGroup[] }) {
+export function AssetHardwareSpecsColumn({
+	groups,
+	title = "硬件档案",
+	emptyLabel = "暂无已确认的硬件参数。",
+}: {
+	groups: AssetParameterGroup[]
+	title?: string
+	emptyLabel?: string
+}) {
 	return (
 		<Card className="border-border/70 bg-card shadow-none xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[auto_minmax(0,1fr)]">
 			<CardHeader className="border-b border-border/70 px-4 py-3">
 				<div className="flex min-w-0 items-center justify-between gap-3">
 					<div className="min-w-0">
-						<CardTitle className="truncate text-base">硬件档案</CardTitle>
+						<CardTitle className="truncate text-base">{title}</CardTitle>
 						<div className="mt-0.5 text-[11px] text-muted-foreground">按设备类别整理的已确认规格</div>
 					</div>
 					{groups.length > 0 ? <CountTag>{groups.length} 类</CountTag> : null}
@@ -68,7 +84,7 @@ export function AssetHardwareSpecsColumn({ groups }: { groups: AssetParameterGro
 				) : (
 					<div className="grid min-h-28 place-items-center gap-2 rounded-md border border-dashed border-border/70 bg-surface-soft px-4 py-5 text-center sm:col-span-2">
 						<ListChecksIcon className="size-5 text-muted-foreground" />
-						<p className="text-sm text-muted-foreground">暂无已确认的硬件参数。</p>
+						<p className="text-sm text-muted-foreground">{emptyLabel}</p>
 					</div>
 				)}
 			</CardContent>

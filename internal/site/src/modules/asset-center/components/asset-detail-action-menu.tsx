@@ -13,6 +13,8 @@ export function AssetDetailActionMenu({
 	onOpenMaintenance,
 	onOpenAttachment,
 	onDelete,
+	showInterface = true,
+	relationLabel = "关系",
 }: {
 	readOnly: boolean
 	editAction: ReactNode
@@ -21,14 +23,16 @@ export function AssetDetailActionMenu({
 	onOpenMaintenance: () => void
 	onOpenAttachment: () => void
 	onDelete: () => void
+	showInterface?: boolean
+	relationLabel?: string
 }) {
 	return (
 		<div className="flex flex-wrap items-center justify-end gap-2">
-			{assetActionScope.detail.includes("interface") ? (
+			{showInterface && assetActionScope.detail.includes("interface") ? (
 				<DirectAction label="接口" onClick={onOpenInterface} disabled={readOnly} icon={<CableIcon />} />
 			) : null}
 			{assetActionScope.detail.includes("relation") ? (
-				<DirectAction label="关系" onClick={onOpenRelation} disabled={readOnly} icon={<GitBranchIcon />} />
+				<DirectAction label={relationLabel} onClick={onOpenRelation} disabled={readOnly} icon={<GitBranchIcon />} />
 			) : null}
 			{assetActionScope.detail.includes("maintenance") ? (
 				<DirectAction label="维护" onClick={onOpenMaintenance} disabled={readOnly} icon={<WrenchIcon />} />

@@ -53,6 +53,17 @@ assert.deepEqual(display.speedItems, [
 assert.equal(buildAssetInterfaceDisplay(asset("mini_pc"), []).accessLabel, "未设置")
 assert.equal(buildAssetInterfaceDisplay(asset("mini_pc"), [], { loadFailed: true }).accessLabel, "接口读取失败")
 assert.equal(buildAssetInterfaceDisplay(asset("web_endpoint"), []).speedMode, "not_applicable")
-assert.equal(buildAssetInterfaceDisplay(asset("internet", { access_mode: "动态公网 IP" }), []).accessLabel, "动态公网 IP")
+assert.deepEqual(
+	buildAssetInterfaceDisplay(
+		asset("internet", { access_technology: "ftth", auth_mode: "pppoe", down_mbps: 1000, up_mbps: 300 }),
+		[]
+	),
+	{
+		accessLabel: "家庭光纤宽带（FTTH）",
+		secondaryLabel: "PPPoE 拨号 · 下行 1 Gbps / 上行 300 Mbps",
+		speedMode: "not_applicable",
+		speedItems: [],
+	}
+)
 
 console.log("asset interface display contract passed")
