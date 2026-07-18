@@ -48,6 +48,7 @@ export type AssetCardProps = {
 	identifying?: boolean
 	onEdit: () => void
 	onDelete: () => void
+	hasInternetUplink?: boolean
 }
 
 export type AssetListItemProps = {
@@ -59,6 +60,7 @@ export type AssetListItemProps = {
 	maintenanceCount: number
 	active: boolean
 	onActivate: () => void
+	hasInternetUplink?: boolean
 }
 
 export function AssetListHeader() {
@@ -85,9 +87,10 @@ export function AssetListItem({
 	maintenanceCount,
 	active,
 	onActivate,
+	hasInternetUplink,
 }: AssetListItemProps) {
 	const Icon = getAssetIcon(asset.type)
-	const completeness = getAssetCompleteness(asset)
+	const completeness = getAssetCompleteness(asset, { hasInternetUplink })
 	const identity = getAssetIdentityLabel(asset)
 	const location = getAssetLocationLabel(asset)
 	const ip = getAssetIpLabel(asset)
@@ -167,9 +170,10 @@ export type AssetPreviewPanelProps = {
 	monitored: boolean
 	maintenanceCount: number
 	readOnly: boolean
+	hasInternetUplink?: boolean
 }
 
-export function AssetPreviewPanel({ asset, parent, monitored, maintenanceCount, readOnly }: AssetPreviewPanelProps) {
+export function AssetPreviewPanel({ asset, parent, monitored, maintenanceCount, readOnly, hasInternetUplink }: AssetPreviewPanelProps) {
 	if (!asset) {
 		return (
 			<div className="grid min-h-[24rem] place-items-center rounded-lg border border-dashed border-border/70 bg-card p-6 text-center">
@@ -186,7 +190,7 @@ export function AssetPreviewPanel({ asset, parent, monitored, maintenanceCount, 
 	const summaryRows = getAssetSummaryRows(asset)
 		.filter((row) => !hiddenPreviewSummaryLabels.has(row.label))
 		.slice(0, 3)
-	const completeness = getAssetCompleteness(asset)
+	const completeness = getAssetCompleteness(asset, { hasInternetUplink })
 	const assetTag = getMetadataString(asset.metadata, "asset_tag")
 	const mac = getMetadataString(asset.metadata, "mac")
 	const color = getMetadataString(asset.metadata, "color") || getMetadataString(asset.metadata, "device_color")
@@ -365,11 +369,12 @@ export function AssetCard({
 	identifying,
 	onEdit,
 	onDelete,
+	hasInternetUplink,
 }: AssetCardProps) {
 	const Icon = getAssetIcon(asset.type)
 	const summaryRows = getAssetSummaryRows(asset).slice(0, 4)
 	const detailHref = getPagePath($router, "asset", { id: asset.id })
-	const completeness = getAssetCompleteness(asset)
+	const completeness = getAssetCompleteness(asset, { hasInternetUplink })
 	const visibleTags = [
 		...(monitored ? [{ key: "monitor", label: "已监控", tone: "ok" as AssetLifecycleTone }] : []),
 		{ key: "profile", label: completeness.label, tone: completeness.tone },

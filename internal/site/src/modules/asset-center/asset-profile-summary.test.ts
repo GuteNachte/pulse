@@ -1,6 +1,7 @@
 import type { AssetRecord } from "../../types"
 import {
 	buildAssetSearchText,
+	buildInternetUplinkAssetIds,
 	getAssetCompleteness,
 	getAssetLocationLabel,
 	getAssetSummaryRows,
@@ -42,17 +43,26 @@ const internet = {
 	id: "asset-internet",
 	type: "internet",
 	name: "宽带",
-	vendor: "联通",
+	vendor: "中国联通",
+	status: "active",
 	location: "",
 	role: "互联网接入",
 	metadata: {
 		down_mbps: 1000,
 		up_mbps: 300,
+		access_technology: "ftth",
+		auth_mode: "pppoe",
 		public_ipv4: "203.0.113.10",
 	},
 } as unknown as AssetRecord
 
-assertEqual(getAssetCompleteness(internet), {
+assertEqual(getAssetCompleteness(internet, { hasInternetUplink: false }), {
+	score: 88,
+	label: "资料可用",
+	tone: "neutral",
+	missing: ["接入设备"],
+})
+assertEqual(getAssetCompleteness(internet, { hasInternetUplink: true }), {
 	score: 100,
 	label: "资料完整",
 	tone: "ok",
@@ -60,3 +70,10 @@ assertEqual(getAssetCompleteness(internet), {
 })
 assertEqual(getAssetLocationLabel(internet), "无")
 assertEqual(getAssetLocationLabel(phone), "家 / 卧室")
+assertEqual(
+	[...buildInternetUplinkAssetIds([
+		{ source_asset: "asset-internet", target_asset: "router-1", kind: "connected_to", metadata: { link_kind: "internet" } },
+		{ source_asset: "other", target_asset: "router-1", kind: "connected_to", metadata: { link_kind: "ethernet" } },
+	] as never[])],
+	["asset-internet"]
+)

@@ -97,6 +97,7 @@ export function filterAssets(options: {
 	monitorFilter: AssetMonitorFilter
 	profileFilter: AssetProfileFilter
 	monitoredAssetIds: Set<string>
+	internetUplinkAssetIds?: Set<string>
 }) {
 	const keyword = options.search.trim().toLowerCase()
 	return options.assets.filter((asset) => {
@@ -128,7 +129,7 @@ export function filterAssets(options: {
 		if (options.monitorFilter === "monitorable" && (!monitorable || monitored)) {
 			return false
 		}
-		if (!matchesProfileFilter(asset, options.profileFilter)) {
+		if (!matchesProfileFilter(asset, options.profileFilter, options.internetUplinkAssetIds)) {
 			return false
 		}
 		if (!keyword) {
@@ -143,6 +144,7 @@ export function getAssetListCounts(options: {
 	locationCount: number
 	looseLocationCount: number
 	monitoredAssetIds: Set<string>
+	internetUplinkAssetIds?: Set<string>
 }): AssetListCounts {
 	const total = options.assets.length
 	const monitored = options.assets.filter((asset) => options.monitoredAssetIds.has(asset.id)).length
@@ -153,8 +155,12 @@ export function getAssetListCounts(options: {
 		manual,
 		locations: options.locationCount,
 		looseLocations: options.looseLocationCount,
-		attention: options.assets.filter(needsAssetProfileAttention).length,
-		profileAttention: options.assets.filter(needsAssetProfileAttention).length,
+		attention: options.assets.filter((asset) =>
+			needsAssetProfileAttention(asset, { hasInternetUplink: options.internetUplinkAssetIds?.has(asset.id) })
+		).length,
+		profileAttention: options.assets.filter((asset) =>
+			needsAssetProfileAttention(asset, { hasInternetUplink: options.internetUplinkAssetIds?.has(asset.id) })
+		).length,
 	}
 }
 
@@ -188,16 +194,17 @@ export function isWebsiteMonitorableAsset(asset: AssetRecord) {
 	return asset.type === "web_endpoint"
 }
 
-function matchesProfileFilter(asset: AssetRecord, filter: AssetProfileFilter) {
+function matchesProfileFilter(asset: AssetRecord, filter: AssetProfileFilter, internetUplinkAssetIds?: Set<string>) {
 	if (filter === "all") return true
-	const completeness = getAssetCompleteness(asset)
+	const context = { hasInternetUplink: internetUplinkAssetIds?.has(asset.id) }
+	const completeness = getAssetCompleteness(asset, context)
 	switch (filter) {
 		case "complete":
 			return completeness.score >= 90
 		case "usable":
 			return completeness.score >= 70 && completeness.score < 90
 		case "attention":
-			return needsAssetProfileAttention(asset)
+			return needsAssetProfileAttention(asset, context)
 		case "incomplete":
 			return completeness.score >= 45 && completeness.score < 70
 		case "critical":

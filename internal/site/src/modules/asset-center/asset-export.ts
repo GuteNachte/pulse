@@ -1,5 +1,5 @@
 import { getAssetTypeLabel, getStatusLabel } from "@/modules/asset-center/asset-schema"
-import { getAssetCompleteness } from "@/modules/asset-center/asset-profile-summary"
+import { buildInternetUplinkAssetIds, getAssetCompleteness } from "@/modules/asset-center/asset-profile-summary"
 import type {
 	AssetAttachmentRecord,
 	AssetInterfaceRecord,
@@ -19,9 +19,15 @@ export type AssetCenterSnapshotInput = {
 	assetAttachments: AssetAttachmentRecord[]
 }
 
-export function buildAssetExportCsv(assets: AssetRecord[], monitoredAssetIds: ReadonlySet<string>) {
+
+export function buildAssetExportCsv(
+	assets: AssetRecord[],
+	monitoredAssetIds: ReadonlySet<string>,
+	assetRelations: AssetRelationRecord[] = []
+) {
+	const internetUplinkAssetIds = buildInternetUplinkAssetIds(assetRelations)
 	const rows = assets.map((asset) => {
-		const completeness = getAssetCompleteness(asset)
+		const completeness = getAssetCompleteness(asset, { hasInternetUplink: internetUplinkAssetIds.has(asset.id) })
 		return {
 			id: asset.id,
 			name: asset.name,

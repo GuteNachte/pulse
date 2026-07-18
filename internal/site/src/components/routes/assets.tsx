@@ -103,7 +103,7 @@ import {
 	type AssetFieldSection,
 } from "@/modules/asset-center/asset-schema"
 import { normalizeInternetProvider, validateInternetAssetValues } from "@/modules/asset-center/asset-type-specs"
-import { getAssetCompleteness } from "@/modules/asset-center/asset-profile-summary"
+import { buildInternetUplinkAssetIds, getAssetCompleteness } from "@/modules/asset-center/asset-profile-summary"
 import { buildAssetInterfaceDisplay, groupAssetInterfacesByAsset } from "@/modules/asset-center/asset-interface-display"
 import { syncPrimaryInterface } from "@/modules/asset-center/asset-interface-sync"
 import type {
@@ -129,6 +129,7 @@ const assetStatusValues = STATUS_OPTIONS.map((option) => option.value)
 export default memo(function AssetsPage() {
 	const [assets, setAssets] = useState<AssetRecord[]>([])
 	const [interfaces, setInterfaces] = useState<AssetInterfaceRecord[]>([])
+	const [relations, setRelations] = useState<AssetRelationRecord[]>([])
 	const [interfaceLoadFailed, setInterfaceLoadFailed] = useState(false)
 	const [locations, setLocations] = useState<AssetLocationRecord[]>([])
 	const [maintenance, setMaintenance] = useState<AssetMaintenanceRecord[]>([])
@@ -195,13 +196,17 @@ export default memo(function AssetsPage() {
 					console.warn("load asset interfaces", error)
 					return { records: [] as AssetInterfaceRecord[], failed: true }
 				})
-			const [records, interfaceResult, locationRecords, maintenanceRecords, systemRecords, websiteRecords] =
+			const [records, interfaceResult, relationRecords, locationRecords, maintenanceRecords, systemRecords, websiteRecords] =
 				await Promise.all([
 					pb.collection<AssetRecord>("assets").getFullList({
 						sort: "type,name",
 						requestKey: null,
 					}),
 					interfaceRequest,
+					pb.collection<AssetRelationRecord>("asset_relations").getFullList({
+						fields: "id,source_asset,target_asset,kind,metadata",
+						requestKey: null,
+					}),
 					pb.collection<AssetLocationRecord>("asset_locations").getFullList({
 						sort: "sort_order,kind,name",
 						requestKey: null,
@@ -222,6 +227,7 @@ export default memo(function AssetsPage() {
 			if (!loadGuardRef.current.isCurrent(loadToken)) return
 			setAssets(records)
 			setInterfaces(interfaceResult.records)
+			setRelations(relationRecords)
 			setInterfaceLoadFailed(interfaceResult.failed)
 			setLocations(locationRecords)
 			setMaintenance(maintenanceRecords)
@@ -255,6 +261,7 @@ export default memo(function AssetsPage() {
 	const looseLocationGroups = useMemo(() => getLooseLocationGroups(assets, locations), [assets, locations])
 	const maintenanceByAsset = useMemo(() => groupMaintenanceByAsset(maintenance), [maintenance])
 	const interfacesByAsset = useMemo(() => groupAssetInterfacesByAsset(interfaces), [interfaces])
+	const internetUplinkAssetIds = useMemo(() => buildInternetUplinkAssetIds(relations), [relations])
 
 	const filteredAssets = useMemo(() => {
 		return filterAssets({
@@ -266,8 +273,9 @@ export default memo(function AssetsPage() {
 			monitorFilter,
 			profileFilter,
 			monitoredAssetIds,
+			internetUplinkAssetIds,
 		})
-	}, [assets, locationFilter, monitorFilter, monitoredAssetIds, profileFilter, search, statusFilter, typeFilter])
+	}, [assets, internetUplinkAssetIds, locationFilter, monitorFilter, monitoredAssetIds, profileFilter, search, statusFilter, typeFilter])
 
 	const counts = useMemo(() => {
 		return getAssetListCounts({
@@ -275,8 +283,9 @@ export default memo(function AssetsPage() {
 			locationCount: locationOptions.values.length,
 			looseLocationCount: looseLocationGroups.length,
 			monitoredAssetIds,
+			internetUplinkAssetIds,
 		})
-	}, [assets, locationOptions.values.length, looseLocationGroups.length, monitoredAssetIds])
+	}, [assets, internetUplinkAssetIds, locationOptions.values.length, looseLocationGroups.length, monitoredAssetIds])
 	const activeAsset = useMemo(() => {
 		return filteredAssets.find((asset) => asset.id === activeAssetId) ?? filteredAssets[0]
 	}, [activeAssetId, filteredAssets])
@@ -294,7 +303,9 @@ export default memo(function AssetsPage() {
 			})
 			if (!["未设置", "未接入", "接口读取失败"].includes(network.accessLabel)) withNetwork += 1
 			if (monitoredAssetIds.has(asset.id)) monitored += 1
-			if (getAssetCompleteness(asset).score < 70) profileAttention += 1
+			if (getAssetCompleteness(asset, { hasInternetUplink: internetUplinkAssetIds.has(asset.id) }).score < 70) {
+				profileAttention += 1
+			}
 		}
 		return {
 			locations: locationSet.size,
@@ -303,7 +314,7 @@ export default memo(function AssetsPage() {
 			monitored,
 			profileAttention,
 		}
-	}, [filteredAssets, interfaceLoadFailed, interfacesByAsset, monitoredAssetIds])
+	}, [filteredAssets, interfaceLoadFailed, interfacesByAsset, internetUplinkAssetIds, monitoredAssetIds])
 	const activeAssetParent = activeAsset?.parent_asset ? assetsById.get(activeAsset.parent_asset) : undefined
 	const numberingSettings = useMemo(() => normalizeAssetNumberingSettings(numberingForm), [numberingForm])
 	const nextAssetTagPreview = useMemo(() => buildNextAssetTag(assets, numberingSettings), [assets, numberingSettings])
@@ -328,7 +339,10 @@ export default memo(function AssetsPage() {
 		profileFilter,
 	})
 	const formSections = useMemo(() => getAssetFormSections(form.type), [form.type])
-	const editingCompleteness = useMemo(() => (editing ? getAssetCompleteness(editing) : undefined), [editing])
+	const editingCompleteness = useMemo(
+		() => (editing ? getAssetCompleteness(editing, { hasInternetUplink: internetUplinkAssetIds.has(editing.id) }) : undefined),
+		[editing, internetUplinkAssetIds]
+	)
 	const focusedFormSections = useMemo(() => {
 		return getFocusedAssetFormSections({
 			formSections,
@@ -408,7 +422,7 @@ export default memo(function AssetsPage() {
 		}
 		downloadTextFile(
 			`pulse-assets-${formatAssetExportTimestamp(new Date())}.csv`,
-			buildAssetExportCsv(filteredAssets, monitoredAssetIds),
+			buildAssetExportCsv(filteredAssets, monitoredAssetIds, relations),
 			"text/csv;charset=utf-8"
 		)
 		setExportDialogOpen(false)
@@ -934,6 +948,7 @@ export default memo(function AssetsPage() {
 											maintenanceCount={maintenanceByAsset.get(asset.id)?.length ?? 0}
 											active={activeAsset?.id === asset.id}
 											onActivate={() => setActiveAssetId(asset.id)}
+											hasInternetUplink={internetUplinkAssetIds.has(asset.id)}
 										/>
 									))}
 								</div>
@@ -944,6 +959,7 @@ export default memo(function AssetsPage() {
 								monitored={activeAsset ? monitoredAssetIds.has(activeAsset.id) : false}
 								maintenanceCount={activeAsset ? (maintenanceByAsset.get(activeAsset.id)?.length ?? 0) : 0}
 								readOnly={readOnly}
+								hasInternetUplink={activeAsset ? internetUplinkAssetIds.has(activeAsset.id) : false}
 							/>
 						</div>
 					)}

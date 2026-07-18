@@ -1,4 +1,4 @@
-import type { AssetMaintenanceRecord, AssetRecord } from "@/types"
+import type { AssetMaintenanceRecord, AssetRecord, AssetRelationRecord } from "@/types"
 import { isAssetLocationNotApplicable } from "./asset-location.ts"
 import {
 	HOST_ASSET_TYPES,
@@ -34,8 +34,12 @@ export type AssetCompletenessStatus = {
 	missing: string[]
 }
 
-export function getAssetCompleteness(asset: AssetRecord): AssetCompletenessStatus {
-	const checks = getAssetCompletenessChecks(asset)
+export type AssetCompletenessContext = {
+	hasInternetUplink?: boolean
+}
+
+export function getAssetCompleteness(asset: AssetRecord, context: AssetCompletenessContext = {}): AssetCompletenessStatus {
+	const checks = getAssetCompletenessChecks(asset, context)
 	const missing = checks.filter((check) => !check.ok).map((check) => check.label)
 	const score = checks.length > 0 ? Math.round(((checks.length - missing.length) / checks.length) * 100) : 100
 	if (score >= 90) return { score, label: "资料完整", tone: "ok", missing }
@@ -44,8 +48,18 @@ export function getAssetCompleteness(asset: AssetRecord): AssetCompletenessStatu
 	return { score, label: "资料缺口大", tone: "danger", missing }
 }
 
-export function needsAssetProfileAttention(asset: AssetRecord) {
-	return getAssetCompleteness(asset).score < 70
+export function needsAssetProfileAttention(asset: AssetRecord, context: AssetCompletenessContext = {}) {
+	return getAssetCompleteness(asset, context).score < 70
+}
+
+export function buildInternetUplinkAssetIds(relations: AssetRelationRecord[]) {
+	const ids = new Set<string>()
+	for (const relation of relations) {
+		if (relation.kind === "connected_to" && getMetadataString(relation.metadata, "link_kind") === "internet") {
+			ids.add(relation.source_asset)
+		}
+	}
+	return ids
 }
 
 export function getLatestMaintenanceRecord(records: AssetMaintenanceRecord[]) {
@@ -167,8 +181,20 @@ function pushRow(
 	}
 }
 
-function getAssetCompletenessChecks(asset: AssetRecord) {
+function getAssetCompletenessChecks(asset: AssetRecord, context: AssetCompletenessContext) {
 	const metadata = asset.metadata
+	if (asset.type === "internet") {
+		return [
+			{ label: "资源名称", ok: Boolean(asset.name?.trim()) },
+			{ label: "运营商", ok: Boolean(asset.vendor?.trim()) },
+			{ label: "使用状态", ok: Boolean(asset.status) },
+			{ label: "线路接入技术", ok: Boolean(getMetadataString(metadata, "access_technology")) },
+			{ label: "联网认证方式", ok: Boolean(getMetadataString(metadata, "auth_mode")) },
+			{ label: "下行带宽", ok: (getMetadataNumber(metadata, "down_mbps") ?? 0) > 0 },
+			{ label: "上行带宽", ok: (getMetadataNumber(metadata, "up_mbps") ?? 0) > 0 },
+			{ label: "接入设备", ok: context.hasInternetUplink === true },
+		]
+	}
 	const hasOfficialReference = Boolean(getMetadataString(metadata, "official_url"))
 	const checks: { label: string; ok: boolean }[] = [
 		{ label: "资产名称", ok: Boolean(asset.name?.trim()) },
@@ -177,15 +203,6 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 			: [{ label: "资产位置", ok: Boolean(asset.location?.trim() || getMetadataString(metadata, "room")) }]),
 		{ label: "用途 / 角色", ok: Boolean(asset.role?.trim()) },
 	]
-	if (asset.type === "internet") {
-		checks.push(
-			{ label: "运营商", ok: Boolean(asset.vendor?.trim()) },
-			{ label: "下行带宽", ok: Boolean(getMetadataNumber(metadata, "down_mbps")) },
-			{ label: "上行带宽", ok: Boolean(getMetadataNumber(metadata, "up_mbps")) },
-			{ label: "公网 IPv4", ok: Boolean(getMetadataString(metadata, "public_ipv4")) }
-		)
-		return checks
-	}
 	if (NETWORK_ASSET_TYPES.includes(asset.type)) {
 		checks.push(
 			{ label: "厂商 / 品牌", ok: Boolean(asset.vendor?.trim()) },
