@@ -26,6 +26,9 @@ func TestAssetMasterValidation(t *testing.T) {
 	t.Run("RequiresPhoneVariantSpecs", func(t *testing.T) {
 		testAssetMasterValidationRequiresPhoneVariantSpecs(t, hub)
 	})
+	t.Run("RequiresStrictInternetProfile", func(t *testing.T) {
+		testAssetMasterValidationRequiresStrictInternetProfile(t, hub)
+	})
 	t.Run("KeepsSinglePrimaryInterface", func(t *testing.T) {
 		testAssetInterfaceValidationKeepsSinglePrimaryInterface(t, hub)
 	})
@@ -47,6 +50,37 @@ func TestAssetMasterValidation(t *testing.T) {
 	t.Run("RejectsCrossUserLocationParentAndCycles", func(t *testing.T) {
 		testAssetLocationValidationRejectsCrossUserParentAndCycles(t, hub)
 	})
+}
+
+func testAssetMasterValidationRequiresStrictInternetProfile(t *testing.T, hub *pulseTests.TestHub) {
+	user, err := pulseTests.CreateUser(hub, "asset-internet-profile@example.com", "password")
+	require.NoError(t, err)
+	token, err := user.NewAuthToken()
+	require.NoError(t, err)
+	headers := map[string]string{"Authorization": token}
+
+	valid := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","name":"严格宽带","type":"internet","status":"active","vendor":"中国联通","metadata":{"access_technology":"ftth","auth_mode":"pppoe","down_mbps":1000,"up_mbps":300}}`, user.Id)), headers)
+	require.Equal(t, http.StatusOK, valid.Status, valid.Body)
+
+	invalidProvider := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","name":"无效运营商宽带","type":"internet","status":"active","vendor":"广电","metadata":{"access_technology":"ftth","auth_mode":"pppoe","down_mbps":1000,"up_mbps":300}}`, user.Id)), headers)
+	require.Equal(t, http.StatusBadRequest, invalidProvider.Status, invalidProvider.Body)
+	require.Contains(t, invalidProvider.Body, "中国电信、中国联通或中国移动")
+
+	invalidStatus := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","name":"规划宽带","type":"internet","status":"planned","vendor":"中国联通","metadata":{"access_technology":"ftth","auth_mode":"pppoe","down_mbps":1000,"up_mbps":300}}`, user.Id)), headers)
+	require.Equal(t, http.StatusBadRequest, invalidStatus.Status, invalidStatus.Body)
+	require.Contains(t, invalidStatus.Body, "使用中、暂停服务或已注销")
+
+	invalidFields := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","name":"字段错误宽带","type":"internet","status":"active","vendor":"中国联通","metadata":{"access_technology":"unknown","auth_mode":"other","down_mbps":0,"up_mbps":-1,"cpu_model":"不允许"}}`, user.Id)), headers)
+	require.Equal(t, http.StatusBadRequest, invalidFields.Status, invalidFields.Body)
+
+	invalidExtraField := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","name":"越界字段宽带","type":"internet","status":"active","vendor":"中国联通","metadata":{"access_technology":"ftth","auth_mode":"pppoe","down_mbps":1000,"up_mbps":300,"cpu_model":"不允许"}}`, user.Id)), headers)
+	require.Equal(t, http.StatusBadRequest, invalidExtraField.Status, invalidExtraField.Body)
+	require.Contains(t, invalidExtraField.Body, "不属于互联网接入严格模板")
 }
 
 func testAssetRelationValidationEnforcesInternetBoundary(t *testing.T, hub *pulseTests.TestHub) {

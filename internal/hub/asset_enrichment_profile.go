@@ -144,7 +144,10 @@ var lockEnrichmentMetadataFields = mergeAssetEnrichmentFields(smartHomeBaseEnric
 var vacuumEnrichmentMetadataFields = mergeAssetEnrichmentFields(smartHomeBaseEnrichmentMetadataFields, []string{"battery_capacity_mah", "storage_target", "sensor_detail"})
 var iotEnrichmentMetadataFields = smartHomeBaseEnrichmentMetadataFields
 
-var internetEnrichmentMetadataFields = []string{"down_mbps", "up_mbps", "public_ipv4", "public_ipv6"}
+var internetEnrichmentMetadataFields = []string{
+	"access_technology", "auth_mode", "down_mbps", "up_mbps", "public_ipv4", "public_ipv6",
+	"package_name", "recurring_price_cny", "billing_cycle", "renewal_date", "auto_renew",
+}
 var webEndpointEnrichmentMetadataFields = []string{"url", "internal_url", "external_url", "endpoint_scope", "expected_owner"}
 var customEnrichmentMetadataFields = assetEnrichmentAddressMetadataFields
 

@@ -133,6 +133,9 @@ func (h *Hub) validateAssetRequiredProfileRequest(e *core.RecordRequestEvent) er
 	if e == nil || e.Record == nil {
 		return nil
 	}
+	if strings.TrimSpace(e.Record.GetString("type")) == "internet" {
+		return h.validateInternetAssetRecord(e)
+	}
 	if strings.TrimSpace(e.Record.GetString("type")) != "phone" {
 		return nil
 	}
