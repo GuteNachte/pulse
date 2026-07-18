@@ -1000,31 +1000,33 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 							<StatusBadge status={asset.status || "active"} />
 						</div>
 					</div>
-					<div className="flex shrink-0 items-center gap-2">
+					<div className="min-w-0 shrink-0">
 						<AssetDetailActionMenu
 							readOnly={readOnly}
+							editAction={
+								<Button
+									variant="outline"
+									size="sm"
+									className="h-9 min-h-9 shrink-0 gap-1.5 px-2.5"
+									onClick={() => {
+										setManagementDialogOpen(true)
+										ensureAssetEditCatalogLoaded().catch((error) => {
+											if (!isPocketBaseAutoCancel(error)) {
+												console.warn("ensure asset edit catalog", error)
+											}
+										})
+									}}
+								>
+									<PencilIcon data-icon="inline-start" />
+									编辑
+								</Button>
+							}
 							onOpenInterface={openInterfaceManager}
 							onOpenRelation={openAddRelationDialog}
 							onOpenMaintenance={openAddMaintenanceDialog}
 							onOpenAttachment={openAddAttachmentDialog}
 							onDelete={deleteAsset}
 						/>
-						<Button
-							variant="outline"
-							size="sm"
-							className="gap-1.5"
-							onClick={() => {
-								setManagementDialogOpen(true)
-								ensureAssetEditCatalogLoaded().catch((error) => {
-									if (!isPocketBaseAutoCancel(error)) {
-										console.warn("ensure asset edit catalog", error)
-									}
-								})
-							}}
-						>
-							<PencilIcon className="size-3.5" />
-							编辑
-						</Button>
 					</div>
 				</div>
 				<div className="mt-3 border-t border-border/70 pt-3">
