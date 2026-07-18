@@ -70,6 +70,23 @@ assertDeepEqual(
 
 assertDeepEqual(
 	validateAssetProfileForm({
+		type: "mini_pc",
+		name: "UM690",
+		vendor: "MINISFORUM",
+		model: "UM690",
+		internalModel: "",
+		color: "银白",
+		assetTag: "ASSET-0004",
+		location: "书房",
+		ipv4: "192.168.1.10",
+		memoryGb: "",
+		storageGb: "",
+	}),
+	[]
+)
+
+assertDeepEqual(
+	validateAssetProfileForm({
 		type: "web_endpoint",
 		name: "家庭 API",
 		vendor: "",

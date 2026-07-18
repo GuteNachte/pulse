@@ -1,63 +1,34 @@
-import { ImageIcon, ListChecksIcon, PencilIcon } from "lucide-react"
+import type { ReactNode } from "react"
+import { PencilIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { assetActionScope } from "../asset-action-scope"
 
 export function AssetEditActionBar({
 	readOnly,
 	saving,
-	visualBlockReason,
-	visualGenerationRunning,
-	onRunSmartRecognition,
-	onGenerateVisual,
+	assetTagControl,
+	archiveCounts,
 }: {
 	readOnly: boolean
 	saving: boolean
-	visualBlockReason: string
-	visualGenerationRunning: boolean
-	onRunSmartRecognition: () => void
-	onGenerateVisual: () => void
+	assetTagControl: ReactNode
+	archiveCounts?: ReactNode
 }) {
 	return (
-		<section className="z-10 border-b border-border/70 bg-card px-4 py-3 sm:px-5">
-			<div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-				<div className="min-w-0">
-					<div className="text-sm font-semibold text-foreground">资产操作</div>
-					<div className="text-xs text-muted-foreground">保存主档后可执行识别与图片收集。</div>
-				</div>
-				<div className="flex flex-wrap items-center justify-end gap-2">
-					{assetActionScope.edit.includes("save") && (
-						<Button type="submit" size="sm" disabled={readOnly || saving} className="gap-2">
-							<PencilIcon className="size-3.5" />
-							保存
-						</Button>
-					)}
-					{assetActionScope.edit.includes("recognition") && (
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							onClick={onRunSmartRecognition}
-							disabled={readOnly || saving}
-							className="gap-2"
-						>
-							<ListChecksIcon className="size-3.5" />
-							智能匹配
-						</Button>
-					)}
-					{assetActionScope.edit.includes("visual") && (
-						<Button
-							type="button"
-							size="sm"
-							variant="outline"
-							onClick={onGenerateVisual}
-							disabled={readOnly || saving || Boolean(visualBlockReason) || visualGenerationRunning}
-							className="gap-2"
-						>
-							<ImageIcon className="size-3.5" />
-							{visualGenerationRunning ? "获取中" : "获取图片"}
-						</Button>
-					)}
-				</div>
+		<section className="z-10 flex min-w-0 flex-wrap items-center gap-2 border-b border-border/70 bg-card px-3 pb-2 pt-1 pe-16 sm:px-4 sm:pe-16">
+			<div className="shrink-0 text-sm font-semibold text-foreground">编辑资产</div>
+			<div className="flex min-w-[15rem] flex-1 items-center gap-2 sm:max-w-sm">
+				<span className="shrink-0 text-xs font-medium text-muted-foreground">资产编号</span>
+				<div className="min-w-0 flex-1">{assetTagControl}</div>
+			</div>
+			{archiveCounts && <div className="hidden items-center gap-1 text-[11px] text-muted-foreground xl:flex">{archiveCounts}</div>}
+			<div className="ms-auto flex shrink-0 items-center gap-2">
+				{assetActionScope.edit.includes("save") && (
+					<Button type="submit" size="sm" disabled={readOnly || saving} className="gap-2">
+						<PencilIcon className="size-3.5" />
+						保存
+					</Button>
+				)}
 			</div>
 		</section>
 	)

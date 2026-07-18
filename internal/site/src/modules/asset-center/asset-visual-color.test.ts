@@ -2,6 +2,7 @@ import {
 	getAssetOfficialColorOptions,
 	getAssetVisualColor,
 	getAssetVisualGenerationBlockReason,
+	getAssetVisualSearchAdvice,
 	isOfficialColorRequiredForAssetType,
 	mergeOfficialColorOptions,
 } from "./asset-visual-color.ts"
@@ -54,3 +55,9 @@ assertEqual(isOfficialColorRequiredForAssetType("router"), false)
 assertEqual(getAssetVisualGenerationBlockReason(phone), "")
 assertEqual(getAssetVisualGenerationBlockReason({ ...phone, model: "", metadata: {} }), "")
 assertEqual(getAssetVisualGenerationBlockReason({ ...phone, name: "" }), "收集候选图至少需要资产名称。")
+assertEqual(getAssetVisualSearchAdvice({ ...phone, name: "", model: "", metadata: {} }), [
+	"资产名称",
+	"厂商 / 品牌",
+	"型号 / 规格",
+])
+assertEqual(getAssetVisualSearchAdvice({ ...phone, type: "internet", name: "宽带", vendor: "" }), ["运营商 / 服务商"])

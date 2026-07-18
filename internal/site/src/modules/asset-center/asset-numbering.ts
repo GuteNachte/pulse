@@ -1,5 +1,5 @@
 import type { AssetRecord } from "@/types"
-import { getMetadataString } from "@/modules/asset-center/asset-schema"
+import { getMetadataString } from "./asset-schema.ts"
 
 export type AssetNumberingSettings = {
 	prefix: string
@@ -52,6 +52,10 @@ export function normalizeAssetNumberingSettings(settings: AssetNumberingSettings
 }
 
 export function buildNextAssetTag(assets: AssetRecord[], settings: NormalizedAssetNumberingSettings) {
+	return buildAssetTagCandidates(assets, settings, 1)[0] ?? formatAssetTag(settings.nextSequence, settings)
+}
+
+export function buildAssetTagCandidates(assets: AssetRecord[], settings: NormalizedAssetNumberingSettings, count = 5) {
 	const used = new Set<string>()
 	let next = settings.nextSequence
 	const pattern = new RegExp(`^${escapeRegExp(settings.prefix)}(\\d+)$`)
@@ -64,12 +68,13 @@ export function buildNextAssetTag(assets: AssetRecord[], settings: NormalizedAss
 			next = Math.max(next, Number(match[1]) + 1)
 		}
 	}
-	let candidate = formatAssetTag(next, settings)
-	while (used.has(candidate)) {
+	const candidates: string[] = []
+	while (candidates.length < Math.max(0, Math.trunc(count))) {
+		const candidate = formatAssetTag(next, settings)
+		if (!used.has(candidate)) candidates.push(candidate)
 		next += 1
-		candidate = formatAssetTag(next, settings)
 	}
-	return candidate
+	return candidates
 }
 
 function formatAssetTag(sequence: number, settings: NormalizedAssetNumberingSettings) {

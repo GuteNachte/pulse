@@ -40,6 +40,10 @@ export const LOCATION_KIND_OPTIONS: { value: AssetLocationKind; label: string }[
 	{ value: "custom", label: "自定义" },
 ]
 
+export function isAssetLocationNotApplicable(type: AssetRecord["type"]) {
+	return type === "internet"
+}
+
 export const DEFAULT_ASSET_LOCATION_PRESETS: AssetLocationPreset[] = [
 	{ name: "家", kind: "area", sortOrder: 10, notes: "家庭资产一级位置。" },
 	{ name: "公司", kind: "area", sortOrder: 20, notes: "公司资产一级位置。" },

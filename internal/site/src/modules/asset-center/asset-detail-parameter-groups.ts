@@ -18,12 +18,13 @@ import {
 	HOST_ASSET_TYPES,
 	getAssetFormSections,
 	getHostTypeSpecificFields,
-	getHostTypeSpecificTitle,
 	getMetadataNumber,
 	getMetadataString,
 	getStatusLabel,
 	type AssetFieldDefinition,
 } from "./asset-schema.ts"
+import { normalizeMemorySpecification } from "./asset-memory-spec.ts"
+import { normalizeNetworkInterfaceSummary } from "./asset-runtime-hardware.ts"
 export function buildAssetParameterGroups(asset: AssetRecord): AssetParameterGroup[] {
 	const useHostHardwareProfile = HOST_ASSET_TYPES.includes(asset.type)
 	const archiveGroups = useHostHardwareProfile
@@ -37,7 +38,7 @@ export function buildAssetParameterGroups(asset: AssetRecord): AssetParameterGro
 					}))
 				)
 	const hostGroups = useHostHardwareProfile
-		? [...buildHostHardwareProfileGroups(asset), ...buildHostTypeSpecificParameterGroups(asset)]
+		? buildHostHardwareProfileGroups(asset)
 				.filter((group) => !hiddenHostHardwareParameterGroupTitles.has(group.title))
 				.filter((group) => group.rows.length > 0)
 				.map((group, index) => ({
@@ -57,30 +58,16 @@ export function buildAssetParameterGroups(asset: AssetRecord): AssetParameterGro
 	return dedupeParameterGroups([...archiveGroups, ...hostGroups])
 }
 
-function buildHostTypeSpecificParameterGroups(asset: AssetRecord): HostHardwareProfileGroup[] {
-	const rows = getHostTypeSpecificFields(asset.type)
-		.map((field) => {
-			const value = getAssetFieldDisplayValue(asset, field)
-			if (!value) return undefined
-			return {
-				label: field.label,
-				value,
-				capture: field.capture,
-			}
-		})
-		.filter(Boolean) as HostHardwareProfileRow[]
-	if (rows.length === 0) return []
-	return [
-		{
-			title: getHostTypeSpecificTitle(asset.type),
-			icon: createElement(BoxesIcon, { className: "size-4" }),
-			rows,
-		},
-	]
-}
-
-const hiddenArchiveParameterGroupTitles = new Set(["基础身份", "硬件识别", "固定地址", "接入信息", "生命周期", "备注"])
-const hiddenHostHardwareParameterGroupTitles = new Set(["整机与支持"])
+const hiddenArchiveParameterGroupTitles = new Set([
+	"基础身份",
+	"硬件识别",
+	"固定地址",
+	"接入信息",
+	"购买信息",
+	"生命周期",
+	"备注",
+])
+const hiddenHostHardwareParameterGroupTitles = new Set<string>()
 
 function splitArchiveSectionIntoParameterGroups(section: ArchiveDetailSection): Omit<AssetParameterGroup, "id">[] {
 	const visibleRows = section.rows.filter((row) => !hiddenArchiveParameterFieldKeys.has(row.field.key))
@@ -396,21 +383,18 @@ type HostHardwareProfileGroup = {
 
 function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfileGroup[] {
 	const metadata = asset.metadata
-	const urlRow = (
-		label: string,
-		key: string,
-		capture: AssetFieldDefinition["capture"] = "future_collectable"
-	): HostHardwareProfileRow | undefined => {
-		const value = getMetadataString(metadata, key)
-		if (!value) return undefined
-		return { label, value, href: /^https?:\/\//i.test(value) ? value : undefined, capture }
-	}
 	const metadataRow = (
 		label: string,
 		key: string,
 		capture: AssetFieldDefinition["capture"] = "future_collectable"
 	): HostHardwareProfileRow | undefined => {
-		const value = getMetadataString(metadata, key)
+		const rawValue = getMetadataString(metadata, key)
+		const value =
+			key === "memory_detail"
+				? normalizeMemorySpecification(rawValue)
+				: key === "nic_detail"
+					? normalizeNetworkInterfaceSummary(rawValue)
+					: rawValue
 		return value ? { label, value, capture } : undefined
 	}
 	const numberRow = (
@@ -420,28 +404,45 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 		capture: AssetFieldDefinition["capture"] = "future_collectable"
 	): HostHardwareProfileRow | undefined => {
 		const value = getMetadataNumber(metadata, key)
-		return value ? { label, value: `${value} ${unit}`, capture } : undefined
+		return value ? { label, value: unit ? `${value} ${unit}` : String(value), capture } : undefined
 	}
-	const directRow = (
-		label: string,
-		value: string | undefined,
-		capture: AssetFieldDefinition["capture"] = "manual"
-	): HostHardwareProfileRow | undefined => (value ? { label, value, capture } : undefined)
 	const compact = (rows: (HostHardwareProfileRow | undefined)[]) => rows.filter(Boolean) as HostHardwareProfileRow[]
+	const typeSpecificRows = new Map(
+		getHostTypeSpecificFields(asset.type)
+			.map((field) => {
+				const value = getAssetFieldDisplayValue(asset, field)
+				return value ? [field.key, { label: field.label, value, capture: field.capture }] : undefined
+			})
+			.filter(Boolean) as [string, HostHardwareProfileRow][]
+	)
+	const typeSpecificRow = (key: string) => typeSpecificRows.get(key)
 
 	return [
 		{
-			title: "整机与支持",
-			icon: createElement(MonitorIcon, { className: "size-4" }),
+			title: "外观尺寸",
+			icon: createElement(BoxesIcon, { className: "size-4" }),
 			rows: compact([
-				directRow("厂商 / 品牌", asset.vendor),
-				directRow("型号 / 规格", asset.model),
-				directRow("序列号", asset.serial_number),
-				urlRow("厂家官方支持页", "support_url", "manual"),
-				urlRow("厂家官方产品页", "product_url", "manual"),
-				urlRow("厂家官网资料页", "official_url", "manual"),
-				metadataRow("专项识别依据", "hardware_fingerprint_note"),
-				metadataRow("专项识别匹配备注", "hardware_match_note"),
+				typeSpecificRow("form_factor"),
+				typeSpecificRow("case_form_factor"),
+				typeSpecificRow("rack_form_factor"),
+				typeSpecificRow("mount_support"),
+				numberRow("长度", "length_mm", "mm", "manual"),
+				numberRow("宽度", "width_mm", "mm", "manual"),
+				numberRow("高度", "height_mm", "mm", "manual"),
+				metadataRow("外观颜色", "color", "manual"),
+				typeSpecificRow("chassis_vendor"),
+				typeSpecificRow("chassis_model"),
+			]),
+		},
+		{
+			title: "主板",
+			icon: createElement(BoxesIcon, { className: "size-4" }),
+			rows: compact([
+				metadataRow("主板品牌", "motherboard_vendor"),
+				metadataRow("主板型号", "motherboard_model"),
+				metadataRow("BIOS 厂商", "bios_vendor"),
+				typeSpecificRow("pcie_slots"),
+				typeSpecificRow("bmc"),
 			]),
 		},
 		{
@@ -450,17 +451,22 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 			rows: compact([
 				metadataRow("CPU 厂商", "cpu_vendor", "agent_collectable"),
 				metadataRow("CPU 型号", "cpu_model", "agent_collectable"),
-				urlRow("CPU 官方支持页", "cpu_support_url"),
+				typeSpecificRow("cpu_socket_count"),
 			]),
 		},
 		{
-			title: "主板 / BIOS",
+			title: "内存",
 			icon: createElement(BoxesIcon, { className: "size-4" }),
 			rows: compact([
-				metadataRow("主板品牌", "motherboard_vendor"),
-				metadataRow("主板型号", "motherboard_model"),
-				urlRow("主板支持页", "motherboard_support_url"),
-				metadataRow("BIOS 厂商", "bios_vendor"),
+				numberRow("当前内存容量", "memory_gb", "GB", "agent_collectable"),
+				metadataRow("内存品牌", "memory_vendor"),
+				metadataRow("内存规格", "memory_detail"),
+				metadataRow("当前内存类型", "memory_type"),
+				numberRow("当前内存频率", "memory_speed_mhz", "MHz"),
+				metadataRow("支持内存类型", "supported_memory_type"),
+				numberRow("最大内存容量", "max_memory_gb", "GB"),
+				numberRow("内存通道数量", "memory_channel_count", ""),
+				typeSpecificRow("ecc_memory"),
 			]),
 		},
 		{
@@ -472,38 +478,31 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 				metadataRow("GPU 芯片型号", "gpu_model"),
 				metadataRow("显卡板卡品牌", "gpu_board_vendor"),
 				numberRow("显存", "gpu_vram_gb", "GB"),
-				urlRow("显卡支持页", "gpu_support_url"),
 			]),
 		},
 		{
-			title: "内存",
-			icon: createElement(BoxesIcon, { className: "size-4" }),
-			rows: compact([
-				numberRow("内存容量", "memory_gb", "GB", "agent_collectable"),
-				metadataRow("内存品牌 / 规格", "memory_detail"),
-				metadataRow("内存品牌", "memory_vendor"),
-				metadataRow("内存型号 / 颗粒", "memory_model"),
-				metadataRow("内存类型", "memory_type"),
-				numberRow("内存频率", "memory_speed_mhz", "MHz"),
-				metadataRow("内存插槽摘要", "memory_slots_summary"),
-				urlRow("内存支持页", "memory_support_url"),
-			]),
-		},
-		{
-			title: "存储",
+			title: "硬盘",
 			icon: createElement(HardDriveIcon, { className: "size-4" }),
 			rows: compact([
-				metadataRow("存储摘要", "storage_summary", "agent_collectable"),
-				metadataRow("硬盘品牌 / 型号", "storage_detail"),
-				metadataRow("主存储品牌", "storage_vendor"),
-				metadataRow("主存储型号", "storage_model"),
-				metadataRow("存储介质 / 总线", "storage_media"),
-				metadataRow("硬盘序列号备注", "storage_serial_note"),
-				urlRow("存储支持页", "storage_support_url"),
+				metadataRow("当前存储摘要", "storage_summary", "agent_collectable"),
+				metadataRow("当前硬盘品牌 / 型号", "storage_detail"),
+				metadataRow("当前主存储品牌", "storage_vendor"),
+				metadataRow("当前主存储型号", "storage_model"),
+				metadataRow("当前存储介质 / 总线", "storage_media"),
+				metadataRow("当前硬盘序列号备注", "storage_serial_note"),
+				typeSpecificRow("storage_slots"),
+				typeSpecificRow("bay_count"),
+				typeSpecificRow("storage_backplane"),
+				typeSpecificRow("raid_mode"),
+				typeSpecificRow("raid_controller"),
+				typeSpecificRow("filesystem"),
+				typeSpecificRow("hot_swap"),
+				typeSpecificRow("cache_slots"),
+				typeSpecificRow("transcode_engine"),
 			]),
 		},
 		{
-			title: "网络硬件",
+			title: "网络",
 			icon: createElement(NetworkIcon, { className: "size-4" }),
 			rows: compact([
 				numberRow("主网卡速率", "primary_nic_speed_mbps", "Mbps", "agent_collectable"),
@@ -512,21 +511,39 @@ function buildHostHardwareProfileGroups(asset: AssetRecord): HostHardwareProfile
 				metadataRow("有线网卡型号", "nic_model"),
 				metadataRow("无线网卡品牌", "wifi_vendor"),
 				metadataRow("无线网卡型号", "wifi_model"),
-				urlRow("网卡驱动 / 支持页", "nic_support_url"),
-				urlRow("无线网卡驱动 / 支持页", "wifi_support_url"),
+				typeSpecificRow("wifi_support"),
+				typeSpecificRow("bluetooth_support"),
 			]),
 		},
 		{
-			title: "机箱 / 电源",
+			title: "电源",
 			icon: createElement(BatteryIcon, { className: "size-4" }),
 			rows: compact([
-				metadataRow("机箱 / 电源", "chassis_power_detail", "manual"),
-				metadataRow("机箱品牌", "chassis_vendor", "manual"),
-				metadataRow("机箱型号", "chassis_model", "manual"),
-				urlRow("机箱支持页", "chassis_support_url", "manual"),
+				typeSpecificRow("chassis_power_detail"),
 				metadataRow("电源品牌", "psu_vendor", "manual"),
 				metadataRow("电源型号 / 功率", "psu_model", "manual"),
-				urlRow("电源支持页", "psu_support_url", "manual"),
+				typeSpecificRow("power_adapter_w"),
+				typeSpecificRow("redundant_psu"),
+			]),
+		},
+		{
+			title: "接口",
+			icon: createElement(NetworkIcon, { className: "size-4" }),
+			rows: compact([
+				typeSpecificRow("display_outputs"),
+				typeSpecificRow("audio_output"),
+				typeSpecificRow("usb_ports"),
+			]),
+		},
+		{
+			title: "其他",
+			icon: createElement(ListChecksIcon, { className: "size-4" }),
+			rows: compact([
+				typeSpecificRow("preinstalled_os"),
+				typeSpecificRow("supported_os"),
+				numberRow("包装重", "package_weight_kg", "kg", "manual"),
+				numberRow("净重", "weight_kg", "kg", "manual"),
+				typeSpecificRow("release_date"),
 			]),
 		},
 	]
@@ -561,6 +578,9 @@ function getAssetFieldDisplayValue(asset: AssetRecord, field: AssetFieldDefiniti
 			break
 		case "notes":
 			value = asset.notes || ""
+			break
+		case "memory_detail":
+			value = normalizeMemorySpecification(getMetadataString(asset.metadata, field.key))
 			break
 		default:
 			value = getMetadataString(asset.metadata, field.key)

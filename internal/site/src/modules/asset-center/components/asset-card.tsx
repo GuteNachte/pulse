@@ -31,8 +31,8 @@ import {
 } from "@/modules/asset-center/asset-schema"
 import {
 	getAssetCompleteness,
+	getAssetLocationLabel,
 	getAssetSummaryRows,
-	getAssetWarrantyStatus,
 	getInternetBandwidthLabel,
 	type AssetLifecycleTone,
 } from "@/modules/asset-center/asset-profile-summary"
@@ -80,9 +80,8 @@ export function AssetListHeader() {
 export function AssetListItem({ asset, parent, monitored, maintenanceCount, active, onActivate }: AssetListItemProps) {
 	const Icon = getAssetIcon(asset.type)
 	const completeness = getAssetCompleteness(asset)
-	const warranty = getAssetWarrantyStatus(asset)
 	const identity = getAssetIdentityLabel(asset)
-	const location = asset.location || getMetadataString(asset.metadata, "room") || "未填写位置"
+	const location = getAssetLocationLabel(asset)
 	const ip = getAssetIpLabel(asset)
 	const network = getAssetNetworkLabel(asset)
 	const assetTag = getMetadataString(asset.metadata, "asset_tag")
@@ -133,8 +132,7 @@ export function AssetListItem({ asset, parent, monitored, maintenanceCount, acti
 						<AssetCardMetaTag tone={completeness.tone}>{completeness.score}%</AssetCardMetaTag>
 					</div>
 					<div className="max-w-28 truncate text-[11px] text-muted-foreground">
-						{color ||
-							(parent ? `归属 ${parent.name}` : maintenanceCount > 0 ? `维护 ${maintenanceCount}` : warranty.label)}
+						{color || (parent ? `归属 ${parent.name}` : maintenanceCount > 0 ? `维护 ${maintenanceCount}` : "")}
 					</div>
 				</div>
 			</button>
@@ -175,7 +173,6 @@ export function AssetPreviewPanel({ asset, parent, monitored, maintenanceCount, 
 		.filter((row) => !hiddenPreviewSummaryLabels.has(row.label))
 		.slice(0, 3)
 	const completeness = getAssetCompleteness(asset)
-	const warranty = getAssetWarrantyStatus(asset)
 	const assetTag = getMetadataString(asset.metadata, "asset_tag")
 	const mac = getMetadataString(asset.metadata, "mac")
 	const color = getMetadataString(asset.metadata, "color") || getMetadataString(asset.metadata, "device_color")
@@ -257,7 +254,6 @@ export function AssetPreviewPanel({ asset, parent, monitored, maintenanceCount, 
 
 			<div className="flex flex-wrap gap-1.5">
 				{monitored && <AssetCardMetaTag tone="ok">已监控</AssetCardMetaTag>}
-				<AssetCardMetaTag tone={warranty.tone}>{warranty.label}</AssetCardMetaTag>
 				{maintenanceCount > 0 && <AssetCardMetaTag>维护 {maintenanceCount}</AssetCardMetaTag>}
 			</div>
 
@@ -320,7 +316,7 @@ export function getAssetNetworkLabel(asset: AssetRecord) {
 }
 
 function getAssetIdentityLabel(asset: AssetRecord) {
-	const internalModel = getMetadataString(asset.metadata, "internal_model")
+	const internalModel = asset.type === "phone" ? getMetadataString(asset.metadata, "internal_model") : ""
 	return [asset.vendor, asset.model, internalModel].filter(Boolean).join(" · ") || "未填写型号"
 }
 
@@ -353,12 +349,10 @@ export function AssetCard({
 	const Icon = getAssetIcon(asset.type)
 	const summaryRows = getAssetSummaryRows(asset).slice(0, 4)
 	const detailHref = getPagePath($router, "asset", { id: asset.id })
-	const warranty = getAssetWarrantyStatus(asset)
 	const completeness = getAssetCompleteness(asset)
 	const visibleTags = [
 		...(monitored ? [{ key: "monitor", label: "已监控", tone: "ok" as AssetLifecycleTone }] : []),
 		{ key: "profile", label: completeness.label, tone: completeness.tone },
-		{ key: "warranty", label: warranty.label, tone: warranty.tone },
 	]
 	return (
 		<div

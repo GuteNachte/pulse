@@ -1,5 +1,5 @@
 import { buildAssetLocationPresetSelection } from "./asset-location-dialog.ts"
-import type { AssetLocationPreset } from "./asset-location.ts"
+import { isAssetLocationNotApplicable, type AssetLocationPreset } from "./asset-location.ts"
 
 function assertDeepEqual(actual: unknown, expected: unknown) {
 	if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -29,6 +29,10 @@ assertDeepEqual(
 		secondPreset: secondPresets[0],
 	}
 )
+
+assertDeepEqual(isAssetLocationNotApplicable("internet"), true)
+assertDeepEqual(isAssetLocationNotApplicable("phone"), false)
+assertDeepEqual(isAssetLocationNotApplicable("web_endpoint"), false)
 
 assertDeepEqual(
 	buildAssetLocationPresetSelection({

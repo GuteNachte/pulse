@@ -35,7 +35,6 @@ function buildAssetShowcaseTags(asset: AssetRecord) {
 	const tags: AssetShowcaseTag[] = []
 	const seen = new Set<string>()
 	const metadata = asset.metadata ?? {}
-	const owner = getMetadataString(metadata, "owner")
 	const color = firstNonEmpty(getMetadataString(metadata, "color"), getMetadataString(metadata, "device_color"))
 
 	function add(label: string, value?: string, tone?: AssetShowcaseTag["tone"]) {
@@ -49,7 +48,6 @@ function buildAssetShowcaseTags(asset: AssetRecord) {
 
 	add("位置", asset.location || "未填写", asset.location ? "strong" : "neutral")
 	add("用途", asset.role || "未填写", asset.role ? "strong" : "neutral")
-	add("归属", owner)
 	add("颜色", color)
 	asset.tags?.slice(0, 4).forEach((tag) => {
 		add("标签", tag)

@@ -1422,9 +1422,6 @@ func buildAssetOnlineSuggestions(asset *core.Record, sources []assetOnlineSource
 	if specs.Summary != "" {
 		suggestions = append(suggestions, buildOnlineRecordSuggestion(asset, "metadata.online_specs_summary", "联网规格摘要", recordMetadataString(asset, "online_specs_summary"), specs.Summary, "从可追溯资料页提取的规格摘要。请确认对应型号无误后再写入主档。", specs.Sources, 68))
 	}
-	if note := buildAssetOnlineMatchNote(sources, query); note != "" {
-		suggestions = append(suggestions, buildOnlineRecordSuggestion(asset, "metadata.hardware_match_note", "联网资料匹配备注", recordMetadataString(asset, "hardware_match_note"), note, "记录本次联网资料来源，作为后续人工核对依据。", sources, 62))
-	}
 	return suggestions
 }
 
@@ -1822,20 +1819,6 @@ func assetOnlineSourceHasOfficialAuthority(source assetOnlineSource) bool {
 	default:
 		return false
 	}
-}
-
-func buildAssetOnlineMatchNote(sources []assetOnlineSource, query string) string {
-	if len(sources) == 0 {
-		return ""
-	}
-	parts := []string{"联网查询：" + query}
-	for index, source := range sources {
-		if index >= 3 {
-			break
-		}
-		parts = append(parts, source.Provider+" · "+source.Title+" · "+source.URL)
-	}
-	return strings.Join(parts, "\n")
 }
 
 func rankAssetOnlineSources(sources []assetOnlineSource, asset *core.Record) []assetOnlineSource {

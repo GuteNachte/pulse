@@ -1,6 +1,8 @@
 import {
 	getAssetDisplayVisual,
 	getAssetVisualCandidateFrames,
+	getAssetVisualCandidateLimit,
+	getAssetVisualCrop,
 	getAssetVisualStageLayout,
 	getDisplayAssetVisualFrames,
 	getLatestAssetVisualCandidateSet,
@@ -18,22 +20,39 @@ function assertDeepEqual(actual: unknown, expected: unknown) {
 }
 
 assertDeepEqual(getAssetVisualStageLayout(false, false), {
-	stageClassName: "aspect-[16/10]",
+	stageClassName: "aspect-[16/9]",
 	imageClassName: "",
 	maxWidth: "100%",
 })
 
 assertDeepEqual(getAssetVisualStageLayout(true, false), {
-	stageClassName: "aspect-[3/4]",
+	stageClassName: "aspect-[16/9]",
 	imageClassName: "object-contain p-1 sm:p-2",
-	maxWidth: "min(100%, calc((100vh - 10rem) * 0.75), 24rem)",
+	maxWidth: "100%",
 })
 
 assertDeepEqual(getAssetVisualStageLayout(true, true), {
-	stageClassName: "aspect-[4/3]",
-	imageClassName: "object-cover p-0",
+	stageClassName: "aspect-[16/9]",
+	imageClassName: "object-contain p-1 sm:p-2",
 	maxWidth: "100%",
 })
+
+assertDeepEqual(getAssetVisualStageLayout(true, true, true), {
+	stageClassName: "aspect-[16/9]",
+	imageClassName: "object-contain p-1 sm:p-2",
+	maxWidth: "100%",
+})
+
+assertDeepEqual(getAssetVisualCandidateLimit("internet"), 4)
+assertDeepEqual(getAssetVisualCandidateLimit("phone"), 15)
+
+assertDeepEqual(getAssetVisualCrop({ crop: { x: 0.1, y: 0.2, width: 0.7, height: 0.6 } } as never), {
+	x: 0.1,
+	y: 0.2,
+	width: 0.7,
+	height: 0.6,
+})
+assertDeepEqual(getAssetVisualCrop({ crop: { x: 0.5, y: 0.2, width: 0.7, height: 0.6 } } as never), undefined)
 
 const calls: Array<{ page: number; perPage: number; options: Record<string, unknown> }> = []
 const fakeCollection = {
@@ -214,7 +233,7 @@ const candidateSet = {
 	status: "ready",
 	primary: false,
 	metadata: { visual_role: "candidate_set" },
-	frames: Array.from({ length: 11 }, (_, index) => ({
+	frames: Array.from({ length: 16 }, (_, index) => ({
 		index,
 		label: `候选 ${index + 1}`,
 		url: `https://cdn.example.com/device-${index + 1}.jpg`,
@@ -224,11 +243,30 @@ const candidateSet = {
 
 assertDeepEqual(getLatestAssetVisualCandidateSet([manualVisual, candidateSet])?.id, "visual-candidate-set")
 const candidateFrames = getAssetVisualCandidateFrames(candidateSet)
-assertDeepEqual(candidateFrames.length, 10)
+assertDeepEqual(candidateFrames.length, 15)
 assertDeepEqual(
 	groupAssetVisualCandidateFramesByColor(candidateFrames).map((group) => [group.color, group.frames.length]),
 	[
 		["墨羽", 2],
-		["幽芒", 8],
+		["幽芒", 13],
 	]
 )
+
+const tracedCandidateSet = {
+	id: "visual-traced-candidate-set",
+	asset: "asset-123",
+	kind: "official_reference",
+	status: "ready",
+	metadata: { visual_role: "candidate_set" },
+	frames: [
+		{
+			index: 0,
+			label: "候选 1",
+			url: "https://cdn.example.com/redmi-k50-black.jpg",
+			provider: "bing_images",
+			source_title: "Redmi K50 墨羽",
+		},
+	],
+} as unknown as AssetVisualRecord
+
+assertDeepEqual(getAssetVisualCandidateFrames(tracedCandidateSet)[0]?.sourceProvider, "bing_images")

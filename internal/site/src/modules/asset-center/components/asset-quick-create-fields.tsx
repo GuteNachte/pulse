@@ -99,37 +99,39 @@ export function QuickAssetCreateFields({
 				<Input
 					value={form.name}
 					onChange={(event) => onFormValue("name", event.target.value)}
-					placeholder="可选，留空按型号和内部型号自动生成"
+					placeholder={form.type === "phone" ? "可选，留空按型号和内部型号自动生成" : "可选，留空按型号自动生成"}
 				/>
 			</AssetFormField>
-			<AssetFormField label="IPv4 地址" required capture="agent_required">
+			<AssetFormField label="IPv4 地址" required>
 				<Input
 					value={form.management_ip}
 					onChange={(event) => onFormValue("management_ip", event.target.value)}
 					placeholder="192.168.1.10"
 				/>
 			</AssetFormField>
-			<AssetFormField label="厂商 / 品牌" required capture="future_collectable">
+			<AssetFormField label="厂商 / 品牌" required>
 				<Input
 					value={form.vendor}
 					onChange={(event) => onFormValue("vendor", event.target.value)}
 					placeholder="例如 小米 / Redmi / TP-Link / 自组"
 				/>
 			</AssetFormField>
-			<AssetFormField label="型号 / 规格" required capture="future_collectable">
+			<AssetFormField label="型号 / 规格" required>
 				<Input
 					value={form.model}
 					onChange={(event) => onFormValue("model", event.target.value)}
 					placeholder="例如 Redmi K50 / V271-20 / CM754"
 				/>
 			</AssetFormField>
-			<AssetFormField label="内部型号 / 搜索代码" required capture="future_collectable">
-				<Input
-					value={form.metadata.internal_model ?? ""}
-					onChange={(event) => onMetadataValue("internal_model", event.target.value)}
-					placeholder="例如 22021211RC / 产品内部代号 / 硬件代码"
-				/>
-			</AssetFormField>
+			{form.type === "phone" && (
+				<AssetFormField label="内部型号 / 搜索代码" required>
+					<Input
+						value={form.metadata.internal_model ?? ""}
+						onChange={(event) => onMetadataValue("internal_model", event.target.value)}
+						placeholder="例如 22021211RC / 产品内部代号 / 硬件代码"
+					/>
+				</AssetFormField>
+			)}
 			<AssetFormField label="外观颜色">
 				<Input
 					value={form.metadata.color ?? ""}

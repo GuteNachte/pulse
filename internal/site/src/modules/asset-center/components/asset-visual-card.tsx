@@ -1,22 +1,23 @@
 import { ImageIcon } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
-import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 import type { AssetVisualRecord } from "@/types"
-import { getAssetDisplayVisual, getAssetVisualStageLayout, getDisplayAssetVisualFrames } from "../asset-visual-query"
+import {
+	getAssetDisplayVisual,
+	getAssetVisualCrop,
+	getAssetVisualStageLayout,
+	getDisplayAssetVisualFrames,
+} from "../asset-visual-query"
+import { useAssetVisualPreviewURL } from "./asset-visual-preview"
 
 export function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
-	const { theme } = useTheme()
-	const [systemTheme, setSystemTheme] = useState<"dark" | "light">(() =>
-		typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-	)
 	const latestVisual = getAssetDisplayVisual(visuals)
 	const frames = useMemo(() => getDisplayAssetVisualFrames(latestVisual), [latestVisual])
 	const activeFrame = frames[0]
+	const activeCrop = getAssetVisualCrop(activeFrame)
+	const previewURL = useAssetVisualPreviewURL(activeFrame?.url)
 	const [activeImageSize, setActiveImageSize] = useState<{ width: number; height: number } | null>(null)
-	const effectiveTheme = theme === "system" ? systemTheme : theme
-	const isDarkVisualStage = effectiveTheme === "dark" && Boolean(activeFrame?.url)
 	const activeImageRatio =
 		activeImageSize && activeImageSize.height > 0 ? activeImageSize.width / activeImageSize.height : 0
 	const useLandscapeImageLayout = activeImageRatio > 1.12
@@ -28,15 +29,6 @@ export function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 	)
 
 	useEffect(() => {
-		if (theme !== "system" || typeof window === "undefined") return
-		const media = window.matchMedia("(prefers-color-scheme: dark)")
-		const syncSystemTheme = () => setSystemTheme(media.matches ? "dark" : "light")
-		syncSystemTheme()
-		media.addEventListener("change", syncSystemTheme)
-		return () => media.removeEventListener("change", syncSystemTheme)
-	}, [theme])
-
-	useEffect(() => {
 		setActiveImageSize(null)
 	}, [activeFrame?.url])
 
@@ -45,46 +37,35 @@ export function AssetVisualCard({ visuals }: { visuals: AssetVisualRecord[] }) {
 			<CardContent className="p-2">
 				<div
 					className={cn(
-						"relative isolate mx-auto grid w-full select-none place-items-center overflow-hidden rounded-md border border-border/70 bg-card dark:bg-background",
-						visualStageLayout.stageClassName,
-						isDarkVisualStage &&
-							"border-white/10 bg-[#050506] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05),inset_0_-80px_120px_rgba(0,0,0,0.55)]"
+						"relative isolate mx-auto grid w-full select-none place-items-center overflow-hidden rounded-md border border-border/70 bg-[#e5e7e5]",
+						visualStageLayout.stageClassName
 					)}
-					style={{
-						maxWidth: visualStageLayout.maxWidth,
-					}}
+					style={{ maxWidth: visualStageLayout.maxWidth }}
 				>
 					{activeFrame?.url ? (
-						<>
-							{isDarkVisualStage && (
-								<>
-									<div
-										aria-hidden="true"
-										className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(10,10,12,0.30)_38%,rgba(5,5,6,0.86)_100%)]"
-									/>
-									<div
-										aria-hidden="true"
-										className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_28%,rgba(0,0,0,0.36)_100%)]"
-									/>
-								</>
-							)}
-							<img
-								src={activeFrame.url}
-								alt="设备全貌图"
-								className={cn(
-									"relative z-10 h-full w-full",
-									visualStageLayout.imageClassName,
-									isDarkVisualStage && "brightness-110 contrast-110 drop-shadow-[0_30px_52px_rgba(0,0,0,0.72)]"
-								)}
-								onLoad={(event) =>
-									setActiveImageSize({
-										width: event.currentTarget.naturalWidth,
-										height: event.currentTarget.naturalHeight,
-									})
-								}
-								draggable={false}
-							/>
-						</>
+						<img
+							src={previewURL}
+							alt="设备全貌图"
+							className={cn("relative z-10 h-full w-full", visualStageLayout.imageClassName)}
+							style={
+								activeCrop
+									? {
+											width: `${100 / activeCrop.width}%`,
+											height: `${100 / activeCrop.height}%`,
+											maxWidth: "none",
+											left: `${(-activeCrop.x / activeCrop.width) * 100}%`,
+											top: `${(-activeCrop.y / activeCrop.height) * 100}%`,
+										}
+									: undefined
+							}
+							onLoad={(event) =>
+								setActiveImageSize({
+									width: event.currentTarget.naturalWidth,
+									height: event.currentTarget.naturalHeight,
+								})
+							}
+							draggable={false}
+						/>
 					) : (
 						<div className="grid place-items-center gap-2 text-center text-muted-foreground">
 							<div className="grid size-12 place-items-center rounded-md border border-border/70 bg-card">

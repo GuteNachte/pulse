@@ -2,7 +2,16 @@ import assert from "node:assert/strict"
 import { buildInternetResourceName, getAssetFormSections, isInternetResourceAssetType } from "./asset-schema.ts"
 
 const internetFields = getAssetFormSections("internet").flatMap((section) => section.fields.map((field) => field.key))
-assert.deepEqual(internetFields, ["vendor", "down_mbps", "up_mbps", "public_ipv4", "public_ipv6"])
+assert.deepEqual(internetFields, [
+	"vendor",
+	"down_mbps",
+	"up_mbps",
+	"public_ipv4",
+	"public_ipv6",
+	"renewal_date",
+	"recurring_price_cny",
+	"billing_cycle",
+])
 
 const internetForm = {
 	name: "",

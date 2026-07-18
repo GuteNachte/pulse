@@ -37,9 +37,7 @@ const ASSET_MISSING_FIELD_ALIASES: Record<string, string[]> = {
 	location: ["资产位置", "位置", "房间"],
 	role: ["用途", "角色"],
 	management_ip: ["IPv4", "IP", "管理 IP", "固定 IP"],
-	support_url: ["厂家支持页", "支持页", "官网"],
-	product_url: ["厂家产品页", "官方产品页", "规格页"],
-	official_url: ["厂家官网资料页", "官网资料页", "说明书"],
+	official_url: ["官方网站", "厂家官网", "官网资料页", "说明书"],
 	fixed_ipv4: ["IPv4", "IP", "固定 IP", "固定 IPv4", "URL"],
 	fixed_ipv6: ["IPv6", "固定 IPv6"],
 	mac: ["MAC", "主 MAC", "管理 MAC"],
@@ -63,12 +61,10 @@ const ASSET_MISSING_FIELD_ALIASES: Record<string, string[]> = {
 	gpu_board_vendor: ["显卡板卡品牌"],
 	gpu_support_url: ["显卡支持页", "显卡驱动页"],
 	gpu_vram_gb: ["显存"],
-	memory_detail: ["内存品牌", "内存规格"],
+	memory_detail: ["内存规格"],
 	memory_vendor: ["内存品牌"],
-	memory_model: ["内存型号", "内存颗粒"],
 	memory_type: ["内存类型"],
 	memory_speed_mhz: ["内存频率"],
-	memory_slots_summary: ["内存插槽"],
 	memory_support_url: ["内存支持页", "内存保修页"],
 	storage_detail: ["硬盘品牌", "硬盘型号"],
 	storage_vendor: ["硬盘品牌", "存储品牌"],
@@ -90,8 +86,6 @@ const ASSET_MISSING_FIELD_ALIASES: Record<string, string[]> = {
 	psu_vendor: ["电源品牌"],
 	psu_model: ["电源型号", "电源功率"],
 	psu_support_url: ["电源支持页", "电源保修页"],
-	hardware_fingerprint_note: ["专项识别依据", "硬件 ID", "DMI", "PCI", "SMART"],
-	hardware_match_note: ["专项识别匹配备注", "匹配来源", "硬件资料来源"],
 	vcpu: ["vCPU"],
 	disk_gb: ["磁盘"],
 	url: ["URL"],
@@ -138,15 +132,20 @@ export function buildSuggestedAssetName(form: AssetFormState) {
 	if (form.type === "internet") {
 		return buildInternetResourceName(form.vendor)
 	}
-	const fixedSpecName = buildFixedSpecAssetName(form.type, form.model, form.metadata.internal_model)
+	const internalModel = form.type === "phone" ? form.metadata.internal_model : undefined
+	const fixedSpecName = buildFixedSpecAssetName(form.type, form.model, internalModel)
 	if (fixedSpecName) return fixedSpecName
 	const model = form.model.trim()
-	const internalModel = form.metadata.internal_model?.trim() ?? ""
+	const normalizedInternalModel = internalModel?.trim() ?? ""
 	if (!model) return ""
-	if (!internalModel || model.includes(`(${internalModel})`) || model.includes(`（${internalModel}）`)) {
+	if (
+		!normalizedInternalModel ||
+		model.includes(`(${normalizedInternalModel})`) ||
+		model.includes(`（${normalizedInternalModel}）`)
+	) {
 		return model
 	}
-	return `${model} (${internalModel})`
+	return `${model} (${normalizedInternalModel})`
 }
 
 export function shouldReplaceAssetNameWithSuggestion(current: AssetFormState) {

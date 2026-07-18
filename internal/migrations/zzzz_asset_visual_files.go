@@ -16,7 +16,7 @@ func init() {
 		}
 		collection.Fields.Add(&core.FileField{
 			Name:      "files",
-			MaxSelect: 10,
+			MaxSelect: 15,
 			MaxSize:   4 << 20,
 			MimeTypes: []string{"image/jpeg", "image/png", "image/webp"},
 			Thumbs:    []string{"1280x1280f", "480x480f"},

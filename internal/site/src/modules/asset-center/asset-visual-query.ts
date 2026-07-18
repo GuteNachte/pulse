@@ -13,6 +13,32 @@ const assetVisualDisplayFields = "id,asset,kind,status,primary,files,frames,meta
 
 export type AssetVisualFileURLBuilder = (recordId: string, file: string) => string
 
+export function getAssetVisualCandidateLimit(assetType: string) {
+	return assetType === "internet" || assetType === "web_endpoint" ? 4 : 15
+}
+
+export function getAssetVisualCrop(frame: { crop?: unknown } | undefined) {
+	const crop = frame?.crop
+	if (!crop || typeof crop !== "object") return undefined
+	const values = crop as Record<string, unknown>
+	const x = Number(values.x)
+	const y = Number(values.y)
+	const width = Number(values.width)
+	const height = Number(values.height)
+	if (
+		![x, y, width, height].every(Number.isFinite) ||
+		x < 0 ||
+		y < 0 ||
+		width <= 0 ||
+		height <= 0 ||
+		x + width > 1 ||
+		y + height > 1
+	) {
+		return undefined
+	}
+	return { x, y, width, height }
+}
+
 export async function loadDisplayAssetVisuals(
 	collection: AssetVisualCollection,
 	assetId: string,
@@ -78,34 +104,13 @@ export function getAssetDisplayVisual(visuals: AssetVisualRecord[]) {
 
 export function getAssetVisualStageLayout(
 	hasVisual: boolean,
-	useLandscapeImageLayout: boolean,
-	isProviderLogo = false
+	_useLandscapeImageLayout: boolean,
+	_isProviderLogo = false
 ) {
-	if (!hasVisual) {
-		return {
-			stageClassName: "aspect-[16/10]",
-			imageClassName: "",
-			maxWidth: "100%",
-		}
-	}
-	if (useLandscapeImageLayout) {
-		return {
-			stageClassName: "aspect-[4/3]",
-			imageClassName: "object-cover p-0",
-			maxWidth: "100%",
-		}
-	}
-	if (isProviderLogo) {
-		return {
-			stageClassName: "aspect-square",
-			imageClassName: "object-contain p-8",
-			maxWidth: "min(100%, 22rem)",
-		}
-	}
 	return {
-		stageClassName: "aspect-[3/4]",
-		imageClassName: "object-contain p-1 sm:p-2",
-		maxWidth: "min(100%, calc((100vh - 10rem) * 0.75), 24rem)",
+		stageClassName: "aspect-[16/9]",
+		imageClassName: hasVisual ? "object-contain p-1 sm:p-2" : "",
+		maxWidth: "100%",
 	}
 }
 
@@ -116,6 +121,7 @@ export type AssetVisualCandidateFrame = {
 	url: string
 	sourceTitle?: string
 	sourceUrl?: string
+	sourceProvider?: string
 	color?: string
 }
 
@@ -143,12 +149,13 @@ export function getAssetVisualCandidateFrames(visual: AssetVisualRecord | undefi
 				label: frame.label || `候选 ${index + 1}`,
 				url: frame.url,
 				color: frame.color,
+				sourceProvider: frame.provider,
 				sourceTitle: frame.source_title,
 				sourceUrl: frame.source_url,
 			}
 		})
 		.filter((item): item is AssetVisualCandidateFrame => Boolean(item))
-		.slice(0, 10)
+		.slice(0, 15)
 }
 
 export function groupAssetVisualCandidateFramesByColor(frames: AssetVisualCandidateFrame[]) {

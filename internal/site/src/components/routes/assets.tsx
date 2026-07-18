@@ -1,5 +1,5 @@
 import {
-	BoxesIcon,
+	ArchiveIcon,
 	ChevronDownIcon,
 	ChevronRightIcon,
 	FileInputIcon,
@@ -91,7 +91,6 @@ import {
 	getAssetListCounts,
 	groupMaintenanceByAsset,
 	hasAssetListFilters,
-	type AssetLifecycleFilter,
 	type AssetMonitorFilter,
 	type AssetProfileFilter,
 } from "@/modules/asset-center/asset-list"
@@ -124,16 +123,6 @@ type AssetFormMode = "quick" | "full"
 
 const monitorFilterValues: AssetMonitorFilter[] = ["all", "monitored", "unmonitored", "monitorable"]
 const profileFilterValues: AssetProfileFilter[] = ["all", "complete", "usable", "attention", "incomplete", "critical"]
-const lifecycleFilterValues: AssetLifecycleFilter[] = [
-	"all",
-	"attention",
-	"warranty-expired",
-	"warranty-soon",
-	"warranty-missing",
-	"warranty-ok",
-	"maintained",
-	"unmaintained",
-]
 const assetTypeValues = ASSET_TYPE_OPTIONS.map((option) => option.value)
 const assetStatusValues = STATUS_OPTIONS.map((option) => option.value)
 export default memo(function AssetsPage() {
@@ -166,7 +155,6 @@ export default memo(function AssetsPage() {
 	const [locationFilter, setLocationFilter] = useState(initialFilters.locationFilter)
 	const [monitorFilter, setMonitorFilter] = useState<AssetMonitorFilter>(initialFilters.monitorFilter)
 	const [profileFilter, setProfileFilter] = useState<AssetProfileFilter>(initialFilters.profileFilter)
-	const [lifecycleFilter, setLifecycleFilter] = useState<AssetLifecycleFilter>(initialFilters.lifecycleFilter)
 	const readOnly = isReadOnlyUser()
 	const assetsById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets])
 
@@ -256,23 +244,10 @@ export default memo(function AssetsPage() {
 			statusFilter,
 			locationFilter,
 			monitorFilter,
-			lifecycleFilter,
 			profileFilter,
 			monitoredAssetIds,
-			maintenanceByAsset,
 		})
-	}, [
-		assets,
-		lifecycleFilter,
-		locationFilter,
-		maintenanceByAsset,
-		monitorFilter,
-		monitoredAssetIds,
-		profileFilter,
-		search,
-		statusFilter,
-		typeFilter,
-	])
+	}, [assets, locationFilter, monitorFilter, monitoredAssetIds, profileFilter, search, statusFilter, typeFilter])
 
 	const counts = useMemo(() => {
 		return getAssetListCounts({
@@ -328,7 +303,6 @@ export default memo(function AssetsPage() {
 		locationFilter,
 		monitorFilter,
 		profileFilter,
-		lifecycleFilter,
 	})
 	const formSections = useMemo(() => getAssetFormSections(form.type), [form.type])
 	const editingCompleteness = useMemo(() => (editing ? getAssetCompleteness(editing) : undefined), [editing])
@@ -351,7 +325,6 @@ export default memo(function AssetsPage() {
 		setLocationFilter("all")
 		setMonitorFilter("all")
 		setProfileFilter("all")
-		setLifecycleFilter("all")
 		window.history.replaceState(null, "", window.location.pathname)
 	}
 
@@ -767,7 +740,7 @@ export default memo(function AssetsPage() {
 					<div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
 						<div className="flex min-w-0 items-center gap-3">
 							<div className="grid size-10 shrink-0 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
-								<BoxesIcon className="size-5" />
+								<ArchiveIcon className="size-5" />
 							</div>
 							<div className="min-w-0">
 								<h1 className="truncate text-2xl font-semibold text-foreground">资产中心</h1>
@@ -873,20 +846,6 @@ export default memo(function AssetsPage() {
 								<option value="monitored">已接入监控</option>
 								<option value="unmonitored">未接入监控</option>
 								<option value="monitorable">可接入未接入</option>
-							</select>
-							<select
-								value={lifecycleFilter}
-								onChange={(event) => setLifecycleFilter(event.target.value as AssetLifecycleFilter)}
-								className="h-9 min-w-0 rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus:border-ring/70 focus:ring-2 focus:ring-ring/15 lg:w-32 xl:w-40"
-							>
-								<option value="all">全部生命周期</option>
-								<option value="attention">需关注</option>
-								<option value="warranty-expired">保修已过期</option>
-								<option value="warranty-soon">保修临近</option>
-								<option value="warranty-ok">保修有效</option>
-								<option value="warranty-missing">未填保修</option>
-								<option value="maintained">有维护记录</option>
-								<option value="unmaintained">无维护记录</option>
 							</select>
 							<select
 								value={profileFilter}
@@ -1351,7 +1310,6 @@ function getInitialAssetFiltersFromUrl() {
 	const status = params.get("status")
 	const monitor = params.get("monitor")
 	const profile = params.get("profile")
-	const lifecycle = params.get("lifecycle")
 	const location = params.get("location")
 	return {
 		search: params.get("q") ?? "",
@@ -1360,7 +1318,6 @@ function getInitialAssetFiltersFromUrl() {
 		locationFilter: location?.trim() || "all",
 		monitorFilter: isMonitorFilter(monitor) ? monitor : "all",
 		profileFilter: isProfileFilter(profile) ? profile : "all",
-		lifecycleFilter: isLifecycleFilter(lifecycle) ? lifecycle : "all",
 	}
 }
 
@@ -1378,8 +1335,4 @@ function isMonitorFilter(value: string | null): value is AssetMonitorFilter {
 
 function isProfileFilter(value: string | null): value is AssetProfileFilter {
 	return Boolean(value && profileFilterValues.includes(value as AssetProfileFilter))
-}
-
-function isLifecycleFilter(value: string | null): value is AssetLifecycleFilter {
-	return Boolean(value && lifecycleFilterValues.includes(value as AssetLifecycleFilter))
 }

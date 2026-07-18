@@ -92,17 +92,18 @@ func countEnrichmentConflicts(suggestions []assetEnrichmentSuggestionInput) int 
 }
 
 func dedupeEnrichmentSuggestions(items []assetEnrichmentSuggestionInput) []assetEnrichmentSuggestionInput {
-	seen := map[string]bool{}
+	seen := map[string]int{}
 	result := make([]assetEnrichmentSuggestionInput, 0, len(items))
 	for _, item := range items {
 		if item.TargetCollection == "" || item.TargetField == "" || strings.TrimSpace(item.RecommendedValue) == "" {
 			continue
 		}
 		key := strings.Join([]string{item.TargetCollection, item.TargetRecord, item.TargetField, normalizeComparableSuggestion(item.RecommendedValue)}, "\x00")
-		if seen[key] {
+		if index, ok := seen[key]; ok {
+			mergeAssetEnrichmentSuggestionSources(&result[index], item)
 			continue
 		}
-		seen[key] = true
+		seen[key] = len(result)
 		result = append(result, item)
 	}
 	sort.SliceStable(result, func(i, j int) bool {
@@ -112,6 +113,24 @@ func dedupeEnrichmentSuggestions(items []assetEnrichmentSuggestionInput) []asset
 		return result[i].Confidence > result[j].Confidence
 	})
 	return result
+}
+
+func mergeAssetEnrichmentSuggestionSources(target *assetEnrichmentSuggestionInput, incoming assetEnrichmentSuggestionInput) {
+	if target == nil {
+		return
+	}
+	if target.CollectedValue == "" {
+		target.CollectedValue = incoming.CollectedValue
+	}
+	if target.OnlineValue == "" {
+		target.OnlineValue = incoming.OnlineValue
+	}
+	if incoming.Confidence > target.Confidence {
+		target.Confidence = incoming.Confidence
+		target.Notes = incoming.Notes
+		target.Metadata = incoming.Metadata
+	}
+	target.Conflict = target.Conflict || incoming.Conflict
 }
 
 func sameSuggestionValue(left string, right string) bool {

@@ -96,46 +96,60 @@ const commonIdentityFields: AssetFieldDefinition[] = [
 const hardwareIdentityFields: AssetFieldDefinition[] = [
 	{ key: "vendor", label: "厂商 / 品牌", source: "asset", placeholder: "例如 Intel / TP-Link / 自组" },
 	{ key: "model", label: "型号 / 规格", source: "asset", placeholder: "例如 V271-20 / CM754" },
-	{
-		key: "internal_model",
-		label: "内部型号",
-		source: "metadata",
-		placeholder: "例如 22021211RC / 产品内部代号",
-		capture: "manual",
-	},
 	{ key: "serial_number", label: "序列号", source: "asset", placeholder: "可选，保修和盘点用" },
 	{
-		key: "support_url",
-		label: "厂家官方支持页",
-		source: "metadata",
-		type: "url",
-		placeholder: "该型号支持 / 下载 / 保修页面 URL，不填厂家首页",
-		capture: "manual",
-	},
-	{
-		key: "product_url",
-		label: "厂家官方产品页",
-		source: "metadata",
-		type: "url",
-		placeholder: "该型号官网产品 / 规格页面 URL",
-		capture: "manual",
-	},
-	{
 		key: "official_url",
-		label: "厂家官网资料页",
+		label: "官方网站",
 		source: "metadata",
 		type: "url",
-		placeholder: "官网资料、说明书或品牌资料页面 URL",
+		placeholder: "主设备厂商官网或型号官方资料页面 URL",
 		capture: "manual",
 	},
 	{ key: "asset_tag", label: "资产编号", source: "metadata", placeholder: "自定义编号，可选" },
 ]
 
-const lifecycleFields: AssetFieldDefinition[] = [
+const phoneInternalModelField: AssetFieldDefinition = {
+	key: "internal_model",
+	label: "内部型号",
+	source: "metadata",
+	placeholder: "例如 22021211RC / 产品内部代号",
+	capture: "manual",
+}
+
+function getHardwareIdentityFields(type: AssetType) {
+	return type === "phone" ? [...hardwareIdentityFields, phoneInternalModelField] : hardwareIdentityFields
+}
+
+const purchaseInfoFields: AssetFieldDefinition[] = [
 	{ key: "purchase_date", label: "购买日期", source: "metadata", type: "date" },
-	{ key: "online_date", label: "上线日期", source: "metadata", type: "date" },
-	{ key: "warranty_until", label: "保修到期", source: "metadata", type: "date" },
-	{ key: "owner", label: "归属 / 责任人", source: "metadata", placeholder: "可选" },
+	{ key: "purchase_price_cny", label: "购买价格（元）", source: "metadata", type: "number", placeholder: "例如 2999" },
+]
+
+const serviceSubscriptionFields: AssetFieldDefinition[] = [
+	{ key: "renewal_date", label: "到期日期", source: "metadata", type: "date", capture: "manual" },
+	{
+		key: "recurring_price_cny",
+		label: "续费价格（元）",
+		source: "metadata",
+		type: "number",
+		placeholder: "例如 120",
+		capture: "manual",
+	},
+	{
+		key: "billing_cycle",
+		label: "计费周期",
+		source: "metadata",
+		type: "select",
+		capture: "manual",
+		options: [
+			{ value: "monthly", label: "月付" },
+			{ value: "quarterly", label: "季付" },
+			{ value: "semiannual", label: "半年付" },
+			{ value: "yearly", label: "年付" },
+			{ value: "usage", label: "按量计费" },
+			{ value: "free", label: "免费 / 无续费" },
+		],
+	},
 ]
 
 const fixedAddressFields: AssetFieldDefinition[] = [
@@ -195,14 +209,6 @@ const hostSpecFields: AssetFieldDefinition[] = [
 		capture: "agent_collectable",
 	},
 	{
-		key: "cpu_support_url",
-		label: "CPU 官方支持页",
-		source: "metadata",
-		type: "url",
-		placeholder: "CPU 厂商官方规格 / 支持页面",
-		capture: "future_collectable",
-	},
-	{
 		key: "memory_gb",
 		label: "内存 GB",
 		source: "metadata",
@@ -212,7 +218,7 @@ const hostSpecFields: AssetFieldDefinition[] = [
 	},
 	{
 		key: "storage_summary",
-		label: "存储摘要",
+		label: "当前存储摘要",
 		source: "metadata",
 		placeholder: "SMART / Agent 接入后可采集，也可先手动填写",
 		span: "full",
@@ -226,17 +232,19 @@ const hostSpecFields: AssetFieldDefinition[] = [
 		placeholder: "Agent 接入后可采集",
 		capture: "agent_collectable",
 	},
-	{
-		key: "planned_agent",
-		label: "计划接入 Agent",
-		source: "metadata",
-		type: "select",
-		options: yesNoOptions,
-		capture: "manual",
-	},
 ]
 
 const hostHardwareDetailFields: AssetFieldDefinition[] = [
+	{
+		key: "length_mm",
+		label: "长度 mm",
+		source: "metadata",
+		type: "number",
+		placeholder: "例如 180",
+		capture: "manual",
+	},
+	{ key: "width_mm", label: "宽度 mm", source: "metadata", type: "number", placeholder: "例如 180", capture: "manual" },
+	{ key: "height_mm", label: "高度 mm", source: "metadata", type: "number", placeholder: "例如 48", capture: "manual" },
 	{
 		key: "motherboard_vendor",
 		label: "主板品牌",
@@ -249,14 +257,6 @@ const hostHardwareDetailFields: AssetFieldDefinition[] = [
 		label: "主板型号",
 		source: "metadata",
 		placeholder: "例如 B760M / X670E",
-		capture: "future_collectable",
-	},
-	{
-		key: "motherboard_support_url",
-		label: "主板支持页",
-		source: "metadata",
-		type: "url",
-		placeholder: "主板型号对应的官网支持 / BIOS / 驱动页",
 		capture: "future_collectable",
 	},
 	{
@@ -295,14 +295,6 @@ const hostHardwareDetailFields: AssetFieldDefinition[] = [
 		capture: "future_collectable",
 	},
 	{
-		key: "gpu_support_url",
-		label: "显卡支持页",
-		source: "metadata",
-		type: "url",
-		placeholder: "板卡厂商官网支持 / 驱动页",
-		capture: "future_collectable",
-	},
-	{
 		key: "gpu_vram_gb",
 		label: "显存 GB",
 		source: "metadata",
@@ -312,9 +304,9 @@ const hostHardwareDetailFields: AssetFieldDefinition[] = [
 	},
 	{
 		key: "memory_detail",
-		label: "内存品牌 / 规格",
+		label: "内存规格",
 		source: "metadata",
-		placeholder: "例如 Kingston DDR5 32GBx2 6000",
+		placeholder: "例如 16 GB x 2",
 		capture: "future_collectable",
 	},
 	{
@@ -325,45 +317,46 @@ const hostHardwareDetailFields: AssetFieldDefinition[] = [
 		capture: "future_collectable",
 	},
 	{
-		key: "memory_model",
-		label: "内存型号 / 颗粒",
-		source: "metadata",
-		placeholder: "Part Number / 颗粒备注",
-		capture: "future_collectable",
-	},
-	{
 		key: "memory_type",
-		label: "内存类型",
+		label: "当前内存类型",
 		source: "metadata",
 		placeholder: "DDR4 / DDR5 / LPDDR5",
 		capture: "future_collectable",
 	},
 	{
 		key: "memory_speed_mhz",
-		label: "内存频率 MHz",
+		label: "当前内存频率 MHz",
 		source: "metadata",
 		type: "number",
 		placeholder: "6000",
 		capture: "future_collectable",
 	},
 	{
-		key: "memory_slots_summary",
-		label: "内存插槽摘要",
+		key: "max_memory_gb",
+		label: "最大内存容量 GB",
 		source: "metadata",
-		placeholder: "2/4 槽，32GB x2",
+		type: "number",
+		placeholder: "例如 64",
 		capture: "future_collectable",
 	},
 	{
-		key: "memory_support_url",
-		label: "内存支持页",
+		key: "supported_memory_type",
+		label: "支持内存类型",
 		source: "metadata",
-		type: "url",
-		placeholder: "内存厂商官方支持 / 规格 / 保修页",
+		placeholder: "例如 DDR5 SO-DIMM",
+		capture: "future_collectable",
+	},
+	{
+		key: "memory_channel_count",
+		label: "内存通道数量",
+		source: "metadata",
+		type: "number",
+		placeholder: "例如 2",
 		capture: "future_collectable",
 	},
 	{
 		key: "storage_detail",
-		label: "硬盘品牌 / 型号",
+		label: "当前硬盘品牌 / 型号",
 		source: "metadata",
 		placeholder: "例如 Samsung 990 Pro 2TB / WD Red 8TB",
 		capture: "future_collectable",
@@ -371,40 +364,32 @@ const hostHardwareDetailFields: AssetFieldDefinition[] = [
 	},
 	{
 		key: "storage_vendor",
-		label: "主存储品牌",
+		label: "当前主存储品牌",
 		source: "metadata",
 		placeholder: "Samsung / WD / Seagate / Crucial",
 		capture: "future_collectable",
 	},
 	{
 		key: "storage_model",
-		label: "主存储型号",
+		label: "当前主存储型号",
 		source: "metadata",
 		placeholder: "例如 990 Pro / SN850X / IronWolf",
 		capture: "future_collectable",
 	},
 	{
 		key: "storage_media",
-		label: "存储介质 / 总线",
+		label: "当前存储介质 / 总线",
 		source: "metadata",
 		placeholder: "NVMe SSD / SATA SSD / HDD",
 		capture: "future_collectable",
 	},
 	{
 		key: "storage_serial_note",
-		label: "硬盘序列号备注",
+		label: "当前硬盘序列号备注",
 		source: "metadata",
 		placeholder: "多盘可写摘要，详细盘建议后续独立资产化",
 		capture: "future_collectable",
 		span: "full",
-	},
-	{
-		key: "storage_support_url",
-		label: "存储支持页",
-		source: "metadata",
-		type: "url",
-		placeholder: "硬盘 / SSD 厂商支持、固件或保修页",
-		capture: "future_collectable",
 	},
 	{
 		key: "nic_detail",
@@ -442,51 +427,6 @@ const hostHardwareDetailFields: AssetFieldDefinition[] = [
 		capture: "future_collectable",
 	},
 	{
-		key: "nic_support_url",
-		label: "网卡驱动 / 支持页",
-		source: "metadata",
-		type: "url",
-		placeholder: "网卡芯片或整卡官网驱动 / 支持页",
-		capture: "future_collectable",
-	},
-	{
-		key: "wifi_support_url",
-		label: "无线网卡驱动 / 支持页",
-		source: "metadata",
-		type: "url",
-		placeholder: "无线网卡芯片或整卡官网驱动 / 支持页",
-		capture: "future_collectable",
-	},
-	{
-		key: "chassis_power_detail",
-		label: "机箱 / 电源",
-		source: "metadata",
-		placeholder: "例如 机箱型号、电源品牌和功率",
-		capture: "manual",
-	},
-	{
-		key: "chassis_vendor",
-		label: "机箱品牌",
-		source: "metadata",
-		placeholder: "可选",
-		capture: "manual",
-	},
-	{
-		key: "chassis_model",
-		label: "机箱型号",
-		source: "metadata",
-		placeholder: "可选",
-		capture: "manual",
-	},
-	{
-		key: "chassis_support_url",
-		label: "机箱支持页",
-		source: "metadata",
-		type: "url",
-		placeholder: "机箱厂商官方产品 / 支持页",
-		capture: "manual",
-	},
-	{
 		key: "psu_vendor",
 		label: "电源品牌",
 		source: "metadata",
@@ -500,30 +440,6 @@ const hostHardwareDetailFields: AssetFieldDefinition[] = [
 		placeholder: "例如 850W 金牌",
 		capture: "manual",
 	},
-	{
-		key: "psu_support_url",
-		label: "电源支持页",
-		source: "metadata",
-		type: "url",
-		placeholder: "电源厂商官方产品 / 支持 / 保修页",
-		capture: "manual",
-	},
-	{
-		key: "hardware_fingerprint_note",
-		label: "专项识别依据",
-		source: "metadata",
-		placeholder: "DMI / PCI / USB / SMART 硬件 ID 摘要，后续专项 Agent 可采集匹配",
-		capture: "future_collectable",
-		span: "full",
-	},
-	{
-		key: "hardware_match_note",
-		label: "专项识别匹配备注",
-		source: "metadata",
-		placeholder: "记录已确认的型号匹配、资料来源和不能自动覆盖的原因",
-		capture: "future_collectable",
-		span: "full",
-	},
 ]
 
 const hostTypeSpecificFields: Partial<Record<AssetType, AssetFieldDefinition[]>> = {
@@ -531,6 +447,14 @@ const hostTypeSpecificFields: Partial<Record<AssetType, AssetFieldDefinition[]>>
 		{ key: "cpu_socket_count", label: "CPU 插槽数量", source: "metadata", type: "number", placeholder: "1" },
 		{ key: "pcie_slots", label: "PCIe 扩展槽", source: "metadata", placeholder: "x16 / x4 / M.2 插槽摘要" },
 		{ key: "case_form_factor", label: "机箱形态", source: "metadata", placeholder: "ATX 塔式 / ITX / 工作站" },
+		{
+			key: "chassis_power_detail",
+			label: "机箱 / 电源",
+			source: "metadata",
+			placeholder: "例如机箱型号、电源品牌和功率",
+		},
+		{ key: "chassis_vendor", label: "机箱品牌", source: "metadata", placeholder: "可选" },
+		{ key: "chassis_model", label: "机箱型号", source: "metadata", placeholder: "可选" },
 	],
 	nas: [
 		{ key: "bay_count", label: "硬盘位数量", source: "metadata", type: "number", placeholder: "4" },
@@ -548,14 +472,31 @@ const hostTypeSpecificFields: Partial<Record<AssetType, AssetFieldDefinition[]>>
 		{ key: "bmc", label: "带外管理", source: "metadata", placeholder: "iDRAC / iLO / IPMI" },
 		{ key: "redundant_psu", label: "冗余电源", source: "metadata", type: "select", options: yesNoOptions },
 		{ key: "rack_form_factor", label: "机架规格", source: "metadata", placeholder: "1U / 2U / 塔式" },
+		{
+			key: "chassis_power_detail",
+			label: "机箱 / 电源",
+			source: "metadata",
+			placeholder: "例如机箱型号、电源品牌和功率",
+		},
+		{ key: "chassis_vendor", label: "机箱品牌", source: "metadata", placeholder: "可选" },
+		{ key: "chassis_model", label: "机箱型号", source: "metadata", placeholder: "可选" },
 	],
 	mini_pc: [
-		{ key: "form_factor", label: "机身形态", source: "metadata", placeholder: "迷你主机 / NUC / 软路由机箱" },
-		{ key: "storage_slots", label: "存储扩展槽", source: "metadata", placeholder: "M.2 2280 x2 / 2.5 英寸 SATA" },
+		{ key: "form_factor", label: "机身形态", source: "metadata", placeholder: "迷你主机 / NUC / 软路由" },
+		{ key: "storage_slots", label: "官方扩展槽", source: "metadata", placeholder: "M.2 2280 x2 / 2.5 英寸 SATA" },
+		{ key: "ecc_memory", label: "ECC 内存", source: "metadata", type: "select", options: yesNoOptions },
+		{ key: "wifi_support", label: "Wi-Fi", source: "metadata", type: "select", options: yesNoOptions },
+		{ key: "bluetooth_support", label: "蓝牙", source: "metadata", type: "select", options: yesNoOptions },
 		{ key: "display_outputs", label: "显示输出", source: "metadata", placeholder: "HDMI 2.1 / USB4 / DP" },
+		{ key: "audio_output", label: "音频输出", source: "metadata", placeholder: "HDMI / 3.5mm Combo Jack" },
 		{ key: "usb_ports", label: "USB / 扩展接口", source: "metadata", placeholder: "USB4 / USB-A / OCuLink" },
-		{ key: "power_adapter_w", label: "电源适配器", source: "metadata", type: "number", placeholder: "120" },
+		{ key: "power_adapter_w", label: "电源", source: "metadata", placeholder: "例如 DC 19V / 120W" },
 		{ key: "mount_support", label: "安装方式", source: "metadata", placeholder: "VESA / 桌面 / 机柜托盘" },
+		{ key: "preinstalled_os", label: "预装操作系统", source: "metadata", placeholder: "例如 Windows 11" },
+		{ key: "supported_os", label: "支持的操作系统", source: "metadata", placeholder: "例如 Windows 11 / Linux" },
+		{ key: "package_weight_kg", label: "包装重 kg", source: "metadata", type: "number", placeholder: "例如 1.66" },
+		{ key: "weight_kg", label: "净重 kg", source: "metadata", type: "number", placeholder: "例如 0.6" },
+		{ key: "release_date", label: "上市日期", source: "metadata", placeholder: "例如 Q4'22 / 2022-10" },
 	],
 }
 
@@ -692,9 +633,8 @@ const internetFields: AssetFieldDefinition[] = [
 		key: "public_ipv4",
 		label: "公网 IPv4",
 		source: "metadata",
-		placeholder: "保存后自动检测",
-		capture: "agent_collectable",
-		readOnly: true,
+		placeholder: "例如 203.0.113.10",
+		capture: "manual",
 	},
 	{
 		key: "public_ipv6",
@@ -711,13 +651,6 @@ const vmFields: AssetFieldDefinition[] = [
 	{ key: "vcpu", label: "vCPU", source: "metadata", type: "number", placeholder: "4" },
 	{ key: "memory_gb", label: "内存 GB", source: "metadata", type: "number", placeholder: "8" },
 	{ key: "disk_gb", label: "磁盘 GB", source: "metadata", type: "number", placeholder: "128" },
-	{
-		key: "planned_agent",
-		label: "计划接入 Agent",
-		source: "metadata",
-		type: "select",
-		options: yesNoOptions,
-	},
 ]
 
 const personalDeviceFields: AssetFieldDefinition[] = [
@@ -1234,14 +1167,17 @@ const customFields: AssetFieldDefinition[] = [
 
 export function getAssetFormSections(type: AssetType): AssetFieldSection[] {
 	if (type === "internet") {
-		return [{ title: "互联网接入", fields: internetFields }]
+		return [
+			{ title: "互联网接入", fields: internetFields },
+			{ title: "订阅与续费", fields: serviceSubscriptionFields },
+		]
 	}
 	if (NETWORK_ASSET_TYPES.includes(type)) {
 		return [
 			{ title: "基础身份", fields: commonIdentityFields },
-			{ title: "硬件识别", fields: hardwareIdentityFields },
+			{ title: "硬件识别", fields: getHardwareIdentityFields(type) },
 			{ title: "网络参数", fields: getNetworkDeviceFields(type) },
-			{ title: "生命周期", fields: lifecycleFields },
+			{ title: "购买信息", fields: purchaseInfoFields },
 			{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },
 		]
 	}
@@ -1249,75 +1185,75 @@ export function getAssetFormSections(type: AssetType): AssetFieldSection[] {
 		const typeSpecificFields = getHostTypeSpecificFields(type)
 		return [
 			{ title: "基础身份", fields: commonIdentityFields },
-			{ title: "硬件识别", fields: hardwareIdentityFields },
+			{ title: "硬件识别", fields: getHardwareIdentityFields(type) },
 			{ title: "接入信息", fields: agentConnectionFields },
 			{ title: "Agent 可采集规格", fields: hostSpecFields },
 			{ title: "硬件细节", fields: hostHardwareDetailFields },
 			...(typeSpecificFields.length ? [{ title: getHostTypeSpecificTitle(type), fields: typeSpecificFields }] : []),
-			{ title: "生命周期", fields: lifecycleFields },
+			{ title: "购买信息", fields: purchaseInfoFields },
 			{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },
 		]
 	}
 	if (type === "vm") {
 		const vmCollectableFields = vmFields.map((field) => ({
 			...field,
-			capture: field.key === "planned_agent" ? "manual" : "agent_collectable",
+			capture: "agent_collectable",
 		})) satisfies AssetFieldDefinition[]
 		return [
 			{ title: "基础身份", fields: commonIdentityFields },
 			{ title: "接入信息", fields: agentConnectionFields },
 			{ title: "Agent 可采集虚拟化参数", fields: vmCollectableFields },
-			{ title: "生命周期", fields: lifecycleFields },
+			{ title: "购买信息", fields: purchaseInfoFields },
 			{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },
 		]
 	}
 	if (PERSONAL_ASSET_TYPES.includes(type)) {
 		return [
 			{ title: "基础身份", fields: commonIdentityFields },
-			{ title: "硬件识别", fields: hardwareIdentityFields },
+			{ title: "硬件识别", fields: getHardwareIdentityFields(type) },
 			{ title: "固定地址", fields: fixedAddressFields },
 			{ title: "设备参数", fields: getPersonalDeviceFields(type) },
-			{ title: "生命周期", fields: lifecycleFields },
+			{ title: "购买信息", fields: purchaseInfoFields },
 			{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },
 		]
 	}
 	if (type === "camera") {
 		return [
 			{ title: "基础身份", fields: commonIdentityFields },
-			{ title: "硬件识别", fields: hardwareIdentityFields },
+			{ title: "硬件识别", fields: getHardwareIdentityFields(type) },
 			{ title: "固定地址", fields: fixedAddressFields },
 			{ title: "摄像头参数", fields: cameraFields },
-			{ title: "生命周期", fields: lifecycleFields },
+			{ title: "购买信息", fields: purchaseInfoFields },
 			{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },
 		]
 	}
 	if (type === "printer") {
 		return [
 			{ title: "基础身份", fields: commonIdentityFields },
-			{ title: "硬件识别", fields: hardwareIdentityFields },
+			{ title: "硬件识别", fields: getHardwareIdentityFields(type) },
 			{ title: "固定地址", fields: fixedAddressFields },
 			{ title: "打印参数", fields: printerFields },
-			{ title: "生命周期", fields: lifecycleFields },
+			{ title: "购买信息", fields: purchaseInfoFields },
 			{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },
 		]
 	}
 	if (type === "ups") {
 		return [
 			{ title: "基础身份", fields: commonIdentityFields },
-			{ title: "硬件识别", fields: hardwareIdentityFields },
+			{ title: "硬件识别", fields: getHardwareIdentityFields(type) },
 			{ title: "固定地址", fields: fixedAddressFields },
 			{ title: "电源参数", fields: upsFields },
-			{ title: "生命周期", fields: lifecycleFields },
+			{ title: "购买信息", fields: purchaseInfoFields },
 			{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },
 		]
 	}
 	if (SMART_HOME_ASSET_TYPES.includes(type)) {
 		return [
 			{ title: "基础身份", fields: commonIdentityFields },
-			{ title: "硬件识别", fields: hardwareIdentityFields },
+			{ title: "硬件识别", fields: getHardwareIdentityFields(type) },
 			{ title: "固定地址", fields: fixedAddressFields },
 			{ title: "智能家居参数", fields: getSmartHomeFields(type) },
-			{ title: "生命周期", fields: lifecycleFields },
+			{ title: "购买信息", fields: purchaseInfoFields },
 			{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },
 		]
 	}
@@ -1325,15 +1261,15 @@ export function getAssetFormSections(type: AssetType): AssetFieldSection[] {
 		return [
 			{ title: "基础身份", fields: commonIdentityFields },
 			{ title: "互联网服务监控", fields: webEndpointFields },
-			{ title: "生命周期", fields: lifecycleFields },
+			{ title: "订阅与续费", fields: serviceSubscriptionFields },
 			{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },
 		]
 	}
 	return [
 		{ title: "基础身份", fields: commonIdentityFields },
-		{ title: "硬件识别", fields: hardwareIdentityFields },
+		{ title: "硬件识别", fields: getHardwareIdentityFields(type) },
 		{ title: "自定义参数", fields: customFields },
-		{ title: "生命周期", fields: lifecycleFields },
+		{ title: "购买信息", fields: purchaseInfoFields },
 		{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },
 	]
 }
@@ -1361,7 +1297,7 @@ export function isPhoneVariantSpecRequired(type: AssetType) {
 
 export function buildFixedSpecAssetName(type: AssetType, model: string, internalModel?: string) {
 	const modelName = model.trim()
-	const internal = internalModel?.trim() ?? ""
+	const internal = type === "phone" ? (internalModel?.trim() ?? "") : ""
 	if (!isFixedSpecAssetType(type) || !modelName) {
 		return ""
 	}

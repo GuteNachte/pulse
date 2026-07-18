@@ -1,4 +1,5 @@
 import type { AssetMaintenanceRecord, AssetRecord } from "@/types"
+import { isAssetLocationNotApplicable } from "./asset-location.ts"
 import {
 	HOST_ASSET_TYPES,
 	NETWORK_ASSET_TYPES,
@@ -19,46 +20,18 @@ export function getInternetBandwidthLabel(asset: AssetRecord) {
 	return `↓ ${formatBandwidth(down)} / ↑ ${formatBandwidth(up)}`
 }
 
-export type AssetLifecycleTone = "neutral" | "ok" | "warning" | "danger"
-
-export type AssetWarrantyStatus = {
-	label: string
-	detail: string
-	tone: AssetLifecycleTone
-	days?: number
-	date?: string
+export function getAssetLocationLabel(asset: AssetRecord) {
+	if (isAssetLocationNotApplicable(asset.type)) return "无"
+	return asset.location?.trim() || getMetadataString(asset.metadata, "room") || "未填写位置"
 }
+
+export type AssetLifecycleTone = "neutral" | "ok" | "warning" | "danger"
 
 export type AssetCompletenessStatus = {
 	score: number
 	label: string
 	tone: AssetLifecycleTone
 	missing: string[]
-}
-
-export function getAssetWarrantyStatus(asset: AssetRecord, now = new Date()): AssetWarrantyStatus {
-	const warrantyUntil = getMetadataString(asset.metadata, "warranty_until")
-	if (!warrantyUntil) {
-		return { label: "未填保修", detail: "未填写保修到期", tone: "neutral" }
-	}
-	const date = parseDateOnly(warrantyUntil)
-	if (!date) {
-		return { label: "保修日期异常", detail: warrantyUntil, tone: "warning" }
-	}
-	const today = startOfDay(now)
-	const days = Math.ceil((date.getTime() - today.getTime()) / 86_400_000)
-	if (days < 0) {
-		return { label: "保修已过期", detail: `${Math.abs(days)} 天前到期`, tone: "danger", days, date: warrantyUntil }
-	}
-	if (days <= 60) {
-		return { label: "保修临近", detail: `${days} 天后到期`, tone: "warning", days, date: warrantyUntil }
-	}
-	return { label: "保修有效", detail: `${days} 天后到期`, tone: "ok", days, date: warrantyUntil }
-}
-
-export function needsLifecycleAttention(asset: AssetRecord) {
-	const warranty = getAssetWarrantyStatus(asset)
-	return warranty.tone === "danger" || warranty.tone === "warning"
 }
 
 export function getAssetCompleteness(asset: AssetRecord): AssetCompletenessStatus {
@@ -156,6 +129,8 @@ export function getAssetSummaryRows(asset: AssetRecord): { label: string; value:
 		pushRow(rows, "URL", getMetadataString(metadata, "url") || getMetadataString(metadata, "internal_url"))
 		pushRow(rows, "服务", getMetadataString(metadata, "service_category"))
 		pushRow(rows, "范围", getMetadataString(metadata, "endpoint_scope"))
+		pushRow(rows, "到期", getMetadataString(metadata, "renewal_date"))
+		pushRow(rows, "计费", getMetadataString(metadata, "billing_cycle"))
 		pushRow(rows, "承载", getMetadataString(metadata, "expected_owner"))
 		return rows
 	}
@@ -194,14 +169,12 @@ function pushRow(
 
 function getAssetCompletenessChecks(asset: AssetRecord) {
 	const metadata = asset.metadata
-	const hasOfficialReference = Boolean(
-		getMetadataString(metadata, "support_url") ||
-			getMetadataString(metadata, "product_url") ||
-			getMetadataString(metadata, "official_url")
-	)
+	const hasOfficialReference = Boolean(getMetadataString(metadata, "official_url"))
 	const checks: { label: string; ok: boolean }[] = [
 		{ label: "资产名称", ok: Boolean(asset.name?.trim()) },
-		{ label: "资产位置", ok: Boolean(asset.location?.trim() || getMetadataString(metadata, "room")) },
+		...(isAssetLocationNotApplicable(asset.type)
+			? []
+			: [{ label: "资产位置", ok: Boolean(asset.location?.trim() || getMetadataString(metadata, "room")) }]),
 		{ label: "用途 / 角色", ok: Boolean(asset.role?.trim()) },
 	]
 	if (asset.type === "internet") {
@@ -231,7 +204,6 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 			{ label: "型号", ok: Boolean(asset.model?.trim()) },
 			{ label: "厂家资料页", ok: hasOfficialReference },
 			{ label: "IPv4", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) },
-			{ label: "计划接入 Agent", ok: Boolean(getMetadataString(metadata, "planned_agent")) },
 			{ label: "CPU 型号", ok: Boolean(getMetadataString(metadata, "cpu_model")) },
 			{
 				label: "内存",
@@ -252,8 +224,7 @@ function getAssetCompletenessChecks(asset: AssetRecord) {
 	if (asset.type === "vm") {
 		checks.push(
 			{ label: "宿主资产", ok: Boolean(asset.parent_asset) },
-			{ label: "IPv4", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) },
-			{ label: "计划接入 Agent", ok: Boolean(getMetadataString(metadata, "planned_agent")) }
+			{ label: "IPv4", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) }
 		)
 		return checks
 	}
@@ -359,15 +330,4 @@ function formatSpeed(value?: number) {
 function formatBandwidth(value?: number) {
 	if (!value) return "未设"
 	return formatSpeed(value)
-}
-
-function parseDateOnly(value: string) {
-	const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
-	if (!match) return undefined
-	const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
-	return Number.isNaN(date.getTime()) ? undefined : date
-}
-
-function startOfDay(value: Date) {
-	return new Date(value.getFullYear(), value.getMonth(), value.getDate())
 }

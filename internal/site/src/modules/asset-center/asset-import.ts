@@ -96,6 +96,11 @@ export function normalizeMetadata(metadata: Record<string, string>, type: AssetT
 		delete result.down_mbps
 		delete result.up_mbps
 	}
+	if (type !== "phone") {
+		delete result.internal_model
+	}
+	delete result.support_url
+	delete result.product_url
 	return result
 }
 
@@ -122,7 +127,7 @@ export function buildImportPreviewRow(
 	const warnings: string[] = []
 	const type = normalizeAssetType(getImportString(raw, ["type", "资产类型", "类型"]))
 	const status = normalizeAssetStatus(getImportString(raw, ["status", "状态"]))
-	const metadata = extractImportMetadata(raw)
+	const metadata = extractImportMetadata(raw, type ?? "custom")
 	const name =
 		getImportString(raw, ["name", "资产名称", "名称"]).trim() ||
 		buildFixedSpecAssetName(
@@ -292,7 +297,7 @@ function getImportDuplicateKeys(form: AssetFormState) {
 	return keys
 }
 
-function extractImportMetadata(raw: Record<string, unknown>) {
+function extractImportMetadata(raw: Record<string, unknown>, type: AssetType) {
 	const metadata: Record<string, string> = {}
 	const directMetadata = raw.metadata
 	if (directMetadata && typeof directMetadata === "object" && !Array.isArray(directMetadata)) {
@@ -312,6 +317,11 @@ function extractImportMetadata(raw: Record<string, unknown>) {
 		const text = getImportString(raw, aliases)
 		if (text && !metadata[metadataKey]) metadata[metadataKey] = text
 	}
+	if (type !== "phone") {
+		delete metadata.internal_model
+	}
+	delete metadata.support_url
+	delete metadata.product_url
 	return metadata
 }
 
@@ -386,7 +396,8 @@ const importMetadataAliases: Record<string, string[]> = {
 	default_port_speed_mbps: ["default_port_speed_mbps", "默认端口速率Mbps", "默认端口速率 Mbps"],
 	primary_nic_speed_mbps: ["primary_nic_speed_mbps", "主网卡速率Mbps", "主网卡速率 Mbps"],
 	purchase_date: ["purchase_date", "购买日期"],
-	online_date: ["online_date", "上线日期"],
-	warranty_until: ["warranty_until", "保修到期"],
-	owner: ["owner", "归属", "责任人"],
+	purchase_price_cny: ["purchase_price_cny", "购买价格", "购买价格（元）"],
+	renewal_date: ["renewal_date", "到期日期", "续费到期"],
+	recurring_price_cny: ["recurring_price_cny", "续费价格", "订阅价格", "价格（元）"],
+	billing_cycle: ["billing_cycle", "计费周期", "续费周期"],
 }

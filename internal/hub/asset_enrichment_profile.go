@@ -8,9 +8,6 @@ import (
 // This server-side catalog is the write boundary for Agent suggestions. It mirrors
 // the persisted asset profiles without exposing UI-only form concerns to the Hub.
 var assetEnrichmentCommonMetadataFields = []string{
-	"internal_model",
-	"support_url",
-	"product_url",
 	"official_url",
 	"official_image_url",
 }
@@ -60,14 +57,12 @@ var assetEnrichmentMetadataFieldsByType = map[string][]string{
 var hostEnrichmentMetadataFields = mergeAssetEnrichmentFields(
 	assetEnrichmentAddressMetadataFields,
 	[]string{
-		"online_specs_summary", "cpu_vendor", "cpu_model", "cpu_support_url", "motherboard_vendor", "motherboard_model",
-		"motherboard_support_url", "bios_vendor", "gpu_detail", "gpu_vendor", "gpu_model", "gpu_board_vendor",
-		"gpu_support_url", "gpu_vram_gb", "memory_gb", "memory_detail", "memory_vendor", "memory_model", "memory_type",
-		"memory_speed_mhz", "memory_slots_summary", "memory_support_url", "storage_summary", "storage_detail", "storage_vendor",
-		"storage_model", "storage_media", "storage_serial_note", "storage_support_url", "primary_nic_speed_mbps", "nic_detail",
-		"nic_vendor", "nic_model", "wifi_vendor", "wifi_model", "nic_support_url", "wifi_support_url", "chassis_power_detail",
-		"chassis_vendor", "chassis_model", "chassis_support_url", "psu_vendor", "psu_model", "psu_support_url",
-		"hardware_fingerprint_note", "hardware_match_note",
+		"online_specs_summary", "cpu_vendor", "cpu_model", "motherboard_vendor", "motherboard_model", "bios_vendor", "gpu_detail",
+		"gpu_vendor", "gpu_model", "gpu_board_vendor", "gpu_vram_gb", "memory_gb", "memory_detail", "memory_vendor",
+		"memory_type", "memory_speed_mhz", "storage_summary", "storage_detail",
+		"storage_vendor", "storage_model", "storage_media", "storage_serial_note", "primary_nic_speed_mbps", "nic_detail",
+		"nic_vendor", "nic_model", "wifi_vendor", "wifi_model", "chassis_power_detail", "chassis_vendor", "chassis_model",
+		"psu_vendor", "psu_model",
 	},
 )
 
@@ -78,6 +73,7 @@ var switchEnrichmentMetadataFields = mergeAssetEnrichmentFields(assetEnrichmentA
 var accessPointEnrichmentMetadataFields = mergeAssetEnrichmentFields(assetEnrichmentAddressMetadataFields, []string{"port_count", "default_port_speed_mbps", "power_mode", "wifi_standard", "ssid_note", "vlan_note"})
 
 var phoneEnrichmentMetadataFields = mergeAssetEnrichmentFields(assetEnrichmentAddressMetadataFields, []string{
+	"internal_model",
 	"cpu_model", "cpu_vendor", "cpu_process", "cpu_architecture", "cpu_cores", "cpu_frequency", "gpu_model", "gpu_detail",
 	"memory_gb", "memory_detail", "memory_type", "storage_gb", "storage_detail", "storage_options", "screen_size", "display_type",
 	"display_resolution", "screen_refresh_rate", "touch_sampling_rate", "display_brightness", "display_color_depth", "hdr_support",

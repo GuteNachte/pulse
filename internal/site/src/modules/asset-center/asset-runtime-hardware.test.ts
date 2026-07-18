@@ -4,6 +4,7 @@ import {
 	formatSpeed,
 	getSystemDisplayName,
 } from "./asset-runtime-hardware.ts"
+import * as assetRuntimeHardware from "./asset-runtime-hardware.ts"
 import type { SystemDetailsRecord, SystemRecord } from "../../types"
 
 function assertEqual(actual: unknown, expected: unknown) {
@@ -24,17 +25,27 @@ assertEqual(formatSpeed(100), "100M")
 assertEqual(formatSpeed(1000), "1G")
 assertEqual(formatSpeed(2500), "2.5G")
 
+const normalizeNetworkInterfaceSummary = (
+	assetRuntimeHardware as {
+		normalizeNetworkInterfaceSummary?: (value: string | undefined) => string
+	}
+).normalizeNetworkInterfaceSummary
+assertEqual(
+	normalizeNetworkInterfaceSummary?.("Intel(R) Ethernet Controller (3) I225-V 58:47:ca:70:6a:c2 2500000000Mbps") ?? "",
+	"Intel(R) Ethernet Controller (3) I225-V 58:47:ca:70:6a:c2 2500 Mbps"
+)
+
 const hardware = {
 	memory_modules: [
 		{ memory_type: "LPDDR5", configured_mhz: 6400 },
 		{ memory_type: "LPDDR5", speed_mhz: 6400 },
 	],
 	network_interfaces: [
-		{ name: "Ethernet", link_speed: 2500 },
-		{ name: "Wi-Fi", link_speed: 866 },
-		{ name: "USB LAN", link_speed: 1000 },
-		{ name: "Dock", link_speed: 100 },
-		{ name: "Ignored", link_speed: 10 },
+		{ name: "Ethernet", link_speed: 2_500_000_000 },
+		{ name: "Wi-Fi", link_speed: 866_000_000 },
+		{ name: "USB LAN", link_speed: 1_000_000_000 },
+		{ name: "Dock", link_speed: 100_000_000 },
+		{ name: "Ignored", link_speed: 10_000_000 },
 	],
 } as SystemDetailsRecord
 

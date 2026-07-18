@@ -41,11 +41,6 @@ export function getAssetRecognitionRequirements(asset: AssetRecord): AssetRecogn
 		{ label: "厂商 / 品牌", value: asset.vendor || "", ok: Boolean(asset.vendor?.trim()) },
 		{ label: "型号 / 规格", value: asset.model || "", ok: Boolean(asset.model?.trim()) },
 		{
-			label: "内部型号 / 搜索代码",
-			value: getMetadataString(metadata, "internal_model"),
-			ok: Boolean(getMetadataString(metadata, "internal_model")),
-		},
-		{
 			label: "资产编号",
 			value: getMetadataString(metadata, "asset_tag"),
 			ok: Boolean(getMetadataString(metadata, "asset_tag")),
@@ -53,6 +48,13 @@ export function getAssetRecognitionRequirements(asset: AssetRecord): AssetRecogn
 		{ label: "所属类型", value: getAssetTypeLabel(asset.type), ok: Boolean(asset.type) },
 		{ label: "位置", value: asset.location || "", ok: Boolean(asset.location?.trim()) },
 	]
+	if (asset.type === "phone") {
+		requirements.splice(3, 0, {
+			label: "内部型号 / 搜索代码",
+			value: getMetadataString(metadata, "internal_model"),
+			ok: Boolean(getMetadataString(metadata, "internal_model")),
+		})
+	}
 	if (isPhoneVariantSpecRequired(asset.type)) {
 		const memoryGb = getMetadataNumber(metadata, "memory_gb")
 		const storageGb = getMetadataNumber(metadata, "storage_gb")
@@ -103,7 +105,7 @@ export function validateAssetProfileForm(values: {
 	}
 	if (!values.vendor.trim()) errors.push("厂商 / 品牌")
 	if (!values.model.trim()) errors.push("型号 / 规格")
-	if (!values.internalModel.trim()) errors.push("内部型号 / 搜索代码")
+	if (values.type === "phone" && !values.internalModel.trim()) errors.push("内部型号 / 搜索代码")
 	if (!values.assetTag.trim()) errors.push("资产编号")
 	if (!values.location.trim()) errors.push("位置")
 	if (isPhoneVariantSpecRequired(values.type)) {

@@ -1,5 +1,5 @@
 import { getAssetTypeLabel, getStatusLabel } from "@/modules/asset-center/asset-schema"
-import { getAssetCompleteness, getAssetWarrantyStatus } from "@/modules/asset-center/asset-profile-summary"
+import { getAssetCompleteness } from "@/modules/asset-center/asset-profile-summary"
 import type {
 	AssetAttachmentRecord,
 	AssetInterfaceRecord,
@@ -22,7 +22,6 @@ export type AssetCenterSnapshotInput = {
 export function buildAssetExportCsv(assets: AssetRecord[], monitoredAssetIds: ReadonlySet<string>) {
 	const rows = assets.map((asset) => {
 		const completeness = getAssetCompleteness(asset)
-		const warranty = getAssetWarrantyStatus(asset)
 		return {
 			id: asset.id,
 			name: asset.name,
@@ -38,7 +37,6 @@ export function buildAssetExportCsv(assets: AssetRecord[], monitoredAssetIds: Re
 			monitored: monitoredAssetIds.has(asset.id) ? "是" : "否",
 			completeness: `${completeness.score}%`,
 			completeness_label: completeness.label,
-			warranty: warranty.label,
 			notes: asset.notes || "",
 			metadata: JSON.stringify(asset.metadata ?? {}),
 		}

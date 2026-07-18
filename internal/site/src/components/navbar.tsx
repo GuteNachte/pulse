@@ -3,7 +3,7 @@ import { getPagePath } from "@nanostores/router"
 import { useStore } from "@nanostores/react"
 import {
 	BellIcon,
-	BoxesIcon,
+	ArchiveIcon,
 	ContainerIcon,
 	Globe2Icon,
 	HousePlugIcon,
@@ -42,8 +42,7 @@ export default function Navbar() {
 	const { isMobile } = useMobileLayout()
 	const settingsPath = getPagePath($router, "settings", { name: "general" })
 	const settingsIndexPath = prependBasePath("/settings")
-	const navigateFromMenu = (href: string) => (event: Event) => {
-		event.preventDefault()
+	const navigateFromMenu = (href: string) => () => {
 		navigate(href)
 	}
 	const currentPath = typeof window !== "undefined" ? window.location.pathname : ""
@@ -90,7 +89,7 @@ export default function Navbar() {
 								</DropdownMenuItem>
 								{moduleEnabled("asset-center") && (
 									<DropdownMenuItem onSelect={navigateFromMenu(assetsPath)}>
-										<BoxesIcon className="me-2.5 h-4 w-4" />
+										<ArchiveIcon className="me-2.5 h-4 w-4" />
 										资产中心
 									</DropdownMenuItem>
 								)}
@@ -145,7 +144,7 @@ export default function Navbar() {
 					</NavIconLink>
 					{moduleEnabled("asset-center") && (
 						<NavIconLink href={assetsPath} label="资产中心" active={isActiveRoute("assets", assetsPath)}>
-							<BoxesIcon className="h-[1.2rem] w-[1.2rem]" />
+							<ArchiveIcon className="h-[1.2rem] w-[1.2rem]" />
 						</NavIconLink>
 					)}
 					{moduleEnabled("network-topology") && (

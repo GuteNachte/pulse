@@ -20,6 +20,7 @@ import { toast } from "@/components/ui/use-toast"
 import { pb } from "@/lib/api"
 import { createLatestRequestGuard } from "@/lib/latest-request-guard"
 import { loadLatestAITasksByKind } from "@/modules/asset-center/asset-ai-task-query"
+import { AssetMediaStoreSettingsPanel } from "@/modules/asset-center/components/asset-media-store-settings-panel"
 import { formatAITaskStatusLabel, formatAITaskSummary } from "@/modules/asset-center/asset-ai-task-summary"
 import type { AITaskRecord } from "@/types"
 import { loadAISettingsSnapshot } from "./ai-settings-load"
@@ -76,7 +77,7 @@ const defaultForm: AISettingsForm = {
 	visualEnabled: false,
 	visualModel: "agnes-2.0-flash",
 	visualApiKey: "",
-	visualMaxImages: 10,
+	visualMaxImages: 15,
 }
 
 export default function AISettings() {
@@ -196,6 +197,7 @@ export default function AISettings() {
 				</div>
 				<div className="grid gap-4 p-4 md:p-5">
 					<div className="grid gap-4">
+						<AssetMediaStoreSettingsPanel />
 						<SettingsPanel
 							icon={BrainCircuitIcon}
 							title="大模型接入配置"
@@ -288,7 +290,7 @@ export default function AISettings() {
 										label="候选图片数量"
 										value={form.visualMaxImages}
 										min={2}
-										max={12}
+										max={15}
 										onChange={(value) => setForm((current) => ({ ...current, visualMaxImages: value }))}
 									/>
 									<div className="rounded-md border border-border/70 bg-surface-soft p-3 text-xs leading-relaxed text-muted-foreground">

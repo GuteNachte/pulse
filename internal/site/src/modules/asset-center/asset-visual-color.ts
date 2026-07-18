@@ -32,6 +32,20 @@ export function getAssetVisualGenerationBlockReason(asset: AssetRecord) {
 	return ""
 }
 
+export function getAssetVisualSearchAdvice(asset: AssetRecord) {
+	const result: string[] = []
+	if (!asset.name?.trim()) result.push("资产名称")
+	if (asset.type === "internet" || asset.type === "web_endpoint") {
+		if (!asset.vendor?.trim()) result.push("运营商 / 服务商")
+		return result
+	}
+	if (!asset.vendor?.trim()) result.push("厂商 / 品牌")
+	if (!asset.model?.trim() && !(asset.type === "phone" && getMetadataString(asset.metadata, "internal_model"))) {
+		result.push("型号 / 规格")
+	}
+	return result
+}
+
 function getOfficialColorOptionsFromSuggestion(suggestion: AssetEnrichmentSuggestionRecord) {
 	if (suggestion.status !== "pending" || suggestion.target_collection !== "assets") return []
 	const field = suggestion.target_field.replace(/^metadata\./, "")

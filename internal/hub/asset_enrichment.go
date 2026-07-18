@@ -339,8 +339,6 @@ func (h *Hub) createAssetEnrichmentReportRecord(userID string, asset *core.Recor
 			"model":         asset.GetString("model"),
 			"vendor":        asset.GetString("vendor"),
 			"location":      asset.GetString("location"),
-			"support_url":   recordMetadataString(asset, "support_url"),
-			"product_url":   recordMetadataString(asset, "product_url"),
 			"official_url":  recordMetadataString(asset, "official_url"),
 			"metadata_keys": sortedMapKeys(recordJSONMap(asset, "metadata")),
 		},
@@ -431,8 +429,18 @@ func (h *Hub) buildAssetEnrichmentSuggestions(asset *core.Record, systems []*cor
 		if memoryGB := bytesToRoundedGB(detail.GetFloat("memory")); memoryGB > 0 {
 			suggestions = append(suggestions, buildRecordSuggestion(asset, asset.Id, "metadata.memory_gb", "内存 GB", metadataValueString(asset, "memory_gb"), strconv.Itoa(memoryGB), "local", 82, false, "来自 Agent 内存容量，写入后仍作为长期档案字段。", map[string]any{"value_type": "number"}))
 		}
-		if memoryDetail := formatMemoryModules(detail); memoryDetail != "" {
-			suggestions = append(suggestions, buildRecordSuggestion(asset, asset.Id, "metadata.memory_detail", "内存条摘要", recordMetadataString(asset, "memory_detail"), memoryDetail, "local", 78, false, "来自 Agent 内存条摘要，品牌和颗粒后续可由专项识别继续补全。", nil))
+		memoryProfile := summarizeMemoryModules(detail)
+		if memoryProfile.Layout != "" {
+			suggestions = append(suggestions, buildRecordSuggestion(asset, asset.Id, "metadata.memory_detail", "内存规格", recordMetadataString(asset, "memory_detail"), memoryProfile.Layout, "local", 78, false, "来自 Agent 内存条容量组合，例如 16 GB x 2。", nil))
+		}
+		if memoryProfile.Vendor != "" {
+			suggestions = append(suggestions, buildRecordSuggestion(asset, asset.Id, "metadata.memory_vendor", "内存品牌", recordMetadataString(asset, "memory_vendor"), memoryProfile.Vendor, "local", 76, false, "来自 Agent 内存条厂商。", nil))
+		}
+		if memoryProfile.Type != "" {
+			suggestions = append(suggestions, buildRecordSuggestion(asset, asset.Id, "metadata.memory_type", "内存类型", recordMetadataString(asset, "memory_type"), memoryProfile.Type, "local", 76, false, "来自 Agent 内存条类型。", nil))
+		}
+		if memoryProfile.SpeedMHz > 0 {
+			suggestions = append(suggestions, buildRecordSuggestion(asset, asset.Id, "metadata.memory_speed_mhz", "内存频率", recordMetadataString(asset, "memory_speed_mhz"), strconv.Itoa(memoryProfile.SpeedMHz), "local", 76, false, "来自 Agent 内存条频率。", map[string]any{"value_type": "number"}))
 		}
 		if speed := primaryNicSpeed(detail); speed > 0 {
 			suggestions = append(suggestions, buildRecordSuggestion(asset, asset.Id, "metadata.primary_nic_speed_mbps", "主网卡速率", metadataValueString(asset, "primary_nic_speed_mbps"), strconv.Itoa(speed), "local", 78, false, "来自 Agent 物理网卡链路速率。", map[string]any{"value_type": "number"}))
@@ -491,7 +499,7 @@ func buildInterfaceSuggestions(asset *core.Record, details []*core.Record, inter
 		if ipv6 := firstStringSliceValue(matched["ipv6"]); ipv6 != "" {
 			suggestions = append(suggestions, buildInterfaceSuggestion(assetInterface, "ipv6", labelPrefix+" IPv6", assetInterface.GetString("ipv6"), ipv6, 72, "IPv6 可能随前缀和隐私地址变化，只在确认长期固定时写入。"))
 		}
-		if speed := intFromMap(matched, "link_speed"); speed > 0 {
+		if speed := networkSpeedMbps(intFromMap(matched, "link_speed")); speed > 0 {
 			suggestions = append(suggestions, buildInterfaceSuggestion(assetInterface, "speed_mbps", labelPrefix+" 链路速率", recordNumberString(assetInterface, "speed_mbps"), strconv.Itoa(speed), 84, "Agent 物理网卡链路速率。"))
 		}
 	}
@@ -1211,34 +1219,71 @@ func stringsFromUnknownSlice(value any) []string {
 	}
 }
 
-func formatMemoryModules(detail *core.Record) string {
+type memoryModuleSummary struct {
+	Layout   string
+	Vendor   string
+	Type     string
+	SpeedMHz int
+}
+
+func summarizeMemoryModules(detail *core.Record) memoryModuleSummary {
 	if detail == nil {
-		return ""
+		return memoryModuleSummary{}
 	}
 	var modules []map[string]any
 	if err := detail.UnmarshalJSONField("memory_modules", &modules); err != nil || len(modules) == 0 {
-		return ""
+		return memoryModuleSummary{}
 	}
-	parts := make([]string, 0, len(modules))
+	capacities := map[int]int{}
+	vendors := make([]string, 0, len(modules))
+	types := make([]string, 0, len(modules))
+	speeds := make([]int, 0, len(modules))
+	seenVendors := map[string]bool{}
+	seenTypes := map[string]bool{}
+	seenSpeeds := map[int]bool{}
 	for _, module := range modules {
-		size := ""
 		if capacity := intFromMap(module, "capacity"); capacity > 0 {
-			size = strconv.Itoa(bytesToRoundedGB(float64(capacity))) + "GB"
+			capacities[bytesToRoundedGB(float64(capacity))]++
 		}
-		text := strings.Join(nonEmptyStrings(
-			stringFromMap(module, "manufacturer"),
-			stringFromMap(module, "part_number"),
-			size,
-			formatMHz(intFromMap(module, "speed_mhz")),
-		), " ")
-		if text != "" {
-			parts = append(parts, text)
+		if vendor := stringFromMap(module, "manufacturer"); vendor != "" && !seenVendors[vendor] {
+			seenVendors[vendor] = true
+			vendors = append(vendors, vendor)
+		}
+		if memoryType := stringFromMap(module, "memory_type"); memoryType != "" && !seenTypes[memoryType] {
+			seenTypes[memoryType] = true
+			types = append(types, memoryType)
+		}
+		speed := intFromMap(module, "configured_mhz")
+		if speed <= 0 {
+			speed = intFromMap(module, "speed_mhz")
+		}
+		if speed > 0 && !seenSpeeds[speed] {
+			seenSpeeds[speed] = true
+			speeds = append(speeds, speed)
 		}
 	}
-	if len(parts) > 4 {
-		parts = parts[:4]
+	capacityValues := make([]int, 0, len(capacities))
+	for capacity := range capacities {
+		capacityValues = append(capacityValues, capacity)
 	}
-	return strings.Join(parts, " / ")
+	sort.Ints(capacityValues)
+	layout := make([]string, 0, len(capacityValues))
+	for _, capacity := range capacityValues {
+		layout = append(layout, fmt.Sprintf("%d GB x %d", capacity, capacities[capacity]))
+	}
+	if len(speeds) > 1 {
+		speeds = nil
+	}
+	speedMHz := 0
+	if len(speeds) == 1 {
+		speedMHz = speeds[0]
+	}
+	return memoryModuleSummary{
+		Layout:   strings.Join(layout, " + "),
+		Vendor:   strings.Join(vendors, " / "),
+		Type:     strings.Join(types, " / "),
+		SpeedMHz: speedMHz,
+	}
 }
 
 func formatNetworkInterfaces(detail *core.Record) string {
@@ -1253,7 +1298,7 @@ func formatNetworkInterfaces(detail *core.Record) string {
 			continue
 		}
 		speed := ""
-		if value := intFromMap(item, "link_speed"); value > 0 {
+		if value := networkSpeedMbps(intFromMap(item, "link_speed")); value > 0 {
 			speed = strconv.Itoa(value) + "Mbps"
 		}
 		parts = append(parts, strings.Join(nonEmptyStrings(name, stringFromMap(item, "mac"), speed), " "))
@@ -1267,11 +1312,19 @@ func formatNetworkInterfaces(detail *core.Record) string {
 func primaryNicSpeed(detail *core.Record) int {
 	maxSpeed := 0
 	for _, item := range collectNetworkInterfaces([]*core.Record{detail}) {
-		if speed := intFromMap(item, "link_speed"); speed > maxSpeed {
+		if speed := networkSpeedMbps(intFromMap(item, "link_speed")); speed > maxSpeed {
 			maxSpeed = speed
 		}
 	}
 	return maxSpeed
+}
+
+// Agent network details keep link_speed in bits per second; asset profile fields use Mbps.
+func networkSpeedMbps(speed int) int {
+	if speed >= 1_000_000 {
+		return speed / 1_000_000
+	}
+	return speed
 }
 
 func formatMHz(value int) string {

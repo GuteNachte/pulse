@@ -37,6 +37,32 @@ func TestAssetEnrichmentDomainDedupesAndPrioritizesConflicts(t *testing.T) {
 	require.Equal(t, 99, suggestions[1].Confidence)
 }
 
+func TestAssetEnrichmentDomainKeepsLocalAndOnlineSourcesForSameCandidate(t *testing.T) {
+	suggestions := dedupeEnrichmentSuggestions([]assetEnrichmentSuggestionInput{
+		{
+			TargetCollection: "assets",
+			TargetField:      "metadata.cpu_model",
+			RecommendedValue: "AMD Ryzen 9 6900HX",
+			CollectedValue:   "AMD Ryzen 9 6900HX",
+			Source:           "local",
+			Confidence:       86,
+		},
+		{
+			TargetCollection: "assets",
+			TargetField:      "metadata.cpu_model",
+			RecommendedValue: "AMD Ryzen 9 6900HX",
+			OnlineValue:      "AMD Ryzen 9 6900HX",
+			Source:           "online",
+			Confidence:       74,
+		},
+	})
+
+	require.Len(t, suggestions, 1)
+	require.Equal(t, "AMD Ryzen 9 6900HX", suggestions[0].CollectedValue)
+	require.Equal(t, "AMD Ryzen 9 6900HX", suggestions[0].OnlineValue)
+	require.Equal(t, "local", suggestions[0].Source)
+}
+
 func TestAssetEnrichmentDomainSelectsHardwareStrategy(t *testing.T) {
 	require.Equal(t, "staged_hardware_identification", assetEnrichmentStrategy("physical_host").ID)
 	require.Equal(t, "fixed_spec_model_match", assetEnrichmentStrategy("phone").ID)
@@ -44,16 +70,22 @@ func TestAssetEnrichmentDomainSelectsHardwareStrategy(t *testing.T) {
 
 func TestAssetEnrichmentProfileFieldAllowlistMatchesAssetType(t *testing.T) {
 	phoneFields := assetEnrichmentAllowedMetadataFieldSet("phone")
+	require.True(t, phoneFields["internal_model"])
+	require.True(t, phoneFields["official_url"])
+	require.False(t, phoneFields["support_url"])
+	require.False(t, phoneFields["product_url"])
 	require.True(t, phoneFields["rear_main_camera"])
 	require.True(t, phoneFields["battery_capacity_mah"])
 
 	televisionFields := assetEnrichmentAllowedMetadataFieldSet("tv")
+	require.False(t, televisionFields["internal_model"])
 	require.True(t, televisionFields["screen_size"])
 	require.True(t, televisionFields["hdr_support"])
 	require.False(t, televisionFields["rear_main_camera"])
 	require.False(t, televisionFields["battery_capacity_mah"])
 
 	switchFields := assetEnrichmentAllowedMetadataFieldSet("switch")
+	require.False(t, switchFields["internal_model"])
 	require.True(t, switchFields["port_count"])
 	require.True(t, switchFields["vlan_note"])
 	require.False(t, switchFields["wifi_standard"])

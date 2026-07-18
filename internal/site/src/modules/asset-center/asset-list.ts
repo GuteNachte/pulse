@@ -2,9 +2,7 @@ import { HOST_ASSET_TYPES } from "@/modules/asset-center/asset-schema"
 import {
 	buildAssetSearchText,
 	getAssetCompleteness,
-	getAssetWarrantyStatus,
 	needsAssetProfileAttention,
-	needsLifecycleAttention,
 } from "@/modules/asset-center/asset-profile-summary"
 import {
 	buildLocationPath,
@@ -23,16 +21,6 @@ import type {
 
 export type AssetMonitorFilter = "all" | "monitored" | "unmonitored" | "monitorable"
 export type AssetProfileFilter = "all" | "complete" | "usable" | "attention" | "incomplete" | "critical"
-export type AssetLifecycleFilter =
-	| "all"
-	| "attention"
-	| "warranty-expired"
-	| "warranty-soon"
-	| "warranty-missing"
-	| "warranty-ok"
-	| "maintained"
-	| "unmaintained"
-
 export type AssetLocationOptions = {
 	values: string[]
 	hasEmptyLocation: boolean
@@ -107,10 +95,8 @@ export function filterAssets(options: {
 	statusFilter: AssetStatus | "all"
 	locationFilter: string
 	monitorFilter: AssetMonitorFilter
-	lifecycleFilter: AssetLifecycleFilter
 	profileFilter: AssetProfileFilter
 	monitoredAssetIds: Set<string>
-	maintenanceByAsset: Map<string, AssetMaintenanceRecord[]>
 }) {
 	const keyword = options.search.trim().toLowerCase()
 	return options.assets.filter((asset) => {
@@ -142,11 +128,6 @@ export function filterAssets(options: {
 		if (options.monitorFilter === "monitorable" && (!monitorable || monitored)) {
 			return false
 		}
-		if (
-			!matchesLifecycleFilter(asset, options.lifecycleFilter, options.maintenanceByAsset.get(asset.id)?.length ?? 0)
-		) {
-			return false
-		}
 		if (!matchesProfileFilter(asset, options.profileFilter)) {
 			return false
 		}
@@ -172,7 +153,7 @@ export function getAssetListCounts(options: {
 		manual,
 		locations: options.locationCount,
 		looseLocations: options.looseLocationCount,
-		attention: options.assets.filter(needsLifecycleAttention).length,
+		attention: options.assets.filter(needsAssetProfileAttention).length,
 		profileAttention: options.assets.filter(needsAssetProfileAttention).length,
 	}
 }
@@ -184,7 +165,6 @@ export function hasAssetListFilters(options: {
 	locationFilter: string
 	monitorFilter: AssetMonitorFilter
 	profileFilter: AssetProfileFilter
-	lifecycleFilter: AssetLifecycleFilter
 }) {
 	return Boolean(
 		options.search.trim() ||
@@ -192,8 +172,7 @@ export function hasAssetListFilters(options: {
 			options.statusFilter !== "all" ||
 			options.locationFilter !== "all" ||
 			options.monitorFilter !== "all" ||
-			options.profileFilter !== "all" ||
-			options.lifecycleFilter !== "all"
+			options.profileFilter !== "all"
 	)
 }
 
@@ -207,27 +186,6 @@ export function isAgentMonitorableAsset(asset: AssetRecord) {
 
 export function isWebsiteMonitorableAsset(asset: AssetRecord) {
 	return asset.type === "web_endpoint"
-}
-
-function matchesLifecycleFilter(asset: AssetRecord, filter: AssetLifecycleFilter, maintenanceCount: number) {
-	if (filter === "all") return true
-	const warranty = getAssetWarrantyStatus(asset)
-	switch (filter) {
-		case "attention":
-			return needsLifecycleAttention(asset)
-		case "warranty-expired":
-			return warranty.tone === "danger"
-		case "warranty-soon":
-			return warranty.tone === "warning"
-		case "warranty-missing":
-			return warranty.label === "未填保修"
-		case "warranty-ok":
-			return warranty.tone === "ok"
-		case "maintained":
-			return maintenanceCount > 0
-		case "unmaintained":
-			return maintenanceCount === 0
-	}
 }
 
 function matchesProfileFilter(asset: AssetRecord, filter: AssetProfileFilter) {

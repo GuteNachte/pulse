@@ -285,6 +285,7 @@ export interface AITaskRecord extends RecordModel {
 
 export type AssetVisualKind = "official_reference" | "ai_turntable" | "manual"
 export type AssetVisualStatus = "draft" | "ready" | "accepted" | "rejected" | "failed"
+export type AssetVisualCrop = { x: number; y: number; width: number; height: number }
 
 export interface AssetVisualRecord extends RecordModel {
 	user: string
@@ -308,6 +309,7 @@ export interface AssetVisualRecord extends RecordModel {
 		url?: string
 		file?: string
 		file_record_id?: string
+		provider?: string
 		source_title?: string
 		source_url?: string
 		source_image_url?: string
@@ -318,6 +320,7 @@ export interface AssetVisualRecord extends RecordModel {
 			width?: number
 			height?: number
 		}
+		crop?: AssetVisualCrop
 	}[]
 	sources?: {
 		title?: string

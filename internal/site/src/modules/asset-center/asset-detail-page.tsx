@@ -22,9 +22,11 @@ import { cn } from "@/lib/utils"
 import { getAssetIcon } from "./components/asset-card"
 import { AssetDetailActionMenu } from "./components/asset-detail-action-menu"
 import { AssetEditWorkbench } from "./components/asset-edit-workbench"
+import { getAssetMediaDefaultPreview } from "./components/asset-media-default-preview"
 import { AssetShowcaseTags } from "./components/asset-showcase-tags"
 import { AssetShowcaseWorkspace } from "./components/asset-showcase-workspace"
 import { SelectField, TextAreaField, TextField } from "./components/asset-detail-form-fields"
+import { getAssetMediaRequestKey, notifyAssetMediaChanged, subscribeAssetMediaChanged } from "./asset-media-events"
 import {
 	getAssetFormSections,
 	getAssetTypeLabel,
@@ -45,7 +47,9 @@ import {
 	type AssetDetailState,
 } from "./asset-detail-data"
 import { loadAssetEditCatalog } from "./asset-edit-catalog-query"
-import { getAssetRecognitionRequirements, validateAssetProfileForm } from "./asset-profile-validation"
+import { getInternetAddressRefreshFeedback } from "./asset-internet-address-status"
+import { getAssetRecognitionRequirements } from "./asset-profile-validation"
+import { getAssetVisualSearchAdvice } from "./asset-visual-color"
 import {
 	buildRelationMetadata,
 	emptyRelationForm,
@@ -108,6 +112,47 @@ const attachmentKindOptions: { value: AssetAttachmentKind; label: string }[] = [
 
 export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const [state, setState] = useState<AssetDetailState>(emptyAssetDetailState)
+	const [assetMedia, setAssetMedia] = useState<{
+		covers: { id: string; url: string }[]
+		gallery: { id: string; url: string }[]
+	}>({ covers: [], gallery: [] })
+	useEffect(() => {
+		let active = true
+		const loadAssetMedia = async () => {
+			try {
+				const result = await pb.send<{
+					versions: { id: string }[]
+					placements: {
+						id: string
+						version: string
+						role: string
+						visible?: boolean
+						sort_order?: number
+					}[]
+				}>(`/api/pulse/assets/${id}/media`, {
+					method: "GET",
+					requestKey: getAssetMediaRequestKey("detail", id),
+				})
+				if (!active) return
+				const versionIds = new Set(result.versions.map((item) => item.id))
+				const display = (role: string) =>
+					result.placements
+						.filter((item) => item.role === role && item.visible !== false && versionIds.has(item.version))
+						.sort((left, right) => (left.sort_order ?? 0) - (right.sort_order ?? 0))
+						.map((item) => ({ id: item.id, url: `/api/pulse/asset-media/object?version=${item.version}` }))
+				setAssetMedia({ covers: display("cover"), gallery: display("gallery") })
+			} catch (error) {
+				if (active && !isPocketBaseAutoCancel(error)) setAssetMedia({ covers: [], gallery: [] })
+			}
+		}
+
+		loadAssetMedia().catch(() => undefined)
+		const unsubscribe = subscribeAssetMediaChanged(id, loadAssetMedia)
+		return () => {
+			active = false
+			unsubscribe()
+		}
+	}, [id])
 	const [loading, setLoading] = useState(true)
 	const [interfaceDialogOpen, setInterfaceDialogOpen] = useState(false)
 	const [relationDialogOpen, setRelationDialogOpen] = useState(false)
@@ -115,8 +160,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false)
 	const [enrichmentReportDialogOpen, setEnrichmentReportDialogOpen] = useState(false)
 	const [managementDialogOpen, setManagementDialogOpen] = useState(false)
-	const [recognitionStage, setRecognitionStage] = useState<"idle" | "blocked" | "running" | "ready" | "failed">("idle")
-	const [recognitionMessage, setRecognitionMessage] = useState("")
 	const [visualGenerationStage, setVisualGenerationStage] = useState<"idle" | "running" | "ready" | "failed">("idle")
 	const [visualGenerationMessage, setVisualGenerationMessage] = useState("")
 	const [editingInterface, setEditingInterface] = useState<AssetInterfaceRecord | null>(null)
@@ -124,6 +167,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const [relationForm, setRelationForm] = useState<RelationFormState>(emptyRelationForm)
 	const [editingMaintenance, setEditingMaintenance] = useState<AssetMaintenanceRecord | null>(null)
 	const [saving, setSaving] = useState(false)
+	const [internetAddressRefreshing, setInternetAddressRefreshing] = useState(false)
 	const secondaryLoadRef = useRef<Promise<void> | null>(null)
 	const editCatalogLoadRef = useRef<Promise<void> | null>(null)
 	const detailLoadGuardRef = useRef(createAssetDetailLoadGuard())
@@ -137,8 +181,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 
 	useEffect(() => {
 		if (!asset) return
-		setRecognitionStage("idle")
-		setRecognitionMessage("")
 		setVisualGenerationStage("idle")
 		setVisualGenerationMessage("")
 	}, [asset?.id])
@@ -155,18 +197,10 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		() => getPeerInterfaceOptions(state.allInterfaces, state.assets, asset?.id ?? id, relationForm.target_asset),
 		[asset?.id, id, relationForm.target_asset, state.allInterfaces, state.assets]
 	)
-	const latestEnrichmentReport = state.enrichmentReports[0]
-	const latestEnrichmentSuggestions = useMemo(
-		() =>
-			latestEnrichmentReport
-				? state.enrichmentSuggestions.filter((item) => item.report === latestEnrichmentReport.id)
-				: [],
-		[latestEnrichmentReport, state.enrichmentSuggestions]
-	)
-	const actionableEnrichmentSuggestions = useMemo(
-		() => latestEnrichmentSuggestions.filter(isActionableEnrichmentSuggestion),
-		[latestEnrichmentSuggestions]
-	)
+	const latestEnrichmentSuggestions = useMemo(() => {
+		const latestReport = state.enrichmentReports[0]
+		return latestReport ? state.enrichmentSuggestions.filter((item) => item.report === latestReport.id) : []
+	}, [state.enrichmentReports, state.enrichmentSuggestions])
 	const recognitionRequirements = useMemo(() => (asset ? getAssetRecognitionRequirements(asset) : []), [asset])
 
 	async function loadDetail(options?: {
@@ -391,8 +425,17 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 
 	async function generateTurntableVisual() {
 		if (!asset || readOnly) return
+		const searchAdvice = getAssetVisualSearchAdvice(asset)
+		if (
+			searchAdvice.length > 0 &&
+			!window.confirm(`补充“${searchAdvice.join("、")}”可提高图片搜索准确度。仍然获取图片吗？`)
+		) {
+			setVisualGenerationStage("idle")
+			setVisualGenerationMessage(`建议补充：${searchAdvice.join("、")}`)
+			return
+		}
 		setVisualGenerationStage("running")
-		setVisualGenerationMessage("设备图片 Agent 正在生成检索关键词并收集 10 张高适配候选图。")
+		setVisualGenerationMessage("设备图片 Agent 正在生成检索关键词并收集最多 15 张高适配候选图。")
 		setSaving(true)
 		try {
 			const response = await pb.send<{ status?: string; message?: string; task?: AITaskRecord }>(
@@ -495,23 +538,23 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		}
 	}
 
-	async function selectAssetVisualCandidate(visualId: string, frameIndex: number) {
-		if (!asset || readOnly) return
-		setSaving(true)
+	async function importAssetVisualCandidate(visualId: string, frameIndex: number) {
+		if (!asset) throw new Error("资产不存在")
 		try {
-			await pb.send(`/api/pulse/assets/${asset.id}/visuals/${visualId}/select`, {
-				method: "POST",
-				body: { frame_index: frameIndex },
-			})
-			await loadDetail({ waitSecondary: true, preserveContent: true })
-			setVisualGenerationStage("ready")
-			setVisualGenerationMessage("已选择设备主图。详情页会显示你选中的这一张。")
-			toast({ title: "设备主图已更新", description: "详情页会显示你选中的候选图。" })
+			const result = await pb.send<{ media: { id: string }; version: { id: string } }>(
+				`/api/pulse/assets/${asset.id}/media/import-visual`,
+				{ method: "POST", body: { visual_id: visualId, frame_index: frameIndex } }
+			)
+			await notifyAssetMediaChanged(asset.id)
+			toast({ title: "已加入图片库", description: "候选图片已归档到本地媒体库。" })
+			return result.media.id
 		} catch (error) {
-			console.error("select asset visual candidate", error)
-			toast({ title: "选择主图失败", description: "请检查候选图是否仍可用。", variant: "destructive" })
-		} finally {
-			setSaving(false)
+			toast({
+				title: "加入图片库失败",
+				description: error instanceof Error ? error.message : "请稍后重试",
+				variant: "destructive",
+			})
+			throw error
 		}
 	}
 
@@ -524,32 +567,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		const fixedIpv4 = form.get("fixed_ipv4")?.toString().trim() || ""
 		const managementIp = form.get("management_ip")?.toString().trim() || fixedIpv4
 		const targetType = (form.get("type")?.toString() as AssetRecord["type"] | undefined) || asset.type
-		const requiredErrors = validateAssetProfileForm({
-			type: targetType,
-			name,
-			vendor: form.get("vendor")?.toString().trim() || "",
-			model: form.get("model")?.toString().trim() || "",
-			internalModel: form.get("internal_model")?.toString().trim() || "",
-			color: form.get("color")?.toString().trim() || "",
-			assetTag: form.get("asset_tag")?.toString().trim() || "",
-			location: form.get("location")?.toString().trim() || "",
-			ipv4: managementIp,
-			memoryGb: form.get("memory_gb")?.toString().trim() || "",
-			storageGb: form.get("storage_gb")?.toString().trim() || "",
-			downMbps: form.get("down_mbps")?.toString().trim() || "",
-			upMbps: form.get("up_mbps")?.toString().trim() || "",
-			serviceURL: form.get("url")?.toString().trim() || "",
-			internalServiceURL: form.get("internal_url")?.toString().trim() || "",
-			externalServiceURL: form.get("external_url")?.toString().trim() || "",
-		})
-		if (requiredErrors.length > 0) {
-			toast({
-				title: "资产主档未填完整",
-				description: requiredErrors.join("、"),
-				variant: "destructive",
-			})
-			return
-		}
 		const schemaFields = getAssetFormSections(targetType).flatMap((section) => section.fields)
 		for (const field of schemaFields) {
 			const value = form.get(field.key)
@@ -557,7 +574,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			const normalized = value.toString().trim()
 			metadata[field.key] = field.type === "number" && normalized ? Number(normalized) : normalized
 		}
-		metadata.internal_model = form.get("internal_model")?.toString().trim() || metadata.internal_model || ""
 		metadata.color = form.get("color")?.toString().trim() || ""
 		metadata.device_color = metadata.color
 		metadata.asset_tag = form.get("asset_tag")?.toString().trim() || metadata.asset_tag || ""
@@ -607,8 +623,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		if (!asset || readOnly || saving) return
 		const missing = recognitionRequirements.filter((item) => !item.ok)
 		if (missing.length > 0) {
-			setRecognitionStage("blocked")
-			setRecognitionMessage(`缺少：${missing.map((item) => item.label).join("、")}`)
 			toast({
 				title: "智能匹配缺少必填参数",
 				description: missing.map((item) => item.label).join("、"),
@@ -616,23 +630,31 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			})
 			return
 		}
-		setRecognitionStage("running")
-		setRecognitionMessage("正在调用资料补全 Agent，读取本地采集、可追溯资料和 AI 结构化结果。")
 		setSaving(true)
 		try {
 			await pb.send(`/api/pulse/assets/${asset.id}/enrichment-reports`, { method: "POST" })
-			setRecognitionMessage("识别完成，正在刷新待替换参数。")
 			await loadDetail({ waitSecondary: true, preserveContent: true })
-			setRecognitionStage("ready")
-			setRecognitionMessage("已生成智能识别报告，可在下方逐项替换或一键替换。")
-			toast({ title: "智能匹配完成", description: "新的参数建议已经整理到编辑工作台。" })
+			toast({ title: "智能匹配完成", description: "新的参数候选已整理到对应参数框的箭头菜单中。" })
 		} catch (error) {
 			console.error("run smart asset recognition", error)
-			setRecognitionStage("failed")
-			setRecognitionMessage("识别失败。请检查 Agnes 配置、资产参数或 Hub 日志。")
 			toast({ title: "智能匹配失败", description: "请检查 Agnes 配置、资产参数或 Hub 日志。", variant: "destructive" })
 		} finally {
 			setSaving(false)
+		}
+	}
+
+	async function refreshInternetAddresses() {
+		if (asset?.type !== "internet" || readOnly || internetAddressRefreshing) return
+		setInternetAddressRefreshing(true)
+		try {
+			const result = await pb.send(`/api/pulse/assets/${asset.id}/internet-addresses/refresh`, { method: "POST" })
+			await loadDetail({ waitSecondary: true, preserveContent: true })
+			toast(getInternetAddressRefreshFeedback(result))
+		} catch (error) {
+			console.error("refresh internet public addresses", error)
+			toast({ title: "刷新公网地址失败", description: "请检查网络连接或稍后重试。", variant: "destructive" })
+		} finally {
+			setInternetAddressRefreshing(false)
 		}
 	}
 
@@ -655,32 +677,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		} catch (error) {
 			console.error("accept asset enrichment suggestion", error)
 			toast({ title: "参数替换失败", description: "请重新生成报告或检查主数据重复约束。", variant: "destructive" })
-		} finally {
-			setSaving(false)
-		}
-	}
-
-	async function acceptAllActionableSuggestions() {
-		if (readOnly || saving || actionableEnrichmentSuggestions.length === 0) return
-		const confirmed = window.confirm(
-			`确认一键替换 ${actionableEnrichmentSuggestions.length} 个参数？\n\nHub 会先校验全部建议。任一建议过期、字段不允许或违反主数据重复约束时，不会写入任何参数。`
-		)
-		if (!confirmed) return
-		setSaving(true)
-		try {
-			await pb.send("/api/pulse/asset-enrichment-suggestions/accept-batch", {
-				method: "POST",
-				body: { suggestion_ids: actionableEnrichmentSuggestions.map((suggestion) => suggestion.id) },
-			})
-			await loadDetail({ waitSecondary: true })
-			toast({ title: "一键替换完成", description: `已处理 ${actionableEnrichmentSuggestions.length} 个参数。` })
-		} catch (error) {
-			console.error("accept all asset enrichment suggestions", error)
-			toast({
-				title: "一键替换失败",
-				description: "未写入任何参数，请重新生成报告或检查主数据重复约束。",
-				variant: "destructive",
-			})
 		} finally {
 			setSaving(false)
 		}
@@ -1007,30 +1003,26 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				</div>
 			</section>
 
-			<AssetShowcaseWorkspace asset={asset} visuals={state.visuals} />
+			<AssetShowcaseWorkspace asset={asset} media={assetMedia} />
 
 			<Dialog open={managementDialogOpen} onOpenChange={setManagementDialogOpen}>
 				<AssetEditWorkbench
 					asset={asset}
 					state={state}
+					defaultMediaPreview={getAssetMediaDefaultPreview(assetMedia.covers, undefined)}
 					readOnly={readOnly}
 					saving={saving}
-					recognitionStage={recognitionStage}
-					recognitionMessage={recognitionMessage}
 					visualGenerationStage={visualGenerationStage}
 					visualGenerationMessage={visualGenerationMessage}
-					recognitionRequirements={recognitionRequirements}
-					latestReport={latestEnrichmentReport}
+					internetAddressRefreshing={internetAddressRefreshing}
 					latestSuggestions={latestEnrichmentSuggestions}
-					actionableSuggestions={actionableEnrichmentSuggestions}
 					onSaveProfile={saveAssetProfile}
 					onRunSmartRecognition={runSmartRecognition}
-					onAcceptSuggestion={(suggestion) => acceptEnrichmentSuggestionDirect(suggestion)}
-					onAcceptAllSuggestions={acceptAllActionableSuggestions}
+					onRefreshInternetAddresses={refreshInternetAddresses}
 					onGenerateVisual={() =>
 						generateTurntableVisual().catch((error) => console.error("collect asset visual images", error))
 					}
-					onSelectVisualCandidate={selectAssetVisualCandidate}
+					onImportVisualCandidate={importAssetVisualCandidate}
 				/>
 			</Dialog>
 
@@ -1402,18 +1394,6 @@ function yesNoOptions() {
 
 function wait(ms: number) {
 	return new Promise((resolve) => window.setTimeout(resolve, ms))
-}
-
-function isActionableEnrichmentSuggestion(suggestion: AssetEnrichmentSuggestionRecord) {
-	if (suggestion.status !== "pending") return false
-	const recommended = suggestion.recommended_value?.trim()
-	if (!recommended) return false
-	const current = suggestion.current_value?.trim()
-	return !current || suggestion.conflict || normalizeComparableText(current) !== normalizeComparableText(recommended)
-}
-
-function normalizeComparableText(value: string) {
-	return value.trim().toLowerCase()
 }
 
 function getDateInputValue(value?: string) {

@@ -50,6 +50,9 @@ const host = {
 	metadata: {
 		cpu_model: "AMD Ryzen 9 6900HX",
 		memory_gb: 32,
+		memory_vendor: "Kingston",
+		memory_detail: "16 GB x 2",
+		memory_type: "DDR5",
 		memory_speed_mhz: 4800,
 	},
 } as unknown as AssetRecord
@@ -59,11 +62,103 @@ assertDeepEqual(
 	hostGroups.map((group) => group.title),
 	["CPU", "内存"]
 )
+
+const fullyProfiledHost = {
+	...host,
+	id: "host-2",
+	metadata: {
+		form_factor: "迷你主机",
+		motherboard_model: "AMD FP7",
+		cpu_model: "AMD Ryzen 9 6900HX",
+		memory_gb: 32,
+		gpu_model: "Radeon 680M",
+		storage_summary: "1 TB NVMe SSD",
+		primary_nic_speed_mbps: 2500,
+		power_adapter_w: 120,
+		display_outputs: "HDMI 2.1 x 2",
+		usb_ports: "USB4 x 2",
+	},
+} as unknown as AssetRecord
+
 assertDeepEqual(
-	hostGroups[1]?.rows.map((row) => [row.label, row.value]),
+	buildAssetParameterGroups(fullyProfiledHost).map((group) => group.title),
+	["外观尺寸", "主板", "CPU", "内存", "GPU", "硬盘", "网络", "电源", "接口"]
+)
+assertDeepEqual(
+	buildAssetParameterGroups(fullyProfiledHost)
+		.find((group) => group.title === "电源")
+		?.rows.map((row) => [row.label, row.value]),
+	[["电源", "120"]]
+)
+assertDeepEqual(
+	buildAssetParameterGroups(fullyProfiledHost)
+		.find((group) => group.title === "接口")
+		?.rows.map((row) => [row.label, row.value]),
 	[
-		["内存容量", "32 GB"],
-		["内存频率", "4800 MHz"],
+		["显示输出", "HDMI 2.1 x 2"],
+		["USB / 扩展接口", "USB4 x 2"],
+	]
+)
+
+const officialMiniPc = {
+	...fullyProfiledHost,
+	id: "host-3",
+	metadata: {
+		...fullyProfiledHost.metadata,
+		memory_type: "DDR5",
+		memory_speed_mhz: 4800,
+		supported_memory_type: "笔记本 DDR5",
+		max_memory_gb: 64,
+		memory_channel_count: 2,
+		ecc_memory: "no",
+		wifi_support: "yes",
+		bluetooth_support: "yes",
+		display_outputs: "HDMI (4K@60Hz) x2\nUSB4 x1",
+		audio_output: "HDMI x2\n3.5mm Combo Jack x1",
+		usb_ports: "RJ45 2.5GbE x1\nUSB3.2 Gen2 Type-C x1\nUSB3.2 Gen2 Type-A x4\nUSB4 Type-C x1\nClear CMOS x1\nDMIC x1",
+		power_adapter_w: "DC 19V",
+		preinstalled_os: "Windows 11",
+		supported_os: "Windows 11",
+		package_weight_kg: 1.66,
+		weight_kg: 0.6,
+		release_date: "Q4'22",
+	},
+} as unknown as AssetRecord
+
+assertDeepEqual(
+	buildAssetParameterGroups(officialMiniPc)
+		.find((group) => group.title === "内存")
+		?.rows.map((row) => [row.label, row.value]),
+	[
+		["当前内存容量", "32 GB"],
+		["当前内存类型", "DDR5"],
+		["当前内存频率", "4800 MHz"],
+		["支持内存类型", "笔记本 DDR5"],
+		["最大内存容量", "64 GB"],
+		["内存通道数量", "2"],
+		["ECC 内存", "否"],
+	]
+)
+assertDeepEqual(
+	buildAssetParameterGroups(officialMiniPc)
+		.find((group) => group.title === "其他")
+		?.rows.map((row) => [row.label, row.value]),
+	[
+		["预装操作系统", "Windows 11"],
+		["支持的操作系统", "Windows 11"],
+		["包装重", "1.66 kg"],
+		["净重", "0.6 kg"],
+		["上市日期", "Q4'22"],
+	]
+)
+assertDeepEqual(
+	hostGroups.find((group) => group.title === "内存")?.rows.map((row) => [row.label, row.value]),
+	[
+		["当前内存容量", "32 GB"],
+		["内存品牌", "Kingston"],
+		["内存规格", "16 GB x 2"],
+		["当前内存类型", "DDR5"],
+		["当前内存频率", "4800 MHz"],
 	]
 )
 
@@ -80,7 +175,7 @@ const nas = {
 
 assertDeepEqual(
 	buildAssetParameterGroups(nas)
-		.filter((group) => group.title === "NAS 存储参数")
+		.filter((group) => group.title === "硬盘")
 		.flatMap((group) => group.rows.map((row) => [row.label, row.value])),
 	[
 		["硬盘位数量", "4"],
@@ -96,7 +191,7 @@ const nasEditFieldLabels = new Set(
 )
 const nasDetailFieldLabels = new Set(
 	buildAssetParameterGroups(nas)
-		.find((group) => group.title === "NAS 存储参数")
+		.find((group) => group.title === "硬盘")
 		?.rows.map((row) => row.label)
 )
 assertDeepEqual(

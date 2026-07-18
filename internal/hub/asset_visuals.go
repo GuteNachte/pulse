@@ -30,8 +30,9 @@ import (
 )
 
 const defaultAssetTurntableFrameCount = 1
-const defaultAssetVisualCandidateCount = 10
-const defaultAssetVisualMaxImages = 12
+const defaultAssetVisualCandidateCount = 15
+const defaultAssetServiceLogoCandidateCount = 4
+const defaultAssetVisualMaxImages = 15
 const assetVisualRunningTaskStaleAfter = 15 * time.Minute
 const assetVisualMaxDownloadBytes int64 = 8 << 20
 const assetVisualMaxDimension = 1600
@@ -72,10 +73,7 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 	var req assetTurntableVisualRequest
 	_ = json.NewDecoder(e.Request.Body).Decode(&req)
 	config := h.assetVisualAIConfig()
-	frameCount := defaultAssetVisualCandidateCount
-	if assetUsesProviderLogoVisual(asset) {
-		frameCount = 1
-	}
+	frameCount := assetVisualCandidateFrameCount(asset)
 	color := firstNonEmpty(strings.TrimSpace(req.Color), recordMetadataString(asset, "color"), recordMetadataString(asset, "device_color"))
 	if message := validateAssetVisualGenerationPrerequisites(asset, color, config); message != "" {
 		task, visual, createErr := h.createFailedAssetVisualTaskAndRecord(e.Auth.Id, asset, config, frameCount, color, message, "blocked")
@@ -86,6 +84,7 @@ func (h *Hub) generateAssetTurntableVisual(e *core.RequestEvent) error {
 	}
 	h.failStaleAssetVisualTasks(e.Auth.Id, asset.Id)
 	references := h.collectAssetVisualReferenceSourcesForColor(asset, config, color)
+	references = h.collectAssetImageSearchFallbackSources(asset, color, references, assetVisualReferenceLimit(asset, config.MaxImages))
 
 	task, err := h.createAssetAITask(e.Auth.Id, asset.Id, config, frameCount, color, references)
 	if err != nil {
@@ -182,6 +181,17 @@ type selectAssetVisualCandidateRequest struct {
 	FrameIndex int `json:"frame_index"`
 }
 
+type assetVisualCrop struct {
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
+}
+
+type updateAssetVisualCropRequest struct {
+	Crop *assetVisualCrop `json:"crop"`
+}
+
 func (h *Hub) selectAssetVisualCandidate(e *core.RequestEvent) error {
 	assetID := strings.TrimSpace(e.Request.PathValue("id"))
 	visualID := strings.TrimSpace(e.Request.PathValue("visualId"))
@@ -250,6 +260,48 @@ func (h *Hub) selectAssetVisualCandidate(e *core.RequestEvent) error {
 	}
 	h.createOperationAudit(e, "", "asset_visual_select", asset.Id, "", "success", "资产设备主图已选择")
 	return e.JSON(http.StatusOK, map[string]any{"visual": record, "status": "ready", "message": "设备主图已更新。"})
+}
+
+func (h *Hub) updateAssetVisualCrop(e *core.RequestEvent) error {
+	assetID := strings.TrimSpace(e.Request.PathValue("id"))
+	visualID := strings.TrimSpace(e.Request.PathValue("visualId"))
+	if assetID == "" || visualID == "" {
+		return e.BadRequestError("Missing asset visual crop target.", nil)
+	}
+	asset, err := h.findUserAssetRecord(assetID, e.Auth.Id)
+	if err != nil {
+		return e.NotFoundError("Asset not found.", err)
+	}
+	visual, err := h.FindRecordById("asset_visuals", visualID)
+	if err != nil || visual.GetString("user") != e.Auth.Id || visual.GetString("asset") != asset.Id || !visual.GetBool("primary") {
+		return e.NotFoundError("Selected asset visual not found.", err)
+	}
+	var req updateAssetVisualCropRequest
+	if err := json.NewDecoder(e.Request.Body).Decode(&req); err != nil {
+		return e.BadRequestError("Invalid asset visual crop.", err)
+	}
+	var frames []map[string]any
+	_ = visual.UnmarshalJSONField("frames", &frames)
+	if len(frames) != 1 {
+		return e.BadRequestError("Selected asset visual must contain one frame.", nil)
+	}
+	if req.Crop == nil {
+		delete(frames[0], "crop")
+	} else {
+		crop := req.Crop
+		if crop.X < 0 || crop.Y < 0 || crop.Width <= 0 || crop.Height <= 0 || crop.X+crop.Width > 1 || crop.Y+crop.Height > 1 {
+			return e.BadRequestError("Asset visual crop is outside the image bounds.", nil)
+		}
+		frames[0]["crop"] = map[string]float64{
+			"x": crop.X, "y": crop.Y, "width": crop.Width, "height": crop.Height,
+		}
+	}
+	visual.Set("frames", frames)
+	if err := h.Save(visual); err != nil {
+		return e.InternalServerError("Failed to update asset visual crop.", err)
+	}
+	h.createOperationAudit(e, "", "asset_visual_crop", asset.Id, "", "success", "资产主图裁剪已更新")
+	return e.JSON(http.StatusOK, map[string]any{"visual": visual, "status": "ready"})
 }
 
 func (h *Hub) updateAssetVisualTaskProgress(task *core.Record, update map[string]any) error {
@@ -428,9 +480,9 @@ func (h *Hub) createAssetAITask(userID string, assetID string, config assetVisua
 	})
 	record.Set("output_summary", map[string]any{
 		"phase":                          "reference_collecting",
-		"phase_label":                    "正在收集官方图片",
+		"phase_label":                    "正在收集图片候选",
 		"progress_percent":               10,
-		"source_policy":                  "official_only",
+		"source_policy":                  assetVisualSourcePolicy(references),
 		"visual_verification_configured": config.Ready(),
 		"phase_history": []map[string]any{
 			{
@@ -445,6 +497,13 @@ func (h *Hub) createAssetAITask(userID string, assetID string, config assetVisua
 		return nil, err
 	}
 	return record, nil
+}
+
+func assetVisualSourcePolicy(references []map[string]any) string {
+	if countAssetVisualReferencesByProvider(references, "bing_images") > 0 {
+		return "official_then_bing_public"
+	}
+	return "official_only"
 }
 
 func (h *Hub) createFailedAssetVisualTaskAndRecord(userID string, asset *core.Record, config assetVisualAIConfig, frameCount int, color string, message string, reason string) (*core.Record, *core.Record, error) {
@@ -555,6 +614,26 @@ func (h *Hub) collectAssetVisualReferenceSourcesForColor(asset *core.Record, con
 	return result
 }
 
+func (h *Hub) collectAssetImageSearchFallbackSources(asset *core.Record, color string, result []map[string]any, limit int) []map[string]any {
+	if len(result) >= limit || !assetImageSearchEnabled() {
+		return result
+	}
+	seen := make(map[string]bool, len(result))
+	for _, source := range result {
+		if imageURL := assetVisualReferenceImageURL(source); imageURL != "" {
+			seen[strings.ToLower(strings.TrimSpace(imageURL))] = true
+		}
+	}
+	if assetUsesProviderLogoVisual(asset) {
+		return h.collectAssetVisualBingServiceLogoSources(asset, buildAssetServiceLogoSearchQueries(asset), result, seen, limit)
+	}
+	if !assetImageSearchEligible(asset) {
+		return result
+	}
+	plan := buildAssetImageSearchPlan(asset, color, h.assetOnlineAIConfig())
+	return h.collectAssetVisualBingImageSources(asset, plan.Queries, result, seen, limit)
+}
+
 func normalizeAssetVisualMaxImages(value int) int {
 	if value <= 0 {
 		return defaultAssetVisualMaxImages
@@ -562,8 +641,8 @@ func normalizeAssetVisualMaxImages(value int) int {
 	if value < 2 {
 		return 2
 	}
-	if value > 12 {
-		return 12
+	if value > 15 {
+		return 15
 	}
 	return value
 }
@@ -582,9 +661,16 @@ func assetUsesProviderLogoVisual(asset *core.Record) bool {
 
 func assetVisualReferenceLimit(asset *core.Record, configuredLimit int) int {
 	if assetUsesProviderLogoVisual(asset) {
-		return 1
+		return defaultAssetServiceLogoCandidateCount
 	}
 	return normalizeAssetVisualMaxImages(configuredLimit)
+}
+
+func assetVisualCandidateFrameCount(asset *core.Record) int {
+	if assetUsesProviderLogoVisual(asset) {
+		return defaultAssetServiceLogoCandidateCount
+	}
+	return defaultAssetVisualCandidateCount
 }
 
 func assetVisualPresentation(asset *core.Record) string {
@@ -598,14 +684,14 @@ func assetVisualCollectionEmptyMessage(asset *core.Record) string {
 	if assetUsesProviderLogoVisual(asset) {
 		return "没有找到可归档的官方服务商 Logo。请先维护服务商官网或官方资料链接后重试。"
 	}
-	return "没有找到可归档的官方设备图片。请先维护厂家产品页、支持页或官方图片 URL 后重试。"
+	return "没有找到可归档的设备图片。请先检查厂商和型号，或维护厂家产品页、支持页或官方图片 URL 后重试。"
 }
 
 func assetVisualCollectionNote(asset *core.Record) string {
 	if assetUsesProviderLogoVisual(asset) {
-		return "只接受服务商官方页面中的 Logo，已归档到本地存储并保留来源用于追溯。"
+		return "优先收集服务商官网 Logo；官网未命中时只保留通过来源和图像质量筛选的公开品牌 Logo，均已归档到本地存储并保留来源用于追溯。"
 	}
-	return "只接受厂商官方页面或官方图片地址，图片已归档到本地存储并保留来源用于追溯。"
+	return "优先收集厂商官网图片；官网未命中时，只接受必应公开结果中可核验型号的图片。所有候选均已归档到本地存储并保留来源用于追溯。"
 }
 
 func assetVisualCollectionReadyLabel(asset *core.Record) string {
@@ -718,7 +804,7 @@ func assetVisualServiceLogoHostAllowed(asset *core.Record, rawHost string) bool 
 			return true
 		}
 	}
-	for _, metadataKey := range []string{"support_url", "product_url", "official_url", "service_url", "public_url", "external_url", "internal_url", "check_url", "url"} {
+	for _, metadataKey := range []string{"official_url", "service_url", "public_url", "external_url", "internal_url", "check_url", "url"} {
 		candidate, err := url.Parse(recordMetadataString(asset, metadataKey))
 		if err == nil && assetVisualHostMatches(host, candidate.Hostname()) {
 			return true
@@ -903,7 +989,7 @@ func buildAssetVisualAISourceDiscoveryPayload(asset *core.Record, color string, 
 		limit = normalizeAssetVisualMaxImages(limit)
 	}
 	searchKeywords := buildAssetVisualSearchKeywords(asset, color)
-	systemPrompt := "你是 Pulse 资产中心的设备图片找图 Agent。先使用提供的 search_keywords 组合多组检索词，再收集同一资产适合作为档案主图的真实图片候选。不要生成图片，不要返回产品页截图、营销横幅、海报、色卡、图标、Logo、相机样张、带水印图片或明显不同型号。目标是尽可能返回 10 张高适配候选，并按可识别颜色分类；颜色未知时可留空。优先级：厂商官网产品图库、官方 CDN、支持页和说明书，其次是可追溯规格库、可信媒体或零售产品图。厂商、型号和内部型号用于提高匹配度，不完整时应结合资产名称和类型继续检索，不得因此拒绝任务。返回严格 JSON：{\"search_keywords\":[\"...\"],\"sources\":[{\"image_url\":\"https://...\",\"source_url\":\"https://...\",\"title\":\"...\",\"color\":\"可选颜色\",\"type\":\"official_image|reference_image\",\"confidence\":90}]}。"
+	systemPrompt := "你是 Pulse 资产中心的设备图片找图 Agent。先使用提供的 search_keywords 组合多组检索词，再收集同一资产适合作为档案主图的真实图片候选。不要生成图片，不要返回产品页截图、营销横幅、海报、色卡、图标、Logo、相机样张、带水印图片或明显不同型号。目标是尽可能返回 15 张高适配候选，并按可识别颜色分类；颜色未知时可留空。优先级：厂商官网产品图库、官方 CDN、支持页和说明书，其次是可追溯规格库、可信媒体或零售产品图。厂商、型号和内部型号用于提高匹配度，不完整时应结合资产名称和类型继续检索，不得因此拒绝任务。返回严格 JSON：{\"search_keywords\":[\"...\"],\"sources\":[{\"image_url\":\"https://...\",\"source_url\":\"https://...\",\"title\":\"...\",\"color\":\"可选颜色\",\"type\":\"official_image|reference_image\",\"confidence\":90}]}。"
 	policy := map[string]any{
 		"must_be_real_device_photo_or_render": true,
 		"required_result_count":               limit,
@@ -942,8 +1028,6 @@ func buildAssetVisualAISourceDiscoveryPayload(asset *core.Record, color string, 
 						"internal_model": recordMetadataString(asset, "internal_model"),
 						"selected_color": color,
 						"known_colors":   assetOfficialColorOptions(asset),
-						"support_url":    recordMetadataString(asset, "support_url"),
-						"product_url":    recordMetadataString(asset, "product_url"),
 						"official_url":   recordMetadataString(asset, "official_url"),
 					},
 					"max_images":      limit,
@@ -1080,8 +1164,6 @@ func assetVisualReferencePageInputs(asset *core.Record) []assetVisualReferencePa
 	result := make([]assetVisualReferencePageInput, 0, 6)
 	seen := map[string]bool{}
 	for _, input := range []assetVisualReferencePageInput{
-		{Provider: "support_url", URL: recordMetadataString(asset, "support_url")},
-		{Provider: "product_url", URL: recordMetadataString(asset, "product_url")},
 		{Provider: "official_url", URL: recordMetadataString(asset, "official_url")},
 	} {
 		if related, ok := assetVisualRelatedProductPageInput(input); ok {
@@ -1804,6 +1886,7 @@ func (h *Hub) buildCollectedAssetVisualFrames(asset *core.Record, references []m
 			"source_title":     title,
 			"source_url":       sourceURL,
 			"source_image_url": imageURL,
+			"provider":         stringFromAny(source["provider"]),
 			"color":            firstNonEmpty(stringFromAny(source["color"]), inferAssetVisualSourceColor(asset, color, strings.Join(nonEmptyStrings(title, sourceURL, imageURL), " "))),
 			"presentation":     assetVisualPresentation(asset),
 			"theme_score":      scoreAssetVisualNightCandidate(source),
@@ -1830,7 +1913,7 @@ func (h *Hub) buildCollectedAssetVisualFrames(asset *core.Record, references []m
 	}
 	frameLimit := limit
 	if assetUsesProviderLogoVisual(asset) {
-		// 服务商 Logo 只保存一张，但先保留多个可归档来源逐一尝试，避免模型猜错单个图片 URL 时直接失败。
+		// 服务商 Logo 保留少量候选供人工确认，避免把近似或低质量品牌图自动设为主图。
 		frameLimit = len(candidates)
 	} else if frameLimit > len(candidates) {
 		frameLimit = len(candidates)
@@ -1850,6 +1933,7 @@ func (h *Hub) buildCollectedAssetVisualFrames(asset *core.Record, references []m
 			"source_title":     source["source_title"],
 			"source_url":       source["source_url"],
 			"source_image_url": source["source_image_url"],
+			"provider":         source["provider"],
 		})
 	}
 	return frames
@@ -1889,6 +1973,13 @@ func (h *Hub) archiveCollectedAssetVisualFrames(asset *core.Record, references [
 		if err != nil {
 			skipped = append(skipped, map[string]string{"source_image_url": sourceImageURL, "reason": "image_processing_failed"})
 			continue
+		}
+		if assetUsesProviderLogoVisual(asset) {
+			decoded, _, decodeErr := image.Decode(bytes.NewReader(processed.Bytes))
+			if decodeErr != nil || !isLikelyAssetServiceLogoRaster(decoded) {
+				skipped = append(skipped, map[string]string{"source_image_url": sourceImageURL, "reason": "service_logo_photo_like"})
+				continue
+			}
 		}
 		file, err := filesystem.NewFileFromBytes(processed.Bytes, fmt.Sprintf("asset-visual-%02d.%s", len(frames)+1, processed.Extension))
 		if err != nil {
@@ -2141,6 +2232,30 @@ func normalizeAssetVisualImage(source []byte, sourceName string) (normalizedAsse
 
 func normalizeAssetServiceLogoImage(source []byte, sourceName string) (normalizedAssetVisualImage, error) {
 	return normalizeAssetVisualImageWithMinimumDimension(source, sourceName, assetVisualMinLogoDimension, true)
+}
+
+func isLikelyAssetServiceLogoRaster(source image.Image) bool {
+	if source == nil {
+		return false
+	}
+	bounds := source.Bounds()
+	if bounds.Dx() < assetVisualMinLogoDimension || bounds.Dy() < assetVisualMinLogoDimension {
+		return false
+	}
+	stepX := max(1, bounds.Dx()/48)
+	stepY := max(1, bounds.Dy()/48)
+	colors := make(map[uint16]struct{}, 72)
+	for y := bounds.Min.Y; y < bounds.Max.Y; y += stepY {
+		for x := bounds.Min.X; x < bounds.Max.X; x += stepX {
+			r, g, b, _ := source.At(x, y).RGBA()
+			bucket := uint16(r>>13)<<6 | uint16(g>>13)<<3 | uint16(b>>13)
+			colors[bucket] = struct{}{}
+			if len(colors) > 72 {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func normalizeAssetVisualImageWithMinimumDimension(source []byte, sourceName string, minimumDimension int, expandSmallSquare bool) (normalizedAssetVisualImage, error) {
@@ -2528,17 +2643,9 @@ func isLikelyAssetServiceLogoURL(rawURL string) bool {
 
 func assetVisualImageURLAccepted(asset *core.Record, rawURL string) bool {
 	if assetUsesProviderLogoVisual(asset) {
-		return isLikelyAssetServiceLogoURL(rawURL) || isKnownAssetServiceLogoFallbackURL(rawURL)
+		return isLikelyAssetServiceLogoURL(rawURL)
 	}
 	return isLikelyAssetVisualImageURL(rawURL)
-}
-
-func isKnownAssetServiceLogoFallbackURL(rawURL string) bool {
-	parsed, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil || parsed.Scheme != "https" || !assetVisualHostMatches(parsed.Hostname(), "google.com") {
-		return false
-	}
-	return parsed.Path == "/s2/favicons" && parsed.Query().Get("domain") != "" && parsed.Query().Get("sz") != ""
 }
 
 func assetVisualReferenceSourceAccepted(asset *core.Record, source map[string]any) bool {

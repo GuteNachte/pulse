@@ -2,8 +2,8 @@ import type { AssetRecord } from "../../types"
 import {
 	buildAssetSearchText,
 	getAssetCompleteness,
+	getAssetLocationLabel,
 	getAssetSummaryRows,
-	getAssetWarrantyStatus,
 } from "./asset-profile-summary.ts"
 
 function assertEqual(actual: unknown, expected: unknown) {
@@ -26,7 +26,6 @@ const phone = {
 		storage_gb: 256,
 		wifi_standard: "Wi-Fi 6",
 		power_mode: "电池",
-		warranty_until: "2099-01-01",
 	},
 } as unknown as AssetRecord
 
@@ -36,6 +35,28 @@ assertEqual(summary, [
 	{ label: "容量", value: "256GB", mono: true },
 	{ label: "连接", value: "Wi-Fi 6" },
 ])
-assertEqual(getAssetWarrantyStatus(phone, new Date("2026-07-11T00:00:00Z")).tone, "ok")
 assertEqual(getAssetCompleteness(phone).missing.includes("厂家资料页"), true)
 assertEqual(buildAssetSearchText(phone).includes("redmi k50"), true)
+
+const internet = {
+	id: "asset-internet",
+	type: "internet",
+	name: "宽带",
+	vendor: "联通",
+	location: "",
+	role: "互联网接入",
+	metadata: {
+		down_mbps: 1000,
+		up_mbps: 300,
+		public_ipv4: "203.0.113.10",
+	},
+} as unknown as AssetRecord
+
+assertEqual(getAssetCompleteness(internet), {
+	score: 100,
+	label: "资料完整",
+	tone: "ok",
+	missing: [],
+})
+assertEqual(getAssetLocationLabel(internet), "无")
+assertEqual(getAssetLocationLabel(phone), "家 / 卧室")

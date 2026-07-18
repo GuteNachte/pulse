@@ -1,18 +1,24 @@
 import { useMemo } from "react"
-import type { AssetRecord, AssetVisualRecord } from "@/types"
+import type { AssetRecord } from "@/types"
 import { buildAssetParameterGroups } from "../asset-detail-parameter-groups"
 import { getMetadataString } from "../asset-schema"
 import { AssetHardwareSpecsColumn, AssetOverviewColumn, type AssetParameterRow } from "./asset-parameter-columns"
-import { AssetVisualCard } from "./asset-visual-card"
+import { AssetMediaShowcase, type AssetMediaShowcaseItem } from "./asset-media-showcase"
 
-export function AssetShowcaseWorkspace({ asset, visuals }: { asset: AssetRecord; visuals: AssetVisualRecord[] }) {
+export function AssetShowcaseWorkspace({
+	asset,
+	media,
+}: {
+	asset: AssetRecord
+	media?: { covers: AssetMediaShowcaseItem[] }
+}) {
 	const parameterGroups = useMemo(() => buildAssetParameterGroups(asset), [asset])
 	const identitySections = useMemo(() => buildAssetIdentitySections(asset), [asset])
 
 	return (
 		<section className="grid items-start gap-5 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.7fr)] 2xl:grid-cols-[minmax(22rem,0.72fr)_minmax(0,1.78fr)]">
 			<aside className="grid content-start gap-5 xl:min-h-0">
-				<AssetVisualCard visuals={visuals} />
+				{media?.covers.length ? <AssetMediaShowcase covers={media.covers} /> : null}
 				<AssetOverviewColumn sections={identitySections} />
 			</aside>
 			<AssetHardwareSpecsColumn groups={parameterGroups} />
@@ -34,7 +40,7 @@ function buildAssetIdentitySections(asset: AssetRecord): { title: string; rows: 
 				textRow("编号", getMetadataString(metadata, "asset_tag")),
 				textRow("厂商", asset.vendor),
 				textRow("型号", asset.model),
-				textRow("内部型号", getMetadataString(metadata, "internal_model")),
+				...(asset.type === "phone" ? [textRow("内部型号", getMetadataString(metadata, "internal_model"))] : []),
 				textRow("序列号", asset.serial_number),
 			]),
 		},
@@ -49,11 +55,7 @@ function buildAssetIdentitySections(asset: AssetRecord): { title: string; rows: 
 		},
 		{
 			title: "资料",
-			rows: compact([
-				linkRow("支持页", getMetadataString(metadata, "support_url")),
-				linkRow("产品页", getMetadataString(metadata, "product_url")),
-				linkRow("资料页", getMetadataString(metadata, "official_url")),
-			]),
+			rows: compact([linkRow("官方网站", getMetadataString(metadata, "official_url"))]),
 		},
 	].filter((section) => section.rows.length > 0)
 }

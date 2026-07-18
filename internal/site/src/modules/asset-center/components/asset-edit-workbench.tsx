@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
+import { ListChecksIcon, RefreshCwIcon } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { cn } from "@/lib/utils"
 import type {
 	AITaskRecord,
 	AssetAttachmentRecord,
-	AssetEnrichmentReportRecord,
 	AssetEnrichmentSuggestionRecord,
 	AssetInterfaceRecord,
 	AssetLocationRecord,
@@ -16,10 +16,9 @@ import type {
 	AssetVisualRecord,
 } from "@/types"
 import { AssetEditActionBar } from "./asset-edit-action-bar"
-import { AssetProfileEditField } from "./asset-edit-profile-fields"
-import { SelectField, TextField } from "./asset-detail-form-fields"
+import { AssetCandidateTextField, AssetProfileEditField } from "./asset-edit-profile-fields"
+import { SelectField } from "./asset-detail-form-fields"
 import { AssetEditVisualPanel } from "./asset-edit-visual-panel"
-import { AssetSuggestionWorkbench } from "./asset-suggestion-workbench"
 import {
 	AssetLocationInput,
 	AssetTagInput,
@@ -28,13 +27,29 @@ import {
 	PHONE_STORAGE_OPTIONS,
 	PhoneVariantSpecField,
 } from "./asset-form-fields"
-import { buildAssetProfileEditSections, getRequiredAssetProfileFieldKeys } from "../asset-edit-profile-sections"
+import {
+	buildAssetProfileEditSections,
+	getAssetConnectionFieldKeys,
+	getRequiredAssetProfileFieldKeys,
+} from "../asset-edit-profile-sections"
 import { formatAssetVisualTaskMeta } from "../asset-ai-task-summary"
-import { buildNextAssetTag, loadAssetNumberingSettings, normalizeAssetNumberingSettings } from "../asset-numbering"
+import { buildAssetEnrichmentCandidateMap } from "../asset-enrichment-candidates"
+import {
+	buildAssetTagCandidates,
+	buildNextAssetTag,
+	loadAssetNumberingSettings,
+	normalizeAssetNumberingSettings,
+} from "../asset-numbering"
 import { buildAssetLocationOptions } from "../asset-list"
+import { isAssetLocationNotApplicable } from "../asset-location"
 import { getEditableAssetTypeOptions } from "../asset-profiles"
-import { getMetadataNumber, getMetadataString, isPhoneVariantSpecRequired } from "../asset-schema"
-import type { AssetRecognitionRequirement } from "../asset-profile-validation"
+import {
+	HOST_ASSET_TYPES,
+	getAssetFormSections,
+	getMetadataNumber,
+	getMetadataString,
+	isPhoneVariantSpecRequired,
+} from "../asset-schema"
 import {
 	getAssetOfficialColorOptions,
 	getAssetVisualColor,
@@ -57,46 +72,40 @@ type AssetEditWorkbenchState = {
 type AssetEditWorkbenchProps = {
 	asset: AssetRecord
 	state: AssetEditWorkbenchState
+	defaultMediaPreview?: { url: string; alt: string }
 	readOnly: boolean
 	saving: boolean
-	recognitionStage: "idle" | "blocked" | "running" | "ready" | "failed"
-	recognitionMessage: string
 	visualGenerationStage: "idle" | "running" | "ready" | "failed"
 	visualGenerationMessage: string
-	recognitionRequirements: AssetRecognitionRequirement[]
-	latestReport?: AssetEnrichmentReportRecord
+	internetAddressRefreshing: boolean
 	latestSuggestions: AssetEnrichmentSuggestionRecord[]
-	actionableSuggestions: AssetEnrichmentSuggestionRecord[]
 	onSaveProfile: (event: FormEvent<HTMLFormElement>) => void
 	onRunSmartRecognition: () => void
-	onAcceptSuggestion: (suggestion: AssetEnrichmentSuggestionRecord) => void
-	onAcceptAllSuggestions: () => void
+	onRefreshInternetAddresses: () => void
 	onGenerateVisual: () => void
-	onSelectVisualCandidate: (visualId: string, frameIndex: number) => void
+	onImportVisualCandidate: (visualId: string, frameIndex: number) => Promise<string>
 }
 
 export function AssetEditWorkbench({
 	asset,
 	state,
+	defaultMediaPreview,
 	readOnly,
 	saving,
-	recognitionStage,
-	recognitionMessage,
 	visualGenerationStage,
 	visualGenerationMessage,
-	recognitionRequirements,
-	latestReport,
+	internetAddressRefreshing,
 	latestSuggestions,
-	actionableSuggestions,
 	onSaveProfile,
 	onRunSmartRecognition,
-	onAcceptSuggestion,
-	onAcceptAllSuggestions,
+	onRefreshInternetAddresses,
 	onGenerateVisual,
-	onSelectVisualCandidate,
+	onImportVisualCandidate,
 }: AssetEditWorkbenchProps) {
 	const metadata = asset.metadata ?? {}
 	const [selectedType, setSelectedType] = useState<AssetRecord["type"]>(asset.type)
+	const [nameValue, setNameValue] = useState(asset.name || "")
+	const [statusValue, setStatusValue] = useState(asset.status || "active")
 	const [locationValue, setLocationValue] = useState(asset.location || "")
 	const [assetTagValue, setAssetTagValue] = useState(getMetadataString(metadata, "asset_tag"))
 	const [fixedIpv4Value, setFixedIpv4Value] = useState(
@@ -107,59 +116,111 @@ export function AssetEditWorkbench({
 		[asset, state.officialColorSuggestions]
 	)
 	const visualBlockReason = getAssetVisualGenerationBlockReason(asset)
-	const visualGenerationRunning = visualGenerationStage === "running"
 	useEffect(() => {
 		setSelectedType(asset.type)
+		setNameValue(asset.name || "")
+		setStatusValue(asset.status || "active")
 		setLocationValue(asset.location || "")
 		setAssetTagValue(getMetadataString(asset.metadata, "asset_tag"))
 		setFixedIpv4Value(getMetadataString(asset.metadata, "fixed_ipv4") || asset.management_ip || "")
-	}, [asset.id, asset.location, asset.metadata, asset.type])
+	}, [asset.id, asset.location, asset.metadata, asset.name, asset.status, asset.type])
 	const locationOptions = useMemo(
 		() => buildAssetLocationOptions(state.assets, state.locations, { includePresets: true }).values,
 		[state.assets, state.locations]
 	)
-	const nextAssetTagPreview = useMemo(
-		() => buildNextAssetTag(state.assets, normalizeAssetNumberingSettings(loadAssetNumberingSettings())),
+	const assetTagCandidates = useMemo(
+		() => buildAssetTagCandidates(state.assets, normalizeAssetNumberingSettings(loadAssetNumberingSettings())),
 		[state.assets]
 	)
-	const missingRequirements = recognitionRequirements.filter((item) => !item.ok)
+	const nextAssetTagPreview =
+		assetTagCandidates[0] ??
+		buildNextAssetTag(state.assets, normalizeAssetNumberingSettings(loadAssetNumberingSettings()))
 	const isInternetService = selectedType === "web_endpoint"
 	const isInternetResource = selectedType === "internet"
-	const requiredFieldKeys = getRequiredAssetProfileFieldKeys(selectedType)
-	const formSections = buildAssetProfileEditSections(selectedType, requiredFieldKeys)
+	const locationNotApplicable = isAssetLocationNotApplicable(selectedType)
+	const formSections = buildAssetProfileEditSections(selectedType, getRequiredAssetProfileFieldKeys(selectedType))
+	const enrichmentCandidates = useMemo(() => buildAssetEnrichmentCandidateMap(latestSuggestions), [latestSuggestions])
+	const universalArchiveFields = useMemo(
+		() =>
+			new Map(
+				getAssetFormSections(selectedType)
+					.flatMap((section) => section.fields)
+					.map((field) => [field.key, field])
+			),
+		[selectedType]
+	)
 	const editableTypeOptions = getEditableAssetTypeOptions(selectedType)
+	const statusField = universalArchiveFields.get("status")
+	const connectionFieldKeys = getAssetConnectionFieldKeys(selectedType)
+	const renderUniversalArchiveField = (key: string) => {
+		const field = universalArchiveFields.get(key)
+		return field ? (
+			<AssetProfileEditField
+				key={`universal-archive-${key}`}
+				field={field}
+				asset={asset}
+				locationOptions={locationOptions}
+				nextAssetTagPreview={nextAssetTagPreview}
+				candidates={enrichmentCandidates}
+			/>
+		) : null
+	}
 
 	return (
-		<DialogContent className="grid h-[min(92dvh,62rem)] w-[calc(100vw-2rem)] max-w-[96rem] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0">
-			<DialogHeader className="shrink-0 border-b border-border/70 bg-card px-5 py-4 pe-14 sm:px-6">
+		<DialogContent className="grid h-[min(92dvh,62rem)] w-[calc(100vw-2rem)] max-w-[96rem] grid-rows-[minmax(0,1fr)] gap-0 overflow-hidden p-0 lg:top-[46%]">
+			<DialogHeader className="sr-only">
 				<DialogTitle>编辑资产</DialogTitle>
 				<DialogDescription>主档、类型专属参数、智能匹配和候选图片在同一工作台维护。</DialogDescription>
 			</DialogHeader>
 			<form
 				onSubmit={onSaveProfile}
-				className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-y-auto lg:overflow-hidden"
+				className="-mt-3 grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-y-auto lg:overflow-hidden"
 			>
 				<AssetEditActionBar
 					readOnly={readOnly}
 					saving={saving}
-					visualBlockReason={visualBlockReason}
-					visualGenerationRunning={visualGenerationRunning}
-					onRunSmartRecognition={onRunSmartRecognition}
-					onGenerateVisual={onGenerateVisual}
+					assetTagControl={
+						<AssetTagInput
+							id="asset-detail-edit-asset-tag"
+							name="asset_tag"
+							value={assetTagValue}
+							onChange={setAssetTagValue}
+							assetTagCandidates={assetTagCandidates}
+						/>
+					}
+					archiveCounts={
+						<>
+							<AssetEditHeaderCount label="接口" value={state.interfaces.length} />
+							<AssetEditHeaderCount label="关系" value={state.relations.length} />
+							<AssetEditHeaderCount label="维护" value={state.maintenance.length} />
+							<AssetEditHeaderCount label="附件" value={state.attachments.length} />
+						</>
+					}
 				/>
-				<div className="grid min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(24rem,0.78fr)]">
-					<div className="grid content-start gap-4 p-4 sm:p-5 lg:min-h-0 lg:overflow-y-auto lg:pe-5">
-						<section className="rounded-lg border border-border/70 bg-card p-4">
-							<div className="mb-3 flex items-center justify-between gap-3">
+				<div className="grid min-h-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(28rem,0.85fr)]">
+					<div className="grid content-start gap-2 p-2 sm:p-3 lg:min-h-0 lg:overflow-y-auto lg:pe-3 [&_input]:h-8 [&_input]:px-2 [&_select]:h-8 [&_select]:px-2">
+						<section className="rounded-md border border-border/70 bg-card p-2">
+							<div className="mb-1 flex items-center justify-between gap-2">
 								<div className="min-w-0">
-									<div className="text-sm font-semibold text-foreground">必填参数</div>
-									<div className="mt-1 text-xs text-muted-foreground">
-										识别、图片收集和本地采集都会优先读取这些参数。
+									<div className="text-sm font-semibold text-foreground">通用档案</div>
+									<div className="mt-0.5 text-xs text-muted-foreground">
+										身份、状态、位置和用途；网络接入信息在下方维护。
 									</div>
 								</div>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									onClick={onRunSmartRecognition}
+									disabled={readOnly || saving}
+									className="shrink-0 gap-2"
+								>
+									<ListChecksIcon className="size-3.5" />
+									智能匹配
+								</Button>
 							</div>
-							<div className="grid gap-3 sm:grid-cols-2">
-								<TextField name="name" label="资产名称" required defaultValue={asset.name} />
+							<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+								<AssetCandidateTextField name="name" label="资产名称" value={nameValue} onChange={setNameValue} />
 								{isInternetResource ? (
 									<input type="hidden" name="type" value={selectedType} />
 								) : (
@@ -171,24 +232,64 @@ export function AssetEditWorkbench({
 										onChange={(value) => setSelectedType(value as AssetRecord["type"])}
 									/>
 								)}
-								{isInternetResource && <TextField name="vendor" label="运营商" required defaultValue={asset.vendor} />}
+								{isInternetResource && (
+									<>
+										<AssetCandidateTextField
+											name="vendor"
+											label="运营商"
+											defaultValue={asset.vendor}
+											candidates={enrichmentCandidates.vendor}
+										/>
+										<AssetCandidateTextField name="role" label="用途" defaultValue={asset.role} />
+									</>
+								)}
 								{!isInternetService && !isInternetResource && (
 									<>
-										<TextField name="vendor" label="厂商 / 品牌" required defaultValue={asset.vendor} />
-										<TextField name="model" label="型号 / 规格" required defaultValue={asset.model} />
-										<TextField
-											name="internal_model"
-											label="内部型号 / 搜索代码"
-											required
-											defaultValue={getMetadataString(metadata, "internal_model")}
+										<AssetCandidateTextField
+											name="vendor"
+											label="厂商 / 品牌"
+											defaultValue={asset.vendor}
+											candidates={enrichmentCandidates.vendor}
 										/>
-										<OfficialColorField
-											name="color"
-											label="外观颜色"
-											defaultValue={getAssetVisualColor(asset)}
-											options={officialColorOptions}
-											requireOfficial={isOfficialColorRequiredForAssetType(selectedType)}
+										<AssetCandidateTextField
+											name="model"
+											label="型号 / 规格"
+											defaultValue={asset.model}
+											candidates={enrichmentCandidates.model}
 										/>
+										{renderUniversalArchiveField("serial_number")}
+										{selectedType === "phone" && (
+											<AssetCandidateTextField
+												name="internal_model"
+												label="内部型号 / 搜索代码"
+												defaultValue={getMetadataString(metadata, "internal_model")}
+												candidates={enrichmentCandidates.internal_model}
+											/>
+										)}
+										{!HOST_ASSET_TYPES.includes(selectedType) && (
+											<OfficialColorField
+												name="color"
+												label="外观颜色"
+												defaultValue={getAssetVisualColor(asset)}
+												options={officialColorOptions}
+												requireOfficial={isOfficialColorRequiredForAssetType(selectedType)}
+											/>
+										)}
+									</>
+								)}
+								{!isInternetService && (
+									<>
+										{statusField && (
+											<SelectField
+												name="status"
+												label={statusField.label}
+												options={statusField.options ?? []}
+												value={statusValue}
+												onChange={(value) => setStatusValue(value as NonNullable<AssetRecord["status"]>)}
+											/>
+										)}
+										{renderUniversalArchiveField("role")}
+										{renderUniversalArchiveField("official_url")}
 									</>
 								)}
 								{isPhoneVariantSpecRequired(selectedType) && (
@@ -196,7 +297,6 @@ export function AssetEditWorkbench({
 										<PhoneVariantSpecField
 											name="memory_gb"
 											label="运行内存 GB"
-											required
 											defaultValue={String(getMetadataNumber(metadata, "memory_gb") ?? "")}
 											options={PHONE_MEMORY_OPTIONS}
 											customPlaceholder="例如 10"
@@ -204,67 +304,70 @@ export function AssetEditWorkbench({
 										<PhoneVariantSpecField
 											name="storage_gb"
 											label="存储容量 GB"
-											required
 											defaultValue={String(getMetadataNumber(metadata, "storage_gb") ?? "")}
 											options={PHONE_STORAGE_OPTIONS}
 											customPlaceholder="例如 384"
 										/>
 									</>
 								)}
-								{(!isInternetService || isInternetResource) && (
+								<div className="grid gap-2">
+									<Label>位置</Label>
+									<AssetLocationInput
+										idPrefix="asset-detail-edit-location"
+										value={locationValue}
+										locationOptions={locationOptions}
+										onChange={setLocationValue}
+										allowNone={locationNotApplicable}
+									/>
+									<input type="hidden" name="location" value={locationValue} />
+								</div>
+							</div>
+						</section>
+
+						{connectionFieldKeys.length > 0 && (
+							<section className="rounded-md border border-border/70 bg-card p-2">
+								<div className="mb-1">
+									<div className="text-sm font-semibold text-foreground">接入信息</div>
+									<div className="mt-0.5 text-xs text-muted-foreground">网络身份与本机管理入口。</div>
+								</div>
+								<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
 									<div className="grid gap-2">
-										<Label htmlFor="asset-detail-edit-asset-tag">
-											资产编号<span className="ms-1 text-destructive">*</span>
-										</Label>
-										<AssetTagInput
-											id="asset-detail-edit-asset-tag"
-											name="asset_tag"
-											value={assetTagValue}
-											onChange={setAssetTagValue}
-											nextAssetTagPreview={nextAssetTagPreview}
-											required
-										/>
-									</div>
-								)}
-								{!isInternetResource && (
-									<>
-										<div className="grid gap-2">
-											<Label>
-												位置<span className="ms-1 text-destructive">*</span>
-											</Label>
-											<AssetLocationInput
-												idPrefix="asset-detail-edit-location"
-												value={locationValue}
-												locationOptions={locationOptions}
-												onChange={setLocationValue}
-											/>
-											<input type="hidden" name="location" value={locationValue} />
-										</div>
-										{!isInternetService && <input type="hidden" name="management_ip" value={fixedIpv4Value} />}
-									</>
-								)}
-								{!isInternetService && !isInternetResource && (
-									<div className="grid gap-2">
-										<Label htmlFor="fixed_ipv4">
-											IPv4<span className="ms-1 text-destructive">*</span>
-										</Label>
+										<Label htmlFor="fixed_ipv4">IPv4</Label>
 										<Input
 											id="fixed_ipv4"
 											name="fixed_ipv4"
-											required
 											value={fixedIpv4Value}
 											placeholder="192.168.1.90"
 											onChange={(event) => setFixedIpv4Value(event.target.value)}
 										/>
 									</div>
-								)}
-							</div>
-						</section>
+									{connectionFieldKeys
+										.filter((key) => key !== "fixed_ipv4")
+										.map((key) => renderUniversalArchiveField(key))}
+								</div>
+								{!isInternetService && <input type="hidden" name="management_ip" value={fixedIpv4Value} />}
+							</section>
+						)}
 
 						{formSections.map((section) => (
-							<section key={section.title} className="rounded-lg border border-border/70 bg-card p-4">
-								<div className="mb-3 text-sm font-semibold text-foreground">{section.title}</div>
-								<div className="grid gap-3 sm:grid-cols-2">
+							<section key={section.title} className="rounded-md border border-border/70 bg-card p-2">
+								<div className="mb-1 flex items-center justify-between gap-2">
+									<div className="text-sm font-semibold text-foreground">{section.title}</div>
+									{section.title === "互联网接入" && (
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											onClick={onRefreshInternetAddresses}
+											disabled={readOnly || saving || internetAddressRefreshing}
+											className="h-7 gap-1.5 px-2 text-xs"
+										>
+											<RefreshCwIcon className={internetAddressRefreshing ? "size-3 animate-spin" : "size-3"} />
+											{internetAddressRefreshing ? "刷新中" : "刷新公网地址"}
+										</Button>
+									)}
+								</div>
+								<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
 									{section.fields.map((field) => (
 										<AssetProfileEditField
 											key={`${section.title}-${field.key}`}
@@ -272,87 +375,38 @@ export function AssetEditWorkbench({
 											asset={asset}
 											locationOptions={locationOptions}
 											nextAssetTagPreview={nextAssetTagPreview}
+											candidates={enrichmentCandidates}
 										/>
 									))}
+									{section.title === "外观尺寸" && HOST_ASSET_TYPES.includes(selectedType) && (
+										<OfficialColorField
+											name="color"
+											label="外观颜色"
+											defaultValue={getAssetVisualColor(asset)}
+											options={officialColorOptions}
+											requireOfficial={isOfficialColorRequiredForAssetType(selectedType)}
+										/>
+									)}
 								</div>
 							</section>
 						))}
-
-						<section className="rounded-lg border border-border/70 bg-card p-4">
-							<div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-								<div className="min-w-0">
-									<div className="text-sm font-semibold text-foreground">智能匹配</div>
-									<div className="mt-1 text-xs text-muted-foreground">缺少必填参数时不会启动 Agent。</div>
-								</div>
-							</div>
-							<div className="grid gap-3">
-								<div className="grid gap-2 sm:grid-cols-2">
-									{recognitionRequirements.map((item) => (
-										<div
-											key={item.label}
-											className={cn(
-												"flex min-w-0 items-center justify-between gap-2 rounded-md border px-2.5 py-2 text-xs",
-												item.ok ? "border-emerald-500/20 bg-card" : "border-amber-500/25 bg-amber-500/5"
-											)}
-										>
-											<span className="text-muted-foreground">{item.label}</span>
-											<span className="truncate font-medium text-foreground">{item.value || "未填写"}</span>
-										</div>
-									))}
-								</div>
-								{recognitionMessage && (
-									<div
-										className={cn(
-											"rounded-md border px-3 py-2 text-xs leading-5",
-											recognitionStage === "blocked" || recognitionStage === "failed"
-												? "border-amber-500/25 bg-amber-500/5 text-amber-700 dark:text-amber-200"
-												: "border-border/70 bg-card text-muted-foreground"
-										)}
-									>
-										{saving && recognitionStage === "running" ? "处理中： " : ""}
-										{recognitionMessage}
-									</div>
-								)}
-								{missingRequirements.length > 0 && recognitionStage !== "blocked" && (
-									<div className="rounded-md border border-dashed border-border/70 bg-card px-3 py-2 text-xs text-muted-foreground">
-										待补齐：{missingRequirements.map((item) => item.label).join("、")}
-									</div>
-								)}
-								<AssetSuggestionWorkbench
-									latestReport={latestReport}
-									suggestions={latestSuggestions}
-									actionableSuggestions={actionableSuggestions}
-									readOnly={readOnly}
-									saving={saving}
-									onAcceptSuggestion={onAcceptSuggestion}
-									onAcceptAllSuggestions={onAcceptAllSuggestions}
-								/>
-							</div>
-						</section>
 					</div>
 
-					<aside className="grid content-start gap-4 border-t border-border/70 bg-surface-soft p-4 sm:p-5 lg:min-h-0 lg:overflow-y-auto lg:border-s lg:border-t-0">
+					<aside className="grid content-start gap-3 border-t border-border/70 bg-surface-soft p-3 sm:p-4 lg:min-h-0 lg:overflow-y-auto lg:border-s lg:border-t-0">
 						<AssetEditVisualPanel
+							assetId={asset.id}
 							assetType={selectedType}
 							visuals={state.visuals}
+							defaultMediaPreview={defaultMediaPreview}
 							visualBlockReason={visualBlockReason}
 							visualGenerationStage={visualGenerationStage}
 							visualGenerationMessage={visualGenerationMessage}
 							taskSummary={getAssetVisualTaskMeta(state.aiTasks, state.visuals)}
 							readOnly={readOnly}
 							saving={saving}
-							onSelectVisualCandidate={onSelectVisualCandidate}
+							onGenerateVisual={onGenerateVisual}
+							onImportVisualCandidate={onImportVisualCandidate}
 						/>
-
-						<section className="rounded-lg border border-border/70 bg-card p-3">
-							<div className="mb-2 text-sm font-semibold text-foreground">子档案数量</div>
-							<div className="grid grid-cols-4 gap-2 text-center text-xs">
-								<AssetEditCount label="接口" value={state.interfaces.length} />
-								<AssetEditCount label="关系" value={state.relations.length} />
-								<AssetEditCount label="维护" value={state.maintenance.length} />
-								<AssetEditCount label="附件" value={state.attachments.length} />
-							</div>
-						</section>
 					</aside>
 				</div>
 			</form>
@@ -360,12 +414,12 @@ export function AssetEditWorkbench({
 	)
 }
 
-function AssetEditCount({ label, value }: { label: string; value: number }) {
+function AssetEditHeaderCount({ label, value }: { label: string; value: number }) {
 	return (
-		<div className="rounded-md border border-border/70 bg-card px-2 py-2">
-			<div className="font-mono text-sm font-semibold tabular-nums text-foreground">{value}</div>
-			<div className="mt-0.5 text-muted-foreground">{label}</div>
-		</div>
+		<span className="rounded border border-border/70 bg-surface-soft px-1.5 py-1">
+			<b className="me-1 font-mono text-foreground">{value}</b>
+			{label}
+		</span>
 	)
 }
 

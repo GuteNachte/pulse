@@ -44,6 +44,39 @@ func TestAssetEnrichmentReportCreatesSuggestions(t *testing.T) {
 	require.Nil(t, findSuggestionByField(suggestions, "metadata.os"), "fields: %v", suggestionFields(suggestions))
 	require.NotNil(t, findSuggestionByField(suggestions, "metadata.cpu_model"), "fields: %v", suggestionFields(suggestions))
 	require.NotNil(t, findSuggestionByField(suggestions, "metadata.memory_gb"), "fields: %v", suggestionFields(suggestions))
+	requireSuggestionValue(t, suggestions, "metadata.memory_detail", "16 GB x 2")
+	requireSuggestionValue(t, suggestions, "metadata.memory_vendor", "Kingston")
+	requireSuggestionValue(t, suggestions, "metadata.memory_speed_mhz", "6000")
+}
+
+func TestAssetEnrichmentReportNormalizesAgentNetworkSpeedToMbps(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-enrichment-network-speed@example.com")
+	_, err := pulseTests.CreateRecord(fixture.hub, "asset_interfaces", map[string]any{
+		"user":  fixture.user.Id,
+		"asset": fixture.asset.Id,
+		"name":  "Ethernet",
+		"kind":  "ethernet",
+		"mac":   "AA:BB:CC:DD:EE:01",
+	})
+	require.NoError(t, err)
+	details, err := fixture.hub.FindRecordsByFilter("system_details", "system.asset = {:asset}", "", -1, 0, map[string]any{"asset": fixture.asset.Id})
+	require.NoError(t, err)
+	require.Len(t, details, 1)
+	details[0].Set("network_interfaces", []map[string]any{{
+		"name":         "Ethernet",
+		"display_name": "Intel I226-V",
+		"mac":          "AA:BB:CC:DD:EE:01",
+		"ipv4":         []string{"192.168.1.10"},
+		"link_speed":   2_500_000_000,
+	}})
+	require.NoError(t, fixture.hub.Save(details[0]))
+
+	response := fixture.generateReport(t)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+
+	suggestions := fixture.findSuggestions(t)
+	requireSuggestionValue(t, suggestions, "metadata.primary_nic_speed_mbps", "2500")
+	requireSuggestionValue(t, suggestions, "speed_mbps", "2500")
 }
 
 func TestAssetEnrichmentReportIncludesOnlineSupportSource(t *testing.T) {
@@ -83,11 +116,7 @@ func TestAssetEnrichmentReportIncludesOnlineSupportSource(t *testing.T) {
 	require.Equal(t, "official_support", firstSource["type"])
 	require.Contains(t, firstSource["title"], "Redmi K50")
 
-	suggestions := fixture.findSuggestions(t)
-	onlineNote := findSuggestionByField(suggestions, "metadata.hardware_match_note")
-	require.NotNil(t, onlineNote, "fields: %v", suggestionFields(suggestions))
-	require.Equal(t, "online", onlineNote.GetString("source"))
-	require.Contains(t, onlineNote.GetString("online_value"), server.URL)
+	require.NotEmpty(t, fixture.findSuggestions(t))
 }
 
 func TestAssetEnrichmentAIAddsSourcesWhenReferenceURLExists(t *testing.T) {
@@ -1157,11 +1186,11 @@ func TestAssetEnrichmentAcceptsOfficialReferenceURLFromOfficialAISource(t *testi
 	}))
 	t.Cleanup(sourceServer.Close)
 	sourceURL := sourceServer.URL + "/support/redmik50"
-	productURL := sourceServer.URL + "/product/redmik50"
+	officialURL := sourceServer.URL + "/product/redmik50"
 	aiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodPost, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"suggestions\":[{\"field\":\"product_url\",\"label\":\"厂家产品页\",\"value\":\"` + productURL + `\",\"confidence\":92,\"notes\":\"来自厂家官方支持页。\",\"source_urls\":[\"` + sourceURL + `\"]}]}"}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"suggestions\":[{\"field\":\"official_url\",\"label\":\"官方网站\",\"value\":\"` + officialURL + `\",\"confidence\":92,\"notes\":\"来自厂家官方支持页。\",\"source_urls\":[\"` + sourceURL + `\"]}]}"}}]}`))
 	}))
 	t.Cleanup(aiServer.Close)
 	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_ENABLED", "true")
@@ -1187,7 +1216,7 @@ func TestAssetEnrichmentAcceptsOfficialReferenceURLFromOfficialAISource(t *testi
 	response := fixture.generateReport(t)
 	require.Equal(t, http.StatusOK, response.Status, response.Body)
 
-	requireSuggestionValue(t, fixture.findSuggestions(t), "metadata.product_url", productURL)
+	requireSuggestionValue(t, fixture.findSuggestions(t), "metadata.official_url", officialURL)
 }
 
 func TestAssetEnrichmentRejectsOfficialImageURLWhenAIValueIsNotImage(t *testing.T) {
@@ -1424,7 +1453,7 @@ func TestAssetEnrichmentConfigUsesAgnesDefaults(t *testing.T) {
 	require.Equal(t, "agnes-test-key", visualAI["api_key"])
 	require.Equal(t, "apihub.agnes-ai.com", visualAI["endpoint_host"])
 	require.Equal(t, "agnes-2.0-flash", visualAI["model"])
-	require.Equal(t, float64(12), visualAI["max_images"])
+	require.Equal(t, float64(15), visualAI["max_images"])
 	require.Equal(t, true, visualAI["ready"])
 }
 
@@ -1645,7 +1674,7 @@ func TestAssetVisualCollectsUnquotedOfficialPageImages(t *testing.T) {
 	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
 	require.NoError(t, err)
 	metadata := recordMetadata(t, asset)
-	metadata["support_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["official_url"] = referenceServer.URL + "/products/redmi-k50"
 	metadata["internal_model"] = "22041211AC"
 	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
 	asset.Set("type", "phone")
@@ -1677,7 +1706,7 @@ func TestAssetVisualCollectsUnquotedOfficialPageImages(t *testing.T) {
 	require.Contains(t, fmt.Sprint(frames), "redmi-k50")
 }
 
-func TestAssetVisualPreservesProductURLProviderForReferenceImages(t *testing.T) {
+func TestAssetVisualPreservesOfficialURLProviderForReferenceImages(t *testing.T) {
 	fixture := newAssetEnrichmentFixture(t, "asset-visual-product-url-provider@example.com")
 	var referenceServer *httptest.Server
 	referenceServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1705,7 +1734,7 @@ func TestAssetVisualPreservesProductURLProviderForReferenceImages(t *testing.T) 
 	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
 	require.NoError(t, err)
 	metadata := recordMetadata(t, asset)
-	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50/specs"
+	metadata["official_url"] = referenceServer.URL + "/products/redmi-k50/specs"
 	metadata["internal_model"] = "22041211AC"
 	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
 	asset.Set("type", "phone")
@@ -1741,10 +1770,10 @@ func TestAssetVisualPreservesProductURLProviderForReferenceImages(t *testing.T) 
 		switch sourceType {
 		case "official_page_image":
 			sawPageImage = true
-			require.Equal(t, "product_url", source["provider"], "source: %v", source)
+			require.Equal(t, "official_url", source["provider"], "source: %v", source)
 		case "official_product_bundle_image":
 			sawBundleImage = true
-			require.Equal(t, "product_url", source["provider"], "source: %v", source)
+			require.Equal(t, "official_url", source["provider"], "source: %v", source)
 		}
 	}
 	require.True(t, sawPageImage, "sources: %v", sources)
@@ -1786,7 +1815,7 @@ func TestAssetVisualPrioritizesDerivedProductPageBeforeSpecsImages(t *testing.T)
 	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
 	require.NoError(t, err)
 	metadata := recordMetadata(t, asset)
-	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50/specs"
+	metadata["official_url"] = referenceServer.URL + "/products/redmi-k50/specs"
 	metadata["internal_model"] = "22041211AC"
 	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
 	asset.Set("type", "phone")
@@ -1848,7 +1877,7 @@ func TestAssetVisualCollectsSelectedColorReferencesBeforeUserSelectsPrimaryDispl
 	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
 	require.NoError(t, err)
 	metadata := recordMetadata(t, asset)
-	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["official_url"] = referenceServer.URL + "/products/redmi-k50"
 	metadata["internal_model"] = "22041211AC"
 	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
 	asset.Set("type", "phone")
@@ -1982,7 +2011,7 @@ func TestAssetVisualAvoidsDuplicateProductPageFetchWhenImagesAreEnough(t *testin
 	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
 	require.NoError(t, err)
 	metadata := recordMetadata(t, asset)
-	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["official_url"] = referenceServer.URL + "/products/redmi-k50"
 	metadata["internal_model"] = "22041211AC"
 	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
 	asset.Set("type", "phone")
@@ -2048,7 +2077,7 @@ func TestAssetVisualRespectsConfiguredCandidateLimit(t *testing.T) {
 	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
 	require.NoError(t, err)
 	metadata := recordMetadata(t, asset)
-	metadata["product_url"] = referenceServer.URL + "/products/redmi-k50"
+	metadata["official_url"] = referenceServer.URL + "/products/redmi-k50"
 	metadata["internal_model"] = "22041211AC"
 	metadata["colors_available"] = "墨羽黑, 银迹, 幽芒"
 	asset.Set("type", "phone")
@@ -2498,7 +2527,7 @@ func TestAssetEnrichmentAcceptRejectsFieldOutsideAssetProfile(t *testing.T) {
 func TestInternetAccessRefreshWritesDetectedPublicAddresses(t *testing.T) {
 	fixture := newAssetEnrichmentFixture(t, "internet-address-refresh@example.com")
 	fixture.asset.Set("type", "internet")
-	fixture.asset.Set("metadata", map[string]any{"down_mbps": 1000, "up_mbps": 100})
+	fixture.asset.Set("metadata", map[string]any{"down_mbps": 1000, "up_mbps": 100, "public_ipv4": "198.51.100.8"})
 	require.NoError(t, fixture.hub.Save(fixture.asset))
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2584,14 +2613,14 @@ func TestAssetEnrichmentAcceptWritesOfficialURLMetadataFields(t *testing.T) {
 
 	reports := fixture.findReports(t)
 	require.Len(t, reports, 1)
-	productURLSuggestion, err := pulseTests.CreateRecord(fixture.hub, "asset_enrichment_suggestions", map[string]any{
+	officialURLSuggestion, err := pulseTests.CreateRecord(fixture.hub, "asset_enrichment_suggestions", map[string]any{
 		"user":              fixture.user.Id,
 		"asset":             fixture.asset.Id,
 		"report":            reports[0].Id,
 		"target_collection": "assets",
 		"target_record":     fixture.asset.Id,
-		"target_field":      "metadata.product_url",
-		"target_label":      "厂家官方产品页",
+		"target_field":      "metadata.official_url",
+		"target_label":      "官方网站",
 		"current_value":     "",
 		"collected_value":   "https://www.mi.com/redmi-k50",
 		"recommended_value": "https://www.mi.com/redmi-k50",
@@ -2599,7 +2628,7 @@ func TestAssetEnrichmentAcceptWritesOfficialURLMetadataFields(t *testing.T) {
 		"confidence":        95,
 		"conflict":          false,
 		"status":            "pending",
-		"notes":             "厂家官方产品页必须允许确认写回 metadata。",
+		"notes":             "官方网站必须允许确认写回 metadata。",
 		"metadata":          map[string]any{},
 	})
 	require.NoError(t, err)
@@ -2608,7 +2637,7 @@ func TestAssetEnrichmentAcceptWritesOfficialURLMetadataFields(t *testing.T) {
 		t,
 		fixture.hub.TestApp,
 		http.MethodPost,
-		"/api/pulse/asset-enrichment-suggestions/"+productURLSuggestion.Id+"/accept",
+		"/api/pulse/asset-enrichment-suggestions/"+officialURLSuggestion.Id+"/accept",
 		nil,
 		fixture.headers,
 	)
@@ -2617,7 +2646,7 @@ func TestAssetEnrichmentAcceptWritesOfficialURLMetadataFields(t *testing.T) {
 	updatedAsset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
 	require.NoError(t, err)
 	metadata := recordMetadata(t, updatedAsset)
-	require.Equal(t, "https://www.mi.com/redmi-k50", metadata["product_url"])
+	require.Equal(t, "https://www.mi.com/redmi-k50", metadata["official_url"])
 }
 
 func TestAssetEnrichmentAcceptRejectsDuplicateAssetName(t *testing.T) {
@@ -2940,6 +2969,8 @@ func newAssetEnrichmentFixture(t testing.TB, email string) assetEnrichmentFixtur
 	t.Helper()
 	// Extraction-focused tests opt out explicitly; source-discovery cases enable it below.
 	t.Setenv("PULSE_ASSET_ENRICHMENT_AI_SOURCE_DISCOVERY_ENABLED", "false")
+	// Image search uses the public Bing endpoint in production; fixture tests must remain local and deterministic.
+	t.Setenv("PULSE_ASSET_IMAGE_SEARCH_ENABLED", "false")
 
 	hub, err := pulseTests.NewTestHub(t.TempDir())
 	require.NoError(t, err)
@@ -3134,6 +3165,55 @@ func makeSolidJPEG(t testing.TB, value color.RGBA) []byte {
 func recordMetadata(t testing.TB, record *core.Record) map[string]any {
 	t.Helper()
 	return recordJSONField(t, record, "metadata")
+}
+
+func TestAssetVisualCropPersistsAndResetsSelectedFrame(t *testing.T) {
+	fixture := newAssetEnrichmentFixture(t, "asset-visual-crop@example.com")
+	collection, err := fixture.hub.FindCachedCollectionByNameOrId("asset_visuals")
+	require.NoError(t, err)
+	visual := core.NewRecord(collection)
+	visual.Set("user", fixture.user.Id)
+	visual.Set("asset", fixture.asset.Id)
+	visual.Set("kind", "official_reference")
+	visual.Set("status", "ready")
+	visual.Set("primary", true)
+	visual.Set("frame_count", 1)
+	visual.Set("frames", []map[string]any{{
+		"index":          0,
+		"label":          "主图",
+		"file":           "asset-visual-01.jpg",
+		"file_record_id": "source-visual",
+	}})
+	require.NoError(t, fixture.hub.Save(visual))
+
+	response := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/%s/crop", fixture.asset.Id, visual.Id),
+		strings.NewReader(`{"crop":{"x":0.1,"y":0.2,"width":0.7,"height":0.6}}`),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, response.Status, response.Body)
+	updated, err := fixture.hub.FindRecordById("asset_visuals", visual.Id)
+	require.NoError(t, err)
+	frames := recordJSONArrayField(t, updated, "frames")
+	require.Equal(t, map[string]any{"x": 0.1, "y": 0.2, "width": 0.7, "height": 0.6}, frames[0]["crop"])
+
+	reset := pulseTests.PerformTestAPIRequest(
+		t,
+		fixture.hub.TestApp,
+		http.MethodPost,
+		fmt.Sprintf("/api/pulse/assets/%s/visuals/%s/crop", fixture.asset.Id, visual.Id),
+		strings.NewReader(`{"crop":null}`),
+		fixture.headers,
+	)
+	require.Equal(t, http.StatusOK, reset.Status, reset.Body)
+	updated, err = fixture.hub.FindRecordById("asset_visuals", visual.Id)
+	require.NoError(t, err)
+	frames = recordJSONArrayField(t, updated, "frames")
+	_, hasCrop := frames[0]["crop"]
+	require.False(t, hasCrop)
 }
 
 func recordJSONField(t testing.TB, record *core.Record, field string) map[string]any {

@@ -13,7 +13,8 @@ export function formatCollectedNicSummary(detail: SystemDetailsRecord) {
 		.map((item) => {
 			const name = item.display_name || item.name
 			if (!name) return ""
-			return `${name}${item.link_speed ? ` ${formatSpeed(item.link_speed)}` : ""}`
+			const speedMbps = normalizeCollectedNetworkSpeedMbps(item.link_speed)
+			return `${name}${speedMbps ? ` ${formatSpeed(speedMbps)}` : ""}`
 		})
 		.filter(Boolean)
 		.slice(0, 4)
@@ -31,4 +32,20 @@ export function formatSpeed(value?: number) {
 		return `${Number.isInteger(gbps) ? gbps.toFixed(0) : gbps.toFixed(1)}G`
 	}
 	return `${value}M`
+}
+
+export function normalizeNetworkInterfaceSummary(value: string | undefined) {
+	const text = value?.trim() ?? ""
+	if (!text) return ""
+	return text.replace(/\b(\d{7,})\s*Mbps\b/gi, (_match, rawSpeed: string) => {
+		const speedMbps = Number(rawSpeed) / 1_000_000
+		if (!Number.isFinite(speedMbps) || speedMbps <= 0) return _match
+		const formattedSpeed = Number.isInteger(speedMbps) ? String(speedMbps) : String(Number(speedMbps.toFixed(1)))
+		return `${formattedSpeed} Mbps`
+	})
+}
+
+function normalizeCollectedNetworkSpeedMbps(value?: number) {
+	if (!value) return 0
+	return value >= 1_000_000 ? value / 1_000_000 : value
 }

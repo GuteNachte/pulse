@@ -511,8 +511,8 @@ msgstr "5 分钟内的平均负载"
 msgid "Load Avg"
 msgstr "负载"
 
-#: src/components/navbar.tsx:130
-#: src/components/navbar.tsx:212
+#: src/components/navbar.tsx:129
+#: src/components/navbar.tsx:211
 msgid "Log Out"
 msgstr "登出"
 
