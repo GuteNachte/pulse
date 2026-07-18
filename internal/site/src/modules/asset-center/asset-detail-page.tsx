@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils"
 import { getAssetIcon } from "./components/asset-card"
 import { AssetDetailActionMenu } from "./components/asset-detail-action-menu"
 import { AssetEditWorkbench } from "./components/asset-edit-workbench"
+import { AssetInterfaceManager } from "./components/asset-interface-manager"
 import { getAssetMediaDefaultPreview } from "./components/asset-media-default-preview"
 import { AssetShowcaseTags } from "./components/asset-showcase-tags"
 import { AssetShowcaseWorkspace } from "./components/asset-showcase-workspace"
@@ -154,6 +155,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		}
 	}, [id])
 	const [loading, setLoading] = useState(true)
+	const [interfaceManagerOpen, setInterfaceManagerOpen] = useState(false)
 	const [interfaceDialogOpen, setInterfaceDialogOpen] = useState(false)
 	const [relationDialogOpen, setRelationDialogOpen] = useState(false)
 	const [maintenanceDialogOpen, setMaintenanceDialogOpen] = useState(false)
@@ -852,9 +854,36 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		await Promise.all(records.map((record) => pb.collection("asset_interfaces").update(record.id, { primary: false })))
 	}
 
+	function openInterfaceManager() {
+		setInterfaceManagerOpen(true)
+	}
+
 	function openAddInterfaceDialog() {
 		setEditingInterface(null)
 		setInterfaceDialogOpen(true)
+	}
+
+	function openEditInterfaceDialog(record: AssetInterfaceRecord) {
+		setEditingInterface(record)
+		setInterfaceDialogOpen(true)
+	}
+
+	async function deleteInterface(record: AssetInterfaceRecord) {
+		if (readOnly) return
+		const stateText = [record.connected ? "当前接入" : "", record.primary ? "主接口" : ""].filter(Boolean).join("、")
+		if (
+			!window.confirm(`确定删除网卡“${record.name}”吗？${stateText ? `它是${stateText}，删除后对应标识会消失。` : ""}`)
+		) {
+			return
+		}
+		try {
+			await pb.collection("asset_interfaces").delete(record.id)
+			await loadDetail({ preserveContent: true })
+			toast({ title: "网卡已删除", description: record.name })
+		} catch (error) {
+			console.error("delete asset interface", error)
+			toast({ title: "网卡删除失败", description: "请检查权限或稍后重试。", variant: "destructive" })
+		}
 	}
 
 	function openAddRelationDialog() {
@@ -974,7 +1003,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					<div className="flex shrink-0 items-center gap-2">
 						<AssetDetailActionMenu
 							readOnly={readOnly}
-							onOpenInterface={openAddInterfaceDialog}
+							onOpenInterface={openInterfaceManager}
 							onOpenRelation={openAddRelationDialog}
 							onOpenMaintenance={openAddMaintenanceDialog}
 							onOpenAttachment={openAddAttachmentDialog}
@@ -1019,6 +1048,11 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					onSaveProfile={saveAssetProfile}
 					onRunSmartRecognition={runSmartRecognition}
 					onRefreshInternetAddresses={refreshInternetAddresses}
+					onAddInterface={openAddInterfaceDialog}
+					onEditInterface={openEditInterfaceDialog}
+					onDeleteInterface={(record) => {
+						deleteInterface(record).catch((error) => console.error("delete asset interface", error))
+					}}
 					onGenerateVisual={() =>
 						generateTurntableVisual().catch((error) => console.error("collect asset visual images", error))
 					}
@@ -1040,6 +1074,24 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					/>
 				</Suspense>
 			)}
+
+			<Dialog open={interfaceManagerOpen} onOpenChange={setInterfaceManagerOpen}>
+				<DialogContent className="max-w-3xl">
+					<DialogHeader>
+						<DialogTitle>网卡管理</DialogTitle>
+						<DialogDescription>维护这个资产的全部网卡、接入方式、速率和当前接入状态。</DialogDescription>
+					</DialogHeader>
+					<AssetInterfaceManager
+						interfaces={state.interfaces}
+						readOnly={readOnly}
+						onAdd={openAddInterfaceDialog}
+						onEdit={openEditInterfaceDialog}
+						onDelete={(record) => {
+							deleteInterface(record).catch((error) => console.error("delete asset interface", error))
+						}}
+					/>
+				</DialogContent>
+			</Dialog>
 
 			<Dialog
 				open={interfaceDialogOpen}
@@ -1069,13 +1121,13 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 								/>
 								<SelectField
 									name="kind"
-									label="接口类型"
+									label="网络接入方式"
 									options={interfaceKindOptions}
 									defaultValue={editingInterface?.kind || "ethernet"}
 								/>
 								<SelectField
 									name="connected"
-									label="连接状态"
+									label="当前接入"
 									options={yesNoOptions()}
 									defaultValue={editingInterface?.connected === false ? "no" : "yes"}
 								/>
@@ -1099,7 +1151,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 								/>
 								<TextField
 									name="speed_mbps"
-									label="速率 Mbps"
+									label="网卡速率 Mbps"
 									type="number"
 									placeholder="2500"
 									defaultValue={editingInterface?.speed_mbps ? String(editingInterface.speed_mbps) : ""}

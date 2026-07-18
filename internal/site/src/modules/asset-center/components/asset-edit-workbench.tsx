@@ -19,6 +19,7 @@ import { AssetEditActionBar } from "./asset-edit-action-bar"
 import { AssetCandidateTextField, AssetProfileEditField } from "./asset-edit-profile-fields"
 import { SelectField } from "./asset-detail-form-fields"
 import { AssetEditVisualPanel } from "./asset-edit-visual-panel"
+import { AssetInterfaceManager } from "./asset-interface-manager"
 import {
 	AssetLocationInput,
 	AssetTagInput,
@@ -82,6 +83,9 @@ type AssetEditWorkbenchProps = {
 	onSaveProfile: (event: FormEvent<HTMLFormElement>) => void
 	onRunSmartRecognition: () => void
 	onRefreshInternetAddresses: () => void
+	onAddInterface: () => void
+	onEditInterface: (record: AssetInterfaceRecord) => void
+	onDeleteInterface: (record: AssetInterfaceRecord) => void
 	onGenerateVisual: () => void
 	onImportVisualCandidate: (visualId: string, frameIndex: number) => Promise<string>
 }
@@ -99,6 +103,9 @@ export function AssetEditWorkbench({
 	onSaveProfile,
 	onRunSmartRecognition,
 	onRefreshInternetAddresses,
+	onAddInterface,
+	onEditInterface,
+	onDeleteInterface,
 	onGenerateVisual,
 	onImportVisualCandidate,
 }: AssetEditWorkbenchProps) {
@@ -346,6 +353,18 @@ export function AssetEditWorkbench({
 										.map((key) => renderUniversalArchiveField(key))}
 								</div>
 								{!isInternetService && <input type="hidden" name="management_ip" value={fixedIpv4Value} />}
+								{!isInternetService && !isInternetResource ? (
+									<div className="mt-3">
+										<AssetInterfaceManager
+											interfaces={state.interfaces}
+											readOnly={readOnly}
+											compact
+											onAdd={onAddInterface}
+											onEdit={onEditInterface}
+											onDelete={onDeleteInterface}
+										/>
+									</div>
+								) : null}
 							</section>
 						)}
 
