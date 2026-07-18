@@ -12,6 +12,7 @@ import {
 	ServerIcon,
 	ShieldIcon,
 	SmartphoneIcon,
+	StarIcon,
 	Trash2Icon,
 	WifiIcon,
 } from "lucide-react"
@@ -23,12 +24,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 import { isAgentMonitorableAsset, isWebsiteMonitorableAsset } from "@/modules/asset-center/asset-list"
-import {
-	getAssetTypeLabel,
-	getMetadataNumber,
-	getMetadataString,
-	getStatusLabel,
-} from "@/modules/asset-center/asset-schema"
+import { getAssetTypeLabel, getMetadataString, getStatusLabel } from "@/modules/asset-center/asset-schema"
 import {
 	getAssetCompleteness,
 	getAssetLocationLabel,
@@ -37,7 +33,8 @@ import {
 	type AssetLifecycleTone,
 } from "@/modules/asset-center/asset-profile-summary"
 import { assetListColumns, assetListDesktopGridClassName } from "@/modules/asset-center/asset-list-layout"
-import type { AssetRecord, AssetStatus, AssetType } from "@/types"
+import { buildAssetInterfaceDisplay, type AssetInterfaceDisplay } from "@/modules/asset-center/asset-interface-display"
+import type { AssetInterfaceRecord, AssetRecord, AssetStatus, AssetType } from "@/types"
 
 export type AssetCardProps = {
 	asset: AssetRecord
@@ -55,6 +52,8 @@ export type AssetCardProps = {
 
 export type AssetListItemProps = {
 	asset: AssetRecord
+	interfaces: AssetInterfaceRecord[]
+	interfaceLoadFailed: boolean
 	parent?: AssetRecord
 	monitored: boolean
 	maintenanceCount: number
@@ -77,13 +76,22 @@ export function AssetListHeader() {
 	)
 }
 
-export function AssetListItem({ asset, parent, monitored, maintenanceCount, active, onActivate }: AssetListItemProps) {
+export function AssetListItem({
+	asset,
+	interfaces,
+	interfaceLoadFailed,
+	parent,
+	monitored,
+	maintenanceCount,
+	active,
+	onActivate,
+}: AssetListItemProps) {
 	const Icon = getAssetIcon(asset.type)
 	const completeness = getAssetCompleteness(asset)
 	const identity = getAssetIdentityLabel(asset)
 	const location = getAssetLocationLabel(asset)
 	const ip = getAssetIpLabel(asset)
-	const network = getAssetNetworkLabel(asset)
+	const network = buildAssetInterfaceDisplay(asset, interfaces, { loadFailed: interfaceLoadFailed })
 	const assetTag = getMetadataString(asset.metadata, "asset_tag")
 	const assetTagLabel = assetTag || "未编号"
 	const color = getMetadataString(asset.metadata, "color") || getMetadataString(asset.metadata, "device_color")
@@ -125,7 +133,13 @@ export function AssetListItem({ asset, parent, monitored, maintenanceCount, acti
 				</div>
 				<AssetListValue className="hidden md:block" value={location} />
 				<AssetListValue className="hidden md:block" value={ip} mono={ip !== "未填写"} />
-				<AssetListValue className="hidden md:block" value={network} />
+				<span className="hidden min-w-0 content-center md:block">
+					<span className="block truncate text-xs text-foreground">{network.accessLabel}</span>
+					{network.secondaryLabel ? (
+						<span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{network.secondaryLabel}</span>
+					) : null}
+				</span>
+				<AssetInterfaceSpeedList className="hidden md:flex" display={network} />
 				<div className="hidden min-w-0 justify-items-end gap-1 md:grid">
 					<div className="flex min-w-0 justify-end gap-1">
 						{monitored && <AssetCardMetaTag tone="ok">监控</AssetCardMetaTag>}
@@ -289,6 +303,40 @@ function AssetListValue({ value, mono, className }: { value: string; mono?: bool
 	)
 }
 
+function AssetInterfaceSpeedList({ display, className }: { display: AssetInterfaceDisplay; className?: string }) {
+	if (display.speedMode === "not_applicable") {
+		return <AssetListValue className={className} value="无" />
+	}
+	if (display.speedMode === "error") {
+		return <AssetListValue className={className} value="接口读取失败" />
+	}
+	if (display.speedItems.length === 0) {
+		return <AssetListValue className={className} value="未设置" />
+	}
+
+	return (
+		<span className={cn("min-w-0 flex-wrap content-center items-center gap-1", className)}>
+			{display.speedItems.map((item) => (
+				<span
+					key={item.id}
+					className={cn(
+						"inline-flex min-w-0 max-w-full items-center gap-1 rounded border border-border/70 bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground",
+						item.connected && "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300"
+					)}
+					title={`${item.label} · ${item.speedLabel}${item.connected ? " · 当前接入" : ""}${item.primary ? " · 主接口" : ""}`}
+				>
+					<span className="max-w-20 truncate text-foreground">{item.label}</span>
+					<span className="shrink-0 font-mono tabular-nums">{item.speedLabel}</span>
+					{item.connected ? <span className="shrink-0 font-medium">接入</span> : null}
+					{item.primary ? (
+						<StarIcon className="size-3 shrink-0 fill-amber-400 text-amber-500" aria-label="主接口" />
+					) : null}
+				</span>
+			))}
+		</span>
+	)
+}
+
 export function getAssetIpLabel(asset: AssetRecord) {
 	const metadata = asset.metadata
 	return (
@@ -300,37 +348,9 @@ export function getAssetIpLabel(asset: AssetRecord) {
 		"未填写"
 	)
 }
-
-export function getAssetNetworkLabel(asset: AssetRecord) {
-	const metadata = asset.metadata
-	if (asset.type === "internet") {
-		return getInternetBandwidthLabel(asset) || getMetadataString(metadata, "access_mode") || "宽带入口"
-	}
-	const connection = getConnectionLabel(getMetadataString(metadata, "connection_type"))
-	const wifi = getMetadataString(metadata, "ssid_note") || getMetadataString(metadata, "wifi_standard")
-	const speed =
-		formatMbps(getMetadataNumber(metadata, "primary_nic_speed_mbps")) ||
-		formatMbps(getMetadataNumber(metadata, "default_port_speed_mbps"))
-	const vlan = getMetadataString(metadata, "vlan_note")
-	return [connection, wifi, speed, vlan].filter(Boolean).slice(0, 2).join(" · ") || "未填写"
-}
-
 function getAssetIdentityLabel(asset: AssetRecord) {
 	const internalModel = asset.type === "phone" ? getMetadataString(asset.metadata, "internal_model") : ""
 	return [asset.vendor, asset.model, internalModel].filter(Boolean).join(" · ") || "未填写型号"
-}
-
-function getConnectionLabel(value: string) {
-	if (value === "ethernet") return "有线"
-	if (value === "wifi") return "无线"
-	if (value === "both") return "有线 + 无线"
-	return ""
-}
-
-function formatMbps(value?: number) {
-	if (!value) return ""
-	if (value >= 1000) return `${Number.isInteger(value / 1000) ? value / 1000 : (value / 1000).toFixed(1)}G`
-	return `${value}M`
 }
 
 export function AssetCard({

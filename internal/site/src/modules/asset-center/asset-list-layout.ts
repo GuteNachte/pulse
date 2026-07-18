@@ -3,9 +3,10 @@ export const assetListColumns = [
 	{ key: "asset", label: "资产" },
 	{ key: "location", label: "位置" },
 	{ key: "ipv4", label: "IPv4" },
-	{ key: "network", label: "接入网络" },
+	{ key: "access", label: "网络接入方式" },
+	{ key: "interface_speed", label: "网卡速率" },
 	{ key: "status", label: "状态 / 资料" },
 ] as const
 
 export const assetListDesktopGridClassName =
-	"md:grid-cols-[minmax(5rem,.42fr)_minmax(12rem,1.25fr)_minmax(7.5rem,.72fr)_minmax(8rem,.72fr)_minmax(8rem,.82fr)_minmax(5.5rem,.55fr)]"
+	"md:grid-cols-[minmax(5rem,.38fr)_minmax(12rem,1.25fr)_minmax(7rem,.62fr)_minmax(7.5rem,.68fr)_minmax(8.5rem,.78fr)_minmax(10rem,1.05fr)_minmax(5.5rem,.52fr)]"

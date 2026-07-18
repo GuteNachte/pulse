@@ -15,7 +15,6 @@ import {
 	AssetListHeader,
 	AssetPreviewPanel,
 	getAssetIpLabel,
-	getAssetNetworkLabel,
 } from "@/modules/asset-center/components/asset-card"
 import {
 	AssetFormField,
@@ -104,6 +103,7 @@ import {
 	type AssetFieldSection,
 } from "@/modules/asset-center/asset-schema"
 import { getAssetCompleteness } from "@/modules/asset-center/asset-profile-summary"
+import { buildAssetInterfaceDisplay, groupAssetInterfacesByAsset } from "@/modules/asset-center/asset-interface-display"
 import { syncPrimaryInterface } from "@/modules/asset-center/asset-interface-sync"
 import type {
 	AssetInterfaceRecord,
@@ -127,6 +127,8 @@ const assetTypeValues = ASSET_TYPE_OPTIONS.map((option) => option.value)
 const assetStatusValues = STATUS_OPTIONS.map((option) => option.value)
 export default memo(function AssetsPage() {
 	const [assets, setAssets] = useState<AssetRecord[]>([])
+	const [interfaces, setInterfaces] = useState<AssetInterfaceRecord[]>([])
+	const [interfaceLoadFailed, setInterfaceLoadFailed] = useState(false)
 	const [locations, setLocations] = useState<AssetLocationRecord[]>([])
 	const [maintenance, setMaintenance] = useState<AssetMaintenanceRecord[]>([])
 	const [systems, setSystems] = useState<SystemRecord[]>([])
@@ -180,30 +182,46 @@ export default memo(function AssetsPage() {
 		const loadToken = loadGuardRef.current.begin()
 		setLoading(true)
 		try {
-			const [records, locationRecords, maintenanceRecords, systemRecords, websiteRecords] = await Promise.all([
-				pb.collection<AssetRecord>("assets").getFullList({
-					sort: "type,name",
+			const interfaceRequest = pb
+				.collection<AssetInterfaceRecord>("asset_interfaces")
+				.getFullList({
+					fields: "id,asset,name,kind,speed_mbps,connected,primary",
+					sort: "asset,-primary,name",
 					requestKey: null,
-				}),
-				pb.collection<AssetLocationRecord>("asset_locations").getFullList({
-					sort: "sort_order,kind,name",
-					requestKey: null,
-				}),
-				pb.collection<AssetMaintenanceRecord>("asset_maintenance").getFullList({
-					fields: "id,asset,kind,title,event_date,created",
-					requestKey: null,
-				}),
-				pb.collection<SystemRecord>("systems").getFullList({
-					fields: "id,asset,name,display_name",
-					requestKey: null,
-				}),
-				pb.collection<WebsiteMonitorRecord>("website_monitors").getFullList({
-					fields: "id,asset,name,last_status,enabled",
-					requestKey: null,
-				}),
-			])
+				})
+				.then((records) => ({ records, failed: false }))
+				.catch((error) => {
+					console.warn("load asset interfaces", error)
+					return { records: [] as AssetInterfaceRecord[], failed: true }
+				})
+			const [records, interfaceResult, locationRecords, maintenanceRecords, systemRecords, websiteRecords] =
+				await Promise.all([
+					pb.collection<AssetRecord>("assets").getFullList({
+						sort: "type,name",
+						requestKey: null,
+					}),
+					interfaceRequest,
+					pb.collection<AssetLocationRecord>("asset_locations").getFullList({
+						sort: "sort_order,kind,name",
+						requestKey: null,
+					}),
+					pb.collection<AssetMaintenanceRecord>("asset_maintenance").getFullList({
+						fields: "id,asset,kind,title,event_date,created",
+						requestKey: null,
+					}),
+					pb.collection<SystemRecord>("systems").getFullList({
+						fields: "id,asset,name,display_name",
+						requestKey: null,
+					}),
+					pb.collection<WebsiteMonitorRecord>("website_monitors").getFullList({
+						fields: "id,asset,name,last_status,enabled",
+						requestKey: null,
+					}),
+				])
 			if (!loadGuardRef.current.isCurrent(loadToken)) return
 			setAssets(records)
+			setInterfaces(interfaceResult.records)
+			setInterfaceLoadFailed(interfaceResult.failed)
 			setLocations(locationRecords)
 			setMaintenance(maintenanceRecords)
 			setSystems(systemRecords)
@@ -235,6 +253,7 @@ export default memo(function AssetsPage() {
 
 	const looseLocationGroups = useMemo(() => getLooseLocationGroups(assets, locations), [assets, locations])
 	const maintenanceByAsset = useMemo(() => groupMaintenanceByAsset(maintenance), [maintenance])
+	const interfacesByAsset = useMemo(() => groupAssetInterfacesByAsset(interfaces), [interfaces])
 
 	const filteredAssets = useMemo(() => {
 		return filterAssets({
@@ -269,7 +288,10 @@ export default memo(function AssetsPage() {
 		for (const asset of filteredAssets) {
 			if (asset.location?.trim()) locationSet.add(asset.location.trim())
 			if (getAssetIpLabel(asset) !== "未填写") withIp += 1
-			if (getAssetNetworkLabel(asset) !== "未填写") withNetwork += 1
+			const network = buildAssetInterfaceDisplay(asset, interfacesByAsset.get(asset.id) ?? [], {
+				loadFailed: interfaceLoadFailed,
+			})
+			if (!["未设置", "未接入", "接口读取失败"].includes(network.accessLabel)) withNetwork += 1
 			if (monitoredAssetIds.has(asset.id)) monitored += 1
 			if (getAssetCompleteness(asset).score < 70) profileAttention += 1
 		}
@@ -280,7 +302,7 @@ export default memo(function AssetsPage() {
 			monitored,
 			profileAttention,
 		}
-	}, [filteredAssets, monitoredAssetIds])
+	}, [filteredAssets, interfaceLoadFailed, interfacesByAsset, monitoredAssetIds])
 	const activeAssetParent = activeAsset?.parent_asset ? assetsById.get(activeAsset.parent_asset) : undefined
 	const numberingSettings = useMemo(() => normalizeAssetNumberingSettings(numberingForm), [numberingForm])
 	const nextAssetTagPreview = useMemo(() => buildNextAssetTag(assets, numberingSettings), [assets, numberingSettings])
@@ -889,6 +911,8 @@ export default memo(function AssetsPage() {
 										<AssetListItem
 											key={asset.id}
 											asset={asset}
+											interfaces={interfacesByAsset.get(asset.id) ?? []}
+											interfaceLoadFailed={interfaceLoadFailed}
 											parent={asset.parent_asset ? assetsById.get(asset.parent_asset) : undefined}
 											monitored={monitoredAssetIds.has(asset.id)}
 											maintenanceCount={maintenanceByAsset.get(asset.id)?.length ?? 0}
