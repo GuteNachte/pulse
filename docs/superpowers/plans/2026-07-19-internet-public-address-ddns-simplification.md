@@ -19,7 +19,7 @@
 - Modify: `internal/hub/asset_type_validation.go`
 - Modify: `internal/hub/asset_enrichment_test.go`
 
-- [ ] **Step 1: 把人工保护测试改成自动覆盖测试**
+- [x] **Step 1: 把人工保护测试改成自动覆盖测试**
 
 将 `TestApplyDetectedInternetAddressesPreservesManualValueAsCandidate` 改为断言旧人工值被新检测值替换，并清理历史字段：
 
@@ -44,13 +44,13 @@ func TestApplyDetectedInternetAddressesReplacesLegacyManualValue(t *testing.T) {
 
 同时把 API 端到端测试改为刷新后直接得到新地址，并断言旧候选字段消失，不再调用确认端点。
 
-- [ ] **Step 2: 运行 Hub 定向测试并确认失败**
+- [x] **Step 2: 运行 Hub 定向测试并确认失败**
 
 Run: `go test -tags=testing ./internal/hub -run "TestApplyDetectedInternetAddresses|TestInternetPublicAddress" -count=1`
 
 Expected: FAIL，旧实现仍保留人工值或候选字段。
 
-- [ ] **Step 3: 实现最小自动更新逻辑**
+- [x] **Step 3: 实现最小自动更新逻辑**
 
 在 `applyDetectedInternetAddress` 中每次刷新先删除历史来源与候选字段；成功时直接写入检测地址：
 
@@ -73,13 +73,13 @@ return current != "" && current != detected
 
 新增设置 API：只接受 `enabled` 和固定 `interval_minutes`；关闭时保存设置并清空下次时间，开启或更改间隔时保存后立即复用刷新链路。
 
-- [ ] **Step 4: 运行 Hub 定向测试并确认通过**
+- [x] **Step 4: 运行 Hub 定向测试并确认通过**
 
 Run: `go test -tags=testing ./internal/hub -run "TestApplyDetectedInternetAddresses|TestInternetPublicAddress" -count=1`
 
 Expected: PASS。
 
-- [ ] **Step 5: 提交 Hub 改动**
+- [x] **Step 5: 提交 Hub 改动**
 
 ```powershell
 git add internal/hub/internet_access.go internal/hub/internet_access_test.go internal/hub/api.go internal/hub/asset_type_validation.go internal/hub/asset_enrichment_test.go
@@ -99,7 +99,7 @@ git commit -m "feat: simplify internet public address updates"
 - Modify: `internal/site/src/modules/asset-center/components/asset-edit-workbench.tsx`
 - Modify: `internal/site/src/modules/asset-center/asset-detail-page.tsx`
 
-- [ ] **Step 1: 先写自动检测状态失败测试**
+- [x] **Step 1: 先写自动检测状态失败测试**
 
 把状态测试改为只返回当前地址、检测时间和错误：
 
@@ -116,13 +116,13 @@ assert.deepEqual(
 
 并为 `asset-edit-workbench.tsx` 增加源码契约断言：不包含“确认新地址”“标记为已确认”和 `onConfirmInternetAddress`，仍包含“刷新公网地址”。
 
-- [ ] **Step 2: 运行前端定向测试并确认失败**
+- [x] **Step 2: 运行前端定向测试并确认失败**
 
 Run: `node --experimental-strip-types src/modules/asset-center/asset-internet-address-status.test.ts`
 
 Expected: FAIL，旧返回仍包含来源与候选状态。
 
-- [ ] **Step 3: 实现紧凑自动检测界面**
+- [x] **Step 3: 实现紧凑自动检测界面**
 
 简化状态函数并读取统一的下次更新时间：
 
@@ -141,7 +141,7 @@ return {
 
 新增共享 `InternetAddressAutoRefreshControls`，使用项目现有 Switch、Select 和 Button，固定选项为 15 分钟、30 分钟、1 小时、6 小时、12 小时、24 小时。为 `AssetHardwareSpecsColumn` 增加按分组标题注入操作区的可选属性；`AssetShowcaseWorkspace` 仅给“动态公网地址”分组注入共享控件。详情页设置回调调用 settings API，编辑工作台复用同一控件。先用 Playwright 断言详情卡片没有开关、间隔和刷新按钮，完成实现后重复执行并确认三项可见且状态同步。
 
-- [ ] **Step 4: 运行前端定向测试、类型检查并确认通过**
+- [x] **Step 4: 运行前端定向测试、类型检查并确认通过**
 
 Run: `node --experimental-strip-types src/modules/asset-center/asset-internet-address-status.test.ts`
 
@@ -149,7 +149,7 @@ Run: `npm run typecheck`
 
 Expected: PASS。
 
-- [ ] **Step 5: 提交前端改动**
+- [x] **Step 5: 提交前端改动**
 
 ```powershell
 git add internal/site/src/modules/asset-center/asset-internet-address-status.ts internal/site/src/modules/asset-center/asset-internet-address-status.test.ts internal/site/src/modules/asset-center/components/asset-edit-workbench.tsx internal/site/src/modules/asset-center/asset-detail-page.tsx
@@ -162,11 +162,11 @@ git commit -m "feat: simplify public address status ui"
 - Modify: `docs/release-notes-next.md`
 - Modify: `internal/site/src/components/routes/settings/release-history.ts`
 
-- [ ] **Step 1: 更新 1.0.6 分端记录**
+- [x] **Step 1: 更新 1.0.6 分端记录**
 
 把原“人工确认保护”说明改为 DDNS 简化后的自动更新语义；Web / Hub 说明删除确认操作，移动端说明跟随 Web，Agent / 部署说明保持 Hub 执行检测。
 
-- [ ] **Step 2: 运行完整自动验证**
+- [x] **Step 2: 运行完整自动验证**
 
 Run: `npm run test`
 
@@ -178,7 +178,7 @@ Run: `go test -tags=testing ./internal/hub ./internal/migrations -count=1`
 
 Expected: 全部退出码 0。
 
-- [ ] **Step 3: 浏览器验收**
+- [x] **Step 3: 浏览器验收**
 
 访问 `http://localhost:5173/assets/hvpbl3jmc8w02qp`，打开编辑工作台并确认：
 
@@ -188,7 +188,7 @@ Expected: 全部退出码 0。
 4. 详情卡片与编辑工作台各自显示自动更新开关、固定间隔和“刷新公网地址”；修改详情设置后，编辑页显示相同状态。
 5. 桌面与 `390×844` 窄屏无横向溢出，控制台无相关 warning / error。
 
-- [ ] **Step 4: 提交文档与验收收尾**
+- [x] **Step 4: 提交文档与验收收尾**
 
 ```powershell
 git add docs/release-notes-next.md internal/site/src/components/routes/settings/release-history.ts docs/superpowers/plans/2026-07-19-internet-public-address-ddns-simplification.md
