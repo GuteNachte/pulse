@@ -2,7 +2,9 @@ import { ExternalLinkIcon, ListChecksIcon } from "lucide-react"
 import type { ReactNode } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import { getAssetParameterSectionId } from "../asset-parameter-navigation"
 import type { AssetFieldDefinition } from "../asset-schema"
+import { AssetParameterNavigator } from "./asset-parameter-navigator"
 
 export type AssetParameterRow = {
 	label: string
@@ -46,7 +48,7 @@ export function AssetOverviewColumn({
 				{sections.map((section) => (
 					<section key={section.title} className="grid gap-2">
 						<div className="text-[11px] font-semibold text-muted-foreground">{section.title}</div>
-						<div className="grid gap-2 sm:grid-cols-2">
+						<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
 							{section.rows.map((row) => (
 								<CompactParameterRow key={`${section.title}-${row.label}`} row={row} />
 							))}
@@ -72,7 +74,7 @@ export function AssetHardwareSpecsColumn({
 	groupActions?: Record<string, ReactNode>
 }) {
 	return (
-		<Card className="border-border/70 bg-card shadow-none xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[auto_minmax(0,1fr)]">
+		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 px-4 py-3">
 				<div className="flex min-w-0 items-center justify-between gap-3">
 					<div className="min-w-0">
@@ -81,8 +83,9 @@ export function AssetHardwareSpecsColumn({
 					</div>
 					{groups.length > 0 ? <CountTag>{groups.length} 类</CountTag> : null}
 				</div>
+				<AssetParameterNavigator groups={groups} variant="inline" className="mt-3 xl:hidden" />
 			</CardHeader>
-			<CardContent className="grid gap-3 p-4 sm:grid-cols-2 xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain">
+			<CardContent className="grid gap-3 p-4 sm:grid-cols-2">
 				{groups.length > 0 ? (
 					groups.map((group) => <HardwareSpecGroup key={group.id} group={group} action={groupActions?.[group.title]} />)
 				) : (
@@ -101,8 +104,10 @@ function HardwareSpecGroup({ group, action }: { group: AssetParameterGroup; acti
 	const hasNamedSections = rowSections.some((section) => section.title)
 	return (
 		<section
+			id={getAssetParameterSectionId(group.id)}
+			data-asset-parameter-group-id={group.id}
 			className={cn(
-				"grid min-w-0 content-start gap-3 rounded-md border border-border/70 bg-surface-soft p-3",
+				"grid min-w-0 scroll-mt-28 content-start gap-3 rounded-md border border-border/70 bg-surface-soft p-3",
 				group.rows.length > 6 && "sm:col-span-2"
 			)}
 		>

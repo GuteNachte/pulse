@@ -11,6 +11,7 @@ import {
 	type InternetAddressAutoRefreshSettings,
 } from "./internet-address-auto-refresh-controls"
 import { AssetMediaShowcase, type AssetMediaShowcaseItem } from "./asset-media-showcase"
+import { AssetParameterNavigator } from "./asset-parameter-navigator"
 
 export function AssetShowcaseWorkspace({
 	asset,
@@ -55,14 +56,15 @@ export function AssetShowcaseWorkspace({
 			: undefined
 
 	return (
-		<section className="grid items-start gap-5 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.7fr)] 2xl:grid-cols-[minmax(22rem,0.72fr)_minmax(0,1.78fr)]">
-			<aside className="grid content-start gap-5 xl:min-h-0">
-				{media?.covers.length ? <AssetMediaShowcase covers={media.covers} /> : null}
+		<section className="grid items-start gap-5 xl:grid-cols-[minmax(22rem,0.78fr)_minmax(0,1.62fr)] 2xl:grid-cols-[minmax(24rem,0.72fr)_minmax(0,1.68fr)]">
+			<aside className="grid content-start gap-5 xl:sticky xl:top-4">
+				<AssetMediaShowcase covers={media?.covers ?? []} />
 				<AssetOverviewColumn
 					sections={identitySections}
 					title={asset.type === "internet" ? "线路档案" : "设备档案"}
 					subtitle={asset.type === "internet" ? null : "主档与接入信息"}
 				/>
+				<AssetParameterNavigator groups={parameterGroups} variant="sidebar" className="hidden xl:block" />
 			</aside>
 			<AssetHardwareSpecsColumn
 				groups={parameterGroups}

@@ -1,4 +1,4 @@
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
+import { ChevronLeftIcon, ChevronRightIcon, ImageIcon } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { pb } from "@/lib/api"
@@ -72,7 +72,21 @@ export function AssetMediaShowcase({ covers }: { covers: AssetMediaShowcaseItem[
 	}, [primary?.id])
 
 	const activeItem = getAssetMediaShowcaseActiveItem(primary, thumbnails, activeImageId)
-	if (!primary) return null
+	if (!primary) {
+		return (
+			<div className="grid gap-2">
+				<div
+					data-testid="asset-media-main-preview"
+					className="grid aspect-[16/9] place-items-center overflow-hidden rounded-lg border border-border/70 bg-surface-soft"
+				>
+					<div className="grid place-items-center gap-2 text-muted-foreground">
+						<ImageIcon className="size-5" />
+						<span className="text-xs">暂无图片</span>
+					</div>
+				</div>
+			</div>
+		)
+	}
 	const displayedItem = activeItem ?? primary
 
 	return (
