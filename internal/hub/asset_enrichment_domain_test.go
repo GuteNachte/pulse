@@ -5,6 +5,7 @@ package hub
 import (
 	"testing"
 
+	"github.com/pocketbase/pocketbase/core"
 	"github.com/stretchr/testify/require"
 )
 
@@ -103,4 +104,32 @@ func TestAssetEnrichmentProfileFieldAllowlistMatchesAssetType(t *testing.T) {
 	require.True(t, internetFields["auto_renew"])
 	require.False(t, internetFields["internal_model"])
 	require.False(t, internetFields["official_image_url"])
+
+	ontFields := assetEnrichmentAllowedMetadataFieldSet("ont")
+	require.True(t, ontFields["pon_standard"])
+	require.True(t, ontFields["wifi_standard"])
+	require.True(t, ontFields["power_spec"])
+	require.False(t, ontFields["ssid"])
+	require.False(t, ontFields["wifi_password"])
+	require.False(t, ontFields["credential"])
+}
+
+func TestParseAssetOnlineAISuggestionsDropsONTCredentials(t *testing.T) {
+	asset := core.NewRecord(core.NewBaseCollection("assets"))
+	asset.Set("type", "ont")
+	const sourceURL = "https://consumer.huawei.com/cn/routers/example"
+	content := `{"suggestions":[
+		{"field":"pon_standard","label":"PON 标准","value":"10G-EPON","confidence":90,"source_urls":["https://consumer.huawei.com/cn/routers/example"]},
+		{"field":"ssid","label":"Wi-Fi 名称","value":"redacted","confidence":90,"source_urls":["https://consumer.huawei.com/cn/routers/example"]},
+		{"field":"wifi_password","label":"Wi-Fi 密码","value":"redacted","confidence":90,"source_urls":["https://consumer.huawei.com/cn/routers/example"]}
+	]}`
+	suggestions := (&Hub{}).parseAssetOnlineAISuggestions(asset, content, []assetOnlineSource{{
+		Provider:   "manual",
+		Type:       "official",
+		Title:      "Huawei product page",
+		URL:        sourceURL,
+		Confidence: 95,
+	}})
+	require.Len(t, suggestions, 1)
+	require.Equal(t, "metadata.pon_standard", suggestions[0].TargetField)
 }

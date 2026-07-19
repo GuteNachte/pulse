@@ -68,7 +68,16 @@ var hostEnrichmentMetadataFields = mergeAssetEnrichmentFields(
 
 var routerEnrichmentMetadataFields = mergeAssetEnrichmentFields(assetEnrichmentAddressMetadataFields, []string{"port_count", "default_port_speed_mbps", "power_mode", "wifi_standard", "ssid_note", "vlan_note"})
 var gatewayEnrichmentMetadataFields = mergeAssetEnrichmentFields(assetEnrichmentAddressMetadataFields, []string{"port_count", "default_port_speed_mbps", "power_mode", "vlan_note"})
-var ontEnrichmentMetadataFields = mergeAssetEnrichmentFields(assetEnrichmentAddressMetadataFields, []string{"port_count", "default_port_speed_mbps", "power_mode"})
+var ontEnrichmentMetadataFields = mergeAssetEnrichmentFields(assetEnrichmentAddressMetadataFields, []string{
+	"product_series", "carrier", "operating_role", "manufacture_date", "color",
+	"onu_type", "pon_standard", "pon_uplink_capacity", "optical_connector",
+	"downstream_optical_port_count", "downstream_optical_status",
+	"router_status", "gateway_status", "dhcp_status", "lan_subnet",
+	"wifi_standard", "wifi_24_supported", "wifi_24_enabled", "wifi_5_supported", "wifi_5_enabled", "wps_supported",
+	"lan_port_count", "lan_2500_count", "lan_1000_count",
+	"usb_port_count", "voice_port_count", "power_spec", "indicator_control", "wireless_control",
+	"reset_supported", "power_switch_supported", "product_number", "pon_sn", "radio_approval_code",
+})
 var switchEnrichmentMetadataFields = mergeAssetEnrichmentFields(assetEnrichmentAddressMetadataFields, []string{"port_count", "default_port_speed_mbps", "power_mode", "vlan_note"})
 var accessPointEnrichmentMetadataFields = mergeAssetEnrichmentFields(assetEnrichmentAddressMetadataFields, []string{"port_count", "default_port_speed_mbps", "power_mode", "wifi_standard", "ssid_note", "vlan_note"})
 

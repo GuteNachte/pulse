@@ -2,9 +2,9 @@ import {
 	ASSET_TYPE_OPTIONS,
 	buildFixedSpecAssetName,
 	buildInternetResourceName,
-} from "@/modules/asset-center/asset-schema"
-import type { AssetRecord, AssetStatus, AssetType } from "@/types"
-import { normalizeInternetProvider } from "./asset-type-specs"
+} from "./asset-schema.ts"
+import type { AssetRecord, AssetStatus, AssetType } from "../../types.ts"
+import { normalizeInternetProvider, validateAssetImportMetadata } from "./asset-type-specs.ts"
 
 export type AssetImportPreviewRow = {
 	index: number
@@ -78,6 +78,12 @@ export function normalizeMetadata(metadata: Record<string, string>, type: AssetT
 		"capacity_w",
 		"battery_count",
 		"outlet_count",
+		"downstream_optical_port_count",
+		"lan_port_count",
+		"lan_2500_count",
+		"lan_1000_count",
+		"usb_port_count",
+		"voice_port_count",
 	])
 	for (const [key, value] of Object.entries(metadata)) {
 		const trimmed = value.trim()
@@ -155,6 +161,7 @@ export function buildImportPreviewRow(
 	if (!name) errors.push("缺少资产名称")
 	if (!type) errors.push("资产类型无效")
 	if (!status) errors.push("状态无效")
+	errors.push(...validateAssetImportMetadata(form.type, form.metadata))
 	if (form.type === "vm" && !form.parent_asset) {
 		errors.push(parentInput ? "宿主资产不存在" : "虚拟机需要宿主资产")
 	}

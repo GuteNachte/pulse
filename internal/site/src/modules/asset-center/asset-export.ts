@@ -1,5 +1,5 @@
-import { getAssetTypeLabel, getStatusLabel } from "@/modules/asset-center/asset-schema"
-import { buildInternetUplinkAssetIds, getAssetCompleteness } from "@/modules/asset-center/asset-profile-summary"
+import { getAssetTypeLabel, getStatusLabel } from "./asset-schema.ts"
+import { buildInternetUplinkAssetIds, getAssetCompleteness } from "./asset-profile-summary.ts"
 import type {
 	AssetAttachmentRecord,
 	AssetInterfaceRecord,
@@ -7,7 +7,7 @@ import type {
 	AssetMaintenanceRecord,
 	AssetRecord,
 	AssetRelationRecord,
-} from "@/types"
+} from "../../types.ts"
 
 export type AssetCenterSnapshotInput = {
 	exportedAt: Date

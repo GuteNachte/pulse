@@ -419,6 +419,45 @@ export function getAssetTypeOptionLabel(type: AssetType, fieldKey: string, value
 	return field?.options?.find((option) => option.value === value)?.label ?? value
 }
 
+const sensitiveAssetMetadataKeys = new Set([
+	"password",
+	"passwd",
+	"secret",
+	"token",
+	"credential",
+	"ssid",
+	"wifiname",
+	"qrcode",
+	"broadbandaccount",
+])
+
+export function validateAssetImportMetadata(type: AssetType, metadata: Record<string, string>) {
+	const errors: string[] = []
+	const allowed =
+		type === "ont"
+			? new Set([
+					"asset_tag",
+					"official_url",
+					"official_image_url",
+					...ontAssetTypeSpec.sections
+						.flatMap((section) => section.fields)
+						.filter((field) => field.source === "metadata")
+						.map((field) => field.key),
+				])
+			: undefined
+	for (const key of Object.keys(metadata)) {
+		const normalizedKey = key.toLowerCase().replace(/[\s_-]+/g, "")
+		if (sensitiveAssetMetadataKeys.has(normalizedKey)) {
+			errors.push(`包含不允许保存的敏感字段 metadata.${key}`)
+			continue
+		}
+		if (allowed && !allowed.has(key)) {
+			errors.push(`字段 metadata.${key} 不属于光猫 / ONT 严格模板`)
+		}
+	}
+	return errors
+}
+
 export function validateInternetAssetValues(values: {
 	name: string
 	provider: string
