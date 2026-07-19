@@ -81,6 +81,11 @@ func testAssetMasterValidationRequiresStrictInternetProfile(t *testing.T, hub *p
 		strings.NewReader(fmt.Sprintf(`{"user":"%s","name":"越界字段宽带","type":"internet","status":"active","vendor":"中国联通","metadata":{"access_technology":"ftth","auth_mode":"pppoe","down_mbps":1000,"up_mbps":300,"cpu_model":"不允许"}}`, user.Id)), headers)
 	require.Equal(t, http.StatusBadRequest, invalidExtraField.Status, invalidExtraField.Body)
 	require.Contains(t, invalidExtraField.Body, "不属于互联网接入严格模板")
+
+	invalidRefreshInterval := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","name":"间隔错误宽带","type":"internet","status":"active","vendor":"中国联通","metadata":{"access_technology":"ftth","auth_mode":"pppoe","down_mbps":1000,"up_mbps":300,"public_ip_auto_refresh":"yes","public_ip_refresh_interval_minutes":37}}`, user.Id)), headers)
+	require.Equal(t, http.StatusBadRequest, invalidRefreshInterval.Status, invalidRefreshInterval.Body)
+	require.Contains(t, invalidRefreshInterval.Body, "更新时间只能选择")
 }
 
 func testAssetRelationValidationEnforcesInternetBoundary(t *testing.T, hub *pulseTests.TestHub) {

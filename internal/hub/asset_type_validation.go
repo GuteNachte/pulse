@@ -8,28 +8,25 @@ import (
 )
 
 var internetAssetAllowedMetadataFields = map[string]bool{
-	"asset_tag": true,
-	"access_mode": true,
-	"access_technology": true,
-	"auth_mode": true,
-	"down_mbps": true,
-	"up_mbps": true,
-	"public_ipv4": true,
-	"public_ipv6": true,
-	"public_ip_checked_at": true,
-	"public_ipv4_error": true,
-	"public_ipv6_error": true,
-	"public_ipv4_source": true,
-	"public_ipv6_source": true,
-	"public_ipv4_candidate": true,
-	"public_ipv6_candidate": true,
-	"public_ipv4_candidate_checked_at": true,
-	"public_ipv6_candidate_checked_at": true,
-	"package_name": true,
-	"recurring_price_cny": true,
-	"billing_cycle": true,
-	"renewal_date": true,
-	"auto_renew": true,
+	"asset_tag":                          true,
+	"access_mode":                        true,
+	"access_technology":                  true,
+	"auth_mode":                          true,
+	"down_mbps":                          true,
+	"up_mbps":                            true,
+	"public_ipv4":                        true,
+	"public_ipv6":                        true,
+	"public_ip_checked_at":               true,
+	"public_ip_next_check_at":            true,
+	"public_ipv4_error":                  true,
+	"public_ipv6_error":                  true,
+	"public_ip_auto_refresh":             true,
+	"public_ip_refresh_interval_minutes": true,
+	"package_name":                       true,
+	"recurring_price_cny":                true,
+	"billing_cycle":                      true,
+	"renewal_date":                       true,
+	"auto_renew":                         true,
 }
 
 func (h *Hub) validateInternetAssetRecord(e *core.RecordRequestEvent) error {
@@ -69,6 +66,15 @@ func (h *Hub) validateInternetAssetRecord(e *core.RecordRequestEvent) error {
 	}
 	if value := metadataString(metadata, "auto_renew"); value != "" && !stringInSet(value, "yes", "no") {
 		return e.BadRequestError("自动续费必须选择是或否。", nil)
+	}
+	if value := metadataString(metadata, "public_ip_auto_refresh"); value != "" && !stringInSet(value, "yes", "no") {
+		return e.BadRequestError("公网地址自动更新只能选择开启或关闭。", nil)
+	}
+	if value, exists := metadata["public_ip_refresh_interval_minutes"]; exists && value != nil {
+		minutes, parsed := parseInternetAddressRefreshIntervalMinutes(value)
+		if !parsed || !isAllowedInternetAddressRefreshInterval(minutes) {
+			return e.BadRequestError("公网地址更新时间只能选择 15 分钟、30 分钟、1 小时、6 小时、12 小时或 24 小时。", nil)
+		}
 	}
 	originalMetadata := map[string]any{}
 	if original := e.Record.Original(); original != nil {

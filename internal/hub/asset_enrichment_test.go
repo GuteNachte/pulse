@@ -2565,15 +2565,17 @@ func TestInternetAccessRefreshWritesDetectedPublicAddresses(t *testing.T) {
 	require.Equal(t, "203.0.113.10", metadata["public_ipv4"])
 	require.Equal(t, "2001:db8::10", metadata["public_ipv6"])
 	require.NotEmpty(t, metadata["public_ip_checked_at"])
-	require.Equal(t, "dynamic", metadata["public_ipv4_source"])
+	require.NotEmpty(t, metadata["public_ip_next_check_at"])
+	require.NotContains(t, metadata, "public_ipv4_source")
 }
 
-func TestInternetAccessRefreshKeepsManualAddressUntilConfirmation(t *testing.T) {
+func TestInternetAccessRefreshReplacesLegacyManualAddress(t *testing.T) {
 	fixture := newAssetEnrichmentFixture(t, "internet-address-confirm@example.com")
 	fixture.asset.Set("type", "internet")
 	fixture.asset.Set("metadata", map[string]any{
 		"down_mbps": 1000, "up_mbps": 300,
 		"public_ipv4": "198.51.100.8", "public_ipv4_source": "manual",
+		"public_ipv4_candidate": "192.0.2.9", "public_ipv4_candidate_checked_at": "2026-07-18T00:00:00Z",
 	})
 	require.NoError(t, fixture.hub.Save(fixture.asset))
 
@@ -2599,20 +2601,32 @@ func TestInternetAccessRefreshKeepsManualAddressUntilConfirmation(t *testing.T) 
 	asset, err := fixture.hub.FindRecordById("assets", fixture.asset.Id)
 	require.NoError(t, err)
 	metadata := recordMetadata(t, asset)
-	require.Equal(t, "198.51.100.8", metadata["public_ipv4"])
-	require.Equal(t, "203.0.113.10", metadata["public_ipv4_candidate"])
+	require.Equal(t, "203.0.113.10", metadata["public_ipv4"])
+	require.NotContains(t, metadata, "public_ipv4_source")
+	require.NotContains(t, metadata, "public_ipv4_candidate")
+	require.NotContains(t, metadata, "public_ipv4_candidate_checked_at")
 
-	confirm := pulseTests.PerformTestAPIRequest(t, fixture.hub.TestApp, http.MethodPost,
-		"/api/pulse/assets/"+fixture.asset.Id+"/internet-addresses/confirm",
-		strings.NewReader(`{"protocol":"ipv4"}`), fixture.headers)
-	require.Equal(t, http.StatusOK, confirm.Status, confirm.Body)
-
+	disable := pulseTests.PerformTestAPIRequest(t, fixture.hub.TestApp, http.MethodPost,
+		"/api/pulse/assets/"+fixture.asset.Id+"/internet-addresses/settings",
+		strings.NewReader(`{"enabled":false,"interval_minutes":360}`), fixture.headers)
+	require.Equal(t, http.StatusOK, disable.Status, disable.Body)
 	asset, err = fixture.hub.FindRecordById("assets", fixture.asset.Id)
 	require.NoError(t, err)
 	metadata = recordMetadata(t, asset)
-	require.Equal(t, "203.0.113.10", metadata["public_ipv4"])
-	require.Equal(t, "manual", metadata["public_ipv4_source"])
-	require.NotContains(t, metadata, "public_ipv4_candidate")
+	require.Equal(t, "no", metadata["public_ip_auto_refresh"])
+	require.EqualValues(t, 360, metadata["public_ip_refresh_interval_minutes"])
+	require.NotContains(t, metadata, "public_ip_next_check_at")
+
+	enable := pulseTests.PerformTestAPIRequest(t, fixture.hub.TestApp, http.MethodPost,
+		"/api/pulse/assets/"+fixture.asset.Id+"/internet-addresses/settings",
+		strings.NewReader(`{"enabled":true,"interval_minutes":60}`), fixture.headers)
+	require.Equal(t, http.StatusOK, enable.Status, enable.Body)
+	asset, err = fixture.hub.FindRecordById("assets", fixture.asset.Id)
+	require.NoError(t, err)
+	metadata = recordMetadata(t, asset)
+	require.Equal(t, "yes", metadata["public_ip_auto_refresh"])
+	require.EqualValues(t, 60, metadata["public_ip_refresh_interval_minutes"])
+	require.NotEmpty(t, metadata["public_ip_next_check_at"])
 }
 
 func TestAssetEnrichmentAcceptRejectsMetadataFieldWithoutPrefix(t *testing.T) {
