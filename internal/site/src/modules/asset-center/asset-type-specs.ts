@@ -71,6 +71,34 @@ const yesNoOptions = [
 	{ value: "no", label: "否" },
 ] as const
 
+const ontCarrierOptions = [
+	{ value: "中国电信", label: "中国电信" },
+	{ value: "中国联通", label: "中国联通" },
+	{ value: "中国移动", label: "中国移动" },
+] as const
+
+const ontOperatingRoleOptions = [
+	{ value: "bridge_ont", label: "桥接光猫" },
+	{ value: "router_ont", label: "光猫路由一体机" },
+	{ value: "ifttr_main_gateway", label: "iFTTR 主网关" },
+] as const
+
+const enabledStatusOptions = [
+	{ value: "enabled", label: "启用" },
+	{ value: "disabled", label: "未启用" },
+] as const
+
+const supportedStatusOptions = [
+	{ value: "supported", label: "支持" },
+	{ value: "unsupported", label: "不支持" },
+] as const
+
+const ontStatusOptions = [
+	{ value: "active", label: "使用中" },
+	{ value: "inactive", label: "未启用" },
+	{ value: "retired", label: "已停用" },
+] as const
+
 export const internetAssetTypeSpec: AssetTypeSpec = {
 	type: "internet",
 	detailTitle: "线路档案",
@@ -220,8 +248,133 @@ export const internetAssetTypeSpec: AssetTypeSpec = {
 	],
 }
 
+export const ontAssetTypeSpec: AssetTypeSpec = {
+	type: "ont",
+	detailTitle: "光猫 / ONT 档案",
+	providerOptions: [],
+	statusOptions: ontStatusOptions,
+	notApplicable: { location: false, role: false, interfaces: false, hardware: false },
+	sections: [
+		{
+			title: "身份与归属",
+			fields: [
+				capturedField("product_series", "产品系列", "身份与归属"),
+				fixedChoiceField("carrier", "运营商", "身份与归属", ontCarrierOptions),
+				fixedChoiceField("operating_role", "工作角色", "身份与归属", ontOperatingRoleOptions),
+				{ ...capturedField("manufacture_date", "生产日期", "身份与归属"), type: "date" },
+				capturedField("color", "外观颜色", "身份与归属"),
+			],
+		},
+		{
+			title: "光纤接入",
+			fields: [
+				capturedField("onu_type", "ONU 类型", "光纤接入"),
+				capturedField("pon_standard", "PON 标准", "光纤接入"),
+				capturedField("pon_uplink_capacity", "PON 上联能力", "光纤接入"),
+				capturedField("optical_connector", "光纤连接器", "光纤接入"),
+				{ ...capturedField("downstream_optical_port_count", "下联光口数量", "光纤接入"), type: "number" },
+				fixedChoiceField("downstream_optical_status", "下联光口状态", "光纤接入", enabledStatusOptions),
+			],
+		},
+		{
+			title: "路由与管理",
+			fields: [
+				fixedChoiceField("router_status", "主路由", "路由与管理", enabledStatusOptions),
+				fixedChoiceField("gateway_status", "主网关", "路由与管理", enabledStatusOptions),
+				fixedChoiceField("dhcp_status", "DHCP", "路由与管理", enabledStatusOptions),
+				{
+					key: "fixed_ipv4",
+					label: "管理 IPv4",
+					group: "路由与管理",
+					inputMode: "manual_required",
+					source: "metadata",
+				},
+				{
+					key: "fixed_ipv6",
+					label: "管理 IPv6",
+					group: "路由与管理",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "无",
+				},
+				{
+					key: "management_url",
+					label: "管理 URL",
+					group: "路由与管理",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "url",
+				},
+				{
+					key: "lan_subnet",
+					label: "LAN 网段",
+					group: "路由与管理",
+					inputMode: "manual_optional",
+					source: "metadata",
+				},
+			],
+		},
+		{
+			title: "无线网络",
+			fields: [
+				capturedField("wifi_standard", "无线标准", "无线网络"),
+				fixedChoiceField("wifi_24_supported", "2.4 GHz 支持", "无线网络", supportedStatusOptions),
+				fixedChoiceField("wifi_24_enabled", "2.4 GHz 状态", "无线网络", enabledStatusOptions),
+				fixedChoiceField("wifi_5_supported", "5 GHz 支持", "无线网络", supportedStatusOptions),
+				fixedChoiceField("wifi_5_enabled", "5 GHz 状态", "无线网络", enabledStatusOptions),
+				fixedChoiceField("wps_supported", "WPS", "无线网络", supportedStatusOptions),
+			],
+		},
+		{
+			title: "有线网络",
+			fields: [
+				{ ...capturedField("lan_port_count", "LAN 总数", "有线网络"), type: "number" },
+				{ ...capturedField("lan_2500_count", "2.5GbE LAN 数量", "有线网络"), type: "number" },
+				{ ...capturedField("lan_1000_count", "1GbE LAN 数量", "有线网络"), type: "number" },
+			],
+		},
+		{
+			title: "其他端口与电源",
+			fields: [
+				{ ...capturedField("usb_port_count", "USB 数量", "其他端口与电源"), type: "number" },
+				{ ...capturedField("voice_port_count", "电话接口数量", "其他端口与电源"), type: "number" },
+				capturedField("power_spec", "电源规格", "其他端口与电源"),
+				fixedChoiceField("indicator_control", "指示灯控制", "其他端口与电源", supportedStatusOptions),
+				fixedChoiceField("wireless_control", "无线 / WPS 控制", "其他端口与电源", supportedStatusOptions),
+				fixedChoiceField("reset_supported", "复位能力", "其他端口与电源", supportedStatusOptions),
+				fixedChoiceField("power_switch_supported", "电源开关", "其他端口与电源", supportedStatusOptions),
+			],
+		},
+		{
+			title: "设备身份标识",
+			fields: [
+				capturedField("product_number", "产品编号", "设备身份标识"),
+				capturedField("pon_sn", "PON SN", "设备身份标识"),
+				{ ...capturedField("serial_number", "设备序列号", "设备身份标识"), source: "asset" },
+				capturedField("mac", "MAC", "设备身份标识"),
+				{ ...capturedField("radio_approval_code", "无线电型号核准编号", "设备身份标识"), span: "full" },
+			],
+		},
+	],
+}
+
+function capturedField(key: string, label: string, group: string): AssetTypeFieldSpec {
+	return { key, label, group, inputMode: "captured_candidate", source: "metadata" }
+}
+
+function fixedChoiceField(
+	key: string,
+	label: string,
+	group: string,
+	options: readonly { value: string; label: string }[]
+): AssetTypeFieldSpec {
+	return { key, label, group, inputMode: "fixed_choice", source: "metadata", type: "select", options }
+}
+
 export function getAssetTypeSpec(type: AssetType) {
-	return type === "internet" ? internetAssetTypeSpec : undefined
+	if (type === "internet") return internetAssetTypeSpec
+	if (type === "ont") return ontAssetTypeSpec
+	return undefined
 }
 
 export function getAssetTypeCapabilities(type: AssetType) {
@@ -258,7 +411,11 @@ export function getInternetStatusLabel(status: AssetStatus) {
 }
 
 export function getInternetOptionLabel(fieldKey: string, value: string) {
-	const field = internetAssetTypeSpec.sections.flatMap((section) => section.fields).find((item) => item.key === fieldKey)
+	return getAssetTypeOptionLabel("internet", fieldKey, value)
+}
+
+export function getAssetTypeOptionLabel(type: AssetType, fieldKey: string, value: string) {
+	const field = getAssetTypeSpec(type)?.sections.flatMap((section) => section.fields).find((item) => item.key === fieldKey)
 	return field?.options?.find((option) => option.value === value)?.label ?? value
 }
 
@@ -281,5 +438,25 @@ export function validateInternetAssetValues(values: {
 	if (!authModeOptions.some((option) => option.value === values.authMode)) errors.push("联网认证方式")
 	if (!values.downMbps || values.downMbps <= 0) errors.push("下行带宽")
 	if (!values.upMbps || values.upMbps <= 0) errors.push("上行带宽")
+	return errors
+}
+
+export function validateOntAssetValues(values: {
+	name: string
+	vendor: string
+	model: string
+	status: AssetStatus
+	location: string
+	carrier: string
+	operatingRole: string
+}) {
+	const errors: string[] = []
+	if (!values.name.trim()) errors.push("资产名称")
+	if (!values.vendor.trim()) errors.push("厂商 / 品牌")
+	if (!values.model.trim()) errors.push("型号 / 规格")
+	if (!ontStatusOptions.some((option) => option.value === values.status)) errors.push("使用状态")
+	if (!values.location.trim()) errors.push("位置")
+	if (!ontCarrierOptions.some((option) => option.value === values.carrier)) errors.push("运营商")
+	if (!ontOperatingRoleOptions.some((option) => option.value === values.operatingRole)) errors.push("工作角色")
 	return errors
 }

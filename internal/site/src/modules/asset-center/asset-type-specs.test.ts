@@ -1,11 +1,14 @@
 import assert from "node:assert/strict"
 import {
 	formatInternetBandwidth,
-	getInternetStatusLabel,
 	getAssetTypeCapabilities,
+	getAssetTypeSpec,
+	getInternetStatusLabel,
 	internetAssetTypeSpec,
 	normalizeInternetProvider,
+	ontAssetTypeSpec,
 	validateInternetAssetValues,
+	validateOntAssetValues,
 } from "./asset-type-specs.ts"
 
 assert.deepEqual(
@@ -74,6 +77,59 @@ assert.deepEqual(
 		upMbps: -1,
 	}),
 	["资源名称", "运营商", "使用状态", "线路接入技术", "联网认证方式", "下行带宽", "上行带宽"]
+)
+
+const ontFields = ontAssetTypeSpec.sections.flatMap((section) => section.fields.map((field) => field.key))
+assert.deepEqual(ontAssetTypeSpec.sections.map((section) => section.title), [
+	"身份与归属",
+	"光纤接入",
+	"路由与管理",
+	"无线网络",
+	"有线网络",
+	"其他端口与电源",
+	"设备身份标识",
+])
+assert.equal(new Set(ontFields).size, ontFields.length)
+assert.deepEqual(
+	ontAssetTypeSpec.sections
+		.flatMap((section) => section.fields)
+		.find((field) => field.key === "operating_role")
+		?.options?.map((option) => option.value),
+	["bridge_ont", "router_ont", "ifttr_main_gateway"]
+)
+assert.deepEqual(
+	ontAssetTypeSpec.sections
+		.flatMap((section) => section.fields)
+		.filter((field) => field.key === "wifi_24_enabled" || field.key === "wifi_5_enabled")
+		.flatMap((field) => field.options?.map((option) => option.value) ?? []),
+	["enabled", "disabled", "enabled", "disabled"]
+)
+assert.equal(ontFields.includes("ssid"), false)
+assert.equal(ontFields.includes("wifi_password"), false)
+assert.equal(getAssetTypeSpec("ont"), ontAssetTypeSpec)
+assert.deepEqual(
+	validateOntAssetValues({
+		name: "家庭主网关",
+		vendor: "华为",
+		model: "V271-20",
+		status: "active",
+		location: "家 / 弱电箱",
+		carrier: "中国联通",
+		operatingRole: "ifttr_main_gateway",
+	}),
+	[]
+)
+assert.deepEqual(
+	validateOntAssetValues({
+		name: "",
+		vendor: "",
+		model: "",
+		status: "planned",
+		location: "",
+		carrier: "其他",
+		operatingRole: "custom",
+	}),
+	["资产名称", "厂商 / 品牌", "型号 / 规格", "使用状态", "位置", "运营商", "工作角色"]
 )
 
 console.log("asset type specs contract passed")
