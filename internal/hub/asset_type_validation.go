@@ -176,6 +176,12 @@ func (h *Hub) validateONTAssetRecord(e *core.RecordRequestEvent) error {
 			}
 		}
 	}
+	if subnet := metadataString(metadata, "lan_subnet"); subnet != "" {
+		ip, _, err := net.ParseCIDR(subnet)
+		if err != nil || ip.To4() == nil {
+			return e.BadRequestError("LAN 网段必须使用 IPv4 CIDR 格式，例如 192.168.1.0/24。", nil)
+		}
+	}
 	if mac := metadataString(metadata, "mac"); mac != "" {
 		if _, err := net.ParseMAC(mac); err != nil {
 			return e.BadRequestError("MAC 格式不正确。", err)

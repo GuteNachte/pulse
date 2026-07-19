@@ -80,6 +80,7 @@ assert.deepEqual(
 )
 
 const ontFields = ontAssetTypeSpec.sections.flatMap((section) => section.fields.map((field) => field.key))
+const ontLanSubnetField = ontAssetTypeSpec.sections.flatMap((section) => section.fields).find((field) => field.key === "lan_subnet")
 assert.deepEqual(ontAssetTypeSpec.sections.map((section) => section.title), [
 	"身份与归属",
 	"光纤接入",
@@ -88,8 +89,11 @@ assert.deepEqual(ontAssetTypeSpec.sections.map((section) => section.title), [
 	"有线网络",
 	"其他端口与电源",
 	"设备身份标识",
+	"备注",
 ])
 assert.equal(new Set(ontFields).size, ontFields.length)
+assert.equal(ontLanSubnetField?.placeholder, "例如 192.168.1.0/24")
+assert.equal(ontLanSubnetField?.pattern, "(?:\\d{1,3}\\.){3}\\d{1,3}/(?:[0-9]|[12][0-9]|3[0-2])")
 assert.deepEqual(
 	ontAssetTypeSpec.sections
 		.flatMap((section) => section.fields)

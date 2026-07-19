@@ -1,5 +1,7 @@
 import { buildAssetLocationPresetSelection } from "./asset-location-dialog.ts"
 import { isAssetLocationNotApplicable, type AssetLocationPreset } from "./asset-location.ts"
+import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
 
 function assertDeepEqual(actual: unknown, expected: unknown) {
 	if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -29,6 +31,12 @@ assertDeepEqual(
 		secondPreset: secondPresets[0],
 	}
 )
+
+const assetLocationInputSource = readFileSync(new URL("./components/asset-form-fields.tsx", import.meta.url), "utf8")
+assert.equal(assetLocationInputSource.includes("一级位置"), false)
+assert.equal(assetLocationInputSource.includes("二级位置"), false)
+assert.equal(assetLocationInputSource.includes('aria-label="位置"'), true)
+assert.equal(assetLocationInputSource.includes('aria-label="房间或子位置"'), true)
 
 assertDeepEqual(isAssetLocationNotApplicable("internet"), true)
 assertDeepEqual(isAssetLocationNotApplicable("phone"), false)

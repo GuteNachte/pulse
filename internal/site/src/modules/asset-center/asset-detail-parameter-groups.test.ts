@@ -316,7 +316,7 @@ const ont = {
 
 assertDeepEqual(
 	buildAssetParameterGroups(ont).map((group) => group.title),
-	["光纤接入", "路由与管理", "无线网络", "有线网络", "其他端口与电源", "设备身份标识"]
+	["光纤接入", "路由与管理", "无线网络", "有线网络", "其他端口与电源", "设备身份标识", "备注"]
 )
 assertDeepEqual(
 	buildAssetParameterGroups(ont)

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { getAssetFormSections } from "./asset-schema.ts"
+import { ASSET_TYPE_OPTIONS, getAssetFormSections } from "./asset-schema.ts"
 
 function getSectionFieldKeys(type: Parameters<typeof getAssetFormSections>[0], title: string) {
 	return (
@@ -136,7 +136,7 @@ assert.equal(switchHardwareFields.includes("switching_capacity_gbps"), true)
 
 assert.deepEqual(
 	getAssetFormSections("ont").map((section) => section.title),
-	["身份与归属", "光纤接入", "路由与管理", "无线网络", "有线网络", "其他端口与电源", "设备身份标识"]
+	["身份与归属", "光纤接入", "路由与管理", "无线网络", "有线网络", "其他端口与电源", "设备身份标识", "备注"]
 )
 assert.equal(getSectionFieldKeys("ont", "网络参数").length, 0)
 assert.equal(getSectionFieldKeys("ont", "无线网络").includes("wifi_5_enabled"), true)
@@ -176,5 +176,13 @@ assert.deepEqual(getSectionFieldKeys("web_endpoint", "订阅与续费"), [
 	"billing_cycle",
 ])
 assert.equal(getSectionFieldKeys("web_endpoint", "购买信息").length, 0)
+
+for (const { value: type } of ASSET_TYPE_OPTIONS) {
+	assert.equal(
+		getAssetFormSections(type).flatMap((section) => section.fields).some((field) => field.key === "notes"),
+		true,
+		`${type} 编辑页必须提供备注输入框`
+	)
+}
 
 console.log("asset schema profile contract passed")

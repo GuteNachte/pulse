@@ -96,11 +96,11 @@ export function AssetLocationSettingsDialog({
 
 	function handleCreatePreset() {
 		if (!selection.rootName) {
-			onValidationError("请选择或填写一级位置")
+			onValidationError("请选择或填写位置")
 			return
 		}
 		if (secondSelection === customLocationOptionValue && !selection.secondName) {
-			onValidationError("请填写自定义二级房间")
+			onValidationError("请填写自定义房间或子位置")
 			return
 		}
 		onCreatePreset(selection)
@@ -111,14 +111,14 @@ export function AssetLocationSettingsDialog({
 			<DialogContent className="flex max-h-[86vh] max-w-3xl flex-col overflow-hidden">
 				<DialogHeader>
 					<DialogTitle>位置</DialogTitle>
-					<DialogDescription>只维护一级位置和二级房间，资产录入时直接复用。</DialogDescription>
+					<DialogDescription>维护位置与房间 / 子位置，资产录入时直接复用。</DialogDescription>
 				</DialogHeader>
 				<div className="grid min-h-0 gap-4 overflow-y-auto pr-1 md:grid-cols-[minmax(0,1fr)_20rem]">
 					<div className="grid content-start gap-3">
 						<div className="grid gap-2 rounded-lg border border-border/70 bg-card p-3">
 							<div className="flex items-center justify-between gap-3 text-sm">
 								<div className="font-medium text-foreground">预设位置</div>
-								<AssetMetaTag>{rootPresetItems.length} 个一级</AssetMetaTag>
+								<AssetMetaTag>{rootPresetItems.length} 个位置</AssetMetaTag>
 							</div>
 							<div className="grid gap-2">
 								{presetGroups.map((group) => (
@@ -177,7 +177,7 @@ export function AssetLocationSettingsDialog({
 					</div>
 					<div className="grid content-start gap-3 rounded-lg border border-border/70 bg-surface-soft p-3">
 						<div className="text-sm font-medium text-foreground">新增预设</div>
-						<AssetFormField label="一级位置" required>
+						<AssetFormField label="位置" required>
 							<select
 								value={rootSelection}
 								onChange={(event) => {
@@ -196,7 +196,7 @@ export function AssetLocationSettingsDialog({
 							</select>
 						</AssetFormField>
 						{rootSelection === customLocationOptionValue && (
-							<AssetFormField label="自定义一级位置" required>
+							<AssetFormField label="自定义位置" required>
 								<Input
 									value={customRoot}
 									placeholder="例如 家、公司、父母家"
@@ -204,14 +204,14 @@ export function AssetLocationSettingsDialog({
 								/>
 							</AssetFormField>
 						)}
-						<AssetFormField label="二级房间">
+						<AssetFormField label="房间 / 子位置">
 							<select
 								value={secondSelection}
 								onChange={(event) => setSecondSelection(event.target.value)}
 								className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
 							>
-								<option value="">选择二级房间</option>
-								<option value={noSecondLocationOptionValue}>只新增一级位置</option>
+								<option value="">选择房间或子位置</option>
+								<option value={noSecondLocationOptionValue}>只新增位置</option>
 								{secondPresetItems.map((item) => (
 									<option key={item.path} value={item.preset.name}>
 										{item.preset.name}
@@ -221,7 +221,7 @@ export function AssetLocationSettingsDialog({
 							</select>
 						</AssetFormField>
 						{secondSelection === customLocationOptionValue && (
-							<AssetFormField label="自定义二级房间" required>
+							<AssetFormField label="自定义房间或子位置" required>
 								<Input
 									value={customSecond}
 									placeholder="例如 客厅、卧室、书房"

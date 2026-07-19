@@ -16,6 +16,8 @@ export type AssetTypeFieldSpec = {
 	type?: "text" | "number" | "date" | "url" | "select"
 	options?: readonly { value: string; label: string }[]
 	placeholder?: string
+	pattern?: string
+	title?: string
 	unit?: string
 	readOnly?: boolean
 	span?: "full"
@@ -311,6 +313,9 @@ export const ontAssetTypeSpec: AssetTypeSpec = {
 					group: "路由与管理",
 					inputMode: "manual_optional",
 					source: "metadata",
+					placeholder: "例如 192.168.1.0/24",
+					pattern: "(?:\\d{1,3}\\.){3}\\d{1,3}/(?:[0-9]|[12][0-9]|3[0-2])",
+					title: "请输入 IPv4 CIDR 格式，例如 192.168.1.0/24",
 				},
 			],
 		},
@@ -353,6 +358,19 @@ export const ontAssetTypeSpec: AssetTypeSpec = {
 				{ ...capturedField("serial_number", "设备序列号", "设备身份标识"), source: "asset" },
 				capturedField("mac", "MAC", "设备身份标识"),
 				{ ...capturedField("radio_approval_code", "无线电型号核准编号", "设备身份标识"), span: "full" },
+			],
+		},
+		{
+			title: "备注",
+			fields: [
+				{
+					key: "notes",
+					label: "备注",
+					group: "备注",
+					inputMode: "manual_optional",
+					source: "asset",
+					span: "full",
+				},
 			],
 		},
 	],

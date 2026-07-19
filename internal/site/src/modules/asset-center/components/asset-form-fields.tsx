@@ -101,6 +101,8 @@ export function AssetInput({
 					min={field.type === "number" && ["down_mbps", "up_mbps"].includes(field.key) ? "1" : undefined}
 					value={value}
 					placeholder={field.placeholder}
+					pattern={field.pattern}
+					title={field.title}
 					readOnly={field.readOnly}
 					onChange={(event) => onChange(event.target.value)}
 				/>
@@ -453,16 +455,16 @@ export function AssetLocationInput({
 	return (
 		<div className="grid gap-2 sm:grid-cols-2">
 			<div className="grid gap-1.5">
-				<div className="text-xs text-muted-foreground">一级位置</div>
 				<select
 					id={`${idPrefix}-root`}
+					aria-label="位置"
 					value={rootSelectValue}
 					onChange={(event) => {
 						updateRoot(event.target.value)
 					}}
 					className={locationSelectClassName}
 				>
-					{allowNone ? <option value="__none__">无</option> : <option value="">选择一级位置</option>}
+					{allowNone ? <option value="__none__">无</option> : <option value="">选择位置</option>}
 					{rootOptions.map((location) => (
 						<option key={location} value={location}>
 							{location}
@@ -471,9 +473,9 @@ export function AssetLocationInput({
 				</select>
 			</div>
 			<div className="grid gap-1.5">
-				<div className="text-xs text-muted-foreground">二级房间</div>
 				<select
 					id={`${idPrefix}-second`}
+					aria-label="房间或子位置"
 					value={secondValue}
 					onChange={(event) => {
 						updateSecond(event.target.value)
@@ -481,7 +483,7 @@ export function AssetLocationInput({
 					disabled={!rootValue}
 					className={locationSelectClassName}
 				>
-					<option value="">{rootValue ? "选择二级房间" : "先选择一级位置"}</option>
+					<option value="">{rootValue ? "选择房间或子位置" : "请先选择位置"}</option>
 					{secondOptions.map((location) => (
 						<option key={location} value={location}>
 							{location}

@@ -204,6 +204,7 @@ func testAssetMasterValidationRequiresStrictONTProfile(t *testing.T, hub *pulseT
 		{name: "negative count", metadata: `"carrier":"中国联通","operating_role":"ifttr_main_gateway","fixed_ipv4":"192.168.1.5","lan_port_count":-1`, message: "端口数量必须是非负整数"},
 		{name: "ipv4", metadata: `"carrier":"中国联通","operating_role":"ifttr_main_gateway","fixed_ipv4":"999.1.1.1"`, message: "管理 IPv4 格式不正确"},
 		{name: "mac", metadata: `"carrier":"中国联通","operating_role":"ifttr_main_gateway","fixed_ipv4":"192.168.1.6","mac":"invalid"`, message: "MAC 格式不正确"},
+		{name: "lan subnet", metadata: `"carrier":"中国联通","operating_role":"ifttr_main_gateway","fixed_ipv4":"192.168.1.6","lan_subnet":"192.168.1.999/24"`, message: "LAN 网段必须使用 IPv4 CIDR 格式"},
 		{name: "ssid", metadata: `"carrier":"中国联通","operating_role":"ifttr_main_gateway","fixed_ipv4":"192.168.1.7","ssid":"redacted"`, message: "不允许保存 Wi-Fi 名称、密码或认证凭据"},
 		{name: "password", metadata: `"carrier":"中国联通","operating_role":"ifttr_main_gateway","fixed_ipv4":"192.168.1.8","wifi_password":"redacted"`, message: "不允许保存 Wi-Fi 名称、密码或认证凭据"},
 		{name: "outside template", metadata: `"carrier":"中国联通","operating_role":"ifttr_main_gateway","fixed_ipv4":"192.168.1.9","cpu_model":"not-allowed"`, message: "不属于光猫 / ONT 严格模板"},

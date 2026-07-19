@@ -67,7 +67,7 @@ for (const key of ["name", "type", "vendor", "model", "status", "location", "ass
 }
 assert.deepEqual(
 	buildAssetProfileEditSections("ont", ontRequiredFields).map((section) => section.title),
-	["身份与归属", "光纤接入", "路由与管理", "无线网络", "有线网络", "其他端口与电源", "设备身份标识"]
+	["身份与归属", "光纤接入", "路由与管理", "无线网络", "有线网络", "其他端口与电源", "设备身份标识", "备注"]
 )
 
 const phoneSections = buildAssetProfileEditSections("phone", phoneRequiredFields)

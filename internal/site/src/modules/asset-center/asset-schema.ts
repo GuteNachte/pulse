@@ -18,6 +18,8 @@ export type AssetFieldDefinition = {
 	type?: AssetFieldType
 	required?: boolean
 	placeholder?: string
+	pattern?: string
+	title?: string
 	span?: "full"
 	options?: { value: string; label: string }[]
 	capture?: AssetFieldCapture
@@ -630,6 +632,8 @@ function assetTypeSpecSectionsToFormSections(spec: AssetTypeSpec): AssetFieldSec
 			type: field.type,
 			required: field.inputMode === "manual_required" || (spec.type === "internet" && field.key === "vendor"),
 			placeholder: field.placeholder,
+			pattern: field.pattern,
+			title: field.title,
 			span: field.span,
 			options: field.options ? [...field.options] : undefined,
 			capture: field.inputMode === "captured_candidate" ? "agent_collectable" : "manual",

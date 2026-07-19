@@ -177,6 +177,8 @@ function AssetFieldValueInput({
 			min={field.type === "number" && ["down_mbps", "up_mbps"].includes(field.key) ? "1" : undefined}
 			value={value}
 			placeholder={placeholder ?? field.placeholder}
+			pattern={field.pattern}
+			title={field.title}
 			readOnly={field.readOnly || (showCandidatePicker && mode !== "custom")}
 			onChange={(event) => {
 				setUncontrolledValue(event.target.value)
