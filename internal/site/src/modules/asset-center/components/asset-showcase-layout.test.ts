@@ -18,6 +18,16 @@ assert.equal(
 	"archive rows must stay compact in two columns"
 )
 assert.equal(columns.includes("xl:grid-cols-1"), false, "desktop archives must not stretch every short row to full width")
+assert.equal(
+	columns.includes('className="grid items-start gap-2.5 p-3 lg:grid-cols-2"'),
+	true,
+	"desktop parameter cards must render two per row"
+)
+assert.equal(
+	columns.includes('group.rows.length > 6 && "sm:col-span-2"'),
+	false,
+	"long parameter groups must not force a full-width desktop card"
+)
 assert.equal(workspace.includes('className="grid items-start gap-4 xl:grid-cols'), true, "workspace spacing must stay compact")
 assert.equal(page.includes("xl:h-[calc(100dvh-7rem)]"), false, "detail page must not force the old fixed viewport")
 assert.equal(page.includes("xl:overflow-hidden"), false, "detail page must not clip long parameter groups")

@@ -1,7 +1,6 @@
 import { ExternalLinkIcon, ListChecksIcon } from "lucide-react"
 import type { ReactNode } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
 import { getAssetParameterSectionId } from "../asset-parameter-navigation"
 import type { AssetFieldDefinition } from "../asset-schema"
 import { AssetParameterNavigator } from "./asset-parameter-navigator"
@@ -85,11 +84,11 @@ export function AssetHardwareSpecsColumn({
 				</div>
 				<AssetParameterNavigator groups={groups} variant="inline" className="mt-3 xl:hidden" />
 			</CardHeader>
-			<CardContent className="grid gap-2.5 p-3 sm:grid-cols-2">
+			<CardContent className="grid items-start gap-2.5 p-3 lg:grid-cols-2">
 				{groups.length > 0 ? (
 					groups.map((group) => <HardwareSpecGroup key={group.id} group={group} action={groupActions?.[group.title]} />)
 				) : (
-					<div className="grid min-h-28 place-items-center gap-2 rounded-md border border-dashed border-border/70 bg-surface-soft px-4 py-5 text-center sm:col-span-2">
+					<div className="grid min-h-28 place-items-center gap-2 rounded-md border border-dashed border-border/70 bg-surface-soft px-4 py-5 text-center lg:col-span-2">
 						<ListChecksIcon className="size-5 text-muted-foreground" />
 						<p className="text-sm text-muted-foreground">{emptyLabel}</p>
 					</div>
@@ -106,10 +105,7 @@ function HardwareSpecGroup({ group, action }: { group: AssetParameterGroup; acti
 		<section
 			id={getAssetParameterSectionId(group.id)}
 			data-asset-parameter-group-id={group.id}
-			className={cn(
-				"grid min-w-0 scroll-mt-28 content-start gap-2.5 rounded-md border border-border/70 bg-surface-soft p-3",
-				group.rows.length > 6 && "sm:col-span-2"
-			)}
+			className="grid min-w-0 scroll-mt-28 content-start gap-2.5 rounded-md border border-border/70 bg-surface-soft p-3"
 		>
 			<div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
 				<div className="flex min-w-0 items-start gap-2">
