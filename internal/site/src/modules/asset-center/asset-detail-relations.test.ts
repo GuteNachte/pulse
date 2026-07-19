@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
 
 import {
 	buildRelationMetadata,
@@ -6,6 +7,17 @@ import {
 	getEmptyRelationFormForGuide,
 	getPeerInterfaceOptions,
 } from "./asset-detail-relations.ts"
+
+const detailPageSource = readFileSync(new URL("./asset-detail-page.tsx", import.meta.url), "utf8")
+const saveRelationStart = detailPageSource.indexOf("async function saveRelation")
+const saveRelationEnd = detailPageSource.indexOf("async function saveMaintenance", saveRelationStart)
+const saveRelationSource = detailPageSource.slice(saveRelationStart, saveRelationEnd)
+assert.equal(
+	saveRelationSource.indexOf("const form = new FormData(event.currentTarget)") <
+		saveRelationSource.indexOf("await ensureAssetEditCatalogLoaded()"),
+	true,
+	"relationship submission must capture the form before crossing an async boundary"
+)
 
 const assets = [
 	{ id: "phone", name: "手机", type: "phone" },

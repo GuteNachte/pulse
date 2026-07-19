@@ -25,6 +25,7 @@ const catalog = await loadAssetEditCatalog({
 		asset: "asset-1",
 		name: "WLAN",
 		kind: "wifi",
+		metadata: { enabled: false },
 	} as unknown as AssetInterfaceRecord),
 	locations: createCollection("asset_locations", {
 		id: "location-1",
@@ -38,8 +39,8 @@ assertDeepEqual(
 	["asset-1"]
 )
 assertDeepEqual(
-	catalog.interfaces.map((item) => item.id),
-	["interface-1"]
+	catalog.interfaces.map((item) => [item.id, item.metadata?.enabled]),
+	[["interface-1", false]]
 )
 assertDeepEqual(
 	catalog.locations.map((item) => item.id),
@@ -56,7 +57,7 @@ assertDeepEqual(
 		{
 			collection: "asset_interfaces",
 			sort: "asset,-primary,kind,name",
-			fields: "id,asset,name,kind,ipv4,mac,speed_mbps,primary",
+			fields: "id,asset,name,kind,ipv4,mac,speed_mbps,primary,metadata",
 		},
 		{
 			collection: "asset_locations",

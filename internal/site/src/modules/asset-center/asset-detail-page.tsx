@@ -814,8 +814,8 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	async function saveRelation(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault()
 		if (!asset) return
-		await ensureAssetEditCatalogLoaded()
 		const form = new FormData(event.currentTarget)
+		await ensureAssetEditCatalogLoaded()
 		const target = form.get("target_asset")?.toString() || ""
 		if (!target) {
 			toast({ title: "请选择目标资产", variant: "destructive" })

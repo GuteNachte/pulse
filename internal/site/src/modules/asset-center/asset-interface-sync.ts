@@ -25,6 +25,7 @@ export async function syncPrimaryInterface(userId: string, assetId: string, form
 }
 
 export function buildPrimaryInterfacePayload(userId: string, assetId: string, form: AssetFormState) {
+	if (form.type === "ont") return null
 	if (isInternetResourceAssetType(form.type)) return null
 	const metadata = form.metadata
 	const speed = getPrimaryInterfaceSpeed(form)

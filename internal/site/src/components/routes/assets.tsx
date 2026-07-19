@@ -111,6 +111,7 @@ import {
 import { buildInternetUplinkAssetIds, getAssetCompleteness } from "@/modules/asset-center/asset-profile-summary"
 import { buildAssetInterfaceDisplay, groupAssetInterfacesByAsset } from "@/modules/asset-center/asset-interface-display"
 import { syncPrimaryInterface } from "@/modules/asset-center/asset-interface-sync"
+import { validateNewOntRequiredFields } from "@/modules/asset-center/asset-profile-validation"
 import type {
 	AssetInterfaceRecord,
 	AssetAttachmentRecord,
@@ -1290,13 +1291,15 @@ function validateNewAssetRequiredFields(form: AssetFormState, existingAssets: As
 		return errors
 	}
 	if (form.type === "ont") {
-		if (!form.vendor.trim()) errors.push("厂商 / 品牌")
-		if (!form.model.trim()) errors.push("型号 / 规格")
-		if (!form.location.trim()) errors.push("位置")
-		if (!form.metadata.fixed_ipv4?.trim()) errors.push("管理 IPv4")
-		if (!form.metadata.carrier?.trim()) errors.push("运营商")
-		if (!form.metadata.operating_role?.trim()) errors.push("工作角色")
-		return errors
+		return validateNewOntRequiredFields({
+			vendor: form.vendor,
+			model: form.model,
+			location: form.location,
+			managementIp: form.management_ip,
+			fixedIpv4: form.metadata.fixed_ipv4 ?? "",
+			carrier: form.metadata.carrier ?? "",
+			operatingRole: form.metadata.operating_role ?? "",
+		})
 	}
 	if (form.type === "web_endpoint") {
 		if (!form.name.trim()) errors.push("服务名称")

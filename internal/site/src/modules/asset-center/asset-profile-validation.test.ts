@@ -1,4 +1,8 @@
-import { getAssetRecognitionRequirements, validateAssetProfileForm } from "./asset-profile-validation.ts"
+import {
+	getAssetRecognitionRequirements,
+	validateAssetProfileForm,
+	validateNewOntRequiredFields,
+} from "./asset-profile-validation.ts"
 import type { AssetRecord } from "../../types"
 
 function assertDeepEqual(actual: unknown, expected: unknown) {
@@ -83,6 +87,32 @@ assertDeepEqual(
 		storageGb: "",
 	}),
 	[]
+)
+
+assertDeepEqual(
+	validateNewOntRequiredFields({
+		vendor: "华为",
+		model: "V271-20",
+		location: "家 / 弱电箱",
+		managementIp: "192.168.1.1",
+		fixedIpv4: "",
+		carrier: "中国联通",
+		operatingRole: "ifttr_main_gateway",
+	}),
+	[]
+)
+
+assertDeepEqual(
+	validateNewOntRequiredFields({
+		vendor: "华为",
+		model: "V271-20",
+		location: "家 / 弱电箱",
+		managementIp: "",
+		fixedIpv4: "",
+		carrier: "中国联通",
+		operatingRole: "ifttr_main_gateway",
+	}),
+	["管理 IPv4"]
 )
 
 assertDeepEqual(

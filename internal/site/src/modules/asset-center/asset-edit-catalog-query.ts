@@ -5,7 +5,7 @@ type CatalogCollection<T> = {
 }
 
 const assetCatalogFields = "id,name,type,location,metadata"
-const assetInterfaceCatalogFields = "id,asset,name,kind,ipv4,mac,speed_mbps,primary"
+const assetInterfaceCatalogFields = "id,asset,name,kind,ipv4,mac,speed_mbps,primary,metadata"
 const assetLocationCatalogFields = "id,name,parent_location,sort_order"
 
 export async function loadAssetEditCatalog(collections: {

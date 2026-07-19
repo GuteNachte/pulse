@@ -115,6 +115,25 @@ export function validateAssetProfileForm(values: {
 	return errors
 }
 
+export function validateNewOntRequiredFields(values: {
+	vendor: string
+	model: string
+	location: string
+	managementIp: string
+	fixedIpv4: string
+	carrier: string
+	operatingRole: string
+}) {
+	const errors: string[] = []
+	if (!values.vendor.trim()) errors.push("厂商 / 品牌")
+	if (!values.model.trim()) errors.push("型号 / 规格")
+	if (!values.location.trim()) errors.push("位置")
+	if (!firstNonEmpty(values.managementIp, values.fixedIpv4)) errors.push("管理 IPv4")
+	if (!values.carrier.trim()) errors.push("运营商")
+	if (!values.operatingRole.trim()) errors.push("工作角色")
+	return errors
+}
+
 function hasServiceURL(values: { serviceURL?: string; internalServiceURL?: string; externalServiceURL?: string }) {
 	return Boolean(values.serviceURL?.trim() || values.internalServiceURL?.trim() || values.externalServiceURL?.trim())
 }
