@@ -85,21 +85,21 @@ func (h *Hub) validateSwitchAssetRecord(e *core.RecordRequestEvent) error {
 		return e.BadRequestError("转发方式只能选择存储转发或直通转发。", nil)
 	}
 	for _, key := range []string{"ethernet_port_count", "optical_port_count", "other_port_count"} {
-		if value, exists := metadata[key]; exists && value != nil && !isNonNegativeInteger(value) {
+		if value, exists := metadata[key]; exists && value != nil && !isBlankMetadataValue(value) && !isNonNegativeInteger(value) {
 			return e.BadRequestError("端口数量必须是非负整数。", nil)
 		}
 	}
 	for _, key := range []string{"default_ethernet_speed_mbps", "default_optical_speed_mbps", "switching_capacity_gbps"} {
-		if value, exists := metadata[key]; exists && value != nil && !isNonNegativeNumber(value) {
+		if value, exists := metadata[key]; exists && value != nil && !isBlankMetadataValue(value) && !isNonNegativeNumber(value) {
 			return e.BadRequestError("端口速率、交换容量和 PoE 预算不能小于 0。", nil)
 		}
 	}
 	for _, key := range []string{"net_weight_g", "lightning_protection_kv", "warranty_months"} {
-		if value, exists := metadata[key]; exists && value != nil && !isNonNegativeNumber(value) {
+		if value, exists := metadata[key]; exists && value != nil && !isBlankMetadataValue(value) && !isNonNegativeNumber(value) {
 			return e.BadRequestError("重量、防雷等级和保修期不能小于 0。", nil)
 		}
 	}
-	if value, exists := metadata["mac_table_entries"]; exists && value != nil && !isNonNegativeInteger(value) {
+	if value, exists := metadata["mac_table_entries"]; exists && value != nil && !isBlankMetadataValue(value) && !isNonNegativeInteger(value) {
 		return e.BadRequestError("MAC 地址表容量必须是非负整数。", nil)
 	}
 	originalMetadata := map[string]any{}
@@ -307,6 +307,11 @@ func isNonNegativeInteger(value any) bool {
 	}
 	number, err := strconv.ParseInt(text, 10, 64)
 	return err == nil && number >= 0
+}
+
+func isBlankMetadataValue(value any) bool {
+	text, ok := value.(string)
+	return ok && strings.TrimSpace(text) == ""
 }
 
 func isNonNegativeNumber(value any) bool {
