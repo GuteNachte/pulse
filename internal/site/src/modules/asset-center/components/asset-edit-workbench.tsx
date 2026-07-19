@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
-import { ListChecksIcon, RefreshCwIcon } from "lucide-react"
+import { ListChecksIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -20,6 +20,10 @@ import { AssetCandidateTextField, AssetProfileEditField } from "./asset-edit-pro
 import { SelectField } from "./asset-detail-form-fields"
 import { AssetEditVisualPanel } from "./asset-edit-visual-panel"
 import { AssetInterfaceManager } from "./asset-interface-manager"
+import {
+	InternetAddressAutoRefreshControls,
+	type InternetAddressAutoRefreshSettings,
+} from "./internet-address-auto-refresh-controls"
 import {
 	AssetLocationInput,
 	AssetTagInput,
@@ -45,7 +49,11 @@ import { buildAssetLocationOptions } from "../asset-list"
 import { isAssetLocationNotApplicable } from "../asset-location"
 import { getEditableAssetTypeOptions } from "../asset-profiles"
 import { getAssetTypeCapabilities, internetAssetTypeSpec } from "../asset-type-specs"
-import { getInternetAddressDisplayState } from "../asset-internet-address-status"
+import {
+	formatInternetAddressTimestamp,
+	getInternetAddressAutoRefreshSettings,
+	getInternetAddressDisplayState,
+} from "../asset-internet-address-status"
 import {
 	HOST_ASSET_TYPES,
 	getAssetFormSections,
@@ -85,7 +93,6 @@ type AssetEditWorkbenchProps = {
 	onSaveProfile: (event: FormEvent<HTMLFormElement>) => void
 	onRunSmartRecognition: () => void
 	onRefreshInternetAddresses: () => void
-	onConfirmInternetAddress: (protocol: "ipv4" | "ipv6") => void
 	onAddInterface: () => void
 	onEditInterface: (record: AssetInterfaceRecord) => void
 	onDeleteInterface: (record: AssetInterfaceRecord) => void
@@ -106,7 +113,6 @@ export function AssetEditWorkbench({
 	onSaveProfile,
 	onRunSmartRecognition,
 	onRefreshInternetAddresses,
-	onConfirmInternetAddress,
 	onAddInterface,
 	onEditInterface,
 	onDeleteInterface,
@@ -119,6 +125,9 @@ export function AssetEditWorkbench({
 	const [statusValue, setStatusValue] = useState(asset.status || "active")
 	const [locationValue, setLocationValue] = useState(asset.location || "")
 	const [assetTagValue, setAssetTagValue] = useState(getMetadataString(metadata, "asset_tag"))
+	const [internetAddressSettingsDraft, setInternetAddressSettingsDraft] = useState<InternetAddressAutoRefreshSettings>(
+		() => getInternetAddressAutoRefreshSettings(metadata)
+	)
 	const [fixedIpv4Value, setFixedIpv4Value] = useState(
 		getMetadataString(metadata, "fixed_ipv4") || asset.management_ip || ""
 	)
@@ -134,6 +143,7 @@ export function AssetEditWorkbench({
 		setLocationValue(asset.location || "")
 		setAssetTagValue(getMetadataString(asset.metadata, "asset_tag"))
 		setFixedIpv4Value(getMetadataString(asset.metadata, "fixed_ipv4") || asset.management_ip || "")
+		setInternetAddressSettingsDraft(getInternetAddressAutoRefreshSettings(asset.metadata ?? {}))
 	}, [asset.id, asset.location, asset.metadata, asset.name, asset.status, asset.type])
 	const locationOptions = useMemo(
 		() => buildAssetLocationOptions(state.assets, state.locations, { includePresets: true }).values,
@@ -189,6 +199,16 @@ export function AssetEditWorkbench({
 				onSubmit={onSaveProfile}
 				className="-mt-3 grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-y-auto lg:overflow-hidden"
 			>
+				<input
+					type="hidden"
+					name="public_ip_auto_refresh"
+					value={internetAddressSettingsDraft.enabled ? "yes" : "no"}
+				/>
+				<input
+					type="hidden"
+					name="public_ip_refresh_interval_minutes"
+					value={internetAddressSettingsDraft.intervalMinutes}
+				/>
 				<AssetEditActionBar
 					readOnly={readOnly}
 					saving={saving}
@@ -203,7 +223,9 @@ export function AssetEditWorkbench({
 					}
 					archiveCounts={
 						<>
-							{capabilities.showInterfaces ? <AssetEditHeaderCount label="接口" value={state.interfaces.length} /> : null}
+							{capabilities.showInterfaces ? (
+								<AssetEditHeaderCount label="接口" value={state.interfaces.length} />
+							) : null}
 							<AssetEditHeaderCount label="关系" value={state.relations.length} />
 							<AssetEditHeaderCount label="维护" value={state.maintenance.length} />
 							<AssetEditHeaderCount label="附件" value={state.attachments.length} />
@@ -215,14 +237,14 @@ export function AssetEditWorkbench({
 						<section className="rounded-md border border-border/70 bg-card p-2">
 							<div className="mb-1 flex items-center justify-between gap-2">
 								<div className="min-w-0">
-								<div className="text-sm font-semibold text-foreground">
-									{isInternetResource ? "基础资料" : "通用档案"}
-								</div>
-								{!isInternetResource ? (
-									<div className="mt-0.5 text-xs text-muted-foreground">
-										身份、状态、位置和用途；网络接入信息在下方维护。
+									<div className="text-sm font-semibold text-foreground">
+										{isInternetResource ? "基础资料" : "通用档案"}
 									</div>
-								) : null}
+									{!isInternetResource ? (
+										<div className="mt-0.5 text-xs text-muted-foreground">
+											身份、状态、位置和用途；网络接入信息在下方维护。
+										</div>
+									) : null}
 								</div>
 								<Button
 									type="button"
@@ -324,17 +346,19 @@ export function AssetEditWorkbench({
 										/>
 									</>
 								)}
-								{capabilities.showLocation ? <div className="grid gap-2">
-									<Label>位置</Label>
-									<AssetLocationInput
-										idPrefix="asset-detail-edit-location"
-										value={locationValue}
-										locationOptions={locationOptions}
-										onChange={setLocationValue}
-										allowNone={locationNotApplicable}
-									/>
-									<input type="hidden" name="location" value={locationValue} />
-								</div> : null}
+								{capabilities.showLocation ? (
+									<div className="grid gap-2">
+										<Label>位置</Label>
+										<AssetLocationInput
+											idPrefix="asset-detail-edit-location"
+											value={locationValue}
+											locationOptions={locationOptions}
+											onChange={setLocationValue}
+											allowNone={locationNotApplicable}
+										/>
+										<input type="hidden" name="location" value={locationValue} />
+									</div>
+								) : null}
 							</div>
 						</section>
 
@@ -377,29 +401,19 @@ export function AssetEditWorkbench({
 
 						{formSections.map((section) => (
 							<section key={section.title} className="rounded-md border border-border/70 bg-card p-2">
-								<div className="mb-1 flex items-center justify-between gap-2">
+								<div className="mb-1 flex flex-wrap items-center justify-between gap-2">
 									<div className="text-sm font-semibold text-foreground">{section.title}</div>
-									{section.title === "动态公网地址" && (
-										<Button
-											type="button"
-											variant="outline"
-											size="sm"
-											onClick={onRefreshInternetAddresses}
+									{section.title === "动态公网地址" ? (
+										<InternetAddressAutoRefreshControls
+											settings={internetAddressSettingsDraft}
 											disabled={readOnly || saving || internetAddressRefreshing}
-											className="h-7 gap-1.5 px-2 text-xs"
-										>
-											<RefreshCwIcon className={internetAddressRefreshing ? "size-3 animate-spin" : "size-3"} />
-											{internetAddressRefreshing ? "刷新中" : "刷新公网地址"}
-										</Button>
-									)}
+											refreshing={internetAddressRefreshing}
+											onChange={setInternetAddressSettingsDraft}
+											onRefresh={onRefreshInternetAddresses}
+										/>
+									) : null}
 								</div>
-								{section.title === "动态公网地址" ? (
-									<InternetAddressStatusPanel
-										metadata={metadata}
-										readOnly={readOnly || saving}
-										onConfirm={onConfirmInternetAddress}
-									/>
-								) : null}
+								{section.title === "动态公网地址" ? <InternetAddressStatusPanel metadata={metadata} /> : null}
 								<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
 									{section.fields.map((field) => (
 										<AssetProfileEditField
@@ -447,36 +461,30 @@ export function AssetEditWorkbench({
 	)
 }
 
-function InternetAddressStatusPanel({
-	metadata,
-	readOnly,
-	onConfirm,
-}: {
-	metadata: Record<string, unknown>
-	readOnly: boolean
-	onConfirm: (protocol: "ipv4" | "ipv6") => void
-}) {
+function InternetAddressStatusPanel({ metadata }: { metadata: Record<string, unknown> }) {
 	const states = (["ipv4", "ipv6"] as const).map((protocol) => ({
 		protocol,
 		state: getInternetAddressDisplayState(metadata, protocol),
 	}))
+	const checkedAt = states[0].state.checkedAt
+	const nextCheckAt = states[0].state.nextCheckAt
 	return (
-		<div className="mb-2 grid gap-2 sm:grid-cols-2">
-			{states.map(({ protocol, state }) => (
-				<div key={protocol} className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border/70 bg-surface-soft px-3 py-2">
-					<div className="min-w-0">
-						<div className="text-xs font-medium text-foreground">{protocol.toUpperCase()} · {state.sourceLabel}</div>
-						<div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-							{state.candidate ? `新地址 ${state.candidate}` : state.address || "尚未获取"}
-						</div>
-					</div>
-					{state.address && (state.sourceLabel !== "手动确认" || state.needsConfirmation) ? (
-						<Button type="button" variant="outline" size="sm" className="h-7 shrink-0 px-2 text-xs" disabled={readOnly} onClick={() => onConfirm(protocol)}>
-							{state.needsConfirmation ? "确认新地址" : "标记为已确认"}
-						</Button>
-					) : null}
+		<div className="mb-2 grid gap-2 rounded-md border border-border/70 bg-surface-soft px-3 py-2">
+			<div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-muted-foreground">
+				<span>上次更新：{formatInternetAddressTimestamp(checkedAt)}</span>
+				<span>下次更新：{nextCheckAt ? formatInternetAddressTimestamp(nextCheckAt) : "自动更新已关闭"}</span>
+			</div>
+			{states.some(({ state }) => state.error) ? (
+				<div className="grid gap-1 text-[11px] text-destructive">
+					{states.map(({ protocol, state }) =>
+						state.error ? (
+							<span key={protocol}>
+								{protocol.toUpperCase()}：{state.error}
+							</span>
+						) : null
+					)}
 				</div>
-			))}
+			) : null}
 		</div>
 	)
 }

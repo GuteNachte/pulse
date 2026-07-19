@@ -26,6 +26,7 @@ import { AssetInterfaceManager } from "./components/asset-interface-manager"
 import { getAssetMediaDefaultPreview } from "./components/asset-media-default-preview"
 import { AssetShowcaseTags } from "./components/asset-showcase-tags"
 import { AssetShowcaseWorkspace } from "./components/asset-showcase-workspace"
+import type { InternetAddressAutoRefreshSettings } from "./components/internet-address-auto-refresh-controls"
 import { SelectField, TextAreaField, TextField } from "./components/asset-detail-form-fields"
 import { getAssetMediaRequestKey, notifyAssetMediaChanged, subscribeAssetMediaChanged } from "./asset-media-events"
 import {
@@ -603,6 +604,10 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			metadata.storage_gb = Number(form.get("storage_gb")?.toString().trim())
 		}
 		if (targetType === "internet") {
+			metadata.public_ip_auto_refresh = form.get("public_ip_auto_refresh") === "no" ? "no" : "yes"
+			metadata.public_ip_refresh_interval_minutes = Number(
+				form.get("public_ip_refresh_interval_minutes")?.toString() || 30
+			)
 			const errors = validateInternetAssetValues({
 				name,
 				provider: form.get("vendor")?.toString() ?? "",
@@ -652,24 +657,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		}
 	}
 
-	async function confirmInternetAddress(protocol: "ipv4" | "ipv6") {
-		if (!asset || readOnly || saving) return
-		setSaving(true)
-		try {
-			await pb.send(`/api/pulse/assets/${asset.id}/internet-addresses/confirm`, {
-				method: "POST",
-				body: { protocol },
-			})
-			await loadDetail({ waitSecondary: true, preserveContent: true })
-			toast({ title: `${protocol.toUpperCase()} 已手动确认` })
-		} catch (error) {
-			console.error("confirm internet public address", error)
-			toast({ title: "公网地址确认失败", description: "请稍后重试。", variant: "destructive" })
-		} finally {
-			setSaving(false)
-		}
-	}
-
 	async function runSmartRecognition() {
 		if (!asset || readOnly || saving) return
 		const missing = recognitionRequirements.filter((item) => !item.ok)
@@ -704,6 +691,27 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		} catch (error) {
 			console.error("refresh internet public addresses", error)
 			toast({ title: "刷新公网地址失败", description: "请检查网络连接或稍后重试。", variant: "destructive" })
+		} finally {
+			setInternetAddressRefreshing(false)
+		}
+	}
+
+	async function updateInternetAddressSettings(settings: InternetAddressAutoRefreshSettings) {
+		if (asset?.type !== "internet" || readOnly || internetAddressRefreshing) return
+		setInternetAddressRefreshing(true)
+		try {
+			await pb.send(`/api/pulse/assets/${asset.id}/internet-addresses/settings`, {
+				method: "POST",
+				body: { enabled: settings.enabled, interval_minutes: settings.intervalMinutes },
+			})
+			await loadDetail({ waitSecondary: true, preserveContent: true })
+			toast({
+				title: settings.enabled ? "公网地址自动更新已开启" : "公网地址自动更新已关闭",
+				description: settings.enabled ? "已立即刷新并重新计算下次更新时间。" : "仍可随时手动刷新。",
+			})
+		} catch (error) {
+			console.error("update internet public address settings", error)
+			toast({ title: "自动更新设置失败", description: "请稍后重试。", variant: "destructive" })
 		} finally {
 			setInternetAddressRefreshing(false)
 		}
@@ -1074,9 +1082,9 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 							onOpenRelation={openAddRelationDialog}
 							onOpenMaintenance={openAddMaintenanceDialog}
 							onOpenAttachment={openAddAttachmentDialog}
-								onDelete={deleteAsset}
-								showInterface={asset.type !== "internet"}
-								relationLabel={asset.type === "internet" ? "接入关系" : "关系"}
+							onDelete={deleteAsset}
+							showInterface={asset.type !== "internet"}
+							relationLabel={asset.type === "internet" ? "接入关系" : "关系"}
 						/>
 					</div>
 				</div>
@@ -1091,6 +1099,10 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				assets={state.assets}
 				interfaces={state.allInterfaces}
 				relations={state.relations}
+				readOnly={readOnly}
+				internetAddressRefreshing={internetAddressRefreshing}
+				onRefreshInternetAddresses={refreshInternetAddresses}
+				onUpdateInternetAddressSettings={updateInternetAddressSettings}
 			/>
 
 			<Dialog open={managementDialogOpen} onOpenChange={setManagementDialogOpen}>
@@ -1107,7 +1119,6 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					onSaveProfile={saveAssetProfile}
 					onRunSmartRecognition={runSmartRecognition}
 					onRefreshInternetAddresses={refreshInternetAddresses}
-					onConfirmInternetAddress={confirmInternetAddress}
 					onAddInterface={openAddInterfaceDialog}
 					onEditInterface={openEditInterfaceDialog}
 					onDeleteInterface={(record) => {
@@ -1265,20 +1276,20 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 									{relationGuides
 										.filter((guide) => (asset.type === "internet" ? guide.id === "internet" : guide.id !== "internet"))
 										.map((guide) => (
-										<button
-											key={guide.id}
-											type="button"
-											onClick={() => setRelationForm(getEmptyRelationFormForGuide(guide.id))}
-											className={cn(
-												"rounded-md border px-3 py-2 text-left transition-colors",
-												relationForm.guide === guide.id
-													? "border-foreground/25 bg-card text-foreground shadow-xs"
-													: "border-border/70 bg-card/70 text-muted-foreground hover:bg-card"
-											)}
-										>
-											<div className="text-sm font-medium">{guide.label}</div>
-											<div className="mt-1 text-xs leading-5">{guide.description}</div>
-										</button>
+											<button
+												key={guide.id}
+												type="button"
+												onClick={() => setRelationForm(getEmptyRelationFormForGuide(guide.id))}
+												className={cn(
+													"rounded-md border px-3 py-2 text-left transition-colors",
+													relationForm.guide === guide.id
+														? "border-foreground/25 bg-card text-foreground shadow-xs"
+														: "border-border/70 bg-card/70 text-muted-foreground hover:bg-card"
+												)}
+											>
+												<div className="text-sm font-medium">{guide.label}</div>
+												<div className="mt-1 text-xs leading-5">{guide.description}</div>
+											</button>
 										))}
 								</div>
 							</div>
@@ -1292,7 +1303,9 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 								{asset.type === "internet" ? (
 									<div className="grid gap-2">
 										<Label>关系类型</Label>
-										<div className="flex h-10 items-center rounded-md border border-border/70 bg-surface-soft px-3 text-sm">网络连接</div>
+										<div className="flex h-10 items-center rounded-md border border-border/70 bg-surface-soft px-3 text-sm">
+											网络连接
+										</div>
 										<input type="hidden" name="kind" value="connected_to" />
 									</div>
 								) : (
@@ -1312,13 +1325,15 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 									value={relationForm.target_asset}
 									onChange={updateRelationTarget}
 								/>
-								{asset.type !== "internet" ? <SelectField
-									name="current_interface"
-									label="本资产接口"
-									options={getAssetInterfaceOptions(state.allInterfaces, asset.id)}
-									value={relationForm.current_interface}
-									onChange={(value) => updateRelationFormValue("current_interface", value)}
-								/> : null}
+								{asset.type !== "internet" ? (
+									<SelectField
+										name="current_interface"
+										label="本资产接口"
+										options={getAssetInterfaceOptions(state.allInterfaces, asset.id)}
+										value={relationForm.current_interface}
+										onChange={(value) => updateRelationFormValue("current_interface", value)}
+									/>
+								) : null}
 								<SelectField
 									name="peer_interface"
 									label="对端接口"
@@ -1335,7 +1350,9 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 								{asset.type === "internet" ? (
 									<div className="grid gap-2">
 										<Label>链路类型</Label>
-										<div className="flex h-10 items-center rounded-md border border-border/70 bg-surface-soft px-3 text-sm">外网链路</div>
+										<div className="flex h-10 items-center rounded-md border border-border/70 bg-surface-soft px-3 text-sm">
+											外网链路
+										</div>
 										<input type="hidden" name="link_kind" value="internet" />
 									</div>
 								) : (

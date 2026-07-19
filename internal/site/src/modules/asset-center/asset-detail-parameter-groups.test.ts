@@ -211,6 +211,9 @@ const internet = {
 		down_mbps: 1000,
 		up_mbps: 300,
 		public_ipv4: "203.0.113.10",
+		public_ipv6: "2001:db8::10",
+		public_ip_checked_at: "2026-07-19T00:00:00Z",
+		public_ip_next_check_at: "2026-07-19T00:30:00Z",
 		package_name: "联通千兆融合套餐",
 		recurring_price_cny: 165,
 		billing_cycle: "monthly",
@@ -232,7 +235,15 @@ assertDeepEqual(
 				["上行带宽", "300 Mbps"],
 			],
 		},
-		{ title: "动态公网地址", rows: [["公网 IPv4", "203.0.113.10"]] },
+		{
+			title: "动态公网地址",
+			rows: [
+				["当前公网 IPv4", "203.0.113.10"],
+				["当前公网 IPv6", "2001:db8::10"],
+				["上次更新时间", "2026-07-19 08:00"],
+				["下次更新时间", "2026-07-19 08:30"],
+			],
+		},
 		{
 			title: "套餐与续费",
 			rows: [
@@ -241,5 +252,32 @@ assertDeepEqual(
 				["计费周期", "月付"],
 			],
 		},
+	]
+)
+
+const internetWithoutDetectedAddress = {
+	...internet,
+	id: "internet-no-address",
+	metadata: {
+		access_technology: "ftth",
+		auth_mode: "pppoe",
+		down_mbps: 1000,
+		up_mbps: 300,
+		public_ip_checked_at: "2026-07-19T00:00:00Z",
+		public_ip_next_check_at: "2026-07-19T00:30:00Z",
+		public_ipv4_error: "检测服务不可达",
+		public_ipv6_error: "检测服务不可达",
+	},
+} as unknown as AssetRecord
+
+assertDeepEqual(
+	buildAssetParameterGroups(internetWithoutDetectedAddress)
+		.find((group) => group.title === "动态公网地址")
+		?.rows.map((row) => [row.label, row.value]),
+	[
+		["当前公网 IPv4", "尚未获取"],
+		["当前公网 IPv6", "尚未获取"],
+		["上次更新时间", "2026-07-19 08:00"],
+		["下次更新时间", "2026-07-19 08:30"],
 	]
 )

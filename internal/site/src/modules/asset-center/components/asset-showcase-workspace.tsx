@@ -3,7 +3,12 @@ import type { AssetInterfaceRecord, AssetRecord, AssetRelationRecord } from "@/t
 import { buildAssetParameterGroups } from "../asset-detail-parameter-groups"
 import { getMetadataString } from "../asset-schema"
 import { getInternetStatusLabel } from "../asset-type-specs"
+import { getInternetAddressAutoRefreshSettings } from "../asset-internet-address-status"
 import { AssetHardwareSpecsColumn, AssetOverviewColumn, type AssetParameterRow } from "./asset-parameter-columns"
+import {
+	InternetAddressAutoRefreshControls,
+	type InternetAddressAutoRefreshSettings,
+} from "./internet-address-auto-refresh-controls"
 import { AssetMediaShowcase, type AssetMediaShowcaseItem } from "./asset-media-showcase"
 
 export function AssetShowcaseWorkspace({
@@ -12,18 +17,41 @@ export function AssetShowcaseWorkspace({
 	assets = [],
 	interfaces = [],
 	relations = [],
+	readOnly = false,
+	internetAddressRefreshing = false,
+	onRefreshInternetAddresses,
+	onUpdateInternetAddressSettings,
 }: {
 	asset: AssetRecord
 	media?: { covers: AssetMediaShowcaseItem[] }
 	assets?: AssetRecord[]
 	interfaces?: AssetInterfaceRecord[]
 	relations?: AssetRelationRecord[]
+	readOnly?: boolean
+	internetAddressRefreshing?: boolean
+	onRefreshInternetAddresses?: () => void
+	onUpdateInternetAddressSettings?: (settings: InternetAddressAutoRefreshSettings) => void
 }) {
 	const parameterGroups = useMemo(() => buildAssetParameterGroups(asset), [asset])
 	const identitySections = useMemo(
 		() => buildAssetIdentitySections(asset, assets, interfaces, relations),
 		[asset, assets, interfaces, relations]
 	)
+	const internetAddressSettings = getInternetAddressAutoRefreshSettings(asset.metadata ?? {})
+	const internetAddressGroupActions =
+		asset.type === "internet" && onRefreshInternetAddresses && onUpdateInternetAddressSettings
+			? {
+					动态公网地址: (
+						<InternetAddressAutoRefreshControls
+							settings={internetAddressSettings}
+							disabled={readOnly || internetAddressRefreshing}
+							refreshing={internetAddressRefreshing}
+							onChange={onUpdateInternetAddressSettings}
+							onRefresh={onRefreshInternetAddresses}
+						/>
+					),
+				}
+			: undefined
 
 	return (
 		<section className="grid items-start gap-5 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.7fr)] 2xl:grid-cols-[minmax(22rem,0.72fr)_minmax(0,1.78fr)]">
@@ -37,6 +65,7 @@ export function AssetShowcaseWorkspace({
 			</aside>
 			<AssetHardwareSpecsColumn
 				groups={parameterGroups}
+				groupActions={internetAddressGroupActions}
 				title={asset.type === "internet" ? "线路参数" : "硬件档案"}
 				description={asset.type === "internet" ? "已确认的线路与套餐参数" : undefined}
 				emptyLabel={asset.type === "internet" ? "暂无已确认的线路参数。" : "暂无已确认的硬件参数。"}
@@ -69,9 +98,7 @@ function buildAssetIdentitySections(
 		const targetInterface = interfaces.find(
 			(item) => item.id === getMetadataString(uplink?.metadata, "target_interface")
 		)
-		const relationLabel = target
-			? [target.name, targetInterface?.name].filter(Boolean).join(" · ")
-			: "待关联接入设备"
+		const relationLabel = target ? [target.name, targetInterface?.name].filter(Boolean).join(" · ") : "待关联接入设备"
 		return [
 			{
 				title: "基础资料",

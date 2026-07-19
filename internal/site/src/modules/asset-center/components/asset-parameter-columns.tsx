@@ -63,11 +63,13 @@ export function AssetHardwareSpecsColumn({
 	title = "硬件档案",
 	description = "按设备类别整理的已确认规格",
 	emptyLabel = "暂无已确认的硬件参数。",
+	groupActions,
 }: {
 	groups: AssetParameterGroup[]
 	title?: string
 	description?: string | null
 	emptyLabel?: string
+	groupActions?: Record<string, ReactNode>
 }) {
 	return (
 		<Card className="border-border/70 bg-card shadow-none xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[auto_minmax(0,1fr)]">
@@ -82,7 +84,7 @@ export function AssetHardwareSpecsColumn({
 			</CardHeader>
 			<CardContent className="grid gap-3 p-4 sm:grid-cols-2 xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain">
 				{groups.length > 0 ? (
-					groups.map((group) => <HardwareSpecGroup key={group.id} group={group} />)
+					groups.map((group) => <HardwareSpecGroup key={group.id} group={group} action={groupActions?.[group.title]} />)
 				) : (
 					<div className="grid min-h-28 place-items-center gap-2 rounded-md border border-dashed border-border/70 bg-surface-soft px-4 py-5 text-center sm:col-span-2">
 						<ListChecksIcon className="size-5 text-muted-foreground" />
@@ -94,7 +96,7 @@ export function AssetHardwareSpecsColumn({
 	)
 }
 
-function HardwareSpecGroup({ group }: { group: AssetParameterGroup }) {
+function HardwareSpecGroup({ group, action }: { group: AssetParameterGroup; action?: ReactNode }) {
 	const rowSections = groupRowsBySection(group.rows)
 	const hasNamedSections = rowSections.some((section) => section.title)
 	return (
@@ -104,14 +106,17 @@ function HardwareSpecGroup({ group }: { group: AssetParameterGroup }) {
 				group.rows.length > 6 && "sm:col-span-2"
 			)}
 		>
-			<div className="flex min-w-0 items-start gap-2">
-				<span className="grid size-8 shrink-0 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
-					{group.icon}
-				</span>
-				<div className="min-w-0">
-					<div className="truncate text-sm font-semibold text-foreground">{group.title}</div>
-					<div className="mt-0.5 truncate text-[11px] text-muted-foreground">{group.summary}</div>
+			<div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+				<div className="flex min-w-0 items-start gap-2">
+					<span className="grid size-8 shrink-0 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
+						{group.icon}
+					</span>
+					<div className="min-w-0">
+						<div className="truncate text-sm font-semibold text-foreground">{group.title}</div>
+						<div className="mt-0.5 truncate text-[11px] text-muted-foreground">{group.summary}</div>
+					</div>
 				</div>
+				{action ? <div className="ms-auto min-w-0">{action}</div> : null}
 			</div>
 			<div className="grid gap-2 border-t border-border/60 pt-2">
 				{rowSections.map((section) => (

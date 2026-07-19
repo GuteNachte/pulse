@@ -25,6 +25,10 @@ import {
 } from "./asset-schema.ts"
 import { normalizeMemorySpecification } from "./asset-memory-spec.ts"
 import { normalizeNetworkInterfaceSummary } from "./asset-runtime-hardware.ts"
+import {
+	formatInternetAddressTimestamp,
+	getInternetAddressAutoRefreshSettings,
+} from "./asset-internet-address-status.ts"
 export function buildAssetParameterGroups(asset: AssetRecord): AssetParameterGroup[] {
 	const useHostHardwareProfile = HOST_ASSET_TYPES.includes(asset.type)
 	const archiveGroups = useHostHardwareProfile
@@ -55,7 +59,45 @@ export function buildAssetParameterGroups(asset: AssetRecord): AssetParameterGro
 					summary: getParameterGroupSummary(group.rows),
 				}))
 		: []
-	return dedupeParameterGroups([...archiveGroups, ...hostGroups])
+	const groups = dedupeParameterGroups([...archiveGroups, ...hostGroups])
+	return asset.type === "internet" ? addInternetAddressStatusRows(asset, groups) : groups
+}
+
+function addInternetAddressStatusRows(asset: AssetRecord, groups: AssetParameterGroup[]) {
+	const ipv4 = getMetadataString(asset.metadata, "public_ipv4")
+	const ipv6 = getMetadataString(asset.metadata, "public_ipv6")
+	const checkedAt = getMetadataString(asset.metadata, "public_ip_checked_at")
+	const nextCheckAt = getMetadataString(asset.metadata, "public_ip_next_check_at")
+	const settings = getInternetAddressAutoRefreshSettings(asset.metadata ?? {})
+	const rows: AssetParameterRow[] = [
+		{ label: "当前公网 IPv4", value: ipv4 || "尚未获取" },
+		{ label: "当前公网 IPv6", value: ipv6 || "尚未获取" },
+		{ label: "上次更新时间", value: formatInternetAddressTimestamp(checkedAt) },
+		{
+			label: "下次更新时间",
+			value: nextCheckAt
+				? formatInternetAddressTimestamp(nextCheckAt)
+				: settings.enabled
+					? "等待首次更新"
+					: "自动更新已关闭",
+		},
+	]
+	const existing = groups.find((group) => group.title === "动态公网地址")
+	if (existing) {
+		return groups.map((group) =>
+			group.title === "动态公网地址" ? { ...group, rows, summary: ipv4 || ipv6 || "尚未获取" } : group
+		)
+	}
+	const addressGroup: AssetParameterGroup = {
+		id: "internet-public-addresses",
+		title: "动态公网地址",
+		summary: ipv4 || ipv6 || "尚未获取",
+		icon: createElement(Globe2Icon, { className: "size-4" }),
+		rows,
+	}
+	const lineParametersIndex = groups.findIndex((group) => group.title === "线路参数")
+	const insertAt = lineParametersIndex >= 0 ? lineParametersIndex + 1 : 0
+	return [...groups.slice(0, insertAt), addressGroup, ...groups.slice(insertAt)]
 }
 
 const hiddenArchiveParameterGroupTitles = new Set([
