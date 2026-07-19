@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 
 import {
 	buildRelationMetadata,
+	getAssetDetailRelationRows,
 	getRelationTargetOptions,
 	getEmptyRelationFormForGuide,
 	getPeerInterfaceOptions,
@@ -26,6 +27,39 @@ const assets = [
 	{ id: "ont", name: "光猫", type: "ont" },
 	{ id: "switch", name: "交换机", type: "switch" },
 ]
+
+assert.deepEqual(
+	getAssetDetailRelationRows(
+		"ont",
+		[{ id: "ont", name: "光猫", type: "ont" }] as never,
+		[
+			{ id: "ont-pon", asset: "ont", name: "PON 上联", kind: "pon" },
+			{ id: "ont-wifi-5", asset: "ont", name: "5 GHz Wi-Fi", kind: "wifi" },
+		] as never,
+		[
+			{
+				id: "internet-relation",
+				source_asset: "internet",
+				target_asset: "ont",
+				kind: "connected_to",
+				metadata: { link_kind: "internet", target_interface: "ont-pon" },
+				expand: { source_asset: { id: "internet", name: "宽带", type: "internet" } },
+			},
+			{
+				id: "wifi-relation",
+				source_asset: "phone",
+				target_asset: "ont",
+				kind: "connected_to",
+				metadata: { link_kind: "wifi", target_interface: "ont-wifi-5" },
+				expand: { source_asset: { id: "phone", name: "手机", type: "phone" } },
+			},
+		] as never
+	),
+	[
+		{ label: "互联网接入", value: "宽带 · PON 上联" },
+		{ label: "无线终端", value: "手机 · 5 GHz Wi-Fi" },
+	]
+)
 
 assert.deepEqual(
 	getRelationTargetOptions(assets as never, "phone", "network").map((item) => item.value),

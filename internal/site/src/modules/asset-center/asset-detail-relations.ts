@@ -277,6 +277,48 @@ export function getRelationEndpointLabel(
 	return `端点：${getEndpointLabel(sourceAsset, sourceInterface)} -> ${getEndpointLabel(targetAsset, targetInterface)}`
 }
 
+export function getAssetDetailRelationRows(
+	assetId: string,
+	assets: AssetRecord[],
+	interfaces: AssetInterfaceRecord[],
+	relations: AssetRelationRecord[]
+) {
+	const assetMap = new Map(assets.map((item) => [item.id, item]))
+	const interfaceMap = new Map(interfaces.map((item) => [item.id, item]))
+	const linkKindPriority: Record<string, number> = { internet: 0, ethernet: 1, wifi: 2 }
+	return relations
+		.filter((relation) => relation.source_asset === assetId || relation.target_asset === assetId)
+		.map((relation) => {
+			const currentIsSource = relation.source_asset === assetId
+			const peerAssetKey = currentIsSource ? "target_asset" : "source_asset"
+			const expandedPeer = relation.expand?.[peerAssetKey]
+			const peerAsset =
+				assetMap.get(currentIsSource ? relation.target_asset : relation.source_asset) ??
+				(expandedPeer && !Array.isArray(expandedPeer) ? (expandedPeer as AssetRecord) : undefined)
+			const currentInterface = interfaceMap.get(
+				getMetadataString(relation.metadata, currentIsSource ? "source_interface" : "target_interface")
+			)
+			const peerInterface = interfaceMap.get(
+				getMetadataString(relation.metadata, currentIsSource ? "target_interface" : "source_interface")
+			)
+			const linkKind = getMetadataString(relation.metadata, "link_kind")
+			return {
+				label:
+					linkKind === "internet"
+						? "互联网接入"
+						: linkKind === "wifi"
+							? "无线终端"
+							: linkKind === "ethernet"
+								? "有线连接"
+								: getRelationKindLabel(relation.kind),
+				value: [peerAsset?.name ?? "未知资产", currentInterface?.name ?? peerInterface?.name].filter(Boolean).join(" · "),
+				priority: linkKindPriority[linkKind] ?? 9,
+			}
+		})
+		.sort((left, right) => left.priority - right.priority || left.value.localeCompare(right.value, "zh-CN"))
+		.map(({ label, value }) => ({ label, value }))
+}
+
 function getEndpointLabel(asset?: AssetRecord, assetInterface?: AssetInterfaceRecord) {
 	return [
 		asset?.name,

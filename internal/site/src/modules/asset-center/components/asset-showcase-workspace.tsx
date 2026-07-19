@@ -4,6 +4,7 @@ import { buildAssetParameterGroups } from "../asset-detail-parameter-groups"
 import { getMetadataString } from "../asset-schema"
 import { getInternetStatusLabel } from "../asset-type-specs"
 import { getInternetAddressAutoRefreshSettings } from "../asset-internet-address-status"
+import { getAssetDetailRelationRows } from "../asset-detail-relations"
 import { AssetHardwareSpecsColumn, AssetOverviewColumn, type AssetParameterRow } from "./asset-parameter-columns"
 import {
 	InternetAddressAutoRefreshControls,
@@ -138,6 +139,14 @@ function buildAssetIdentitySections(
 			title: "资料",
 			rows: compact([linkRow("官方网站", getMetadataString(metadata, "official_url"))]),
 		},
+		...(asset.type === "ont"
+			? [
+					{
+						title: "接入关系",
+						rows: getAssetDetailRelationRows(asset.id, assets, interfaces, relations),
+					},
+				]
+			: []),
 	].filter((section) => section.rows.length > 0)
 }
 
