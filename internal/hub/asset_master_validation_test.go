@@ -32,8 +32,14 @@ func TestAssetMasterValidation(t *testing.T) {
 	t.Run("RequiresStrictONTProfile", func(t *testing.T) {
 		testAssetMasterValidationRequiresStrictONTProfile(t, hub)
 	})
+	t.Run("RequiresStrictSwitchProfile", func(t *testing.T) {
+		testAssetMasterValidationRequiresStrictSwitchProfile(t, hub)
+	})
 	t.Run("ValidatesONTInterfaceState", func(t *testing.T) {
 		testAssetInterfaceValidationValidatesONTState(t, hub)
+	})
+	t.Run("ValidatesSwitchInterfaceState", func(t *testing.T) {
+		testAssetInterfaceValidationValidatesSwitchState(t, hub)
 	})
 	t.Run("KeepsSinglePrimaryInterface", func(t *testing.T) {
 		testAssetInterfaceValidationKeepsSinglePrimaryInterface(t, hub)
@@ -59,6 +65,23 @@ func TestAssetMasterValidation(t *testing.T) {
 	t.Run("RejectsCrossUserLocationParentAndCycles", func(t *testing.T) {
 		testAssetLocationValidationRejectsCrossUserParentAndCycles(t, hub)
 	})
+}
+
+func testAssetMasterValidationRequiresStrictSwitchProfile(t *testing.T, hub *pulseTests.TestHub) {
+	user, err := pulseTests.CreateUser(hub, "asset-switch-profile@example.com", "password")
+	require.NoError(t, err)
+	token, err := user.NewAuthToken()
+	require.NoError(t, err)
+	headers := map[string]string{"Authorization": token}
+
+	validBody := fmt.Sprintf(`{"user":"%s","name":"通用交换机","type":"switch","status":"active","vendor":"示例品牌","model":"示例型号","metadata":{"management_level":"smart","management_access":"web","vlan_status":"disabled","port_isolation_status":"disabled","link_aggregation_status":"unsupported","poe_status":"unsupported","power_mode":"external"}}`, user.Id)
+	valid := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records", strings.NewReader(validBody), headers)
+	require.Equal(t, http.StatusOK, valid.Status, valid.Body)
+
+	invalidBody := fmt.Sprintf(`{"user":"%s","name":"错误交换机","type":"switch","status":"active","metadata":{"management_level":"router","wifi_standard":"Wi-Fi 7"}}`, user.Id)
+	invalid := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records", strings.NewReader(invalidBody), headers)
+	require.Equal(t, http.StatusBadRequest, invalid.Status, invalid.Body)
+	require.Contains(t, invalid.Body, "管理级别只能选择")
 }
 
 func testAssetRelationValidationEnforcesWiFiBoundary(t *testing.T, hub *pulseTests.TestHub) {
@@ -157,6 +180,28 @@ func testAssetInterfaceValidationValidatesONTState(t *testing.T, hub *pulseTests
 	validBody := fmt.Sprintf(`{"user":"%s","asset":"%s","name":"LAN 1","kind":"lan","speed_mbps":2500,"source":"manual","metadata":{"enabled":true,"role":"lan"}}`, user.Id, ont.Id)
 	valid := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/asset_interfaces/records", strings.NewReader(validBody), headers)
 	require.Equal(t, http.StatusOK, valid.Status, valid.Body)
+}
+
+func testAssetInterfaceValidationValidatesSwitchState(t *testing.T, hub *pulseTests.TestHub) {
+	user, err := pulseTests.CreateUser(hub, "asset-switch-interface@example.com", "password")
+	require.NoError(t, err)
+	token, err := user.NewAuthToken()
+	require.NoError(t, err)
+	headers := map[string]string{"Authorization": token}
+	switchAsset, err := pulseTests.CreateRecord(hub, "assets", map[string]any{"user": user.Id, "name": "接口验收交换机", "type": "switch", "status": "active"})
+	require.NoError(t, err)
+	validBody := fmt.Sprintf(`{"user":"%s","asset":"%s","name":"端口 1","kind":"ethernet","speed_mbps":2500,"connected":true,"source":"manual","metadata":{"enabled":true,"role":"uplink","negotiated_speed_mbps":1000}}`, user.Id, switchAsset.Id)
+	valid := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/asset_interfaces/records", strings.NewReader(validBody), headers)
+	require.Equal(t, http.StatusOK, valid.Status, valid.Body)
+	for _, tc := range []struct{ body, message string }{
+		{`{"name":"无线","kind":"wifi","source":"manual","metadata":{"enabled":true,"role":"uplink"}}`, "交换机接口只能选择有线或光纤"},
+		{`{"name":"端口 2","kind":"ethernet","connected":true,"source":"manual","metadata":{"enabled":false,"role":"downlink"}}`, "未启用接口不能标记为已接线"},
+	} {
+		body := strings.TrimSuffix(tc.body, "}") + fmt.Sprintf(`,"user":"%s","asset":"%s"}`, user.Id, switchAsset.Id)
+		response := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/asset_interfaces/records", strings.NewReader(body), headers)
+		require.Equal(t, http.StatusBadRequest, response.Status, response.Body)
+		require.Contains(t, response.Body, tc.message)
+	}
 }
 
 func testAssetMasterValidationRequiresStrictONTProfile(t *testing.T, hub *pulseTests.TestHub) {

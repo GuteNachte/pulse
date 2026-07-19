@@ -28,8 +28,6 @@
 - Modify: internal/site/src/modules/asset-center/asset-type-specs.ts
 - Modify: internal/site/src/modules/asset-center/asset-type-specs.test.ts
 - Modify: internal/site/src/modules/asset-center/asset-schema.ts
-- Modify: internal/site/src/modules/asset-center/components/asset-edit-profile-fields.tsx
-- Modify: internal/site/src/modules/asset-center/components/asset-edit-profile-fields.test.ts
 
 - [ ] **Step 1: 写失败契约测试**
 
@@ -77,9 +75,7 @@ const switchFeatureStatusOptions = [
 ] as const
 ~~~
 
-分组固定为“接入信息”“硬件与端口能力”“管理与网络能力”“备注”。管理 IPv4、IPv6、URL、各类端口数量、端口速率与交换容量为可选手工字段；管理级别、供电方式、PoE、VLAN、端口隔离、链路聚合为 fixed_choice。管理入口使用新增 fixed_multi_choice，选项为无、Web、App、桌面客户端和命令行，保存为 metadata.management_access 字符串数组。PoE 标准和供电预算仅在 PoE 状态不是 unsupported 时显示。让 getAssetTypeSpec() 和 validateAssetImportMetadata() 都使用此规格。
-
-为 AssetFieldInputMode 新增 fixed_multi_choice；在 asset-edit-profile-fields.tsx 用项目已有 Checkbox 呈现固定多选项，至少保留一个“无”互斥选项，选择“无”时清空其他项，选择任一真实入口时移除“无”。组件测试覆盖数组回填、互斥切换和保存值稳定排序。
+分组固定为“接入信息”“硬件与端口能力”“管理与网络能力”“备注”。管理 IPv4、IPv6、URL、各类端口数量、端口速率与交换容量为可选手工字段；管理级别、主要管理入口、供电方式、PoE、VLAN、端口隔离、链路聚合为 fixed_choice。PoE 标准和供电预算仅在 PoE 状态不是 unsupported 时显示。让 getAssetTypeSpec() 和 validateAssetImportMetadata() 都使用此规格。
 
 - [ ] **Step 4: 移除旧字段双来源并验证**
 
@@ -89,7 +85,7 @@ const switchFeatureStatusOptions = [
 cd internal/site
 npm run test:asset-type-spec
 npm run typecheck
-git add src/modules/asset-center/asset-type-specs.ts src/modules/asset-center/asset-type-specs.test.ts src/modules/asset-center/asset-schema.ts src/modules/asset-center/components/asset-edit-profile-fields.tsx src/modules/asset-center/components/asset-edit-profile-fields.test.ts
+git add src/modules/asset-center/asset-type-specs.ts src/modules/asset-center/asset-type-specs.test.ts src/modules/asset-center/asset-schema.ts
 git commit -m "feat: define generic switch template"
 ~~~
 
@@ -193,7 +189,7 @@ case "switch":
   return h.validateSwitchAssetRecord(e)
 ~~~
 
-validateSwitchAssetRecord() 仅允许规格 metadata、asset_tag、official_url 与 official_image_url；拒绝规范化后命中 password、secret、token、credential、ssid、qrcode 的键；验证管理级别、供电方式、PoE、VLAN、端口隔离、链路聚合的固定选项；验证 management_access 为唯一固定值构成的数组，且无不能与真实入口并存；拒绝负数端口数量、端口速率、交换容量和 PoE 预算。PoE 不支持时拒绝写入 PoE 标准或预算。历史 metadata 仅在原记录中存在且未修改时只读兼容。
+validateSwitchAssetRecord() 仅允许规格 metadata、asset_tag、official_url 与 official_image_url；拒绝规范化后命中 password、secret、token、credential、ssid、qrcode 的键；验证管理级别、主要管理入口、供电方式、PoE、VLAN、端口隔离、链路聚合的固定选项；拒绝负数端口数量、端口速率、交换容量和 PoE 预算。PoE 不支持时拒绝写入 PoE 标准或预算。历史 metadata 仅在原记录中存在且未修改时只读兼容。
 
 在 validateAssetInterfaceProfileRequest() 为 asset.type == "switch" 调用新函数。该函数使用：
 

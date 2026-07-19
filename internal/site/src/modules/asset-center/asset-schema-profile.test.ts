@@ -50,9 +50,9 @@ const tabletMemoryField = getAssetFormSections("tablet")
 	?.fields.find((field) => field.key === "memory_gb")
 assert.equal(tabletMemoryField?.required, undefined)
 
-const switchFields = getSectionFieldKeys("switch", "网络参数")
-assert.equal(switchFields.includes("port_count"), true)
-assert.equal(switchFields.includes("vlan_note"), true)
+const switchFields = getSectionFieldKeys("switch", "管理与网络能力")
+assert.equal(switchFields.includes("management_level"), true)
+assert.equal(switchFields.includes("vlan_status"), true)
 assert.equal(switchFields.includes("wifi_standard"), false)
 
 const accessPointFields = getSectionFieldKeys("ap", "网络参数")
@@ -130,7 +130,7 @@ assert.equal(
 	"虚拟机档案不应再提供计划接入 Agent 字段"
 )
 
-const switchHardwareFields = getSectionFieldKeys("switch", "网络参数")
+const switchHardwareFields = getSectionFieldKeys("switch", "硬件与端口能力")
 assert.equal(switchHardwareFields.includes("poe_budget_w"), true)
 assert.equal(switchHardwareFields.includes("switching_capacity_gbps"), true)
 

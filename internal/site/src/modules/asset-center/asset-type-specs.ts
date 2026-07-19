@@ -101,6 +101,34 @@ const ontStatusOptions = [
 	{ value: "retired", label: "已停用" },
 ] as const
 
+const switchManagementLevelOptions = [
+	{ value: "unmanaged", label: "非网管" },
+	{ value: "smart", label: "轻管理" },
+	{ value: "managed", label: "全管理" },
+] as const
+
+const switchManagementAccessOptions = [
+	{ value: "none", label: "无" },
+	{ value: "web", label: "Web" },
+	{ value: "app", label: "App" },
+	{ value: "desktop", label: "桌面客户端" },
+	{ value: "cli", label: "命令行" },
+] as const
+
+const switchFeatureStatusOptions = [
+	{ value: "unsupported", label: "不支持" },
+	{ value: "disabled", label: "未启用" },
+	{ value: "enabled", label: "已启用" },
+] as const
+
+const switchPowerModeOptions = [
+	{ value: "external", label: "外置电源" },
+	{ value: "internal", label: "内置电源" },
+	{ value: "poe_powered", label: "PoE 受电" },
+	{ value: "other", label: "其他" },
+	{ value: "unknown", label: "未确认" },
+] as const
+
 export const internetAssetTypeSpec: AssetTypeSpec = {
 	type: "internet",
 	detailTitle: "线路档案",
@@ -376,6 +404,51 @@ export const ontAssetTypeSpec: AssetTypeSpec = {
 	],
 }
 
+export const switchAssetTypeSpec: AssetTypeSpec = {
+	type: "switch",
+	detailTitle: "交换机档案",
+	providerOptions: [],
+	statusOptions: ontStatusOptions,
+	notApplicable: { location: false, role: true, interfaces: false, hardware: false },
+	sections: [
+		{
+			title: "接入信息",
+			fields: [
+				{ key: "fixed_ipv4", label: "管理 IPv4", group: "接入信息", inputMode: "manual_optional", source: "metadata" },
+				{ key: "fixed_ipv6", label: "管理 IPv6", group: "接入信息", inputMode: "manual_optional", source: "metadata" },
+				{ key: "mac", label: "MAC", group: "接入信息", inputMode: "manual_optional", source: "metadata" },
+				{ key: "management_url", label: "管理 URL", group: "接入信息", inputMode: "manual_optional", source: "metadata", type: "url" },
+			],
+		},
+		{
+			title: "硬件与端口能力",
+			fields: [
+				{ key: "ethernet_port_count", label: "电口数量", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
+				{ key: "optical_port_count", label: "光口数量", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
+				{ key: "other_port_count", label: "其他端口数量", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
+				{ key: "default_ethernet_speed_mbps", label: "默认电口速率 Mbps", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
+				{ key: "default_optical_speed_mbps", label: "默认光口速率 Mbps", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
+				{ key: "switching_capacity_gbps", label: "交换容量 Gbps", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
+				fixedChoiceField("power_mode", "供电方式", "硬件与端口能力", switchPowerModeOptions),
+				fixedChoiceField("poe_status", "PoE", "硬件与端口能力", switchFeatureStatusOptions),
+				{ key: "poe_standard", label: "PoE 标准", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata" },
+				{ key: "poe_budget_w", label: "PoE 供电预算 W", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
+			],
+		},
+		{
+			title: "管理与网络能力",
+			fields: [
+				fixedChoiceField("management_level", "管理级别", "管理与网络能力", switchManagementLevelOptions),
+				fixedChoiceField("management_access", "主要管理入口", "管理与网络能力", switchManagementAccessOptions),
+				fixedChoiceField("vlan_status", "VLAN", "管理与网络能力", switchFeatureStatusOptions),
+				fixedChoiceField("port_isolation_status", "端口隔离", "管理与网络能力", switchFeatureStatusOptions),
+				fixedChoiceField("link_aggregation_status", "链路聚合", "管理与网络能力", switchFeatureStatusOptions),
+			],
+		},
+		{ title: "备注", fields: [{ key: "notes", label: "备注", group: "备注", inputMode: "manual_optional", source: "asset", span: "full" }] },
+	],
+}
+
 function capturedField(key: string, label: string, group: string): AssetTypeFieldSpec {
 	return { key, label, group, inputMode: "captured_candidate", source: "metadata" }
 }
@@ -392,6 +465,7 @@ function fixedChoiceField(
 export function getAssetTypeSpec(type: AssetType) {
 	if (type === "internet") return internetAssetTypeSpec
 	if (type === "ont") return ontAssetTypeSpec
+	if (type === "switch") return switchAssetTypeSpec
 	return undefined
 }
 
@@ -452,12 +526,12 @@ const sensitiveAssetMetadataKeys = new Set([
 export function validateAssetImportMetadata(type: AssetType, metadata: Record<string, string>) {
 	const errors: string[] = []
 	const allowed =
-		type === "ont"
+		 type === "ont" || type === "switch"
 			? new Set([
 					"asset_tag",
 					"official_url",
 					"official_image_url",
-					...ontAssetTypeSpec.sections
+					...(type === "ont" ? ontAssetTypeSpec : switchAssetTypeSpec).sections
 						.flatMap((section) => section.fields)
 						.filter((field) => field.source === "metadata")
 						.map((field) => field.key),
@@ -470,7 +544,7 @@ export function validateAssetImportMetadata(type: AssetType, metadata: Record<st
 			continue
 		}
 		if (allowed && !allowed.has(key)) {
-			errors.push(`字段 metadata.${key} 不属于光猫 / ONT 严格模板`)
+			errors.push(`字段 metadata.${key} 不属于${type === "switch" ? "交换机" : "光猫 / ONT"} 严格模板`)
 		}
 	}
 	return errors

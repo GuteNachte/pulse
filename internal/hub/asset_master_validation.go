@@ -134,7 +134,13 @@ func (h *Hub) validateAssetInterfaceProfileRequest(e *core.RecordRequestEvent) e
 		return nil
 	}
 	assetRecord, err := h.FindRecordById("assets", strings.TrimSpace(e.Record.GetString("asset")))
-	if err != nil || strings.TrimSpace(assetRecord.GetString("type")) != "ont" {
+	if err != nil {
+		return nil
+	}
+	if strings.TrimSpace(assetRecord.GetString("type")) == "switch" {
+		return h.validateSwitchInterfaceProfileRequest(e)
+	}
+	if strings.TrimSpace(assetRecord.GetString("type")) != "ont" {
 		return nil
 	}
 	metadata := recordJSONMap(e.Record, "metadata")
@@ -176,6 +182,36 @@ func (h *Hub) validateAssetInterfaceProfileRequest(e *core.RecordRequestEvent) e
 	return nil
 }
 
+func (h *Hub) validateSwitchInterfaceProfileRequest(e *core.RecordRequestEvent) error {
+	metadata := recordJSONMap(e.Record, "metadata")
+	if !stringInSet(strings.TrimSpace(e.Record.GetString("kind")), "ethernet", "optical") {
+		return e.BadRequestError("交换机接口只能选择有线或光纤。", nil)
+	}
+	enabled, ok := metadata["enabled"].(bool)
+	if !ok {
+		return e.BadRequestError("交换机接口必须明确填写启用状态。", nil)
+	}
+	if !stringInSet(metadataString(metadata, "role"), "uplink", "downlink", "general") {
+		return e.BadRequestError("交换机接口角色只能选择上联、下联或通用。", nil)
+	}
+	if !enabled && e.Record.GetBool("connected") {
+		return e.BadRequestError("未启用接口不能标记为已接线。", nil)
+	}
+	if e.Record.GetFloat("speed_mbps") < 0 {
+		return e.BadRequestError("接口速率不能小于 0。", nil)
+	}
+	if value, exists := metadata["negotiated_speed_mbps"]; exists && !isNonNegativeNumber(value) {
+		return e.BadRequestError("实际协商速率不能小于 0。", nil)
+	}
+	allowed := map[string]bool{"enabled": true, "role": true, "connection_note": true, "negotiated_speed_mbps": true, "notes": true}
+	for key := range metadata {
+		if !allowed[key] {
+			return e.BadRequestError("字段 "+key+" 不属于交换机接口模板。", nil)
+		}
+	}
+	return nil
+}
+
 func (h *Hub) validateAssetParentRequest(e *core.RecordRequestEvent) error {
 	if e == nil || e.Record == nil {
 		return nil
@@ -209,6 +245,8 @@ func (h *Hub) validateAssetRequiredProfileRequest(e *core.RecordRequestEvent) er
 		return h.validateInternetAssetRecord(e)
 	case "ont":
 		return h.validateONTAssetRecord(e)
+	case "switch":
+		return h.validateSwitchAssetRecord(e)
 	case "phone":
 		if !recordMetadataPositiveNumber(e.Record, "memory_gb") {
 			return e.BadRequestError("手机资产必须填写运行内存。", nil)

@@ -4,6 +4,7 @@ import {
 	internetAssetTypeSpec,
 	normalizeInternetProvider,
 	ontAssetTypeSpec,
+	switchAssetTypeSpec,
 	type AssetTypeSpec,
 } from "./asset-type-specs.ts"
 
@@ -644,6 +645,7 @@ function assetTypeSpecSectionsToFormSections(spec: AssetTypeSpec): AssetFieldSec
 
 const internetSections = assetTypeSpecSectionsToFormSections(internetAssetTypeSpec)
 const ontSections = assetTypeSpecSectionsToFormSections(ontAssetTypeSpec)
+const switchSections = assetTypeSpecSectionsToFormSections(switchAssetTypeSpec)
 
 const vmFields: AssetFieldDefinition[] = [
 	{ key: "virtualization_platform", label: "虚拟化平台", source: "metadata", placeholder: "PVE / Hyper-V / Docker VM" },
@@ -1170,6 +1172,9 @@ export function getAssetFormSections(type: AssetType): AssetFieldSection[] {
 	}
 	if (type === "ont") {
 		return ontSections
+	}
+	if (type === "switch") {
+		return switchSections
 	}
 	if (NETWORK_ASSET_TYPES.includes(type)) {
 		return [

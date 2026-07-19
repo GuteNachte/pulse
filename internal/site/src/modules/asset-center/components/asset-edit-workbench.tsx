@@ -396,6 +396,7 @@ export function AssetEditWorkbench({
 									<div className="mt-3">
 										<AssetInterfaceManager
 											interfaces={state.interfaces}
+											assetType={asset.type}
 											readOnly={readOnly}
 											compact
 											onAdd={onAddInterface}

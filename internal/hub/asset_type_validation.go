@@ -49,6 +49,65 @@ var internetAssetAllowedMetadataFields = map[string]bool{
 	"auto_renew":                         true,
 }
 
+var switchAssetAllowedMetadataFields = map[string]bool{
+	"asset_tag": true, "official_url": true, "official_image_url": true,
+	"fixed_ipv4": true, "fixed_ipv6": true, "mac": true, "management_url": true,
+	"ethernet_port_count": true, "optical_port_count": true, "other_port_count": true,
+	"default_ethernet_speed_mbps": true, "default_optical_speed_mbps": true, "switching_capacity_gbps": true,
+	"power_mode": true, "poe_status": true, "poe_standard": true, "poe_budget_w": true,
+	"management_level": true, "management_access": true, "vlan_status": true, "port_isolation_status": true, "link_aggregation_status": true,
+}
+
+func (h *Hub) validateSwitchAssetRecord(e *core.RecordRequestEvent) error {
+	if e == nil || e.Record == nil || strings.TrimSpace(e.Record.GetString("type")) != "switch" {
+		return nil
+	}
+	metadata := recordJSONMap(e.Record, "metadata")
+	if value := metadataString(metadata, "management_level"); value != "" && !stringInSet(value, "unmanaged", "smart", "managed") {
+		return e.BadRequestError("管理级别只能选择非网管、轻管理或全管理。", nil)
+	}
+	if value := metadataString(metadata, "management_access"); value != "" && !stringInSet(value, "none", "web", "app", "desktop", "cli") {
+		return e.BadRequestError("主要管理入口只能选择无、Web、App、桌面客户端或命令行。", nil)
+	}
+	for _, key := range []string{"poe_status", "vlan_status", "port_isolation_status", "link_aggregation_status"} {
+		if value := metadataString(metadata, key); value != "" && !stringInSet(value, "unsupported", "disabled", "enabled") {
+			return e.BadRequestError(""+map[string]string{"poe_status": "PoE", "vlan_status": "VLAN", "port_isolation_status": "端口隔离", "link_aggregation_status": "链路聚合"}[key]+"状态只能选择不支持、未启用或已启用。", nil)
+		}
+	}
+	if value := metadataString(metadata, "power_mode"); value != "" && !stringInSet(value, "external", "internal", "poe_powered", "other", "unknown") {
+		return e.BadRequestError("供电方式只能选择外置电源、内置电源、PoE 受电、其他或未确认。", nil)
+	}
+	for _, key := range []string{"ethernet_port_count", "optical_port_count", "other_port_count"} {
+		if value, exists := metadata[key]; exists && value != nil && !isNonNegativeInteger(value) {
+			return e.BadRequestError("端口数量必须是非负整数。", nil)
+		}
+	}
+	for _, key := range []string{"default_ethernet_speed_mbps", "default_optical_speed_mbps", "switching_capacity_gbps", "poe_budget_w"} {
+		if value, exists := metadata[key]; exists && value != nil && !isNonNegativeNumber(value) {
+			return e.BadRequestError("端口速率、交换容量和 PoE 预算不能小于 0。", nil)
+		}
+	}
+	if metadataString(metadata, "poe_status") == "unsupported" && (metadataString(metadata, "poe_standard") != "" || metadataString(metadata, "poe_budget_w") != "") {
+		return e.BadRequestError("不支持 PoE 的交换机不能填写 PoE 标准或供电预算。", nil)
+	}
+	originalMetadata := map[string]any{}
+	if original := e.Record.Original(); original != nil {
+		originalMetadata = recordJSONMap(original, "metadata")
+	}
+	for key, value := range metadata {
+		if isSensitiveONTMetadataKey(key) {
+			return e.BadRequestError("不允许保存密码、认证凭据或 Wi-Fi 名称。", nil)
+		}
+		if switchAssetAllowedMetadataFields[key] {
+			continue
+		}
+		if originalValue, existed := originalMetadata[key]; !existed || !reflect.DeepEqual(originalValue, value) {
+			return e.BadRequestError("字段 "+key+" 不属于交换机严格模板。", nil)
+		}
+	}
+	return nil
+}
+
 func (h *Hub) validateInternetAssetRecord(e *core.RecordRequestEvent) error {
 	if e == nil || e.Record == nil || strings.TrimSpace(e.Record.GetString("type")) != "internet" {
 		return nil
@@ -235,6 +294,15 @@ func isNonNegativeInteger(value any) bool {
 		return false
 	}
 	number, err := strconv.ParseInt(text, 10, 64)
+	return err == nil && number >= 0
+}
+
+func isNonNegativeNumber(value any) bool {
+	text := strings.TrimSpace(toString(value))
+	if text == "" {
+		return false
+	}
+	number, err := strconv.ParseFloat(text, 64)
 	return err == nil && number >= 0
 }
 

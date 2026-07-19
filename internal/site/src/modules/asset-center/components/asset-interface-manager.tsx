@@ -8,12 +8,13 @@ import {
 	isAssetInterfaceEnabled,
 } from "@/modules/asset-center/asset-interface-display"
 import { getMetadataString } from "@/modules/asset-center/asset-schema"
-import type { AssetInterfaceRecord } from "@/types"
+import type { AssetInterfaceRecord, AssetType } from "@/types"
 
 export type AssetInterfaceManagerProps = {
 	interfaces: AssetInterfaceRecord[]
 	readOnly: boolean
 	compact?: boolean
+	assetType?: AssetType
 	onAdd: () => void
 	onEdit: (record: AssetInterfaceRecord) => void
 	onDelete: (record: AssetInterfaceRecord) => void
@@ -23,28 +24,30 @@ export function AssetInterfaceManager({
 	interfaces,
 	readOnly,
 	compact = false,
+	assetType,
 	onAdd,
 	onEdit,
 	onDelete,
 }: AssetInterfaceManagerProps) {
+	const isSwitch = assetType === "switch"
 	return (
 		<div className="grid gap-2.5">
 			<div className="flex items-center justify-between gap-3">
 				<div className="min-w-0">
-					<div className="text-sm font-semibold text-foreground">网卡</div>
-					<div className="text-xs text-muted-foreground">网络接入方式、网卡速率与当前接入状态</div>
+					<div className="text-sm font-semibold text-foreground">{isSwitch ? "接口" : "网卡"}</div>
+					<div className="text-xs text-muted-foreground">{isSwitch ? "端口能力、协商速率与当前接线状态" : "网络接入方式、网卡速率与当前接入状态"}</div>
 				</div>
 				{readOnly ? null : (
 					<Button type="button" variant="outline" size="sm" className="h-8 min-h-8 shrink-0" onClick={onAdd}>
 						<PlusIcon data-icon="inline-start" />
-						添加网卡
+						{isSwitch ? "添加接口" : "添加网卡"}
 					</Button>
 				)}
 			</div>
 
 			{interfaces.length === 0 ? (
 				<div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
-					暂无网卡信息
+					{isSwitch ? "暂无接口信息" : "暂无网卡信息"}
 				</div>
 			) : (
 				<div className="grid gap-2">
@@ -54,6 +57,7 @@ export function AssetInterfaceManager({
 							record={record}
 							readOnly={readOnly}
 							compact={compact}
+							assetType={assetType}
 							onEdit={onEdit}
 							onDelete={onDelete}
 						/>
@@ -68,18 +72,23 @@ function AssetInterfaceRow({
 	record,
 	readOnly,
 	compact,
+	assetType,
 	onEdit,
 	onDelete,
 }: {
 	record: AssetInterfaceRecord
 	readOnly: boolean
 	compact: boolean
+	assetType?: AssetType
 	onEdit: (record: AssetInterfaceRecord) => void
 	onDelete: (record: AssetInterfaceRecord) => void
 }) {
 	const addressSummary = [record.ipv4, record.ipv6, record.mac].filter(Boolean).join(" · ")
 	const connectionNote = getMetadataString(record.metadata, "connection_note")
 	const enabled = isAssetInterfaceEnabled(record)
+	const isSwitch = assetType === "switch"
+	const role = getMetadataString(record.metadata, "role")
+	const negotiatedSpeed = Number(record.metadata?.negotiated_speed_mbps)
 
 	return (
 		<div className="grid gap-2 rounded-md border border-border/70 bg-card p-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
@@ -87,9 +96,9 @@ function AssetInterfaceRow({
 				<div className="flex min-w-0 flex-wrap items-center gap-1.5">
 					<span className="truncate text-sm font-medium text-foreground">{record.name || "未命名网卡"}</span>
 					<Badge variant="secondary">{formatAssetInterfaceKind(record.kind)}</Badge>
-					<Badge variant="outline">
-						网卡速率 {record.speed_mbps ? formatAssetInterfaceSpeed(record.speed_mbps) : "未填"}
-					</Badge>
+					<Badge variant="outline">{isSwitch ? `支持速率 ${record.speed_mbps ? formatAssetInterfaceSpeed(record.speed_mbps) : "未填"}` : `网卡速率 ${record.speed_mbps ? formatAssetInterfaceSpeed(record.speed_mbps) : "未填"}`}</Badge>
+					{isSwitch ? <Badge variant="outline">{Number.isFinite(negotiatedSpeed) && negotiatedSpeed > 0 ? `协商速率 ${formatAssetInterfaceSpeed(negotiatedSpeed)}` : "协商速率未确认"}</Badge> : null}
+					{isSwitch && ["uplink", "downlink", "general"].includes(role) ? <Badge variant="secondary">{role === "uplink" ? "上联" : role === "downlink" ? "下联" : "通用"}</Badge> : null}
 					<Badge variant={enabled ? "success" : "secondary"}>{enabled ? "启用" : "未启用"}</Badge>
 					{record.kind === "wifi" ? null : (
 						<Badge variant={record.connected ? "success" : "outline"}>{record.connected ? "已接线" : "未接线"}</Badge>

@@ -69,6 +69,36 @@ assert.deepEqual(display.speedItems, [
 ])
 
 assert.equal(buildAssetInterfaceDisplay(asset("mini_pc"), []).accessLabel, "未设置")
+const switchDisplay = buildAssetInterfaceDisplay(
+	asset("switch"),
+	[
+		{
+			id: "switch-port-1",
+			asset: "switch-1",
+			name: "端口 1",
+			kind: "ethernet",
+			speed_mbps: 2500,
+			connected: true,
+			primary: false,
+			metadata: { enabled: true, role: "uplink", negotiated_speed_mbps: 1000 },
+		},
+		{
+			id: "switch-port-2",
+			asset: "switch-1",
+			name: "端口 2",
+			kind: "optical",
+			speed_mbps: 10000,
+			connected: false,
+			primary: false,
+			metadata: { enabled: true, role: "general" },
+		},
+	] as unknown as AssetInterfaceRecord[]
+)
+assert.equal(switchDisplay.speedItems[0].speedLabel, "支持 2.5 Gbps")
+assert.equal(switchDisplay.speedItems[0].negotiatedSpeedLabel, "协商 1 Gbps")
+assert.equal(switchDisplay.speedItems[0].role, "uplink")
+assert.equal(switchDisplay.speedItems[1].speedLabel, "支持 10 Gbps")
+assert.equal(switchDisplay.speedItems[1].negotiatedSpeedLabel, "协商速率未确认")
 assert.equal(buildAssetInterfaceDisplay(asset("mini_pc"), [], { loadFailed: true }).accessLabel, "接口读取失败")
 assert.equal(buildAssetInterfaceDisplay(asset("web_endpoint"), []).speedMode, "not_applicable")
 assert.equal(formatAssetInterfaceKind("optical"), "光纤")

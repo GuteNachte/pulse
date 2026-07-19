@@ -2,11 +2,13 @@ import assert from "node:assert/strict"
 import {
 	formatInternetBandwidth,
 	getAssetTypeCapabilities,
+	getAssetTypeOptionLabel,
 	getAssetTypeSpec,
 	getInternetStatusLabel,
 	internetAssetTypeSpec,
 	normalizeInternetProvider,
 	ontAssetTypeSpec,
+	validateAssetImportMetadata,
 	validateInternetAssetValues,
 	validateOntAssetValues,
 } from "./asset-type-specs.ts"
@@ -135,5 +137,33 @@ assert.deepEqual(
 	}),
 	["资产名称", "厂商 / 品牌", "型号 / 规格", "使用状态", "位置", "运营商", "工作角色"]
 )
+
+const switchSpec = getAssetTypeSpec("switch")
+assert.ok(switchSpec)
+assert.equal(switchSpec.detailTitle, "交换机档案")
+const switchFields = switchSpec.sections.flatMap((section) => section.fields.map((field) => field.key))
+for (const key of [
+	"management_level",
+	"management_access",
+	"ethernet_port_count",
+	"optical_port_count",
+	"other_port_count",
+	"default_ethernet_speed_mbps",
+	"default_optical_speed_mbps",
+	"switching_capacity_gbps",
+	"power_mode",
+	"poe_status",
+	"poe_standard",
+	"poe_budget_w",
+	"vlan_status",
+	"port_isolation_status",
+	"link_aggregation_status",
+]) assert.equal(switchFields.includes(key), true, "交换机规格缺少 " + key)
+assert.equal(switchFields.includes("wifi_standard"), false)
+assert.equal(switchFields.includes("wan_port_count"), false)
+assert.equal(getAssetTypeOptionLabel("switch", "management_level", "smart"), "轻管理")
+assert.deepEqual(validateAssetImportMetadata("switch", { device_specific_default: "x" }), [
+	"字段 metadata.device_specific_default 不属于交换机 严格模板",
+])
 
 console.log("asset type specs contract passed")

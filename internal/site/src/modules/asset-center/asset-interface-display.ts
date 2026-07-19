@@ -11,6 +11,8 @@ export type AssetInterfaceSpeedItem = {
 	primary: boolean
 	enabled: boolean
 	connectionNote?: string
+	role?: "uplink" | "downlink" | "general"
+	negotiatedSpeedLabel?: string
 }
 
 export type AssetInterfaceDisplay = {
@@ -67,13 +69,29 @@ export function buildAssetInterfaceDisplay(
 		speedMode: "interfaces",
 		speedItems: records.map((item) => {
 			const connectionNote = getMetadataString(item.metadata, "connection_note")
+			const isSwitchPort = asset.type === "switch"
+			const role = getMetadataString(item.metadata, "role")
+			const negotiatedSpeed = Number(item.metadata?.negotiated_speed_mbps)
 			return {
 				id: item.id,
 				label: item.name || formatAssetInterfaceKind(item.kind),
-				speedLabel: item.speed_mbps ? formatAssetInterfaceSpeed(item.speed_mbps) : "速率未填",
+				speedLabel: isSwitchPort
+					? `支持 ${item.speed_mbps ? formatAssetInterfaceSpeed(item.speed_mbps) : "速率未填"}`
+					: item.speed_mbps
+						? formatAssetInterfaceSpeed(item.speed_mbps)
+						: "速率未填",
 				connected: item.connected === true,
 				primary: item.primary === true,
 				enabled: isAssetInterfaceEnabled(item),
+				...(isSwitchPort && (role === "uplink" || role === "downlink" || role === "general") ? { role } : {}),
+				...(isSwitchPort
+					? {
+						negotiatedSpeedLabel:
+							Number.isFinite(negotiatedSpeed) && negotiatedSpeed > 0
+								? `协商 ${formatAssetInterfaceSpeed(negotiatedSpeed)}`
+								: "协商速率未确认",
+					}
+					: {}),
 				...(connectionNote ? { connectionNote } : {}),
 			}
 		}),

@@ -1189,6 +1189,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 					</DialogHeader>
 					<AssetInterfaceManager
 						interfaces={state.interfaces}
+						assetType={asset.type}
 						readOnly={readOnly}
 						onAdd={openAddInterfaceDialog}
 						onEdit={openEditInterfaceDialog}
