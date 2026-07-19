@@ -81,6 +81,8 @@ export function formatAssetInterfaceKind(kind: AssetInterfaceKind) {
 			return "Wi-Fi"
 		case "pon":
 			return "PON"
+		case "optical":
+			return "光纤"
 		case "wan":
 			return "WAN"
 		case "lan":

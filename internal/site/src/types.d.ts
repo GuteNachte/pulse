@@ -107,7 +107,16 @@ export interface AssetRecord extends RecordModel {
 	updated: string
 }
 
-export type AssetInterfaceKind = "ethernet" | "wifi" | "pon" | "wan" | "lan" | "management" | "virtual" | "custom"
+export type AssetInterfaceKind =
+	| "ethernet"
+	| "wifi"
+	| "pon"
+	| "optical"
+	| "wan"
+	| "lan"
+	| "management"
+	| "virtual"
+	| "custom"
 export type AssetInterfaceSource = "manual" | "agent" | "snmp" | "import"
 
 export interface AssetInterfaceRecord extends RecordModel {

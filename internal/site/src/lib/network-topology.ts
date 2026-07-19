@@ -1,5 +1,6 @@
 import { MarkerType, type Edge, type Node, type Viewport } from "@xyflow/react"
 import { formatBytes } from "@/lib/utils"
+import { mapAssetInterfaceKindToNetworkPortType } from "@/modules/network-topology/workspace-data"
 import type {
 	AssetInterfaceRecord,
 	AssetRecord,
@@ -11,7 +12,6 @@ import type {
 	NetworkPortRecord,
 	SystemDetailsRecord,
 	SystemRecord,
-	AssetInterfaceKind,
 } from "@/types"
 
 export type TopologyNodeKind = "asset" | "system"
@@ -636,7 +636,7 @@ function assetInterfaceToNetworkPort(item: AssetInterfaceRecord): NetworkPortRec
 		user: item.user,
 		asset: item.asset,
 		name: item.name,
-		type: mapAssetInterfaceKindToNetworkPortType(item.kind),
+		type: mapAssetInterfaceKindToNetworkPortType(item.kind, item.metadata ?? {}),
 		speed_mbps: item.speed_mbps,
 		notes: [item.mac, item.ipv4, item.ipv6].filter(Boolean).join(" · "),
 		metadata: { asset_interface: item.id },
@@ -649,14 +649,6 @@ function getNetworkPortInterfaceKey(port: NetworkPortRecord) {
 	const metadata = (port as NetworkPortRecord & { metadata?: Record<string, unknown> }).metadata
 	const value = metadata?.asset_interface
 	return typeof value === "string" ? value : ""
-}
-
-function mapAssetInterfaceKindToNetworkPortType(kind: AssetInterfaceKind): NetworkPortRecord["type"] {
-	if (kind === "wan") return "wan"
-	if (kind === "lan" || kind === "ethernet") return "lan"
-	if (kind === "wifi") return "wifi"
-	if (kind === "management") return "management"
-	return "custom"
 }
 
 function getSavedPosition(layout: NetworkLayoutRecord["layout"], id: string, index: number) {

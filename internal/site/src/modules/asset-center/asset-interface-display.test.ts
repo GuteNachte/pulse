@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import {
 	buildAssetInterfaceDisplay,
+	formatAssetInterfaceKind,
 	groupAssetInterfacesByAsset,
 } from "./asset-interface-display.ts"
 import type { AssetInterfaceRecord, AssetRecord } from "@/types"
@@ -53,6 +54,7 @@ assert.deepEqual(display.speedItems, [
 assert.equal(buildAssetInterfaceDisplay(asset("mini_pc"), []).accessLabel, "未设置")
 assert.equal(buildAssetInterfaceDisplay(asset("mini_pc"), [], { loadFailed: true }).accessLabel, "接口读取失败")
 assert.equal(buildAssetInterfaceDisplay(asset("web_endpoint"), []).speedMode, "not_applicable")
+assert.equal(formatAssetInterfaceKind("optical"), "光纤")
 assert.deepEqual(
 	buildAssetInterfaceDisplay(
 		asset("internet", { access_technology: "ftth", auth_mode: "pppoe", down_mbps: 1000, up_mbps: 300 }),

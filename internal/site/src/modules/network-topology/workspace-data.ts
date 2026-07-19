@@ -34,6 +34,20 @@ export function mapTopologyPortTypeToAssetInterfaceKind(type: NetworkPortRecord[
 	return "custom"
 }
 
+export function mapAssetInterfaceKindToNetworkPortType(
+	kind: AssetInterfaceRecord["kind"],
+	metadata: Record<string, unknown> = {}
+): NetworkPortRecord["type"] {
+	const role = typeof metadata.role === "string" ? metadata.role : ""
+	if (kind === "pon" || role === "uplink") return "uplink"
+	if (kind === "optical" || role === "downlink") return "downlink"
+	if (kind === "wan") return "wan"
+	if (kind === "lan" || kind === "ethernet") return "lan"
+	if (kind === "wifi") return "wifi"
+	if (kind === "management") return "management"
+	return "custom"
+}
+
 export function formatTopologyPortSpeed(value: number) {
 	if (value >= 1000) {
 		return `${value / 1000} Gbps`

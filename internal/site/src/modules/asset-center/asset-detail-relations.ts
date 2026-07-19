@@ -12,6 +12,7 @@ export const interfaceKindOptions: { value: AssetInterfaceKind; label: string }[
 	{ value: "ethernet", label: "有线" },
 	{ value: "wifi", label: "无线" },
 	{ value: "pon", label: "PON 光纤" },
+	{ value: "optical", label: "光纤" },
 	{ value: "wan", label: "WAN" },
 	{ value: "lan", label: "LAN" },
 	{ value: "management", label: "管理口" },

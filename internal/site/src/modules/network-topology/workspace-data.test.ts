@@ -5,6 +5,7 @@ import {
 	formatTopologyInternetBandwidth,
 	formatTopologyPortSpeed,
 	getUnlinkedTopologySystems,
+	mapAssetInterfaceKindToNetworkPortType,
 	mapTopologyPortTypeToAssetInterfaceKind,
 } from "./workspace-data.ts"
 import type { AssetRecord, NetworkPortRecord, SystemRecord } from "@/types"
@@ -63,6 +64,8 @@ test("topology workspace maps and formats connection metadata", () => {
 	assert.equal(mapTopologyPortTypeToAssetInterfaceKind("wifi"), "wifi")
 	assert.equal(mapTopologyPortTypeToAssetInterfaceKind("uplink"), "ethernet")
 	assert.equal(mapTopologyPortTypeToAssetInterfaceKind("custom"), "custom")
+	assert.equal(mapAssetInterfaceKindToNetworkPortType("pon", { role: "uplink" }), "uplink")
+	assert.equal(mapAssetInterfaceKindToNetworkPortType("optical", { role: "downlink" }), "downlink")
 	assert.equal(formatTopologyPortSpeed(2500), "2.5 Gbps")
 	assert.equal(formatTopologyPortSpeed(100), "100 Mbps")
 	assert.equal(
