@@ -19,10 +19,12 @@ assert.equal(
 )
 assert.equal(columns.includes("xl:grid-cols-1"), false, "desktop archives must not stretch every short row to full width")
 assert.equal(
-	columns.includes('className="grid items-start gap-2.5 p-3 lg:grid-cols-2"'),
+	columns.includes('className="grid items-stretch gap-2.5 p-3 lg:auto-rows-fr lg:grid-cols-2"'),
 	true,
-	"desktop parameter cards must render two per row"
+	"desktop parameter cards must render two equal-height cards per row and keep every row consistent"
 )
+assert.equal(columns.includes('className="grid auto-rows-fr'), false, "small screens must keep natural card heights")
+assert.equal(columns.includes("grid items-start gap-2.5 p-3 lg:grid-cols-2"), false, "desktop card rows must allow equal-height stretching")
 assert.equal(
 	columns.includes('group.rows.length > 6 && "sm:col-span-2"'),
 	false,
