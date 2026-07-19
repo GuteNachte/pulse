@@ -63,6 +63,25 @@ assert.deepEqual(getEmptyRelationFormForGuide("wifi"), {
 })
 
 assert.deepEqual(
+	getRelationTargetOptions(assets as never, "phone", "wifi").map((item) => item.value),
+	["router", "ont"]
+)
+assert.deepEqual(
+	getPeerInterfaceOptions(
+		[
+			{ id: "ont-wifi-24", asset: "ont", name: "2.4 GHz Wi-Fi", kind: "wifi", metadata: { enabled: false } },
+			{ id: "ont-wifi-5", asset: "ont", name: "5 GHz Wi-Fi", kind: "wifi", metadata: { enabled: true } },
+			{ id: "ont-lan", asset: "ont", name: "LAN 1", kind: "lan", metadata: { enabled: true } },
+		] as never,
+		assets as never,
+		"phone",
+		"ont",
+		"wifi"
+	).map((item) => item.value),
+	["", "ont-wifi-5"]
+)
+
+assert.deepEqual(
 	buildRelationMetadata({
 		relation: null,
 		currentAssetId: "phone",

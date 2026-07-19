@@ -163,7 +163,7 @@ function isRelationGuideTarget(asset: AssetRecord, guideId?: RelationGuideId) {
 		case "network":
 			return asset.type === "internet" || NETWORK_ASSET_TYPES.includes(asset.type)
 		case "wifi":
-			return asset.type === "ap" || asset.type === "router" || asset.type === "gateway"
+			return asset.type === "ont" || asset.type === "ap" || asset.type === "router" || asset.type === "gateway"
 		case "power":
 			return asset.type === "ups" || asset.type === "plug"
 		case "host":
@@ -210,6 +210,7 @@ export function getPeerInterfaceOptions(
 	const peerInterfaces = interfaces
 		.filter((item) => (targetAssetId ? item.asset === targetAssetId : item.asset !== currentAssetId))
 		.filter((item) => guideId !== "internet" || item.kind === "pon" || item.kind === "wan")
+		.filter((item) => guideId !== "wifi" || (item.kind === "wifi" && item.metadata?.enabled !== false))
 	return [
 		{ value: "", label: "不指定" },
 		...peerInterfaces.map((item) => ({

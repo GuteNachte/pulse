@@ -53,9 +53,73 @@ func TestAssetMasterValidation(t *testing.T) {
 	t.Run("EnforcesInternetRelationBoundary", func(t *testing.T) {
 		testAssetRelationValidationEnforcesInternetBoundary(t, hub)
 	})
+	t.Run("EnforcesWiFiRelationBoundary", func(t *testing.T) {
+		testAssetRelationValidationEnforcesWiFiBoundary(t, hub)
+	})
 	t.Run("RejectsCrossUserLocationParentAndCycles", func(t *testing.T) {
 		testAssetLocationValidationRejectsCrossUserParentAndCycles(t, hub)
 	})
+}
+
+func testAssetRelationValidationEnforcesWiFiBoundary(t *testing.T, hub *pulseTests.TestHub) {
+	user, err := pulseTests.CreateUser(hub, "asset-wifi-relation@example.com", "password")
+	require.NoError(t, err)
+	token, err := user.NewAuthToken()
+	require.NoError(t, err)
+	headers := map[string]string{"Authorization": token}
+
+	ont, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user": user.Id, "name": "验收无线主网关", "type": "ont", "status": "active",
+	})
+	require.NoError(t, err)
+	phones := make([]string, 5)
+	for index := range phones {
+		phone, createErr := pulseTests.CreateRecord(hub, "assets", map[string]any{
+			"user": user.Id, "name": fmt.Sprintf("验收手机 %d", index+1), "type": "phone", "status": "active",
+		})
+		require.NoError(t, createErr)
+		phones[index] = phone.Id
+	}
+	wifi5, err := pulseTests.CreateRecord(hub, "asset_interfaces", map[string]any{
+		"user": user.Id, "asset": ont.Id, "name": "5 GHz Wi-Fi", "kind": "wifi", "source": "manual",
+		"metadata": map[string]any{"enabled": true, "role": "radio", "band": "5 GHz"},
+	})
+	require.NoError(t, err)
+	wifi24, err := pulseTests.CreateRecord(hub, "asset_interfaces", map[string]any{
+		"user": user.Id, "asset": ont.Id, "name": "2.4 GHz Wi-Fi", "kind": "wifi", "source": "manual",
+		"metadata": map[string]any{"enabled": false, "role": "radio", "band": "2.4 GHz"},
+	})
+	require.NoError(t, err)
+	lan1, err := pulseTests.CreateRecord(hub, "asset_interfaces", map[string]any{
+		"user": user.Id, "asset": ont.Id, "name": "LAN 1", "kind": "lan", "source": "manual",
+		"metadata": map[string]any{"enabled": true, "role": "lan"},
+	})
+	require.NoError(t, err)
+
+	createWiFiRelation := func(sourceAsset string, targetAsset string, kind string, targetInterface string) pulseTests.TestAPIResponse {
+		body := fmt.Sprintf(`{"user":"%s","source_asset":"%s","target_asset":"%s","kind":"%s","metadata":{"link_kind":"wifi","target_interface":"%s"}}`, user.Id, sourceAsset, targetAsset, kind, targetInterface)
+		return pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/asset_relations/records", strings.NewReader(body), headers)
+	}
+
+	accepted := createWiFiRelation(phones[0], ont.Id, "connected_to", wifi5.Id)
+	require.Equal(t, http.StatusOK, accepted.Status, accepted.Body)
+
+	disabled := createWiFiRelation(phones[1], ont.Id, "connected_to", wifi24.Id)
+	require.Equal(t, http.StatusBadRequest, disabled.Status, disabled.Body)
+	require.Contains(t, disabled.Body, "不能连接未启用的 Wi-Fi 接口")
+
+	wrongInterface := createWiFiRelation(phones[2], ont.Id, "connected_to", lan1.Id)
+	require.Equal(t, http.StatusBadRequest, wrongInterface.Status, wrongInterface.Body)
+	require.Contains(t, wrongInterface.Body, "必须选择 Wi-Fi 接口")
+
+	wrongDirectionBody := fmt.Sprintf(`{"user":"%s","source_asset":"%s","target_asset":"%s","kind":"connected_to","metadata":{"link_kind":"wifi","source_interface":"%s"}}`, user.Id, ont.Id, phones[3], wifi5.Id)
+	wrongDirection := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/asset_relations/records", strings.NewReader(wrongDirectionBody), headers)
+	require.Equal(t, http.StatusBadRequest, wrongDirection.Status, wrongDirection.Body)
+	require.Contains(t, wrongDirection.Body, "必须由终端指向")
+
+	wrongKind := createWiFiRelation(phones[4], ont.Id, "depends_on", wifi5.Id)
+	require.Equal(t, http.StatusBadRequest, wrongKind.Status, wrongKind.Body)
+	require.Contains(t, wrongKind.Body, "必须使用网络连接关系")
 }
 
 func testAssetInterfaceValidationValidatesONTState(t *testing.T, hub *pulseTests.TestHub) {
@@ -231,6 +295,22 @@ func testAssetRelationValidationEnforcesInternetBoundary(t *testing.T, hub *puls
 
 	ontPon, err := pulseTests.CreateRecord(hub, "asset_interfaces", map[string]any{
 		"user": user.Id, "asset": ont.Id, "name": "PON", "kind": "pon", "source": "manual",
+		"metadata": map[string]any{"enabled": true, "role": "uplink"},
+	})
+	require.NoError(t, err)
+	ontOptical, err := pulseTests.CreateRecord(hub, "asset_interfaces", map[string]any{
+		"user": user.Id, "asset": ont.Id, "name": "下联光口", "kind": "optical", "source": "manual",
+		"metadata": map[string]any{"enabled": true, "role": "downlink"},
+	})
+	require.NoError(t, err)
+	ontDownlinkPON, err := pulseTests.CreateRecord(hub, "asset_interfaces", map[string]any{
+		"user": user.Id, "asset": ont.Id, "name": "错误下联 PON", "kind": "pon", "source": "manual",
+		"metadata": map[string]any{"enabled": true, "role": "downlink"},
+	})
+	require.NoError(t, err)
+	ontLan, err := pulseTests.CreateRecord(hub, "asset_interfaces", map[string]any{
+		"user": user.Id, "asset": ont.Id, "name": "LAN 1", "kind": "lan", "source": "manual",
+		"metadata": map[string]any{"enabled": true, "role": "lan"},
 	})
 	require.NoError(t, err)
 	routerWan, err := pulseTests.CreateRecord(hub, "asset_interfaces", map[string]any{
@@ -255,6 +335,33 @@ func testAssetRelationValidationEnforcesInternetBoundary(t *testing.T, hub *puls
 		"user": user.Id, "name": "验收第二宽带", "type": "internet", "status": "active",
 	})
 	require.NoError(t, err)
+	opticalInternet, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user": user.Id, "name": "验收第三宽带", "type": "internet", "status": "active",
+	})
+	require.NoError(t, err)
+	rejectedOptical := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/asset_relations/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","source_asset":"%s","target_asset":"%s","kind":"connected_to","metadata":{"link_kind":"internet","target_interface":"%s"}}`, user.Id, opticalInternet.Id, ont.Id, ontOptical.Id)), headers)
+	require.Equal(t, http.StatusBadRequest, rejectedOptical.Status, rejectedOptical.Body)
+	require.Contains(t, rejectedOptical.Body, "PON 或 WAN")
+
+	lanInternet, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user": user.Id, "name": "验收第四宽带", "type": "internet", "status": "active",
+	})
+	require.NoError(t, err)
+	rejectedLan := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/asset_relations/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","source_asset":"%s","target_asset":"%s","kind":"connected_to","metadata":{"link_kind":"internet","target_interface":"%s"}}`, user.Id, lanInternet.Id, ont.Id, ontLan.Id)), headers)
+	require.Equal(t, http.StatusBadRequest, rejectedLan.Status, rejectedLan.Body)
+	require.Contains(t, rejectedLan.Body, "PON 或 WAN")
+
+	downlinkPONInternet, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user": user.Id, "name": "验收第五宽带", "type": "internet", "status": "active",
+	})
+	require.NoError(t, err)
+	rejectedDownlinkPON := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/asset_relations/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","source_asset":"%s","target_asset":"%s","kind":"connected_to","metadata":{"link_kind":"internet","target_interface":"%s"}}`, user.Id, downlinkPONInternet.Id, ont.Id, ontDownlinkPON.Id)), headers)
+	require.Equal(t, http.StatusBadRequest, rejectedDownlinkPON.Status, rejectedDownlinkPON.Body)
+	require.Contains(t, rejectedDownlinkPON.Body, "PON 或 WAN 上联接口")
+
 	rejectedTarget := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/asset_relations/records",
 		strings.NewReader(fmt.Sprintf(`{"user":"%s","source_asset":"%s","target_asset":"%s","kind":"connected_to","metadata":{"link_kind":"internet","target_interface":"%s"}}`, user.Id, otherInternet.Id, switchAsset.Id, switchWan.Id)), headers)
 	require.Equal(t, http.StatusBadRequest, rejectedTarget.Status, rejectedTarget.Body)

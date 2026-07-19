@@ -421,6 +421,9 @@ func (h *Hub) validateAssetRelationRequest(e *core.RecordRequestEvent) error {
 	if err := h.validateInternetAssetRelation(e, sourceRecord, targetRecord); err != nil {
 		return err
 	}
+	if err := h.validateWiFiAssetRelation(e, sourceRecord, targetRecord); err != nil {
+		return err
+	}
 	if h.hasDuplicateAssetRelation(e.Record) {
 		return e.BadRequestError("资产关系已存在，请不要重复添加同一条关系。", nil)
 	}
@@ -467,6 +470,9 @@ func (h *Hub) validateInternetAssetRelation(e *core.RecordRequestEvent, sourceRe
 	if targetInterfaceKind != "pon" && targetInterfaceKind != "wan" {
 		return e.BadRequestError("互联网接入关系必须选择目标设备的 PON 或 WAN 接口。", nil)
 	}
+	if strings.TrimSpace(targetRecord.GetString("type")) == "ont" && recordMetadataString(targetInterface, "role") != "uplink" {
+		return e.BadRequestError("互联网接入关系必须选择目标设备的 PON 或 WAN 上联接口。", nil)
+	}
 	records, err := h.FindRecordsByFilter(
 		"asset_relations",
 		"source_asset = {:source} && kind = 'connected_to'",
@@ -482,6 +488,36 @@ func (h *Hub) validateInternetAssetRelation(e *core.RecordRequestEvent, sourceRe
 		if existing.Id != e.Record.Id && recordMetadataString(existing, "link_kind") == "internet" {
 			return e.BadRequestError("一条宽带只能关联一个当前接入设备。", nil)
 		}
+	}
+	return nil
+}
+
+func (h *Hub) validateWiFiAssetRelation(e *core.RecordRequestEvent, sourceRecord *core.Record, targetRecord *core.Record) error {
+	if e == nil || e.Record == nil || sourceRecord == nil || targetRecord == nil {
+		return nil
+	}
+	if recordMetadataString(e.Record, "link_kind") != "wifi" {
+		return nil
+	}
+	if strings.TrimSpace(e.Record.GetString("kind")) != "connected_to" {
+		return e.BadRequestError("无线链路必须使用网络连接关系。", nil)
+	}
+	if !stringInSet(strings.TrimSpace(targetRecord.GetString("type")), "ont", "router", "gateway", "ap") {
+		return e.BadRequestError("无线关系必须由终端指向光猫、路由器、网关或 AP。", nil)
+	}
+	interfaceID := recordMetadataString(e.Record, "target_interface")
+	if interfaceID == "" {
+		return e.BadRequestError("无线关系必须选择目标设备的 Wi-Fi 接口。", nil)
+	}
+	interfaceRecord, err := h.FindRecordById("asset_interfaces", interfaceID)
+	if err != nil {
+		return e.BadRequestError("目标 Wi-Fi 接口不存在。", err)
+	}
+	if strings.TrimSpace(interfaceRecord.GetString("kind")) != "wifi" {
+		return e.BadRequestError("无线关系必须选择 Wi-Fi 接口。", nil)
+	}
+	if enabled, ok := recordJSONMap(interfaceRecord, "metadata")["enabled"].(bool); ok && !enabled {
+		return e.BadRequestError("无线关系不能连接未启用的 Wi-Fi 接口。", nil)
 	}
 	return nil
 }
