@@ -1184,8 +1184,8 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			<Dialog open={interfaceManagerOpen} onOpenChange={setInterfaceManagerOpen}>
 				<DialogContent className="max-w-3xl">
 					<DialogHeader>
-						<DialogTitle>网卡管理</DialogTitle>
-						<DialogDescription>维护这个资产的全部网卡、接入方式、速率和当前接入状态。</DialogDescription>
+						<DialogTitle>{asset.type === "switch" ? "网口设置" : "网卡管理"}</DialogTitle>
+						<DialogDescription>{asset.type === "switch" ? "逐口维护端口角色、支持速率、协商速率、启用与接线状态。" : "维护这个资产的全部网卡、接入方式、速率和当前接入状态。"}</DialogDescription>
 					</DialogHeader>
 					<AssetInterfaceManager
 						interfaces={state.interfaces}

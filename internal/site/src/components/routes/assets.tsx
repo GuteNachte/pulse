@@ -1315,7 +1315,7 @@ function validateNewAssetRequiredFields(form: AssetFormState, existingAssets: As
 	}
 	if (!form.vendor.trim()) errors.push("厂商 / 品牌")
 	if (!form.model.trim()) errors.push("型号 / 规格")
-	if (!form.metadata.internal_model?.trim()) errors.push("内部型号 / 搜索代码")
+	if (form.type === "phone" && !form.metadata.internal_model?.trim()) errors.push("内部型号 / 搜索代码")
 	if (isPhoneVariantSpecRequired(form.type)) {
 		if (!isPositiveNumberString(form.metadata.memory_gb)) errors.push("运行内存")
 		if (!isPositiveNumberString(form.metadata.storage_gb)) errors.push("存储容量")
