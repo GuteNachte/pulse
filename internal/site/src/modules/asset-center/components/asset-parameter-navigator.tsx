@@ -56,7 +56,7 @@ export function AssetParameterNavigator({ groups, variant, className }: AssetPar
 			)}
 		>
 			{variant === "sidebar" ? (
-				<div className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold text-muted-foreground">
+				<div className="mb-1.5 flex items-center gap-2 px-1 text-xs font-semibold text-muted-foreground">
 					<ListTreeIcon className="size-3.5" />
 					参数目录
 				</div>
@@ -74,7 +74,7 @@ export function AssetParameterNavigator({ groups, variant, className }: AssetPar
 							className={cn(
 								"min-w-0 border text-left",
 								variant === "sidebar"
-									? "h-auto min-h-0 w-full flex-col items-stretch justify-start whitespace-normal px-2.5 py-2"
+									? "h-auto min-h-0 w-full flex-col items-stretch justify-start whitespace-normal px-2.5 py-1.5"
 									: "h-8 min-h-8 shrink-0 px-2.5",
 								active ? "border-border/70" : "border-transparent text-muted-foreground"
 							)}

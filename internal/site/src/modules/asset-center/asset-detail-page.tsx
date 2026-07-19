@@ -1078,7 +1078,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const AssetIcon = getAssetIcon(asset.type)
 	const assetTag = getMetadataString(asset.metadata, "asset_tag")
 	return (
-		<div className="grid gap-5 xl:h-[calc(100dvh-7rem)] xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden">
+		<div className="grid gap-4">
 			<section className="rounded-lg border border-border/70 bg-card px-4 py-3 shadow-none">
 				<div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
 					<div className="min-w-0">

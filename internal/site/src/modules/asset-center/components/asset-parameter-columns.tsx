@@ -44,11 +44,11 @@ export function AssetOverviewColumn({
 					{subtitle ? <span className="text-[11px] text-muted-foreground">{subtitle}</span> : null}
 				</div>
 			</CardHeader>
-			<CardContent className="grid gap-4 p-4">
+			<CardContent className="grid gap-3 p-3">
 				{sections.map((section) => (
 					<section key={section.title} className="grid gap-2">
 						<div className="text-[11px] font-semibold text-muted-foreground">{section.title}</div>
-						<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+						<div className="grid gap-2 sm:grid-cols-2">
 							{section.rows.map((row) => (
 								<CompactParameterRow key={`${section.title}-${row.label}`} row={row} />
 							))}
@@ -85,7 +85,7 @@ export function AssetHardwareSpecsColumn({
 				</div>
 				<AssetParameterNavigator groups={groups} variant="inline" className="mt-3 xl:hidden" />
 			</CardHeader>
-			<CardContent className="grid gap-3 p-4 sm:grid-cols-2">
+			<CardContent className="grid gap-2.5 p-3 sm:grid-cols-2">
 				{groups.length > 0 ? (
 					groups.map((group) => <HardwareSpecGroup key={group.id} group={group} action={groupActions?.[group.title]} />)
 				) : (
@@ -107,7 +107,7 @@ function HardwareSpecGroup({ group, action }: { group: AssetParameterGroup; acti
 			id={getAssetParameterSectionId(group.id)}
 			data-asset-parameter-group-id={group.id}
 			className={cn(
-				"grid min-w-0 scroll-mt-28 content-start gap-3 rounded-md border border-border/70 bg-surface-soft p-3",
+				"grid min-w-0 scroll-mt-28 content-start gap-2.5 rounded-md border border-border/70 bg-surface-soft p-3",
 				group.rows.length > 6 && "sm:col-span-2"
 			)}
 		>
@@ -123,13 +123,13 @@ function HardwareSpecGroup({ group, action }: { group: AssetParameterGroup; acti
 				</div>
 				{action ? <div className="ms-auto min-w-0">{action}</div> : null}
 			</div>
-			<div className="grid gap-2 border-t border-border/60 pt-2">
+			<div className="grid gap-1.5 border-t border-border/60 pt-2">
 				{rowSections.map((section) => (
-					<section key={`${group.id}-${section.title || "default"}`} className="grid gap-1.5">
+					<section key={`${group.id}-${section.title || "default"}`} className="grid gap-1">
 						{hasNamedSections && section.title ? (
 							<div className="px-0.5 text-[11px] font-semibold text-muted-foreground">{section.title}</div>
 						) : null}
-						<div className="grid gap-1">
+						<div className="grid gap-0.5">
 							{section.rows.map((row) => (
 								<CompactSpecRow key={`${group.id}-${section.title}-${row.label}`} row={row} />
 							))}
@@ -156,7 +156,7 @@ function CompactParameterRow({ row }: { row: AssetParameterRow }) {
 		<div className="min-w-0 truncate text-xs font-medium text-foreground">{row.value}</div>
 	)
 	return (
-		<div className="grid min-h-10 grid-cols-[4.25rem_minmax(0,1fr)] items-center gap-2 rounded-md border border-border/70 bg-surface-soft px-2.5 py-1.5">
+		<div className="grid min-h-9 grid-cols-[3.75rem_minmax(0,1fr)] items-center gap-2 rounded-md border border-border/70 bg-surface-soft px-2 py-1">
 			<div className="truncate text-[11px] text-muted-foreground">{row.label}</div>
 			{value}
 		</div>
@@ -178,7 +178,7 @@ function CompactSpecRow({ row }: { row: AssetParameterRow }) {
 		<div className="min-w-0 break-words text-xs font-medium leading-relaxed text-foreground">{row.value}</div>
 	)
 	return (
-		<div className="grid min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-2 rounded-sm px-1.5 py-1">
+		<div className="grid min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-2 rounded-sm px-1.5 py-0.5">
 			<div className="min-w-0 break-words text-[11px] leading-relaxed text-muted-foreground">{row.label}</div>
 			{value}
 		</div>

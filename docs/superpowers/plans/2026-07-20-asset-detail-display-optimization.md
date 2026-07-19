@@ -16,6 +16,7 @@
 - Create: `internal/site/src/modules/asset-center/asset-parameter-navigation.test.ts` — 纯规则回归测试。
 - Create: `internal/site/src/modules/asset-center/components/asset-parameter-navigator.tsx` — 桌面纵向目录、移动端横向目录和当前分组反馈。
 - Create: `internal/site/src/modules/asset-center/components/asset-showcase-layout.test.ts` — 展示组件布局契约。
+- Modify: `internal/site/src/modules/asset-center/asset-detail-page.tsx` — 移除旧版固定视口与父级溢出裁切。
 - Modify: `internal/site/src/modules/asset-center/components/asset-showcase-workspace.tsx` — 单页滚动、桌面吸顶侧栏和纵向参数目录。
 - Modify: `internal/site/src/modules/asset-center/components/asset-parameter-columns.tsx` — 参数卡锚点、移动端目录、取消内部滚动和档案字段响应式排布。
 - Modify: `internal/site/src/modules/asset-center/components/asset-media-showcase.tsx` — 无封面时保留固定 16:9 中性图片框。
@@ -60,6 +61,7 @@ import { readFileSync } from "node:fs"
 const workspace = readFileSync(new URL("./asset-showcase-workspace.tsx", import.meta.url), "utf8")
 const columns = readFileSync(new URL("./asset-parameter-columns.tsx", import.meta.url), "utf8")
 const media = readFileSync(new URL("./asset-media-showcase.tsx", import.meta.url), "utf8")
+const page = readFileSync(new URL("../asset-detail-page.tsx", import.meta.url), "utf8")
 
 assert.equal(workspace.includes("AssetParameterNavigator"), true, "desktop archive column must render parameter navigation")
 assert.equal(workspace.includes("xl:sticky xl:top-4"), true, "desktop archive column must remain visible while the page scrolls")
@@ -71,6 +73,8 @@ assert.equal(columns.includes("sm:grid-cols-2 xl:grid-cols-1"), true, "archive r
 assert.equal(workspace.includes("<AssetMediaShowcase covers={media?.covers ?? []} />"), true, "the media frame must always render")
 assert.equal(media.includes("if (!primary) return null"), false, "missing covers must not remove the media frame")
 assert.equal(media.includes("暂无图片"), true, "the empty media frame must use a neutral label")
+assert.equal(page.includes("xl:h-[calc(100dvh-7rem)]"), false, "detail page must not force the old fixed viewport")
+assert.equal(page.includes("xl:overflow-hidden"), false, "detail page must not clip long parameter groups")
 
 console.log("asset showcase layout contract passed")
 ```
@@ -260,6 +264,14 @@ git commit -m "feat: add asset parameter navigation"
 
 - [ ] **Step 1：改造展示工作区外层和桌面侧栏**
 
+先将 `asset-detail-page.tsx` 的详情根容器替换为：
+
+```tsx
+<div className="grid gap-4">
+```
+
+移除旧有 `xl:h-[calc(100dvh-7rem)]`、固定行高和 `xl:overflow-hidden`，避免长参数被父级裁掉。
+
 在 `asset-showcase-workspace.tsx` 引入导航：
 
 ```tsx
@@ -269,8 +281,8 @@ import { AssetParameterNavigator } from "./asset-parameter-navigator"
 将当前返回的最外层布局替换为：
 
 ```tsx
-<section className="grid items-start gap-5 xl:grid-cols-[minmax(22rem,0.78fr)_minmax(0,1.62fr)] 2xl:grid-cols-[minmax(24rem,0.72fr)_minmax(0,1.68fr)]">
-	<aside className="grid content-start gap-5 xl:sticky xl:top-4">
+<section className="grid items-start gap-4 xl:grid-cols-[minmax(23rem,0.78fr)_minmax(0,1.62fr)] 2xl:grid-cols-[minmax(25rem,0.72fr)_minmax(0,1.68fr)]">
+	<aside className="grid content-start gap-3 xl:sticky xl:top-4">
 		<AssetMediaShowcase covers={media?.covers ?? []} />
 		<AssetOverviewColumn
 			sections={identitySections}
@@ -300,10 +312,10 @@ import { AssetParameterNavigator } from "./asset-parameter-navigator"
 替换为：
 
 ```tsx
-<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+<div className="grid gap-2 sm:grid-cols-2">
 ```
 
-移动端与平板继续双列；进入桌面双栏后左侧档案改为单列，避免型号、IPv4 和管理页面被过度截断。
+档案保持紧凑双列，并通过更宽的桌面侧栏保证编号、型号、IPv4 和管理页面可读。
 
 - [ ] **Step 3：取消硬件档案内部滚动并加入移动端目录**
 

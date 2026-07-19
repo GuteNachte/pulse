@@ -56,8 +56,8 @@ export function AssetShowcaseWorkspace({
 			: undefined
 
 	return (
-		<section className="grid items-start gap-5 xl:grid-cols-[minmax(22rem,0.78fr)_minmax(0,1.62fr)] 2xl:grid-cols-[minmax(24rem,0.72fr)_minmax(0,1.68fr)]">
-			<aside className="grid content-start gap-5 xl:sticky xl:top-4">
+		<section className="grid items-start gap-4 xl:grid-cols-[minmax(23rem,0.78fr)_minmax(0,1.62fr)] 2xl:grid-cols-[minmax(25rem,0.72fr)_minmax(0,1.68fr)]">
+			<aside className="grid content-start gap-3 xl:sticky xl:top-4">
 				<AssetMediaShowcase covers={media?.covers ?? []} />
 				<AssetOverviewColumn
 					sections={identitySections}
