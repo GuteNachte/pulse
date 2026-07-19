@@ -23,5 +23,6 @@ for (const text of ["AssetInterfaceManager", "onAddInterface", "onEditInterface"
 
 const detailPage = readFileSync(new URL("../asset-detail-page.tsx", import.meta.url), "utf8")
 assert.equal(detailPage.includes("交换机（待建档）"), true, "interface connection note needs a neutral example")
+assert.equal(detailPage.includes('...(kind === "wifi"'), true, "non-Wi-Fi interfaces must not send an empty wireless band")
 
 console.log("asset interface manager contract passed")

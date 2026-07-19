@@ -413,11 +413,12 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 		const user = pb.authStore.record?.id
 		if (!user) return
 		const primary = form.get("primary") === "yes"
+		const kind = form.get("kind")?.toString() || "ethernet"
 		const payload = {
 			user,
 			asset: asset.id,
 			name,
-			kind: form.get("kind")?.toString() || "ethernet",
+			kind,
 			mac: form.get("mac")?.toString().trim(),
 			ipv4: form.get("ipv4")?.toString().trim(),
 			ipv6: form.get("ipv6")?.toString().trim(),
@@ -428,7 +429,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			metadata: {
 				enabled: form.get("enabled") !== "no",
 				role: form.get("interface_role")?.toString() || "",
-				band: form.get("band")?.toString() || "",
+				...(kind === "wifi" ? { band: form.get("band")?.toString() || "" } : {}),
 				connection_note: form.get("connection_note")?.toString().trim() || "",
 				notes: form.get("notes")?.toString().trim() || "",
 			},
