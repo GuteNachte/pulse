@@ -9,6 +9,8 @@ export type AssetInterfaceSpeedItem = {
 	speedLabel: string
 	connected: boolean
 	primary: boolean
+	enabled: boolean
+	connectionNote?: string
 }
 
 export type AssetInterfaceDisplay = {
@@ -63,14 +65,23 @@ export function buildAssetInterfaceDisplay(
 	return {
 		accessLabel: records.length === 0 ? "未设置" : connectedKinds.join(" + ") || "未接入",
 		speedMode: "interfaces",
-		speedItems: records.map((item) => ({
-			id: item.id,
-			label: item.name || formatAssetInterfaceKind(item.kind),
-			speedLabel: item.speed_mbps ? formatAssetInterfaceSpeed(item.speed_mbps) : "速率未填",
-			connected: item.connected === true,
-			primary: item.primary === true,
-		})),
+		speedItems: records.map((item) => {
+			const connectionNote = getMetadataString(item.metadata, "connection_note")
+			return {
+				id: item.id,
+				label: item.name || formatAssetInterfaceKind(item.kind),
+				speedLabel: item.speed_mbps ? formatAssetInterfaceSpeed(item.speed_mbps) : "速率未填",
+				connected: item.connected === true,
+				primary: item.primary === true,
+				enabled: isAssetInterfaceEnabled(item),
+				...(connectionNote ? { connectionNote } : {}),
+			}
+		}),
 	}
+}
+
+export function isAssetInterfaceEnabled(record: AssetInterfaceRecord) {
+	return record.metadata?.enabled !== false
 }
 
 export function formatAssetInterfaceKind(kind: AssetInterfaceKind) {

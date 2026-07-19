@@ -38,17 +38,34 @@ const interfaces = [
 		connected: false,
 		primary: false,
 	},
+	{
+		id: "wifi-24",
+		asset: "asset-1",
+		name: "2.4 GHz Wi-Fi",
+		kind: "wifi",
+		connected: false,
+		primary: false,
+		metadata: { enabled: false, role: "radio", band: "2.4 GHz" },
+	},
 ] as AssetInterfaceRecord[]
 
 const grouped = groupAssetInterfacesByAsset(interfaces)
-assert.equal(grouped.get("asset-1")?.length, 3)
+assert.equal(grouped.get("asset-1")?.length, 4)
 
 const display = buildAssetInterfaceDisplay(asset("mini_pc"), grouped.get("asset-1") ?? [])
 assert.equal(display.accessLabel, "有线 + Wi-Fi")
 assert.deepEqual(display.speedItems, [
-	{ id: "lan", label: "LAN 1", speedLabel: "2.5 Gbps", connected: true, primary: true },
-	{ id: "wifi", label: "Wi-Fi", speedLabel: "1.2 Gbps", connected: true, primary: false },
-	{ id: "spare", label: "LAN 2", speedLabel: "1 Gbps", connected: false, primary: false },
+	{ id: "lan", label: "LAN 1", speedLabel: "2.5 Gbps", connected: true, primary: true, enabled: true },
+	{ id: "wifi", label: "Wi-Fi", speedLabel: "1.2 Gbps", connected: true, primary: false, enabled: true },
+	{ id: "spare", label: "LAN 2", speedLabel: "1 Gbps", connected: false, primary: false, enabled: true },
+	{
+		id: "wifi-24",
+		label: "2.4 GHz Wi-Fi",
+		speedLabel: "速率未填",
+		connected: false,
+		primary: false,
+		enabled: false,
+	},
 ])
 
 assert.equal(buildAssetInterfaceDisplay(asset("mini_pc"), []).accessLabel, "未设置")

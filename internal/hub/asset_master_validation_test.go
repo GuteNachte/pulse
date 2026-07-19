@@ -32,6 +32,9 @@ func TestAssetMasterValidation(t *testing.T) {
 	t.Run("RequiresStrictONTProfile", func(t *testing.T) {
 		testAssetMasterValidationRequiresStrictONTProfile(t, hub)
 	})
+	t.Run("ValidatesONTInterfaceState", func(t *testing.T) {
+		testAssetInterfaceValidationValidatesONTState(t, hub)
+	})
 	t.Run("KeepsSinglePrimaryInterface", func(t *testing.T) {
 		testAssetInterfaceValidationKeepsSinglePrimaryInterface(t, hub)
 	})
@@ -53,6 +56,43 @@ func TestAssetMasterValidation(t *testing.T) {
 	t.Run("RejectsCrossUserLocationParentAndCycles", func(t *testing.T) {
 		testAssetLocationValidationRejectsCrossUserParentAndCycles(t, hub)
 	})
+}
+
+func testAssetInterfaceValidationValidatesONTState(t *testing.T, hub *pulseTests.TestHub) {
+	user, err := pulseTests.CreateUser(hub, "asset-ont-interface-state@example.com", "password")
+	require.NoError(t, err)
+	token, err := user.NewAuthToken()
+	require.NoError(t, err)
+	headers := map[string]string{"Authorization": token}
+
+	ont, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user": user.Id, "name": "接口验收 ONT", "type": "ont", "status": "active",
+	})
+	require.NoError(t, err)
+	tests := []struct {
+		name    string
+		body    string
+		message string
+	}{
+		{name: "missing enabled", body: `{"name":"LAN 1","kind":"lan","speed_mbps":2500,"metadata":{"role":"lan"}}`, message: "必须明确填写启用状态"},
+		{name: "string enabled", body: `{"name":"LAN 1","kind":"lan","speed_mbps":2500,"metadata":{"enabled":"yes","role":"lan"}}`, message: "启用状态必须是布尔值"},
+		{name: "invalid role", body: `{"name":"USB","kind":"custom","metadata":{"enabled":true,"role":"usb"}}`, message: "接口角色只能选择"},
+		{name: "invalid band", body: `{"name":"6 GHz Wi-Fi","kind":"wifi","metadata":{"enabled":true,"role":"radio","band":"6 GHz"}}`, message: "无线频段只能选择"},
+		{name: "disabled connected", body: `{"name":"2.4 GHz Wi-Fi","kind":"wifi","connected":true,"metadata":{"enabled":false,"role":"radio","band":"2.4 GHz"}}`, message: "未启用接口不能标记为当前接入"},
+		{name: "invalid speed", body: `{"name":"LAN 1","kind":"lan","speed_mbps":-1,"metadata":{"enabled":true,"role":"lan"}}`, message: "接口速率不能小于 0"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body := strings.TrimSuffix(tc.body, "}") + fmt.Sprintf(`,"user":"%s","asset":"%s","source":"manual"}`, user.Id, ont.Id)
+			response := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/asset_interfaces/records", strings.NewReader(body), headers)
+			require.Equal(t, http.StatusBadRequest, response.Status, response.Body)
+			require.Contains(t, response.Body, tc.message)
+		})
+	}
+
+	validBody := fmt.Sprintf(`{"user":"%s","asset":"%s","name":"LAN 1","kind":"lan","speed_mbps":2500,"source":"manual","metadata":{"enabled":true,"role":"lan"}}`, user.Id, ont.Id)
+	valid := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/asset_interfaces/records", strings.NewReader(validBody), headers)
+	require.Equal(t, http.StatusOK, valid.Status, valid.Body)
 }
 
 func testAssetMasterValidationRequiresStrictONTProfile(t *testing.T, hub *pulseTests.TestHub) {

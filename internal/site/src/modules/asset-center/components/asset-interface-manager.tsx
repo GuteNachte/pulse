@@ -2,7 +2,12 @@ import { PencilIcon, PlusIcon, StarIcon, Trash2Icon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { formatAssetInterfaceKind, formatAssetInterfaceSpeed } from "@/modules/asset-center/asset-interface-display"
+import {
+	formatAssetInterfaceKind,
+	formatAssetInterfaceSpeed,
+	isAssetInterfaceEnabled,
+} from "@/modules/asset-center/asset-interface-display"
+import { getMetadataString } from "@/modules/asset-center/asset-schema"
 import type { AssetInterfaceRecord } from "@/types"
 
 export type AssetInterfaceManagerProps = {
@@ -73,6 +78,8 @@ function AssetInterfaceRow({
 	onDelete: (record: AssetInterfaceRecord) => void
 }) {
 	const addressSummary = [record.ipv4, record.ipv6, record.mac].filter(Boolean).join(" · ")
+	const connectionNote = getMetadataString(record.metadata, "connection_note")
+	const enabled = isAssetInterfaceEnabled(record)
 
 	return (
 		<div className="grid gap-2 rounded-md border border-border/70 bg-card p-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
@@ -83,7 +90,10 @@ function AssetInterfaceRow({
 					<Badge variant="outline">
 						网卡速率 {record.speed_mbps ? formatAssetInterfaceSpeed(record.speed_mbps) : "未填"}
 					</Badge>
-					{record.connected ? <Badge variant="success">当前接入</Badge> : null}
+					<Badge variant={enabled ? "success" : "secondary"}>{enabled ? "启用" : "未启用"}</Badge>
+					{record.kind === "wifi" ? null : (
+						<Badge variant={record.connected ? "success" : "outline"}>{record.connected ? "已接线" : "未接线"}</Badge>
+					)}
 					{record.primary ? (
 						<Tooltip>
 							<TooltipTrigger asChild>
@@ -99,6 +109,7 @@ function AssetInterfaceRow({
 				{compact || !addressSummary ? null : (
 					<div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{addressSummary}</div>
 				)}
+				{connectionNote ? <div className="mt-1 text-xs text-muted-foreground">{connectionNote}</div> : null}
 			</div>
 
 			{readOnly ? null : (

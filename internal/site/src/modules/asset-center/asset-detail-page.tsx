@@ -79,6 +79,7 @@ import type {
 	AssetAttachmentKind,
 	AssetAttachmentRecord,
 	AssetVisualRecord,
+	AssetInterfaceKind,
 	AssetInterfaceRecord,
 	AssetEnrichmentReportRecord,
 	AssetEnrichmentSuggestionRecord,
@@ -165,6 +166,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const [loading, setLoading] = useState(true)
 	const [interfaceManagerOpen, setInterfaceManagerOpen] = useState(false)
 	const [interfaceDialogOpen, setInterfaceDialogOpen] = useState(false)
+	const [interfaceKindDraft, setInterfaceKindDraft] = useState<AssetInterfaceKind>("ethernet")
 	const [relationDialogOpen, setRelationDialogOpen] = useState(false)
 	const [maintenanceDialogOpen, setMaintenanceDialogOpen] = useState(false)
 	const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false)
@@ -423,7 +425,13 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			connected: form.get("connected") === "yes",
 			primary,
 			source: editingInterface?.source || "manual",
-			metadata: { notes: form.get("notes")?.toString().trim() || "" },
+			metadata: {
+				enabled: form.get("enabled") !== "no",
+				role: form.get("interface_role")?.toString() || "",
+				band: form.get("band")?.toString() || "",
+				connection_note: form.get("connection_note")?.toString().trim() || "",
+				notes: form.get("notes")?.toString().trim() || "",
+			},
 		}
 		setSaving(true)
 		try {
@@ -942,11 +950,13 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 
 	function openAddInterfaceDialog() {
 		setEditingInterface(null)
+		setInterfaceKindDraft("ethernet")
 		setInterfaceDialogOpen(true)
 	}
 
 	function openEditInterfaceDialog(record: AssetInterfaceRecord) {
 		setEditingInterface(record)
+		setInterfaceKindDraft(record.kind)
 		setInterfaceDialogOpen(true)
 	}
 
@@ -1219,8 +1229,40 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 									name="kind"
 									label="网络接入方式"
 									options={interfaceKindOptions}
-									defaultValue={editingInterface?.kind || "ethernet"}
+									value={interfaceKindDraft}
+									onChange={(value) => setInterfaceKindDraft(value as AssetInterfaceKind)}
 								/>
+								<SelectField
+									name="enabled"
+									label="启用状态"
+									options={[
+										{ value: "yes", label: "启用" },
+										{ value: "no", label: "未启用" },
+									]}
+									defaultValue={editingInterface?.metadata?.enabled === false ? "no" : "yes"}
+								/>
+								<SelectField
+									name="interface_role"
+									label="接口角色"
+									options={[
+										{ value: "uplink", label: "上联" },
+										{ value: "downlink", label: "下联" },
+										{ value: "lan", label: "LAN" },
+										{ value: "radio", label: "无线频段" },
+									]}
+									defaultValue={getMetadataString(editingInterface?.metadata, "role") || "lan"}
+								/>
+								{interfaceKindDraft === "wifi" ? (
+									<SelectField
+										name="band"
+										label="无线频段"
+										options={[
+											{ value: "2.4 GHz", label: "2.4 GHz" },
+											{ value: "5 GHz", label: "5 GHz" },
+										]}
+										defaultValue={getMetadataString(editingInterface?.metadata, "band") || "5 GHz"}
+									/>
+								) : null}
 								<SelectField
 									name="connected"
 									label="当前接入"
@@ -1254,6 +1296,12 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 								/>
 								<TextField name="ipv4" label="IPv4" placeholder="192.168.1.10" defaultValue={editingInterface?.ipv4} />
 								<TextField name="ipv6" label="IPv6" placeholder="可选" defaultValue={editingInterface?.ipv6} />
+								<TextField
+									name="connection_note"
+									label="接线说明"
+									placeholder="例如 交换机（待建档）"
+									defaultValue={getMetadataString(editingInterface?.metadata, "connection_note")}
+								/>
 								<TextAreaField
 									name="notes"
 									label="备注"

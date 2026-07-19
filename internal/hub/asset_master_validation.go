@@ -1,12 +1,30 @@
 package hub
 
 import (
+	"reflect"
 	"strings"
 
+	validation "github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/pocketbase/pocketbase/core"
 )
 
+var ontAssetInterfaceAllowedMetadataFields = map[string]bool{
+	"enabled": true, "role": true, "band": true, "connection_note": true, "notes": true,
+}
+
 func (h *Hub) bindAssetMasterValidationHooks() {
+	h.App.OnRecordValidate("asset_interfaces").BindFunc(func(e *core.RecordEvent) error {
+		if e == nil || e.Record == nil || e.Record.GetFloat("speed_mbps") >= 0 {
+			return e.Next()
+		}
+		assetRecord, err := h.FindRecordById("assets", strings.TrimSpace(e.Record.GetString("asset")))
+		if err != nil || strings.TrimSpace(assetRecord.GetString("type")) != "ont" {
+			return e.Next()
+		}
+		return validation.Errors{
+			"speed_mbps": validation.NewError("validation_ont_interface_speed", "接口速率不能小于 0。"),
+		}
+	})
 	h.App.OnRecordCreateRequest("assets").BindFunc(func(e *core.RecordRequestEvent) error {
 		if err := h.validateAssetParentRequest(e); err != nil {
 			return err
@@ -35,6 +53,9 @@ func (h *Hub) bindAssetMasterValidationHooks() {
 		if err := h.validateAssetScopedRecordRequest(e, "asset"); err != nil {
 			return err
 		}
+		if err := h.validateAssetInterfaceProfileRequest(e); err != nil {
+			return err
+		}
 		if err := h.validateAssetInterfaceDuplicateRequest(e); err != nil {
 			return err
 		}
@@ -45,6 +66,9 @@ func (h *Hub) bindAssetMasterValidationHooks() {
 	})
 	h.App.OnRecordUpdateRequest("asset_interfaces").BindFunc(func(e *core.RecordRequestEvent) error {
 		if err := h.validateAssetScopedRecordRequest(e, "asset"); err != nil {
+			return err
+		}
+		if err := h.validateAssetInterfaceProfileRequest(e); err != nil {
 			return err
 		}
 		if err := h.validateAssetInterfaceDuplicateRequest(e); err != nil {
@@ -103,6 +127,53 @@ func (h *Hub) bindAssetMasterValidationHooks() {
 		}
 		return e.Next()
 	})
+}
+
+func (h *Hub) validateAssetInterfaceProfileRequest(e *core.RecordRequestEvent) error {
+	if e == nil || e.Record == nil {
+		return nil
+	}
+	assetRecord, err := h.FindRecordById("assets", strings.TrimSpace(e.Record.GetString("asset")))
+	if err != nil || strings.TrimSpace(assetRecord.GetString("type")) != "ont" {
+		return nil
+	}
+	metadata := recordJSONMap(e.Record, "metadata")
+	enabledValue, exists := metadata["enabled"]
+	if !exists {
+		return e.BadRequestError("ONT 接口必须明确填写启用状态。", nil)
+	}
+	enabled, ok := enabledValue.(bool)
+	if !ok {
+		return e.BadRequestError("接口启用状态必须是布尔值。", nil)
+	}
+	if role := metadataString(metadata, "role"); !stringInSet(role, "uplink", "downlink", "lan", "radio") {
+		return e.BadRequestError("接口角色只能选择上联、下联、LAN 或无线频段。", nil)
+	}
+	if strings.TrimSpace(e.Record.GetString("kind")) == "wifi" &&
+		!stringInSet(metadataString(metadata, "band"), "2.4 GHz", "5 GHz") {
+		return e.BadRequestError("无线频段只能选择 2.4 GHz 或 5 GHz。", nil)
+	}
+	if !enabled && e.Record.GetBool("connected") {
+		return e.BadRequestError("未启用接口不能标记为当前接入。", nil)
+	}
+	if speed := e.Record.GetFloat("speed_mbps"); speed < 0 {
+		return e.BadRequestError("接口速率不能小于 0。", nil)
+	}
+
+	originalMetadata := map[string]any{}
+	if original := e.Record.Original(); original != nil {
+		originalMetadata = recordJSONMap(original, "metadata")
+	}
+	for key, value := range metadata {
+		if ontAssetInterfaceAllowedMetadataFields[key] {
+			continue
+		}
+		originalValue, existed := originalMetadata[key]
+		if !existed || !reflect.DeepEqual(originalValue, value) {
+			return e.BadRequestError("字段 "+key+" 不属于 ONT 接口模板。", nil)
+		}
+	}
+	return nil
 }
 
 func (h *Hub) validateAssetParentRequest(e *core.RecordRequestEvent) error {
