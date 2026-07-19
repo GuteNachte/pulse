@@ -133,17 +133,18 @@ func (h *Hub) validateAssetRequiredProfileRequest(e *core.RecordRequestEvent) er
 	if e == nil || e.Record == nil {
 		return nil
 	}
-	if strings.TrimSpace(e.Record.GetString("type")) == "internet" {
+	switch strings.TrimSpace(e.Record.GetString("type")) {
+	case "internet":
 		return h.validateInternetAssetRecord(e)
-	}
-	if strings.TrimSpace(e.Record.GetString("type")) != "phone" {
-		return nil
-	}
-	if !recordMetadataPositiveNumber(e.Record, "memory_gb") {
-		return e.BadRequestError("手机资产必须填写运行内存。", nil)
-	}
-	if !recordMetadataPositiveNumber(e.Record, "storage_gb") {
-		return e.BadRequestError("手机资产必须填写存储容量。", nil)
+	case "ont":
+		return h.validateONTAssetRecord(e)
+	case "phone":
+		if !recordMetadataPositiveNumber(e.Record, "memory_gb") {
+			return e.BadRequestError("手机资产必须填写运行内存。", nil)
+		}
+		if !recordMetadataPositiveNumber(e.Record, "storage_gb") {
+			return e.BadRequestError("手机资产必须填写存储容量。", nil)
+		}
 	}
 	return nil
 }

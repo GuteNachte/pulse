@@ -29,6 +29,9 @@ func TestAssetMasterValidation(t *testing.T) {
 	t.Run("RequiresStrictInternetProfile", func(t *testing.T) {
 		testAssetMasterValidationRequiresStrictInternetProfile(t, hub)
 	})
+	t.Run("RequiresStrictONTProfile", func(t *testing.T) {
+		testAssetMasterValidationRequiresStrictONTProfile(t, hub)
+	})
 	t.Run("KeepsSinglePrimaryInterface", func(t *testing.T) {
 		testAssetInterfaceValidationKeepsSinglePrimaryInterface(t, hub)
 	})
@@ -50,6 +53,80 @@ func TestAssetMasterValidation(t *testing.T) {
 	t.Run("RejectsCrossUserLocationParentAndCycles", func(t *testing.T) {
 		testAssetLocationValidationRejectsCrossUserParentAndCycles(t, hub)
 	})
+}
+
+func testAssetMasterValidationRequiresStrictONTProfile(t *testing.T, hub *pulseTests.TestHub) {
+	user, err := pulseTests.CreateUser(hub, "asset-ont-profile@example.com", "password")
+	require.NoError(t, err)
+	token, err := user.NewAuthToken()
+	require.NoError(t, err)
+	headers := map[string]string{"Authorization": token}
+
+	validBody := fmt.Sprintf(`{
+		"user":"%s",
+		"name":"家庭主网关",
+		"type":"ont",
+		"status":"active",
+		"vendor":"华为",
+		"model":"V271-20",
+		"management_ip":"192.168.1.1",
+		"location":"家 / 弱电箱",
+		"metadata":{
+			"carrier":"中国联通",
+			"operating_role":"ifttr_main_gateway",
+			"fixed_ipv4":"192.168.1.1",
+			"pon_standard":"10G-EPON",
+			"wifi_24_supported":"supported",
+			"wifi_24_enabled":"disabled",
+			"wifi_5_supported":"supported",
+			"wifi_5_enabled":"enabled",
+			"lan_port_count":4,
+			"lan_2500_count":1,
+			"lan_1000_count":3
+		}
+	}`, user.Id)
+	valid := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records", strings.NewReader(validBody), headers)
+	require.Equal(t, http.StatusOK, valid.Status, valid.Body)
+	require.Contains(t, valid.Body, `"role":"iFTTR 主网关"`)
+
+	tests := []struct {
+		name     string
+		metadata string
+		message  string
+	}{
+		{name: "carrier", metadata: `"carrier":"其他","operating_role":"ifttr_main_gateway","fixed_ipv4":"192.168.1.2"`, message: "运营商只能选择"},
+		{name: "role", metadata: `"carrier":"中国联通","operating_role":"custom","fixed_ipv4":"192.168.1.3"`, message: "工作角色只能选择"},
+		{name: "wifi state", metadata: `"carrier":"中国联通","operating_role":"ifttr_main_gateway","fixed_ipv4":"192.168.1.4","wifi_5_enabled":"auto"`, message: "启用状态只能选择"},
+		{name: "negative count", metadata: `"carrier":"中国联通","operating_role":"ifttr_main_gateway","fixed_ipv4":"192.168.1.5","lan_port_count":-1`, message: "端口数量必须是非负整数"},
+		{name: "ipv4", metadata: `"carrier":"中国联通","operating_role":"ifttr_main_gateway","fixed_ipv4":"999.1.1.1"`, message: "管理 IPv4 格式不正确"},
+		{name: "mac", metadata: `"carrier":"中国联通","operating_role":"ifttr_main_gateway","fixed_ipv4":"192.168.1.6","mac":"invalid"`, message: "MAC 格式不正确"},
+		{name: "ssid", metadata: `"carrier":"中国联通","operating_role":"ifttr_main_gateway","fixed_ipv4":"192.168.1.7","ssid":"redacted"`, message: "不允许保存 Wi-Fi 名称、密码或认证凭据"},
+		{name: "password", metadata: `"carrier":"中国联通","operating_role":"ifttr_main_gateway","fixed_ipv4":"192.168.1.8","wifi_password":"redacted"`, message: "不允许保存 Wi-Fi 名称、密码或认证凭据"},
+		{name: "outside template", metadata: `"carrier":"中国联通","operating_role":"ifttr_main_gateway","fixed_ipv4":"192.168.1.9","cpu_model":"not-allowed"`, message: "不属于光猫 / ONT 严格模板"},
+	}
+	for index, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body := fmt.Sprintf(`{"user":"%s","name":"无效 ONT %d","type":"ont","status":"active","vendor":"华为","model":"V271-20","location":"家 / 弱电箱","metadata":{%s}}`, user.Id, index, tc.metadata)
+			response := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records", strings.NewReader(body), headers)
+			require.Equal(t, http.StatusBadRequest, response.Status, response.Body)
+			require.Contains(t, response.Body, tc.message)
+		})
+	}
+
+	legacy, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user": user.Id, "name": "历史 ONT", "type": "ont", "status": "active", "vendor": "华为", "model": "Legacy",
+		"location": "家 / 弱电箱", "metadata": map[string]any{
+			"carrier": "中国联通", "operating_role": "bridge_ont", "fixed_ipv4": "192.168.1.10", "legacy_field": "keep",
+		},
+	})
+	require.NoError(t, err)
+	kept := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPatch, "/api/collections/assets/records/"+legacy.Id,
+		strings.NewReader(`{"metadata":{"carrier":"中国联通","operating_role":"bridge_ont","fixed_ipv4":"192.168.1.10","legacy_field":"keep"}}`), headers)
+	require.Equal(t, http.StatusOK, kept.Status, kept.Body)
+	changed := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPatch, "/api/collections/assets/records/"+legacy.Id,
+		strings.NewReader(`{"metadata":{"carrier":"中国联通","operating_role":"bridge_ont","fixed_ipv4":"192.168.1.10","legacy_field":"changed"}}`), headers)
+	require.Equal(t, http.StatusBadRequest, changed.Status, changed.Body)
+	require.Contains(t, changed.Body, "不属于光猫 / ONT 严格模板")
 }
 
 func testAssetMasterValidationRequiresStrictInternetProfile(t *testing.T, hub *pulseTests.TestHub) {
