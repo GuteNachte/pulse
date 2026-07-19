@@ -152,13 +152,25 @@ for (const key of [
 	"default_optical_speed_mbps",
 	"switching_capacity_gbps",
 	"power_mode",
-	"poe_status",
-	"poe_standard",
-	"poe_budget_w",
+	"net_weight_g",
+	"dimensions_mm",
+	"installation_method",
+	"forwarding_method",
+	"mac_table_entries",
+	"ethernet_supported_speeds",
+	"optical_supported_speeds",
+	"lightning_protection_kv",
+	"power_input",
+	"operating_temperature_range",
+	"operating_humidity_range",
+	"storage_temperature_range",
+	"storage_humidity_range",
+	"warranty_months",
 	"vlan_status",
 	"port_isolation_status",
 	"link_aggregation_status",
 ]) assert.equal(switchFields.includes(key), true, "交换机规格缺少 " + key)
+for (const key of ["poe_status", "poe_standard", "poe_budget_w"]) assert.equal(switchFields.includes(key), false, "交换机规格不应包含 " + key)
 assert.equal(switchFields.includes("wifi_standard"), false)
 assert.equal(switchFields.includes("wan_port_count"), false)
 assert.equal(getAssetTypeOptionLabel("switch", "management_level", "smart"), "轻管理")

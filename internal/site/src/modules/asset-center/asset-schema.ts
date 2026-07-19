@@ -583,8 +583,6 @@ const networkDeviceFieldKeysByType: Partial<Record<AssetType, readonly string[]>
 		"mac",
 		"port_count",
 		"default_port_speed_mbps",
-		"poe_standard",
-		"poe_budget_w",
 		"switching_capacity_gbps",
 		"power_mode",
 		"vlan_note",

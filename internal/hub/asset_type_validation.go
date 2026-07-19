@@ -52,9 +52,13 @@ var internetAssetAllowedMetadataFields = map[string]bool{
 var switchAssetAllowedMetadataFields = map[string]bool{
 	"asset_tag": true, "official_url": true, "official_image_url": true,
 	"fixed_ipv4": true, "fixed_ipv6": true, "mac": true, "management_url": true,
+	"color": true, "device_color": true, "colors_available": true, "official_colors": true,
 	"ethernet_port_count": true, "optical_port_count": true, "other_port_count": true,
 	"default_ethernet_speed_mbps": true, "default_optical_speed_mbps": true, "switching_capacity_gbps": true,
-	"power_mode": true, "poe_status": true, "poe_standard": true, "poe_budget_w": true,
+	"net_weight_g": true, "dimensions_mm": true, "installation_method": true, "forwarding_method": true, "mac_table_entries": true,
+	"ethernet_supported_speeds": true, "optical_supported_speeds": true, "lightning_protection_kv": true, "power_input": true,
+	"operating_temperature_range": true, "operating_humidity_range": true, "storage_temperature_range": true, "storage_humidity_range": true, "warranty_months": true,
+	"power_mode":       true,
 	"management_level": true, "management_access": true, "vlan_status": true, "port_isolation_status": true, "link_aggregation_status": true,
 }
 
@@ -69,26 +73,34 @@ func (h *Hub) validateSwitchAssetRecord(e *core.RecordRequestEvent) error {
 	if value := metadataString(metadata, "management_access"); value != "" && !stringInSet(value, "none", "web", "app", "desktop", "cli") {
 		return e.BadRequestError("主要管理入口只能选择无、Web、App、桌面客户端或命令行。", nil)
 	}
-	for _, key := range []string{"poe_status", "vlan_status", "port_isolation_status", "link_aggregation_status"} {
+	for _, key := range []string{"vlan_status", "port_isolation_status", "link_aggregation_status"} {
 		if value := metadataString(metadata, key); value != "" && !stringInSet(value, "unsupported", "disabled", "enabled") {
-			return e.BadRequestError(""+map[string]string{"poe_status": "PoE", "vlan_status": "VLAN", "port_isolation_status": "端口隔离", "link_aggregation_status": "链路聚合"}[key]+"状态只能选择不支持、未启用或已启用。", nil)
+			return e.BadRequestError(""+map[string]string{"vlan_status": "VLAN", "port_isolation_status": "端口隔离", "link_aggregation_status": "链路聚合"}[key]+"状态只能选择不支持、未启用或已启用。", nil)
 		}
 	}
-	if value := metadataString(metadata, "power_mode"); value != "" && !stringInSet(value, "external", "internal", "poe_powered", "other", "unknown") {
-		return e.BadRequestError("供电方式只能选择外置电源、内置电源、PoE 受电、其他或未确认。", nil)
+	if value := metadataString(metadata, "power_mode"); value != "" && !stringInSet(value, "external", "internal", "other", "unknown") {
+		return e.BadRequestError("供电方式只能选择外置电源、内置电源、其他或未确认。", nil)
+	}
+	if value := metadataString(metadata, "forwarding_method"); value != "" && !stringInSet(value, "store_and_forward", "cut_through") {
+		return e.BadRequestError("转发方式只能选择存储转发或直通转发。", nil)
 	}
 	for _, key := range []string{"ethernet_port_count", "optical_port_count", "other_port_count"} {
 		if value, exists := metadata[key]; exists && value != nil && !isNonNegativeInteger(value) {
 			return e.BadRequestError("端口数量必须是非负整数。", nil)
 		}
 	}
-	for _, key := range []string{"default_ethernet_speed_mbps", "default_optical_speed_mbps", "switching_capacity_gbps", "poe_budget_w"} {
+	for _, key := range []string{"default_ethernet_speed_mbps", "default_optical_speed_mbps", "switching_capacity_gbps"} {
 		if value, exists := metadata[key]; exists && value != nil && !isNonNegativeNumber(value) {
 			return e.BadRequestError("端口速率、交换容量和 PoE 预算不能小于 0。", nil)
 		}
 	}
-	if metadataString(metadata, "poe_status") == "unsupported" && (metadataString(metadata, "poe_standard") != "" || positiveMetadataNumber(metadata, "poe_budget_w")) {
-		return e.BadRequestError("不支持 PoE 的交换机不能填写 PoE 标准或供电预算。", nil)
+	for _, key := range []string{"net_weight_g", "lightning_protection_kv", "warranty_months"} {
+		if value, exists := metadata[key]; exists && value != nil && !isNonNegativeNumber(value) {
+			return e.BadRequestError("重量、防雷等级和保修期不能小于 0。", nil)
+		}
+	}
+	if value, exists := metadata["mac_table_entries"]; exists && value != nil && !isNonNegativeInteger(value) {
+		return e.BadRequestError("MAC 地址表容量必须是非负整数。", nil)
 	}
 	originalMetadata := map[string]any{}
 	if original := e.Record.Original(); original != nil {
@@ -106,15 +118,6 @@ func (h *Hub) validateSwitchAssetRecord(e *core.RecordRequestEvent) error {
 		}
 	}
 	return nil
-}
-
-func positiveMetadataNumber(metadata map[string]any, key string) bool {
-	value, exists := metadata[key]
-	if !exists || value == nil {
-		return false
-	}
-	number, err := strconv.ParseFloat(strings.TrimSpace(toString(value)), 64)
-	return err == nil && number > 0
 }
 
 func (h *Hub) validateInternetAssetRecord(e *core.RecordRequestEvent) error {

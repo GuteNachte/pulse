@@ -131,7 +131,7 @@ assert.equal(
 )
 
 const switchHardwareFields = getSectionFieldKeys("switch", "硬件与端口能力")
-assert.equal(switchHardwareFields.includes("poe_budget_w"), true)
+assert.equal(switchHardwareFields.includes("poe_budget_w"), false)
 assert.equal(switchHardwareFields.includes("switching_capacity_gbps"), true)
 
 assert.deepEqual(

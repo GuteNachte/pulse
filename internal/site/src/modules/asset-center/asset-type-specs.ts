@@ -124,9 +124,13 @@ const switchFeatureStatusOptions = [
 const switchPowerModeOptions = [
 	{ value: "external", label: "外置电源" },
 	{ value: "internal", label: "内置电源" },
-	{ value: "poe_powered", label: "PoE 受电" },
 	{ value: "other", label: "其他" },
 	{ value: "unknown", label: "未确认" },
+] as const
+
+const switchForwardingMethodOptions = [
+	{ value: "store_and_forward", label: "存储转发" },
+	{ value: "cut_through", label: "直通转发" },
 ] as const
 
 export const internetAssetTypeSpec: AssetTypeSpec = {
@@ -429,10 +433,26 @@ export const switchAssetTypeSpec: AssetTypeSpec = {
 				{ key: "default_ethernet_speed_mbps", label: "默认电口速率 Mbps", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
 				{ key: "default_optical_speed_mbps", label: "默认光口速率 Mbps", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
 				{ key: "switching_capacity_gbps", label: "交换容量 Gbps", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
+				{ key: "ethernet_supported_speeds", label: "电口支持速率", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", placeholder: "10 / 100 / 1000 / 2500 Mbps" },
+				{ key: "optical_supported_speeds", label: "光口支持速率", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", placeholder: "10 Gbps" },
 				fixedChoiceField("power_mode", "供电方式", "硬件与端口能力", switchPowerModeOptions),
-				fixedChoiceField("poe_status", "PoE", "硬件与端口能力", switchFeatureStatusOptions),
-				{ key: "poe_standard", label: "PoE 标准", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata" },
-				{ key: "poe_budget_w", label: "PoE 供电预算 W", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
+			],
+		},
+		{
+			title: "设备与环境",
+			fields: [
+				{ key: "net_weight_g", label: "净重 g", group: "设备与环境", inputMode: "manual_optional", source: "metadata", type: "number" },
+				{ key: "dimensions_mm", label: "外观尺寸 mm", group: "设备与环境", inputMode: "manual_optional", source: "metadata", placeholder: "长 × 宽 × 高" },
+				{ key: "installation_method", label: "安装方式", group: "设备与环境", inputMode: "manual_optional", source: "metadata", placeholder: "桌面 / 壁挂" },
+				fixedChoiceField("forwarding_method", "转发方式", "设备与环境", switchForwardingMethodOptions),
+				{ key: "mac_table_entries", label: "MAC 地址表容量", group: "设备与环境", inputMode: "manual_optional", source: "metadata", type: "number" },
+				{ key: "lightning_protection_kv", label: "防雷等级 kV", group: "设备与环境", inputMode: "manual_optional", source: "metadata", type: "number" },
+				{ key: "power_input", label: "输入电源", group: "设备与环境", inputMode: "manual_optional", source: "metadata", placeholder: "12V 1.5A Max" },
+				{ key: "operating_temperature_range", label: "工作温度", group: "设备与环境", inputMode: "manual_optional", source: "metadata", placeholder: "0°C ~ 40°C" },
+				{ key: "operating_humidity_range", label: "工作湿度", group: "设备与环境", inputMode: "manual_optional", source: "metadata", placeholder: "10% ~ 90% RH 无凝结" },
+				{ key: "storage_temperature_range", label: "存储温度", group: "设备与环境", inputMode: "manual_optional", source: "metadata", placeholder: "-40°C ~ 70°C" },
+				{ key: "storage_humidity_range", label: "存储湿度", group: "设备与环境", inputMode: "manual_optional", source: "metadata", placeholder: "5% ~ 90% RH 无凝结" },
+				{ key: "warranty_months", label: "保修期 月", group: "设备与环境", inputMode: "manual_optional", source: "metadata", type: "number" },
 			],
 		},
 		{

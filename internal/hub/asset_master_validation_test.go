@@ -74,18 +74,14 @@ func testAssetMasterValidationRequiresStrictSwitchProfile(t *testing.T, hub *pul
 	require.NoError(t, err)
 	headers := map[string]string{"Authorization": token}
 
-	validBody := fmt.Sprintf(`{"user":"%s","name":"通用交换机","type":"switch","status":"active","vendor":"示例品牌","model":"示例型号","metadata":{"management_level":"smart","management_access":"web","vlan_status":"disabled","port_isolation_status":"disabled","link_aggregation_status":"unsupported","poe_status":"unsupported","power_mode":"external"}}`, user.Id)
+	validBody := fmt.Sprintf(`{"user":"%s","name":"通用交换机","type":"switch","status":"active","vendor":"示例品牌","model":"示例型号","metadata":{"color":"","device_color":"","management_level":"smart","management_access":"web","vlan_status":"disabled","port_isolation_status":"disabled","link_aggregation_status":"unsupported","power_mode":"external","net_weight_g":806,"dimensions_mm":"220 × 136 × 28","installation_method":"桌面 / 壁挂","forwarding_method":"store_and_forward","mac_table_entries":4000,"ethernet_supported_speeds":"10 / 100 / 1000 / 2500 Mbps","optical_supported_speeds":"10 Gbps","lightning_protection_kv":4,"power_input":"12V 1.5A Max","operating_temperature_range":"0°C ~ 40°C","operating_humidity_range":"10%% ~ 90%% RH 无凝结","storage_temperature_range":"-40°C ~ 70°C","storage_humidity_range":"5%% ~ 90%% RH 无凝结","warranty_months":12}}`, user.Id)
 	valid := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records", strings.NewReader(validBody), headers)
 	require.Equal(t, http.StatusOK, valid.Status, valid.Body)
 
-	unsupportedPoeWithEmptyBudget := fmt.Sprintf(`{"user":"%s","name":"无 PoE 预算交换机","type":"switch","status":"active","metadata":{"poe_status":"unsupported","poe_budget_w":0}}`, user.Id)
-	unsupportedPoeWithEmptyBudgetResponse := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records", strings.NewReader(unsupportedPoeWithEmptyBudget), headers)
-	require.Equal(t, http.StatusOK, unsupportedPoeWithEmptyBudgetResponse.Status, unsupportedPoeWithEmptyBudgetResponse.Body)
-
-	unsupportedPoeWithPositiveBudget := fmt.Sprintf(`{"user":"%s","name":"错误 PoE 预算交换机","type":"switch","status":"active","metadata":{"poe_status":"unsupported","poe_budget_w":1}}`, user.Id)
-	unsupportedPoeWithPositiveBudgetResponse := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records", strings.NewReader(unsupportedPoeWithPositiveBudget), headers)
-	require.Equal(t, http.StatusBadRequest, unsupportedPoeWithPositiveBudgetResponse.Status, unsupportedPoeWithPositiveBudgetResponse.Body)
-	require.Contains(t, unsupportedPoeWithPositiveBudgetResponse.Body, "不支持 PoE")
+	poeBody := fmt.Sprintf(`{"user":"%s","name":"错误 PoE 交换机","type":"switch","status":"active","metadata":{"poe_status":"unsupported"}}`, user.Id)
+	poe := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records", strings.NewReader(poeBody), headers)
+	require.Equal(t, http.StatusBadRequest, poe.Status, poe.Body)
+	require.Contains(t, poe.Body, "poe_status 不属于交换机严格模板")
 
 	invalidBody := fmt.Sprintf(`{"user":"%s","name":"错误交换机","type":"switch","status":"active","metadata":{"management_level":"router","wifi_standard":"Wi-Fi 7"}}`, user.Id)
 	invalid := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records", strings.NewReader(invalidBody), headers)
