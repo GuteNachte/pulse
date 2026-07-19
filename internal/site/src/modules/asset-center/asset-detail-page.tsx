@@ -182,6 +182,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const [internetAddressRefreshing, setInternetAddressRefreshing] = useState(false)
 	const secondaryLoadRef = useRef<Promise<void> | null>(null)
 	const editCatalogLoadRef = useRef<Promise<void> | null>(null)
+	const interfaceDialogCloseGuardRef = useRef(false)
 	const detailLoadGuardRef = useRef(createAssetDetailLoadGuard())
 	const readOnly = isReadOnlyUser()
 	const assetMap = useMemo(() => new Map(state.assets.map((asset) => [asset.id, asset])), [state.assets])
@@ -442,8 +443,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			if (primary) {
 				await clearOtherPrimaryInterfaces(asset.id, saved.id)
 			}
-			setEditingInterface(null)
-			setInterfaceDialogOpen(false)
+			closeInterfaceDialog()
 			await loadDetail({ preserveContent: true })
 			toast({ title: editingInterface ? "接口已更新" : "接口已添加", description: name })
 		} catch (error) {
@@ -950,15 +950,31 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	}
 
 	function openAddInterfaceDialog() {
+		interfaceDialogCloseGuardRef.current = managementDialogOpen
 		setEditingInterface(null)
 		setInterfaceKindDraft("ethernet")
 		setInterfaceDialogOpen(true)
 	}
 
 	function openEditInterfaceDialog(record: AssetInterfaceRecord) {
+		interfaceDialogCloseGuardRef.current = managementDialogOpen
 		setEditingInterface(record)
 		setInterfaceKindDraft(record.kind)
 		setInterfaceDialogOpen(true)
+	}
+
+	function closeInterfaceDialog() {
+		setInterfaceDialogOpen(false)
+		setEditingInterface(null)
+		window.setTimeout(() => {
+			const releaseGuard = () => {
+				interfaceDialogCloseGuardRef.current = false
+				document.removeEventListener("pointerdown", releaseGuard, true)
+				document.removeEventListener("keydown", releaseGuard, true)
+			}
+			document.addEventListener("pointerdown", releaseGuard, true)
+			document.addEventListener("keydown", releaseGuard, true)
+		}, 0)
 	}
 
 	async function deleteInterface(record: AssetInterfaceRecord) {
@@ -1141,10 +1157,18 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				onUpdateInternetAddressSettings={updateInternetAddressSettings}
 			/>
 
-			<Dialog open={managementDialogOpen} onOpenChange={setManagementDialogOpen}>
+			<Dialog
+				open={managementDialogOpen}
+				onOpenChange={(open) => {
+					if (!open && interfaceDialogOpen) return
+					if (!open && interfaceDialogCloseGuardRef.current) return
+					setManagementDialogOpen(open)
+				}}
+			>
 				<AssetEditWorkbench
 					asset={asset}
 					state={state}
+					nestedDialogOpen={interfaceDialogOpen}
 					defaultMediaPreview={getAssetMediaDefaultPreview(assetMedia.covers, undefined)}
 					readOnly={readOnly}
 					saving={saving}
@@ -1204,8 +1228,11 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			<Dialog
 				open={interfaceDialogOpen}
 				onOpenChange={(open) => {
-					setInterfaceDialogOpen(open)
-					if (!open) setEditingInterface(null)
+					if (open) {
+						setInterfaceDialogOpen(true)
+					} else {
+						closeInterfaceDialog()
+					}
 				}}
 			>
 				<DialogContent className="max-w-2xl">
@@ -1313,7 +1340,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 							</DialogFormSection>
 						</div>
 						<DialogFooter>
-							<Button variant="outline" onClick={() => setInterfaceDialogOpen(false)} disabled={saving}>
+							<Button variant="outline" onClick={closeInterfaceDialog} disabled={saving}>
 								取消
 							</Button>
 							<Button type="submit" disabled={saving || readOnly}>

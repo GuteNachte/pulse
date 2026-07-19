@@ -24,5 +24,35 @@ for (const text of ["AssetInterfaceManager", "onAddInterface", "onEditInterface"
 const detailPage = readFileSync(new URL("../asset-detail-page.tsx", import.meta.url), "utf8")
 assert.equal(detailPage.includes("交换机（待建档）"), true, "interface connection note needs a neutral example")
 assert.equal(detailPage.includes('...(kind === "wifi"'), true, "non-Wi-Fi interfaces must not send an empty wireless band")
+assert.equal(
+	detailPage.includes("if (!open && interfaceDialogOpen) return"),
+	true,
+	"closing the interface dialog must not close the parent asset editor"
+)
+assert.equal(
+	detailPage.includes("nestedDialogOpen={interfaceDialogOpen}"),
+	true,
+	"the parent workbench must know while an interface dialog is stacked above it"
+)
+assert.equal(
+	workbench.includes("if (nestedDialogOpen) event.preventDefault()"),
+	true,
+	"the parent workbench must ignore outside interactions coming from its nested dialog"
+)
+assert.equal(
+	detailPage.includes("interfaceDialogCloseGuardRef.current"),
+	true,
+	"the close guard must survive the child dialog unmount and focus restoration"
+)
+assert.equal(
+	detailPage.includes('document.addEventListener("pointerdown", releaseGuard, true)'),
+	true,
+	"the close guard must survive asynchronous interface refresh until the next user interaction"
+)
+assert.equal(
+	detailPage.includes('document.addEventListener("keydown", releaseGuard, true)'),
+	true,
+	"keyboard dismissal must also release the nested dialog guard"
+)
 
 console.log("asset interface manager contract passed")

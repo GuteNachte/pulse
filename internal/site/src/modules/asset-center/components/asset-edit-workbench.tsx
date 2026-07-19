@@ -83,6 +83,7 @@ type AssetEditWorkbenchState = {
 type AssetEditWorkbenchProps = {
 	asset: AssetRecord
 	state: AssetEditWorkbenchState
+	nestedDialogOpen: boolean
 	defaultMediaPreview?: { url: string; alt: string }
 	readOnly: boolean
 	saving: boolean
@@ -103,6 +104,7 @@ type AssetEditWorkbenchProps = {
 export function AssetEditWorkbench({
 	asset,
 	state,
+	nestedDialogOpen,
 	defaultMediaPreview,
 	readOnly,
 	saving,
@@ -192,7 +194,15 @@ export function AssetEditWorkbench({
 	}
 
 	return (
-		<DialogContent className="grid h-[min(92dvh,62rem)] w-[calc(100vw-2rem)] max-w-[96rem] grid-rows-[minmax(0,1fr)] gap-0 overflow-hidden p-0 lg:top-[46%]">
+		<DialogContent
+			className="grid h-[min(92dvh,62rem)] w-[calc(100vw-2rem)] max-w-[96rem] grid-rows-[minmax(0,1fr)] gap-0 overflow-hidden p-0 lg:top-[46%]"
+			onInteractOutside={(event) => {
+				if (nestedDialogOpen) event.preventDefault()
+			}}
+			onEscapeKeyDown={(event) => {
+				if (nestedDialogOpen) event.preventDefault()
+			}}
+		>
 			<DialogHeader className="sr-only">
 				<DialogTitle>编辑资产</DialogTitle>
 				<DialogDescription>主档、类型专属参数、智能匹配和候选图片在同一工作台维护。</DialogDescription>
