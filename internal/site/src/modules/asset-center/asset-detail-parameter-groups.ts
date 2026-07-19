@@ -30,6 +30,24 @@ import {
 	getInternetAddressAutoRefreshSettings,
 } from "./asset-internet-address-status.ts"
 export function buildAssetParameterGroups(asset: AssetRecord): AssetParameterGroup[] {
+	if (asset.type === "ont") {
+		return getAssetFormSections("ont")
+			.filter((section) => section.title !== "身份与归属")
+			.map((section, index) => {
+				const rows = section.fields.map((field) => {
+					const rawValue = getAssetFieldDisplayValue(asset, field)
+					const value = rawValue === "none" || rawValue === "无" ? "无" : rawValue || "未确认"
+					return archiveRowToParameterRow({ field, value })
+				})
+				return {
+					id: `ont-${normalizeGroupId(section.title)}-${index}`,
+					title: section.title,
+					icon: getParameterGroupIcon(section.title),
+					rows,
+					summary: getParameterGroupSummary(rows),
+				}
+			})
+	}
 	const useHostHardwareProfile = HOST_ASSET_TYPES.includes(asset.type)
 	const archiveGroups = useHostHardwareProfile
 		? []

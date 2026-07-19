@@ -281,3 +281,52 @@ assertDeepEqual(
 		["下次更新时间", "2026-07-19 08:30"],
 	]
 )
+
+const ont = {
+	id: "ont-1",
+	user: "user-1",
+	name: "家庭主网关",
+	type: "ont",
+	status: "active",
+	vendor: "华为",
+	model: "V271-20",
+	location: "家 / 弱电箱",
+	created: "2026-07-19 00:00:00.000Z",
+	updated: "2026-07-19 00:00:00.000Z",
+	metadata: {
+		product_series: "Huawei OptiXstar",
+		carrier: "中国联通",
+		operating_role: "ifttr_main_gateway",
+		pon_standard: "10G-EPON",
+		router_status: "enabled",
+		gateway_status: "enabled",
+		dhcp_status: "enabled",
+		fixed_ipv4: "192.168.1.1",
+		wifi_standard: "Wi-Fi 7",
+		wifi_24_supported: "supported",
+		wifi_24_enabled: "disabled",
+		wifi_5_supported: "supported",
+		wifi_5_enabled: "enabled",
+		lan_port_count: 4,
+		lan_2500_count: 1,
+		lan_1000_count: 3,
+		power_spec: "DC 12V / 2A",
+	},
+} as unknown as AssetRecord
+
+assertDeepEqual(
+	buildAssetParameterGroups(ont).map((group) => group.title),
+	["光纤接入", "路由与管理", "无线网络", "有线网络", "其他端口与电源", "设备身份标识"]
+)
+assertDeepEqual(
+	buildAssetParameterGroups(ont)
+		.find((group) => group.title === "设备身份标识")
+		?.rows.map((row) => [row.label, row.value]),
+	[
+		["产品编号", "未确认"],
+		["PON SN", "未确认"],
+		["设备序列号", "未确认"],
+		["MAC", "未确认"],
+		["无线电型号核准编号", "未确认"],
+	]
+)

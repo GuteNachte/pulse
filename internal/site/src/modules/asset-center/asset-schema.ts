@@ -1,6 +1,11 @@
 import type { AssetStatus, AssetType } from "@/types"
 import { getAssetProfile, getCreatableAssetTypeOptions } from "./asset-profiles.ts"
-import { internetAssetTypeSpec, normalizeInternetProvider } from "./asset-type-specs.ts"
+import {
+	internetAssetTypeSpec,
+	normalizeInternetProvider,
+	ontAssetTypeSpec,
+	type AssetTypeSpec,
+} from "./asset-type-specs.ts"
 
 export type AssetFieldSource = "asset" | "metadata"
 export type AssetFieldType = "text" | "number" | "date" | "url" | "select"
@@ -569,17 +574,6 @@ const networkDeviceFieldKeysByType: Partial<Record<AssetType, readonly string[]>
 		"power_mode",
 		"vlan_note",
 	],
-	ont: [
-		"fixed_ipv4",
-		"fixed_ipv6",
-		"mac",
-		"port_count",
-		"default_port_speed_mbps",
-		"pon_standard",
-		"optical_connector",
-		"voice_port_count",
-		"power_mode",
-	],
 	switch: [
 		"fixed_ipv4",
 		"fixed_ipv6",
@@ -626,21 +620,26 @@ function getNetworkDeviceFields(type: AssetType) {
 	return networkDeviceFields.filter((field) => keys.has(field.key))
 }
 
-const internetSections: AssetFieldSection[] = internetAssetTypeSpec.sections.map((section) => ({
-	title: section.title,
-	fields: section.fields.map((field) => ({
-		key: field.key,
-		label: field.label,
-		source: field.source,
-		type: field.type,
-		required: field.inputMode === "manual_required" || field.key === "vendor",
-		placeholder: field.placeholder,
-		span: field.span,
-		options: field.options ? [...field.options] : undefined,
-		capture: field.inputMode === "captured_candidate" ? "agent_collectable" : "manual",
-		readOnly: field.readOnly,
-	})),
-}))
+function assetTypeSpecSectionsToFormSections(spec: AssetTypeSpec): AssetFieldSection[] {
+	return spec.sections.map((section) => ({
+		title: section.title,
+		fields: section.fields.map((field) => ({
+			key: field.key,
+			label: field.label,
+			source: field.source,
+			type: field.type,
+			required: field.inputMode === "manual_required" || (spec.type === "internet" && field.key === "vendor"),
+			placeholder: field.placeholder,
+			span: field.span,
+			options: field.options ? [...field.options] : undefined,
+			capture: field.inputMode === "captured_candidate" ? "agent_collectable" : "manual",
+			readOnly: field.readOnly,
+		})),
+	}))
+}
+
+const internetSections = assetTypeSpecSectionsToFormSections(internetAssetTypeSpec)
+const ontSections = assetTypeSpecSectionsToFormSections(ontAssetTypeSpec)
 
 const vmFields: AssetFieldDefinition[] = [
 	{ key: "virtualization_platform", label: "虚拟化平台", source: "metadata", placeholder: "PVE / Hyper-V / Docker VM" },
@@ -1164,6 +1163,9 @@ const customFields: AssetFieldDefinition[] = [
 export function getAssetFormSections(type: AssetType): AssetFieldSection[] {
 	if (type === "internet") {
 		return internetSections
+	}
+	if (type === "ont") {
+		return ontSections
 	}
 	if (NETWORK_ASSET_TYPES.includes(type)) {
 		return [

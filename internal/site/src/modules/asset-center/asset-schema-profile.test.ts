@@ -134,7 +134,13 @@ const switchHardwareFields = getSectionFieldKeys("switch", "网络参数")
 assert.equal(switchHardwareFields.includes("poe_budget_w"), true)
 assert.equal(switchHardwareFields.includes("switching_capacity_gbps"), true)
 
-assert.equal(getSectionFieldKeys("ont", "网络参数").includes("pon_standard"), true)
+assert.deepEqual(
+	getAssetFormSections("ont").map((section) => section.title),
+	["身份与归属", "光纤接入", "路由与管理", "无线网络", "有线网络", "其他端口与电源", "设备身份标识"]
+)
+assert.equal(getSectionFieldKeys("ont", "网络参数").length, 0)
+assert.equal(getSectionFieldKeys("ont", "无线网络").includes("wifi_5_enabled"), true)
+assert.equal(getSectionFieldKeys("ont", "设备身份标识").includes("pon_sn"), true)
 assert.equal(getSectionFieldKeys("firewall", "网络参数").includes("security_throughput_gbps"), true)
 
 const sensorFields = getSectionFieldKeys("sensor", "智能家居参数")

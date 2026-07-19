@@ -48,7 +48,7 @@ import {
 import { buildAssetLocationOptions } from "../asset-list"
 import { isAssetLocationNotApplicable } from "../asset-location"
 import { getEditableAssetTypeOptions } from "../asset-profiles"
-import { getAssetTypeCapabilities, internetAssetTypeSpec } from "../asset-type-specs"
+import { getAssetTypeCapabilities, getAssetTypeSpec, internetAssetTypeSpec } from "../asset-type-specs"
 import {
 	formatInternetAddressTimestamp,
 	getInternetAddressAutoRefreshSettings,
@@ -158,6 +158,7 @@ export function AssetEditWorkbench({
 		buildNextAssetTag(state.assets, normalizeAssetNumberingSettings(loadAssetNumberingSettings()))
 	const isInternetService = selectedType === "web_endpoint"
 	const isInternetResource = selectedType === "internet"
+	const isOnt = selectedType === "ont"
 	const locationNotApplicable = isAssetLocationNotApplicable(selectedType)
 	const capabilities = getAssetTypeCapabilities(selectedType)
 	const formSections = buildAssetProfileEditSections(selectedType, getRequiredAssetProfileFieldKeys(selectedType))
@@ -173,7 +174,8 @@ export function AssetEditWorkbench({
 	)
 	const editableTypeOptions = getEditableAssetTypeOptions(selectedType)
 	const statusField = universalArchiveFields.get("status")
-	const statusOptions = isInternetResource ? [...internetAssetTypeSpec.statusOptions] : (statusField?.options ?? [])
+	const selectedTypeSpec = getAssetTypeSpec(selectedType)
+	const statusOptions = selectedTypeSpec ? [...selectedTypeSpec.statusOptions] : (statusField?.options ?? [])
 	const connectionFieldKeys = getAssetConnectionFieldKeys(selectedType)
 	const renderUniversalArchiveField = (key: string) => {
 		const field = universalArchiveFields.get(key)
@@ -324,7 +326,13 @@ export function AssetEditWorkbench({
 												onChange={(value) => setStatusValue(value as NonNullable<AssetRecord["status"]>)}
 											/>
 										)}
-										{capabilities.showRole ? renderUniversalArchiveField("role") : null}
+									{isOnt ? (
+										<>
+											{renderUniversalArchiveField("carrier")}
+											{renderUniversalArchiveField("operating_role")}
+										</>
+									) : null}
+									{capabilities.showRole && !isOnt ? renderUniversalArchiveField("role") : null}
 										{capabilities.showHardware ? renderUniversalArchiveField("official_url") : null}
 									</>
 								)}

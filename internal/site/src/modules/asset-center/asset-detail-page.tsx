@@ -36,7 +36,13 @@ import {
 	getStatusLabel,
 	isPhoneVariantSpecRequired,
 } from "./asset-schema"
-import { getInternetStatusLabel, normalizeInternetProvider, validateInternetAssetValues } from "./asset-type-specs"
+import {
+	getAssetTypeOptionLabel,
+	getInternetStatusLabel,
+	normalizeInternetProvider,
+	validateInternetAssetValues,
+	validateOntAssetValues,
+} from "./asset-type-specs"
 import { formatAssetVisualTaskMeta as formatAssetVisualTaskSummary } from "./asset-ai-task-summary"
 import { loadLatestAITasksByKind } from "./asset-ai-task-query"
 import { createAssetDetailLoadGuard, type AssetDetailLoadToken } from "./asset-detail-load-guard"
@@ -591,7 +597,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			metadata[field.key] = field.type === "number" && normalized ? Number(normalized) : normalized
 		}
 		metadata.color = form.get("color")?.toString().trim() || ""
-		metadata.device_color = metadata.color
+		if (targetType !== "ont") metadata.device_color = metadata.color
 		metadata.asset_tag = form.get("asset_tag")?.toString().trim() || metadata.asset_tag || ""
 		metadata.fixed_ipv4 = fixedIpv4
 		const colorsAvailable = form.get("colors_available")?.toString().trim()
@@ -622,6 +628,25 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				return
 			}
 		}
+		if (targetType === "ont") {
+			const errors = validateOntAssetValues({
+				name,
+				vendor: form.get("vendor")?.toString() ?? "",
+				model: form.get("model")?.toString() ?? "",
+				status: (form.get("status")?.toString() as AssetRecord["status"]) ?? asset.status ?? "active",
+				location: form.get("location")?.toString() ?? "",
+				carrier: String(metadata.carrier ?? ""),
+				operatingRole: String(metadata.operating_role ?? ""),
+			})
+			if (errors.length > 0) {
+				toast({ title: "光猫 / ONT 资料未填完整", description: errors.join("、"), variant: "destructive" })
+				return
+			}
+		}
+		const normalizedRole =
+			targetType === "ont"
+				? getAssetTypeOptionLabel("ont", "operating_role", String(metadata.operating_role ?? ""))
+				: form.get("role")?.toString().trim() || ""
 		setSaving(true)
 		try {
 			await pb.collection("assets").update(asset.id, {
@@ -636,7 +661,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				serial_number: form.get("serial_number")?.toString().trim() || "",
 				management_ip: managementIp,
 				location: targetType === "internet" ? asset.location || "" : form.get("location")?.toString().trim() || "",
-				role: targetType === "internet" ? asset.role || "" : form.get("role")?.toString().trim() || "",
+				role: targetType === "internet" ? asset.role || "" : normalizedRole,
 				notes: form.get("notes")?.toString().trim() || "",
 				metadata,
 			})

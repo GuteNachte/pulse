@@ -10,7 +10,7 @@ import {
 	getMetadataString,
 	isPhoneVariantSpecRequired,
 } from "./asset-schema.ts"
-import { formatInternetBandwidth, getInternetOptionLabel } from "./asset-type-specs.ts"
+import { formatInternetBandwidth, getAssetTypeOptionLabel, getInternetOptionLabel } from "./asset-type-specs.ts"
 
 export function getInternetBandwidthLabel(asset: AssetRecord) {
 	const down = getMetadataNumber(asset.metadata, "down_mbps")
@@ -85,6 +85,25 @@ export function getAssetSummaryRows(asset: AssetRecord): { label: string; value:
 			getMetadataString(metadata, "public_ipv4") || getMetadataString(metadata, "public_ipv6"),
 			true
 		)
+		return rows
+	}
+	if (asset.type === "ont") {
+		const productSeries = getMetadataString(metadata, "product_series")
+		const seriesModel = [productSeries, asset.model].filter(Boolean).join(" ")
+		const role = getAssetTypeOptionLabel("ont", "operating_role", getMetadataString(metadata, "operating_role"))
+		const lan2500Count = getMetadataNumber(metadata, "lan_2500_count")
+		const lan1000Count = getMetadataNumber(metadata, "lan_1000_count")
+		const wired = [
+			lan2500Count ? (lan2500Count === 1 ? "2.5GbE" : `${lan2500Count} × 2.5GbE`) : "",
+			lan1000Count ? `${lan1000Count} × 1GbE` : "",
+		]
+			.filter(Boolean)
+			.join(" + ")
+		pushRow(rows, "型号", seriesModel || [asset.vendor, asset.model].filter(Boolean).join(" "))
+		pushRow(rows, "工作角色", role)
+		pushRow(rows, "接入", getMetadataString(metadata, "pon_standard"))
+		pushRow(rows, "网络", [wired, getMetadataString(metadata, "wifi_standard")].filter(Boolean).join(" / "))
+		pushRow(rows, "位置", asset.location || "未填写位置")
 		return rows
 	}
 	if (NETWORK_ASSET_TYPES.includes(asset.type)) {
@@ -205,6 +224,20 @@ function getAssetCompletenessChecks(asset: AssetRecord, context: AssetCompletene
 			: [{ label: "资产位置", ok: Boolean(asset.location?.trim() || getMetadataString(metadata, "room")) }]),
 		{ label: "用途 / 角色", ok: Boolean(asset.role?.trim()) },
 	]
+	if (asset.type === "ont") {
+		return [
+			{ label: "资产名称", ok: Boolean(asset.name?.trim()) },
+			{ label: "厂商 / 品牌", ok: Boolean(asset.vendor?.trim()) },
+			{ label: "型号", ok: Boolean(asset.model?.trim()) },
+			{ label: "位置", ok: Boolean(asset.location?.trim()) },
+			{ label: "运营商", ok: Boolean(getMetadataString(metadata, "carrier")) },
+			{ label: "工作角色", ok: Boolean(getMetadataString(metadata, "operating_role")) },
+			{ label: "管理 IPv4", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) },
+			{ label: "PON 标准", ok: Boolean(getMetadataString(metadata, "pon_standard")) },
+			{ label: "无线标准", ok: Boolean(getMetadataString(metadata, "wifi_standard")) },
+			{ label: "LAN 端口", ok: (getMetadataNumber(metadata, "lan_port_count") ?? 0) > 0 },
+		]
+	}
 	if (NETWORK_ASSET_TYPES.includes(asset.type)) {
 		checks.push(
 			{ label: "厂商 / 品牌", ok: Boolean(asset.vendor?.trim()) },

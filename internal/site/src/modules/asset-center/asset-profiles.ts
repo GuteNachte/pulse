@@ -1,5 +1,5 @@
 import type { AssetType } from "../../types"
-import { internetAssetTypeSpec } from "./asset-type-specs.ts"
+import { internetAssetTypeSpec, ontAssetTypeSpec } from "./asset-type-specs.ts"
 
 export type AssetClass =
 	| "compute"
@@ -26,6 +26,10 @@ const phoneRequiredFieldKeys = ["memory_gb", "storage_gb"] as const
 const internetRequiredFieldKeys = internetAssetTypeSpec.sections
 	.flatMap((section) => section.fields)
 	.filter((field) => field.inputMode === "manual_required" || ["vendor", "access_technology", "auth_mode"].includes(field.key))
+	.map((field) => field.key)
+const ontRequiredFieldKeys = ontAssetTypeSpec.sections
+	.flatMap((section) => section.fields)
+	.filter((field) => field.key === "carrier" || field.key === "operating_role")
 	.map((field) => field.key)
 
 export const assetProfiles: readonly AssetProfileDefinition[] = [
@@ -90,7 +94,7 @@ export const assetProfiles: readonly AssetProfileDefinition[] = [
 		assetClass: "network",
 		description: "运营商入户光猫、桥接设备",
 		creatable: true,
-		requiredFieldKeys: [],
+		requiredFieldKeys: ontRequiredFieldKeys,
 	},
 	{
 		type: "switch",

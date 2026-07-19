@@ -102,7 +102,12 @@ import {
 	type AssetFieldDefinition,
 	type AssetFieldSection,
 } from "@/modules/asset-center/asset-schema"
-import { normalizeInternetProvider, validateInternetAssetValues } from "@/modules/asset-center/asset-type-specs"
+import {
+	getAssetTypeOptionLabel,
+	normalizeInternetProvider,
+	validateInternetAssetValues,
+	validateOntAssetValues,
+} from "@/modules/asset-center/asset-type-specs"
 import { buildInternetUplinkAssetIds, getAssetCompleteness } from "@/modules/asset-center/asset-profile-summary"
 import { buildAssetInterfaceDisplay, groupAssetInterfacesByAsset } from "@/modules/asset-center/asset-interface-display"
 import { syncPrimaryInterface } from "@/modules/asset-center/asset-interface-sync"
@@ -556,6 +561,21 @@ export default memo(function AssetsPage() {
 				return
 			}
 		}
+		if (form.type === "ont") {
+			const errors = validateOntAssetValues({
+				name,
+				vendor: form.vendor,
+				model: form.model,
+				status: form.status,
+				location: form.location,
+				carrier: form.metadata.carrier ?? "",
+				operatingRole: form.metadata.operating_role ?? "",
+			})
+			if (errors.length > 0) {
+				toast({ title: "光猫 / ONT 资料未填完整", description: errors.join("、"), variant: "destructive" })
+				return
+			}
+		}
 		if (!editing) {
 			const createErrors = validateNewAssetRequiredFields(form, assets)
 			if (createErrors.length > 0) {
@@ -597,6 +617,10 @@ export default memo(function AssetsPage() {
 		if (!editing && !String(normalizedMetadata.asset_tag ?? "").trim()) {
 			normalizedMetadata.asset_tag = buildNextAssetTag(assets, numberingSettings)
 		}
+		const normalizedRole =
+			form.type === "ont"
+				? getAssetTypeOptionLabel("ont", "operating_role", form.metadata.operating_role ?? "")
+				: form.role.trim()
 		const payload = {
 			user,
 			name,
@@ -608,7 +632,7 @@ export default memo(function AssetsPage() {
 			serial_number: form.serial_number.trim(),
 			management_ip: form.type === "internet" ? "" : form.management_ip.trim() || canonicalIpv4,
 			location: form.location.trim(),
-			role: form.role.trim(),
+			role: normalizedRole,
 			notes: form.notes.trim(),
 			metadata: normalizedMetadata,
 		}
@@ -1263,6 +1287,15 @@ function validateNewAssetRequiredFields(form: AssetFormState, existingAssets: As
 		if (!form.vendor.trim()) errors.push("运营商")
 		if (!isPositiveNumberString(form.metadata.down_mbps)) errors.push("下行带宽")
 		if (!isPositiveNumberString(form.metadata.up_mbps)) errors.push("上行带宽")
+		return errors
+	}
+	if (form.type === "ont") {
+		if (!form.vendor.trim()) errors.push("厂商 / 品牌")
+		if (!form.model.trim()) errors.push("型号 / 规格")
+		if (!form.location.trim()) errors.push("位置")
+		if (!form.metadata.fixed_ipv4?.trim()) errors.push("管理 IPv4")
+		if (!form.metadata.carrier?.trim()) errors.push("运营商")
+		if (!form.metadata.operating_role?.trim()) errors.push("工作角色")
 		return errors
 	}
 	if (form.type === "web_endpoint") {

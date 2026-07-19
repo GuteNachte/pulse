@@ -23,5 +23,6 @@ assert.equal(
 )
 assert.deepEqual(getProfileRequiredFieldKeys("phone"), ["memory_gb", "storage_gb"])
 assert.deepEqual(getProfileRequiredFieldKeys("mini_pc"), [])
+assert.deepEqual(getProfileRequiredFieldKeys("ont"), ["carrier", "operating_role"])
 
 console.log("asset profile contract passed")

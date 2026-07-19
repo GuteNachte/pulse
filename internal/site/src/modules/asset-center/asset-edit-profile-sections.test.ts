@@ -61,6 +61,15 @@ assert.deepEqual(
 	["access_technology", "auth_mode", "down_mbps", "up_mbps"]
 )
 
+const ontRequiredFields = getRequiredAssetProfileFieldKeys("ont")
+for (const key of ["name", "type", "vendor", "model", "status", "location", "asset_tag", "fixed_ipv4", "carrier", "operating_role"]) {
+	assert.equal(ontRequiredFields.has(key), true, `ONT 顶部字段缺少 ${key}`)
+}
+assert.deepEqual(
+	buildAssetProfileEditSections("ont", ontRequiredFields).map((section) => section.title),
+	["身份与归属", "光纤接入", "路由与管理", "无线网络", "有线网络", "其他端口与电源", "设备身份标识"]
+)
+
 const phoneSections = buildAssetProfileEditSections("phone", phoneRequiredFields)
 assert.equal(
 	phoneSections.every((section) => section.fields.every((field) => !phoneRequiredFields.has(field.key))),

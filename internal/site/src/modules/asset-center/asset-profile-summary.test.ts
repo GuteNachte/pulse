@@ -77,3 +77,33 @@ assertEqual(
 	] as never[])],
 	["asset-internet"]
 )
+
+const ont = {
+	id: "asset-ont",
+	type: "ont",
+	name: "家庭主网关",
+	vendor: "华为",
+	model: "V271-20",
+	status: "active",
+	location: "家 / 弱电箱",
+	metadata: {
+		product_series: "Huawei OptiXstar",
+		carrier: "中国联通",
+		operating_role: "ifttr_main_gateway",
+		fixed_ipv4: "192.168.1.1",
+		pon_standard: "10G-EPON",
+		wifi_standard: "Wi-Fi 7",
+		lan_port_count: 4,
+		lan_2500_count: 1,
+		lan_1000_count: 3,
+	},
+} as unknown as AssetRecord
+
+assertEqual(getAssetSummaryRows(ont), [
+	{ label: "型号", value: "Huawei OptiXstar V271-20" },
+	{ label: "工作角色", value: "iFTTR 主网关" },
+	{ label: "接入", value: "10G-EPON" },
+	{ label: "网络", value: "2.5GbE + 3 × 1GbE / Wi-Fi 7" },
+	{ label: "位置", value: "家 / 弱电箱" },
+])
+assertEqual(getAssetCompleteness(ont).missing.includes("内部型号 / 搜索代码"), false)
