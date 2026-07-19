@@ -32,14 +32,14 @@ export function AssetOverviewColumn({
 }: {
 	sections: AssetIdentitySection[]
 	title?: string
-	subtitle?: string
+	subtitle?: string | null
 }) {
 	return (
 		<Card className="border-border/70 bg-card shadow-none">
 			<CardHeader className="border-b border-border/70 px-4 py-3">
 				<div className="flex items-center justify-between gap-3">
 					<CardTitle className="truncate text-base">{title}</CardTitle>
-					<span className="text-[11px] text-muted-foreground">{subtitle}</span>
+					{subtitle ? <span className="text-[11px] text-muted-foreground">{subtitle}</span> : null}
 				</div>
 			</CardHeader>
 			<CardContent className="grid gap-4 p-4">
@@ -61,10 +61,12 @@ export function AssetOverviewColumn({
 export function AssetHardwareSpecsColumn({
 	groups,
 	title = "硬件档案",
+	description = "按设备类别整理的已确认规格",
 	emptyLabel = "暂无已确认的硬件参数。",
 }: {
 	groups: AssetParameterGroup[]
 	title?: string
+	description?: string | null
 	emptyLabel?: string
 }) {
 	return (
@@ -73,7 +75,7 @@ export function AssetHardwareSpecsColumn({
 				<div className="flex min-w-0 items-center justify-between gap-3">
 					<div className="min-w-0">
 						<CardTitle className="truncate text-base">{title}</CardTitle>
-						<div className="mt-0.5 text-[11px] text-muted-foreground">按设备类别整理的已确认规格</div>
+						{description ? <div className="mt-0.5 text-[11px] text-muted-foreground">{description}</div> : null}
 					</div>
 					{groups.length > 0 ? <CountTag>{groups.length} 类</CountTag> : null}
 				</div>

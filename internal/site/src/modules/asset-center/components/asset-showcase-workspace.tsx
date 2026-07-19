@@ -32,12 +32,13 @@ export function AssetShowcaseWorkspace({
 				<AssetOverviewColumn
 					sections={identitySections}
 					title={asset.type === "internet" ? "线路档案" : "设备档案"}
-					subtitle={asset.type === "internet" ? "基础资料" : "主档与接入信息"}
+					subtitle={asset.type === "internet" ? null : "主档与接入信息"}
 				/>
 			</aside>
 			<AssetHardwareSpecsColumn
 				groups={parameterGroups}
 				title={asset.type === "internet" ? "线路参数" : "硬件档案"}
+				description={asset.type === "internet" ? "已确认的线路与套餐参数" : undefined}
 				emptyLabel={asset.type === "internet" ? "暂无已确认的线路参数。" : "暂无已确认的硬件参数。"}
 			/>
 		</section>
