@@ -87,7 +87,7 @@ func (h *Hub) validateSwitchAssetRecord(e *core.RecordRequestEvent) error {
 			return e.BadRequestError("端口速率、交换容量和 PoE 预算不能小于 0。", nil)
 		}
 	}
-	if metadataString(metadata, "poe_status") == "unsupported" && (metadataString(metadata, "poe_standard") != "" || metadataString(metadata, "poe_budget_w") != "") {
+	if metadataString(metadata, "poe_status") == "unsupported" && (metadataString(metadata, "poe_standard") != "" || positiveMetadataNumber(metadata, "poe_budget_w")) {
 		return e.BadRequestError("不支持 PoE 的交换机不能填写 PoE 标准或供电预算。", nil)
 	}
 	originalMetadata := map[string]any{}
@@ -106,6 +106,15 @@ func (h *Hub) validateSwitchAssetRecord(e *core.RecordRequestEvent) error {
 		}
 	}
 	return nil
+}
+
+func positiveMetadataNumber(metadata map[string]any, key string) bool {
+	value, exists := metadata[key]
+	if !exists || value == nil {
+		return false
+	}
+	number, err := strconv.ParseFloat(strings.TrimSpace(toString(value)), 64)
+	return err == nil && number > 0
 }
 
 func (h *Hub) validateInternetAssetRecord(e *core.RecordRequestEvent) error {

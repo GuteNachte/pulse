@@ -78,6 +78,15 @@ func testAssetMasterValidationRequiresStrictSwitchProfile(t *testing.T, hub *pul
 	valid := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records", strings.NewReader(validBody), headers)
 	require.Equal(t, http.StatusOK, valid.Status, valid.Body)
 
+	unsupportedPoeWithEmptyBudget := fmt.Sprintf(`{"user":"%s","name":"无 PoE 预算交换机","type":"switch","status":"active","metadata":{"poe_status":"unsupported","poe_budget_w":0}}`, user.Id)
+	unsupportedPoeWithEmptyBudgetResponse := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records", strings.NewReader(unsupportedPoeWithEmptyBudget), headers)
+	require.Equal(t, http.StatusOK, unsupportedPoeWithEmptyBudgetResponse.Status, unsupportedPoeWithEmptyBudgetResponse.Body)
+
+	unsupportedPoeWithPositiveBudget := fmt.Sprintf(`{"user":"%s","name":"错误 PoE 预算交换机","type":"switch","status":"active","metadata":{"poe_status":"unsupported","poe_budget_w":1}}`, user.Id)
+	unsupportedPoeWithPositiveBudgetResponse := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records", strings.NewReader(unsupportedPoeWithPositiveBudget), headers)
+	require.Equal(t, http.StatusBadRequest, unsupportedPoeWithPositiveBudgetResponse.Status, unsupportedPoeWithPositiveBudgetResponse.Body)
+	require.Contains(t, unsupportedPoeWithPositiveBudgetResponse.Body, "不支持 PoE")
+
 	invalidBody := fmt.Sprintf(`{"user":"%s","name":"错误交换机","type":"switch","status":"active","metadata":{"management_level":"router","wifi_standard":"Wi-Fi 7"}}`, user.Id)
 	invalid := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records", strings.NewReader(invalidBody), headers)
 	require.Equal(t, http.StatusBadRequest, invalid.Status, invalid.Body)
