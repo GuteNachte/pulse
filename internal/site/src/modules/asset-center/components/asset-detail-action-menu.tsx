@@ -27,18 +27,38 @@ export function AssetDetailActionMenu({
 	relationLabel?: string
 }) {
 	return (
-		<div className="flex flex-wrap items-center justify-end gap-2">
+		<div className="flex flex-wrap items-center justify-end gap-1.5">
 			{showInterface && assetActionScope.detail.includes("interface") ? (
-				<DirectAction label="接口" onClick={onOpenInterface} disabled={readOnly} icon={<CableIcon />} />
+				<DirectAction
+					label="接口"
+					onClick={onOpenInterface}
+					disabled={readOnly}
+					icon={<CableIcon className="size-3.5" />}
+				/>
 			) : null}
 			{assetActionScope.detail.includes("relation") ? (
-				<DirectAction label={relationLabel} onClick={onOpenRelation} disabled={readOnly} icon={<GitBranchIcon />} />
+				<DirectAction
+					label={relationLabel}
+					onClick={onOpenRelation}
+					disabled={readOnly}
+					icon={<GitBranchIcon className="size-3.5" />}
+				/>
 			) : null}
 			{assetActionScope.detail.includes("maintenance") ? (
-				<DirectAction label="维护" onClick={onOpenMaintenance} disabled={readOnly} icon={<WrenchIcon />} />
+				<DirectAction
+					label="维护"
+					onClick={onOpenMaintenance}
+					disabled={readOnly}
+					icon={<WrenchIcon className="size-3.5" />}
+				/>
 			) : null}
 			{assetActionScope.detail.includes("attachment") ? (
-				<DirectAction label="附件" onClick={onOpenAttachment} disabled={readOnly} icon={<PaperclipIcon />} />
+				<DirectAction
+					label="附件"
+					onClick={onOpenAttachment}
+					disabled={readOnly}
+					icon={<PaperclipIcon className="size-3.5" />}
+				/>
 			) : null}
 
 			{editAction}
@@ -54,7 +74,7 @@ export function AssetDetailActionMenu({
 								className="h-9 min-h-9 shrink-0 gap-1.5 px-2.5"
 								aria-label="更多"
 							>
-								<MoreHorizontalIcon data-icon="inline-start" />
+								<MoreHorizontalIcon data-icon="inline-start" className="size-3.5" />
 								<span className="hidden xl:inline">更多</span>
 							</Button>
 						</DropdownMenuTrigger>

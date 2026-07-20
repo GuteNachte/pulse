@@ -1126,7 +1126,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 										})
 									}}
 								>
-									<PencilIcon data-icon="inline-start" />
+									<PencilIcon data-icon="inline-start" className="size-3.5" />
 									编辑
 								</Button>
 							}

@@ -9,6 +9,19 @@ for (const label of ["接口", "关系", "维护", "附件"]) {
 assert.equal(menu.includes("更多"), true)
 assert.equal(menu.includes("showInterface"), true)
 assert.equal(menu.includes("relationLabel"), true)
+assert.equal(
+	menu.includes('className="flex flex-wrap items-center justify-end gap-1.5"'),
+	true,
+	"详情操作按钮之间必须使用紧凑且统一的间距"
+)
+for (const icon of ["CableIcon", "GitBranchIcon", "WrenchIcon", "PaperclipIcon"]) {
+	assert.equal(menu.includes(`<${icon} className="size-3.5"`), true, `${icon} 必须使用 14px 紧凑图标`)
+}
+assert.equal(
+	menu.includes('<MoreHorizontalIcon data-icon="inline-start" className="size-3.5" />'),
+	true,
+	"更多按钮必须使用 14px 紧凑图标"
+)
 assert.equal(menu.indexOf("删除资产") > menu.indexOf("DropdownMenuContent"), true)
 assert.equal(
 	menu.lastIndexOf("{editAction}") < menu.lastIndexOf("<DropdownMenuTrigger"),
@@ -18,6 +31,11 @@ assert.equal(
 
 const page = readFileSync(new URL("../asset-detail-page.tsx", import.meta.url), "utf8")
 assert.equal(page.includes("editAction={"), true)
+assert.equal(
+	page.includes('<PencilIcon data-icon="inline-start" className="size-3.5" />'),
+	true,
+	"编辑按钮必须使用 14px 紧凑图标"
+)
 assert.equal(page.includes('showInterface={asset.type !== "internet"}'), true)
 assert.equal(page.includes('relationLabel={asset.type === "internet" ? "接入关系" : "关系"}'), true)
 assert.equal(
