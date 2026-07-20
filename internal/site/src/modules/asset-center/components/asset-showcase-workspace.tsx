@@ -11,7 +11,6 @@ import {
 	type InternetAddressAutoRefreshSettings,
 } from "./internet-address-auto-refresh-controls"
 import { AssetMediaShowcase, type AssetMediaShowcaseItem } from "./asset-media-showcase"
-import { AssetParameterNavigator } from "./asset-parameter-navigator"
 
 export function AssetShowcaseWorkspace({
 	asset,
@@ -64,7 +63,6 @@ export function AssetShowcaseWorkspace({
 					title={asset.type === "internet" ? "线路档案" : "设备档案"}
 					subtitle={asset.type === "internet" ? null : "主档与接入信息"}
 				/>
-				<AssetParameterNavigator groups={parameterGroups} variant="sidebar" className="hidden xl:block" />
 			</aside>
 			<AssetHardwareSpecsColumn
 				groups={parameterGroups}

@@ -82,7 +82,7 @@ export function AssetHardwareSpecsColumn({
 					</div>
 					{groups.length > 0 ? <CountTag>{groups.length} 类</CountTag> : null}
 				</div>
-				<AssetParameterNavigator groups={groups} variant="inline" className="mt-3 xl:hidden" />
+				<AssetParameterNavigator groups={groups} variant="inline" className="mt-3" />
 			</CardHeader>
 			<CardContent className="grid items-stretch gap-2.5 p-3 lg:auto-rows-fr lg:grid-cols-2">
 				{groups.length > 0 ? (
