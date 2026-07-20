@@ -8,6 +8,16 @@ const page = readFileSync(new URL("../asset-detail-page.tsx", import.meta.url), 
 
 assert.equal(workspace.includes("AssetParameterNavigator"), false, "the first column must only render media and the asset overview")
 assert.equal(workspace.includes('variant="sidebar"'), false, "desktop parameter navigation must not appear in the first column")
+assert.equal(
+	workspace.includes("buildSwitchPortStatusGroup(asset, interfaces, assets, relations)"),
+	true,
+	"switch details must derive a port status parameter group from interfaces and relations"
+)
+assert.equal(
+	workspace.includes('group.title === "硬件与端口能力"'),
+	true,
+	"switch port status must sit after the hardware port capability group"
+)
 assert.equal(workspace.includes("xl:sticky xl:top-4"), true, "desktop archive column must remain visible while the page scrolls")
 assert.equal(workspace.includes("xl:h-full"), false, "workspace must not force a nested viewport height")
 assert.equal(columns.includes("xl:overflow-y-auto"), false, "hardware archive must use page-level scrolling")

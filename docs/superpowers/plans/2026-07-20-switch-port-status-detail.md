@@ -43,7 +43,7 @@ export function buildSwitchPortStatusGroup(
 ): AssetParameterGroup | undefined
 ```
 
-只读取当前交换机的真实接口，按端口名称自然排序；关系对端优先读取资产目录，其次读取 PocketBase `expand`。
+只读取当前交换机的真实接口，按电口在前、光口在后且组内名称自然排序；关系对端优先读取资产目录，其次读取 PocketBase `expand`。
 
 - [ ] **Step 4：运行测试确认通过**
 
