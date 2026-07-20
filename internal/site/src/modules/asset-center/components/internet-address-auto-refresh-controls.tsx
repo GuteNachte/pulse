@@ -66,7 +66,7 @@ export function InternetAddressAutoRefreshControls({
 				disabled={disabled}
 				onClick={onRefresh}
 			>
-				<RefreshCwIcon data-icon="inline-start" className={refreshing ? "animate-spin" : undefined} />
+				<RefreshCwIcon data-icon="inline-start" className={refreshing ? "size-3.5 animate-spin" : "size-3.5"} />
 				{refreshing ? "刷新中" : "刷新公网地址"}
 			</Button>
 		</div>
