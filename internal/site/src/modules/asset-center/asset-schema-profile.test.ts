@@ -179,7 +179,16 @@ assert.equal(getSectionFieldKeys("web_endpoint", "购买信息").length, 0)
 
 for (const { value: type } of ASSET_TYPE_OPTIONS) {
 	assert.equal(
-		getAssetFormSections(type).flatMap((section) => section.fields).some((field) => field.key === "notes"),
+		getAssetFormSections(type)
+			.flatMap((section) => section.fields)
+			.some((field) => field.key === "fixed_ipv6"),
+		false,
+		`${type} 设备档案不得提供管理 IPv6`
+	)
+	assert.equal(
+		getAssetFormSections(type)
+			.flatMap((section) => section.fields)
+			.some((field) => field.key === "notes"),
 		true,
 		`${type} 编辑页必须提供备注输入框`
 	)

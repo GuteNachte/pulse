@@ -340,14 +340,6 @@ export const ontAssetTypeSpec: AssetTypeSpec = {
 					source: "metadata",
 				},
 				{
-					key: "fixed_ipv6",
-					label: "管理 IPv6",
-					group: "路由与管理",
-					inputMode: "manual_optional",
-					source: "metadata",
-					placeholder: "无",
-				},
-				{
 					key: "management_url",
 					label: "管理 URL",
 					group: "路由与管理",
@@ -451,7 +443,6 @@ export const switchAssetTypeSpec: AssetTypeSpec = {
 					type: "url",
 				},
 				{ key: "fixed_ipv4", label: "管理 IPv4", group: "接入信息", inputMode: "manual_optional", source: "metadata" },
-				{ key: "fixed_ipv6", label: "管理 IPv6", group: "接入信息", inputMode: "manual_optional", source: "metadata" },
 				{ key: "mac", label: "MAC", group: "接入信息", inputMode: "manual_optional", source: "metadata" },
 				{
 					key: "management_url",

@@ -45,7 +45,6 @@ for (const { value: type } of ASSET_TYPE_OPTIONS) {
 	}
 	for (const section of getAssetFormSections(type)) {
 		for (const field of section.fields) {
-			if (field.key === "fixed_ipv6") continue
 			assert.ok(getAssetArchiveField(field.key), `${type}.${field.key} 未进入共享字段目录`)
 		}
 	}

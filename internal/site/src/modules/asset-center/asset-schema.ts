@@ -163,7 +163,6 @@ const serviceSubscriptionFields: AssetFieldDefinition[] = [
 
 const fixedAddressFields: AssetFieldDefinition[] = [
 	{ key: "fixed_ipv4", label: "IPv4", source: "metadata", placeholder: "192.168.1.10", capture: "manual" },
-	{ key: "fixed_ipv6", label: "IPv6", source: "metadata", placeholder: "可选", capture: "manual" },
 	{ key: "mac", label: "MAC", source: "metadata", placeholder: "AA:BB:CC:DD:EE:FF", capture: "manual" },
 	{
 		key: "management_url",
@@ -183,13 +182,6 @@ const agentConnectionFields: AssetFieldDefinition[] = [
 		required: true,
 		placeholder: "192.168.1.10",
 		capture: "agent_required",
-	},
-	{
-		key: "fixed_ipv6",
-		label: "IPv6",
-		source: "metadata",
-		placeholder: "Agent 接入后可采集",
-		capture: "agent_collectable",
 	},
 	{ key: "mac", label: "MAC", source: "metadata", placeholder: "Agent 接入后可采集", capture: "agent_collectable" },
 	{
@@ -522,7 +514,6 @@ export function getHostTypeSpecificTitle(type: AssetType) {
 
 const networkDeviceFields: AssetFieldDefinition[] = [
 	{ key: "fixed_ipv4", label: "IPv4", source: "metadata", placeholder: "192.168.1.1" },
-	{ key: "fixed_ipv6", label: "IPv6", source: "metadata", placeholder: "可选" },
 	{ key: "mac", label: "MAC", source: "metadata", placeholder: "AA:BB:CC:DD:EE:FF" },
 	{ key: "port_count", label: "端口数量", source: "metadata", type: "number", placeholder: "5" },
 	{
@@ -554,7 +545,6 @@ const networkDeviceFields: AssetFieldDefinition[] = [
 const networkDeviceFieldKeysByType: Partial<Record<AssetType, readonly string[]>> = {
 	router: [
 		"fixed_ipv4",
-		"fixed_ipv6",
 		"mac",
 		"port_count",
 		"default_port_speed_mbps",
@@ -567,19 +557,9 @@ const networkDeviceFieldKeysByType: Partial<Record<AssetType, readonly string[]>
 		"ssid_note",
 		"vlan_note",
 	],
-	gateway: [
-		"fixed_ipv4",
-		"fixed_ipv6",
-		"mac",
-		"port_count",
-		"wan_port_count",
-		"default_port_speed_mbps",
-		"power_mode",
-		"vlan_note",
-	],
+	gateway: ["fixed_ipv4", "mac", "port_count", "wan_port_count", "default_port_speed_mbps", "power_mode", "vlan_note"],
 	switch: [
 		"fixed_ipv4",
-		"fixed_ipv6",
 		"mac",
 		"port_count",
 		"default_port_speed_mbps",
@@ -589,7 +569,6 @@ const networkDeviceFieldKeysByType: Partial<Record<AssetType, readonly string[]>
 	],
 	ap: [
 		"fixed_ipv4",
-		"fixed_ipv6",
 		"mac",
 		"port_count",
 		"default_port_speed_mbps",
@@ -604,7 +583,6 @@ const networkDeviceFieldKeysByType: Partial<Record<AssetType, readonly string[]>
 	],
 	firewall: [
 		"fixed_ipv4",
-		"fixed_ipv6",
 		"mac",
 		"port_count",
 		"default_port_speed_mbps",
@@ -1160,9 +1138,13 @@ const webEndpointFields: AssetFieldDefinition[] = [
 const customFields: AssetFieldDefinition[] = [
 	{ key: "custom_category", label: "自定义分类", source: "metadata", placeholder: "例如 UPS / KVM / 采集器" },
 	{ key: "fixed_ipv4", label: "IPv4", source: "metadata", placeholder: "可选" },
-	{ key: "fixed_ipv6", label: "IPv6", source: "metadata", placeholder: "可选" },
 	{ key: "mac", label: "MAC", source: "metadata", placeholder: "可选" },
 ]
+
+function getHostHardwareDetailFields(type: AssetType) {
+	if (type !== "mini_pc") return hostHardwareDetailFields
+	return hostHardwareDetailFields.filter((field) => !["psu_vendor", "psu_model"].includes(field.key))
+}
 
 export function getAssetFormSections(type: AssetType): AssetFieldSection[] {
 	if (type === "internet") {
@@ -1190,7 +1172,7 @@ export function getAssetFormSections(type: AssetType): AssetFieldSection[] {
 			{ title: "硬件识别", fields: getHardwareIdentityFields(type) },
 			{ title: "接入信息", fields: agentConnectionFields },
 			{ title: "Agent 可采集规格", fields: hostSpecFields },
-			{ title: "硬件细节", fields: hostHardwareDetailFields },
+			{ title: "硬件细节", fields: getHostHardwareDetailFields(type) },
 			...(typeSpecificFields.length ? [{ title: getHostTypeSpecificTitle(type), fields: typeSpecificFields }] : []),
 			{ title: "购买信息", fields: purchaseInfoFields },
 			{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },

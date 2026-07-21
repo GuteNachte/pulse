@@ -244,7 +244,6 @@ function shouldShowAssetCandidatePicker(field: AssetFieldDefinition) {
 	if (field.capture === "manual") return false
 	return !new Set([
 		"fixed_ipv4",
-		"fixed_ipv6",
 		"management_ip",
 		"public_ipv4",
 		"public_ipv6",

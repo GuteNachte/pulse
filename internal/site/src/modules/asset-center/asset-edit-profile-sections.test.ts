@@ -7,7 +7,7 @@ import {
 } from "./asset-edit-profile-sections.ts"
 
 assert.deepEqual(getAssetQuickSettingFieldKeys(), [])
-assert.deepEqual(getAssetConnectionFieldKeys("mini_pc"), ["fixed_ipv4", "fixed_ipv6", "mac", "management_url"])
+assert.deepEqual(getAssetConnectionFieldKeys("mini_pc"), ["fixed_ipv4", "mac", "management_url"])
 assert.deepEqual(getAssetConnectionFieldKeys("internet"), [])
 assert.deepEqual(getAssetConnectionFieldKeys("web_endpoint"), [])
 
@@ -22,7 +22,7 @@ assert.equal(hostRequiredFields.has("memory_gb"), false)
 assert.equal(hostRequiredFields.has("storage_gb"), false)
 assert.equal(hostRequiredFields.has("status"), true)
 assert.equal(hostRequiredFields.has("role"), true)
-assert.equal(hostRequiredFields.has("fixed_ipv6"), true)
+assert.equal(hostRequiredFields.has("fixed_ipv6"), false)
 assert.equal(hostRequiredFields.has("mac"), true)
 assert.equal(hostRequiredFields.has("management_url"), true)
 assert.equal(hostRequiredFields.has("internal_model"), false)
@@ -79,7 +79,7 @@ for (const key of [
 }
 assert.deepEqual(
 	buildAssetProfileEditSections("ont", ontRequiredFields).map((section) => section.title),
-	["身份与归属", "光纤接入", "路由与管理", "无线网络", "有线网络", "其他端口与电源", "设备身份标识", "备注"]
+	["电源", "主板与平台", "网络", "接口与扩展", "备注"]
 )
 
 const phoneSections = buildAssetProfileEditSections("phone", phoneRequiredFields)
@@ -104,17 +104,17 @@ assert.equal(
 )
 assert.deepEqual(
 	hostSections.map((section) => section.title),
-	["外观尺寸", "主板", "CPU", "内存", "GPU", "硬盘", "网络", "电源", "接口", "其他", "购买信息", "备注"]
+	["外观与尺寸", "电源", "主板与平台", "处理器", "显卡", "内存", "存储", "网络", "接口与扩展", "购买信息", "备注"]
 )
 assert.deepEqual(
 	hostSections.find((section) => section.title === "电源")?.fields.map((field) => field.key),
 	["power_adapter_w"]
 )
 assert.deepEqual(
-	hostSections.find((section) => section.title === "其他")?.fields.map((field) => field.key),
-	["preinstalled_os", "supported_os", "package_weight_kg", "weight_kg", "release_date"]
-)
-assert.deepEqual(
-	hostSections.find((section) => section.title === "接口")?.fields.map((field) => field.key),
+	hostSections.find((section) => section.title === "接口与扩展")?.fields.map((field) => field.key),
 	["display_outputs", "audio_output", "usb_ports"]
+)
+assert.equal(
+	hostSections.some((section) => ["其他", "设备参数", "硬件性能"].includes(section.title)),
+	false
 )
