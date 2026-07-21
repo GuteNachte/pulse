@@ -1,3 +1,4 @@
+import { CableIcon } from "lucide-react"
 import { useMemo } from "react"
 import type { AssetInterfaceRecord, AssetRecord, AssetRelationRecord } from "@/types"
 import { buildAssetParameterGroups } from "../asset-detail-parameter-groups"
@@ -5,7 +6,12 @@ import { getMetadataString } from "../asset-schema"
 import { getInternetStatusLabel } from "../asset-type-specs"
 import { getInternetAddressAutoRefreshSettings } from "../asset-internet-address-status"
 import { getAssetDetailRelationRows } from "../asset-detail-relations"
-import { AssetHardwareSpecsColumn, AssetOverviewColumn, type AssetParameterRow } from "./asset-parameter-columns"
+import {
+	AssetHardwareSpecsColumn,
+	AssetOverviewColumn,
+	type AssetParameterGroup,
+	type AssetParameterRow,
+} from "./asset-parameter-columns"
 import {
 	InternetAddressAutoRefreshControls,
 	type InternetAddressAutoRefreshSettings,
@@ -34,12 +40,15 @@ export function AssetShowcaseWorkspace({
 	onUpdateInternetAddressSettings?: (settings: InternetAddressAutoRefreshSettings) => void
 }) {
 	const parameterGroups = useMemo(() => {
-		return buildAssetParameterGroups(asset, { interfaces, assets, relations })
+		const groups = buildAssetParameterGroups(asset, { interfaces, assets, relations })
+		const relationGroup = buildAssetRelationParameterGroup(asset, assets, interfaces, relations)
+		if (!relationGroup) return groups
+		const anchorTitle = asset.type === "internet" ? "线路参数" : "网络"
+		const anchorIndex = groups.findIndex((group) => group.title === anchorTitle)
+		const insertAt = anchorIndex >= 0 ? anchorIndex + 1 : groups.length
+		return [...groups.slice(0, insertAt), relationGroup, ...groups.slice(insertAt)]
 	}, [asset, assets, interfaces, relations])
-	const identitySections = useMemo(
-		() => buildAssetIdentitySections(asset, assets, interfaces, relations),
-		[asset, assets, interfaces, relations]
-	)
+	const identitySections = useMemo(() => buildAssetIdentitySections(asset), [asset])
 	const internetAddressSettings = getInternetAddressAutoRefreshSettings(asset.metadata ?? {})
 	const internetAddressGroupActions =
 		asset.type === "internet" && onRefreshInternetAddresses && onUpdateInternetAddressSettings
@@ -77,12 +86,7 @@ export function AssetShowcaseWorkspace({
 	)
 }
 
-function buildAssetIdentitySections(
-	asset: AssetRecord,
-	assets: AssetRecord[],
-	interfaces: AssetInterfaceRecord[],
-	relations: AssetRelationRecord[]
-): { title: string; rows: AssetParameterRow[] }[] {
+function buildAssetIdentitySections(asset: AssetRecord): { title: string; rows: AssetParameterRow[] }[] {
 	const metadata = asset.metadata ?? {}
 	const textRow = (label: string, value: string | undefined): AssetParameterRow | undefined =>
 		value ? { label, value } : undefined
@@ -90,18 +94,6 @@ function buildAssetIdentitySections(
 		value ? { label, value, href: /^https?:\/\//i.test(value) ? value : undefined } : undefined
 	const compact = (rows: (AssetParameterRow | undefined)[]) => rows.filter((row) => row?.value) as AssetParameterRow[]
 	if (asset.type === "internet") {
-		const uplink = relations.find(
-			(relation) =>
-				relation.source_asset === asset.id &&
-				relation.kind === "connected_to" &&
-				getMetadataString(relation.metadata, "link_kind") === "internet"
-		)
-		const expandedTarget = uplink?.expand?.target_asset as AssetRecord | undefined
-		const target = assets.find((item) => item.id === uplink?.target_asset) ?? expandedTarget
-		const targetInterface = interfaces.find(
-			(item) => item.id === getMetadataString(uplink?.metadata, "target_interface")
-		)
-		const relationLabel = target ? [target.name, targetInterface?.name].filter(Boolean).join(" · ") : "待关联接入设备"
 		return [
 			{
 				title: "基础资料",
@@ -110,10 +102,6 @@ function buildAssetIdentitySections(
 					textRow("运营商", asset.vendor),
 					textRow("状态", getInternetStatusLabel(asset.status || "active")),
 				]),
-			},
-			{
-				title: "接入关系",
-				rows: [{ label: "当前接入", value: relationLabel }],
 			},
 		]
 	}
@@ -140,15 +128,29 @@ function buildAssetIdentitySections(
 			title: "资料",
 			rows: compact([linkRow("官方网站", getMetadataString(metadata, "official_url"))]),
 		},
-		...(asset.type === "ont"
-			? [
-					{
-						title: "接入关系",
-						rows: getAssetDetailRelationRows(asset.id, assets, interfaces, relations),
-					},
-				]
-			: []),
 	].filter((section) => section.rows.length > 0)
+}
+
+function buildAssetRelationParameterGroup(
+	asset: AssetRecord,
+	assets: AssetRecord[],
+	interfaces: AssetInterfaceRecord[],
+	relations: AssetRelationRecord[]
+): AssetParameterGroup | undefined {
+	if (asset.type !== "internet" && asset.type !== "ont") return undefined
+	const relationRows = getAssetDetailRelationRows(asset.id, assets, interfaces, relations)
+	const rows =
+		asset.type === "internet" && relationRows.length === 0
+			? [{ label: "当前接入", value: "待关联接入设备" }]
+			: relationRows
+	if (rows.length === 0) return undefined
+	return {
+		id: "asset-relations",
+		title: "接入关系",
+		summary: `${rows.length} 条关系`,
+		icon: <CableIcon className="size-4" />,
+		rows,
+	}
 }
 
 function firstNonEmpty(...values: (string | undefined)[]) {

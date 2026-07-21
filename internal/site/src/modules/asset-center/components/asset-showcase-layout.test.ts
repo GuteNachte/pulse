@@ -8,6 +8,9 @@ const tags = readFileSync(new URL("./asset-showcase-tags.tsx", import.meta.url),
 const page = readFileSync(new URL("../asset-detail-page.tsx", import.meta.url), "utf8")
 const navigatorModule = new URL("./asset-parameter-navigator.tsx", import.meta.url)
 const navigationRulesModule = new URL("../asset-parameter-navigation.ts", import.meta.url)
+const identityBuilderStart = workspace.indexOf("function buildAssetIdentitySections")
+const identityBuilderEnd = workspace.indexOf("function buildAssetRelationParameterGroup", identityBuilderStart)
+const identityBuilderSource = workspace.slice(identityBuilderStart, identityBuilderEnd)
 
 assert.equal(
 	existsSync(navigatorModule),
@@ -34,6 +37,16 @@ assert.equal(
 	workspace.includes("buildAssetParameterGroups(asset, { interfaces, assets, relations })"),
 	true,
 	"switch details must merge port status into canonical parameter groups"
+)
+assert.equal(
+	identityBuilderSource.includes('title: "接入关系"'),
+	false,
+	"the left device archive must not contain relationship sections"
+)
+assert.equal(
+	workspace.includes("buildAssetRelationParameterGroup(asset, assets, interfaces, relations)"),
+	true,
+	"access relationships must be composed into the right parameter cards"
 )
 assert.equal(
 	workspace.includes("xl:sticky xl:top-4"),
