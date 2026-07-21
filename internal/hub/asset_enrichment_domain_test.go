@@ -87,9 +87,10 @@ func TestAssetEnrichmentProfileFieldAllowlistMatchesAssetType(t *testing.T) {
 
 	switchFields := assetEnrichmentAllowedMetadataFieldSet("switch")
 	require.False(t, switchFields["internal_model"])
-	require.True(t, switchFields["port_count"])
-	require.True(t, switchFields["vlan_note"])
+	require.True(t, switchFields["ethernet_port_count"])
+	require.True(t, switchFields["vlan_status"])
 	require.False(t, switchFields["wifi_standard"])
+	require.False(t, switchFields["fixed_ipv6"])
 
 	accessPointFields := assetEnrichmentAllowedMetadataFieldSet("ap")
 	require.True(t, accessPointFields["wifi_standard"])

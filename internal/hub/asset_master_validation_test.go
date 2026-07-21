@@ -23,6 +23,9 @@ func TestAssetMasterValidation(t *testing.T) {
 	t.Run("RejectsDuplicateAssets", func(t *testing.T) {
 		testAssetMasterValidationRejectsDuplicateAssets(t, hub)
 	})
+	t.Run("RejectsDeviceManagementIPv6", func(t *testing.T) {
+		testAssetMasterValidationRejectsDeviceManagementIPv6(t, hub)
+	})
 	t.Run("RequiresPhoneVariantSpecs", func(t *testing.T) {
 		testAssetMasterValidationRequiresPhoneVariantSpecs(t, hub)
 	})
@@ -65,6 +68,41 @@ func TestAssetMasterValidation(t *testing.T) {
 	t.Run("RejectsCrossUserLocationParentAndCycles", func(t *testing.T) {
 		testAssetLocationValidationRejectsCrossUserParentAndCycles(t, hub)
 	})
+}
+
+func testAssetMasterValidationRejectsDeviceManagementIPv6(t *testing.T, hub *pulseTests.TestHub) {
+	user, err := pulseTests.CreateUser(hub, "asset-ipv6-boundary@example.com", "password")
+	require.NoError(t, err)
+	token, err := user.NewAuthToken()
+	require.NoError(t, err)
+	headers := map[string]string{"Authorization": token}
+
+	create := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","name":"错误管理 IPv6","type":"mini_pc","status":"active","metadata":{"fixed_ipv6":"2001:db8::10"}}`, user.Id)), headers)
+	require.Equal(t, http.StatusBadRequest, create.Status, create.Body)
+	require.Contains(t, create.Body, "设备档案不保存管理 IPv6")
+
+	historical, err := pulseTests.CreateRecord(hub, "assets", map[string]any{
+		"user": user.Id, "name": "历史主机", "type": "mini_pc", "status": "active",
+		"metadata": map[string]any{"fixed_ipv6": "2001:db8::20"},
+	})
+	require.NoError(t, err)
+	updateName := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPatch, "/api/collections/assets/records/"+historical.Id,
+		strings.NewReader(`{"name":"历史主机已改名"}`), headers)
+	require.Equal(t, http.StatusOK, updateName.Status, updateName.Body)
+	updated, err := hub.FindRecordById("assets", historical.Id)
+	require.NoError(t, err)
+	updatedMetadata := map[string]any{}
+	require.NoError(t, updated.UnmarshalJSONField("metadata", &updatedMetadata))
+	require.Equal(t, "2001:db8::20", updatedMetadata["fixed_ipv6"])
+
+	changeIPv6 := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPatch, "/api/collections/assets/records/"+historical.Id,
+		strings.NewReader(`{"metadata":{"fixed_ipv6":"2001:db8::21"}}`), headers)
+	require.Equal(t, http.StatusBadRequest, changeIPv6.Status, changeIPv6.Body)
+
+	internet := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodPost, "/api/collections/assets/records",
+		strings.NewReader(fmt.Sprintf(`{"user":"%s","name":"IPv6 宽带","type":"internet","status":"active","vendor":"中国联通","metadata":{"access_technology":"ftth","auth_mode":"pppoe","down_mbps":1000,"up_mbps":300,"public_ipv6":"2001:db8::30"}}`, user.Id)), headers)
+	require.Equal(t, http.StatusOK, internet.Status, internet.Body)
 }
 
 func testAssetMasterValidationRequiresStrictSwitchProfile(t *testing.T, hub *pulseTests.TestHub) {

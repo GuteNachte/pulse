@@ -8,58 +8,32 @@ import (
 	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
+	"gutenacht.site/pulse/internal/assetcatalog"
 )
 
-var ontAssetAllowedMetadataFields = map[string]bool{
-	"asset_tag": true, "official_url": true, "official_image_url": true,
-	"product_series": true, "carrier": true, "operating_role": true, "manufacture_date": true, "color": true,
-	"onu_type": true, "pon_standard": true, "pon_uplink_capacity": true, "optical_connector": true,
-	"downstream_optical_port_count": true, "downstream_optical_status": true,
-	"router_status": true, "gateway_status": true, "dhcp_status": true,
-	"fixed_ipv4": true, "fixed_ipv6": true, "management_url": true, "lan_subnet": true,
-	"wifi_standard": true, "wifi_24_supported": true, "wifi_24_enabled": true,
-	"wifi_5_supported": true, "wifi_5_enabled": true, "wps_supported": true,
-	"lan_port_count": true, "lan_2500_count": true, "lan_1000_count": true,
-	"usb_port_count": true, "voice_port_count": true, "power_spec": true,
-	"indicator_control": true, "wireless_control": true, "reset_supported": true, "power_switch_supported": true,
-	"product_number": true, "pon_sn": true, "mac": true, "radio_approval_code": true,
-}
+var ontAssetAllowedMetadataFields = assetcatalog.MustParameterRegistry().AllowedMetadataKeys("ont")
 
 var ontIdentityValuePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.\-:/]{3,63}$`)
 
-var internetAssetAllowedMetadataFields = map[string]bool{
-	"asset_tag":                          true,
-	"access_mode":                        true,
-	"access_technology":                  true,
-	"auth_mode":                          true,
-	"down_mbps":                          true,
-	"up_mbps":                            true,
-	"public_ipv4":                        true,
-	"public_ipv6":                        true,
-	"public_ip_checked_at":               true,
-	"public_ip_next_check_at":            true,
-	"public_ipv4_error":                  true,
-	"public_ipv6_error":                  true,
-	"public_ip_auto_refresh":             true,
-	"public_ip_refresh_interval_minutes": true,
-	"package_name":                       true,
-	"recurring_price_cny":                true,
-	"billing_cycle":                      true,
-	"renewal_date":                       true,
-	"auto_renew":                         true,
-}
+var internetAssetAllowedMetadataFields = withLegacyAssetMetadataKeys(
+	assetcatalog.MustParameterRegistry().AllowedMetadataKeys("internet"),
+	"access_mode",
+)
 
-var switchAssetAllowedMetadataFields = map[string]bool{
-	"asset_tag": true, "official_url": true, "official_image_url": true,
-	"fixed_ipv4": true, "fixed_ipv6": true, "mac": true, "management_url": true,
-	"color": true, "device_color": true, "colors_available": true, "official_colors": true,
-	"ethernet_port_count": true, "optical_port_count": true, "other_port_count": true,
-	"default_ethernet_speed_mbps": true, "default_optical_speed_mbps": true, "switching_capacity_gbps": true,
-	"net_weight_g": true, "dimensions_mm": true, "installation_method": true, "forwarding_method": true, "mac_table_entries": true,
-	"ethernet_supported_speeds": true, "optical_supported_speeds": true, "lightning_protection_kv": true, "power_input": true,
-	"operating_temperature_range": true, "operating_humidity_range": true, "storage_temperature_range": true, "storage_humidity_range": true, "warranty_months": true,
-	"power_mode":       true,
-	"management_level": true, "management_access": true, "vlan_status": true, "port_isolation_status": true, "link_aggregation_status": true,
+var switchAssetAllowedMetadataFields = withLegacyAssetMetadataKeys(
+	assetcatalog.MustParameterRegistry().AllowedMetadataKeys("switch"),
+	"color",
+	"device_color",
+	"colors_available",
+	"official_colors",
+	"official_image_url",
+)
+
+func withLegacyAssetMetadataKeys(allowed map[string]bool, keys ...string) map[string]bool {
+	for _, key := range keys {
+		allowed[key] = true
+	}
+	return allowed
 }
 
 func (h *Hub) validateSwitchAssetRecord(e *core.RecordRequestEvent) error {

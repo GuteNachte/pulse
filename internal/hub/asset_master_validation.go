@@ -26,6 +26,9 @@ func (h *Hub) bindAssetMasterValidationHooks() {
 		}
 	})
 	h.App.OnRecordCreateRequest("assets").BindFunc(func(e *core.RecordRequestEvent) error {
+		if err := h.validateDeviceManagementIPv6Request(e); err != nil {
+			return err
+		}
 		if err := h.validateAssetParentRequest(e); err != nil {
 			return err
 		}
@@ -38,6 +41,9 @@ func (h *Hub) bindAssetMasterValidationHooks() {
 		return e.Next()
 	})
 	h.App.OnRecordUpdateRequest("assets").BindFunc(func(e *core.RecordRequestEvent) error {
+		if err := h.validateDeviceManagementIPv6Request(e); err != nil {
+			return err
+		}
 		if err := h.validateAssetParentRequest(e); err != nil {
 			return err
 		}
@@ -127,6 +133,24 @@ func (h *Hub) bindAssetMasterValidationHooks() {
 		}
 		return e.Next()
 	})
+}
+
+func (h *Hub) validateDeviceManagementIPv6Request(e *core.RecordRequestEvent) error {
+	if e == nil || e.Record == nil || strings.TrimSpace(e.Record.GetString("type")) == "internet" {
+		return nil
+	}
+	metadata := recordJSONMap(e.Record, "metadata")
+	value, exists := metadata["fixed_ipv6"]
+	if !exists {
+		return nil
+	}
+	if original := e.Record.Original(); original != nil {
+		originalValue, existed := recordJSONMap(original, "metadata")["fixed_ipv6"]
+		if existed && reflect.DeepEqual(originalValue, value) {
+			return nil
+		}
+	}
+	return e.BadRequestError("设备档案不保存管理 IPv6，请在接口运行状态中查看 IPv6。", nil)
 }
 
 func (h *Hub) validateAssetInterfaceProfileRequest(e *core.RecordRequestEvent) error {
