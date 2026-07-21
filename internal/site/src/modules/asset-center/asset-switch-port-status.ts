@@ -64,7 +64,7 @@ function buildSwitchPortRow(
 	return {
 		label: port.name || `端口 ${index + 1}`,
 		value: segments.join(" · "),
-		section: "网口状态",
+		section: "端口明细",
 	}
 }
 

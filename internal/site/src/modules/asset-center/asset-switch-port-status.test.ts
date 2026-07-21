@@ -88,11 +88,11 @@ const rows = statusModule?.buildSwitchPortStatusRows(
 assert.deepEqual(
 	rows.map((row) => ({ label: row.label, value: row.value, section: row.section })),
 	[
-		{ label: "电口 1", value: "有线 · 启用 · 已接线 · 上联 · 协商 1 Gbps · 华为主网关", section: "网口状态" },
-		{ label: "电口 2", value: "有线 · 启用 · 未接线 · 通用 · 支持 2.5 Gbps", section: "网口状态" },
-		{ label: "电口 3", value: "有线 · 启用 · 已接线 · 通用 · 支持 2.5 Gbps · 对端未关联", section: "网口状态" },
-		{ label: "电口 4", value: "有线 · 启用 · 已接线 · 下联 · 协商 2.5 Gbps · UNRAID NAS", section: "网口状态" },
-		{ label: "10G SFP+ 光口", value: "光纤 · 未启用 · 未接线 · 通用 · 支持 10 Gbps · 未接模块", section: "网口状态" },
+		{ label: "电口 1", value: "有线 · 启用 · 已接线 · 上联 · 协商 1 Gbps · 华为主网关", section: "端口明细" },
+		{ label: "电口 2", value: "有线 · 启用 · 未接线 · 通用 · 支持 2.5 Gbps", section: "端口明细" },
+		{ label: "电口 3", value: "有线 · 启用 · 已接线 · 通用 · 支持 2.5 Gbps · 对端未关联", section: "端口明细" },
+		{ label: "电口 4", value: "有线 · 启用 · 已接线 · 下联 · 协商 2.5 Gbps · UNRAID NAS", section: "端口明细" },
+		{ label: "10G SFP+ 光口", value: "光纤 · 未启用 · 未接线 · 通用 · 支持 10 Gbps · 未接模块", section: "端口明细" },
 	]
 )
 assert.deepEqual(

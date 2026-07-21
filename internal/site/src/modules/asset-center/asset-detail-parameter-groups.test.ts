@@ -346,11 +346,21 @@ const switchGroups = buildAssetParameterGroups(networkSwitch, {
 	assets: [networkSwitch],
 	relations: [] as AssetRelationRecord[],
 })
-assertDeepEqual(switchGroups.filter((group) => group.title === "网络").length, 1)
+assertDeepEqual(
+	switchGroups.map((group) => group.title),
+	["网络", "网口状态"]
+)
 assertDeepEqual(
 	switchGroups
 		.find((group) => group.title === "网络")
 		?.rows.map((row) => row.section)
 		.filter((section, index, sections) => sections.indexOf(section) === index),
-	["端口能力", "网络功能", "网口状态"]
+	["网络功能"]
+)
+assertDeepEqual(
+	switchGroups
+		.find((group) => group.title === "网口状态")
+		?.rows.map((row) => row.section)
+		.filter((section, index, sections) => sections.indexOf(section) === index),
+	["端口能力", "端口明细"]
 )

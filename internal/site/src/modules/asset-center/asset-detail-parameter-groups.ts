@@ -65,17 +65,21 @@ export function buildAssetParameterGroups(
 		rowsByCategory.set(definition.category, rows)
 	}
 
-	const switchRows = buildSwitchPortStatusRows(
+	const switchPortCapabilityRows =
+		asset.type === "switch" ? (rowsByCategory.get("network") ?? []).filter((row) => row.section === "端口能力") : []
+	if (asset.type === "switch") {
+		rowsByCategory.set(
+			"network",
+			(rowsByCategory.get("network") ?? []).filter((row) => row.section !== "端口能力")
+		)
+	}
+	const switchPortDetailRows = buildSwitchPortStatusRows(
 		asset,
 		context.interfaces ?? [],
 		context.assets ?? [],
 		context.relations ?? []
 	)
-	if (switchRows.length > 0) {
-		rowsByCategory.set("network", [...(rowsByCategory.get("network") ?? []), ...switchRows])
-	}
-
-	return ASSET_PARAMETER_CATEGORIES.flatMap((category) => {
+	const groups = ASSET_PARAMETER_CATEGORIES.flatMap((category) => {
 		const rows = sortDetailRows(asset.type, rowsByCategory.get(category.id) ?? [])
 		if (rows.length === 0) return []
 		return [
@@ -88,6 +92,18 @@ export function buildAssetParameterGroups(
 			},
 		]
 	})
+	const switchPortRows = [...switchPortCapabilityRows, ...switchPortDetailRows]
+	if (asset.type !== "switch" || switchPortRows.length === 0) return groups
+	const switchPortGroup: AssetParameterGroup = {
+		id: "switch-port-status",
+		title: "网口状态",
+		summary: switchPortDetailRows.length > 0 ? `${switchPortDetailRows.length} 个网口` : "已记录端口能力",
+		icon: createElement(PlugIcon, { className: "size-4" }),
+		rows: switchPortRows,
+	}
+	const networkIndex = groups.findIndex((group) => group.title === "网络")
+	const insertAt = networkIndex >= 0 ? networkIndex + 1 : 0
+	return [...groups.slice(0, insertAt), switchPortGroup, ...groups.slice(insertAt)]
 }
 
 function buildServiceGroups(asset: AssetRecord) {
@@ -221,7 +237,7 @@ function sortDetailRows(assetType: AssetRecord["type"], rows: AssetParameterRow[
 		assetType === "ont"
 			? ["接入角色", "光纤接入", "路由与管理", "无线网络", "有线网络", "网络标识"]
 			: assetType === "switch"
-				? ["端口能力", "网络功能", "网口状态"]
+				? ["网络功能"]
 				: []
 	if (sectionOrder.length === 0) return rows
 	return rows
