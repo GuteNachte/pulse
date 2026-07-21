@@ -22,7 +22,17 @@ import {
 	getAssetArchiveField,
 	type AssetParameterCategoryId,
 } from "./asset-parameter-registry.ts"
-import { getAssetFormSections, getMetadataString, getStatusLabel, type AssetFieldDefinition } from "./asset-schema.ts"
+import {
+	getAssetFormSections,
+	getMetadataString,
+	getStatusLabel,
+	NETWORK_ASSET_TYPES,
+	type AssetFieldDefinition,
+} from "./asset-schema.ts"
+import {
+	groupNetworkDeviceDetailRows,
+	type NetworkDetailRow,
+} from "./asset-network-detail-groups.ts"
 import { normalizeMemorySpecification } from "./asset-memory-spec.ts"
 import { normalizeNetworkInterfaceSummary } from "./asset-runtime-hardware.ts"
 import { buildSwitchPortStatusRows } from "./asset-switch-port-status.ts"
@@ -60,6 +70,7 @@ export function buildAssetParameterGroups(
 		formSections.flatMap((section) => section.fields.map((field) => [field.key, section.title] as const))
 	)
 	const rowsByCategory = new Map<AssetParameterCategoryId, AssetParameterRow[]>()
+	const networkDetailRows: NetworkDetailRow<AssetParameterRow>[] = []
 	const switchPortCapabilityRows: AssetParameterRow[] = []
 	for (const field of fields.sort(
 		(left, right) => (getAssetArchiveField(left.key)?.order ?? 0) - (getAssetArchiveField(right.key)?.order ?? 0)
@@ -76,6 +87,10 @@ export function buildAssetParameterGroups(
 			switchPortCapabilityRows.push(row)
 			continue
 		}
+		if (definition.category === "network" && NETWORK_ASSET_TYPES.includes(asset.type)) {
+			networkDetailRows.push({ fieldKey: field.key, row })
+			continue
+		}
 		const rows = rowsByCategory.get(definition.category) ?? []
 		rows.push(row)
 		rowsByCategory.set(definition.category, rows)
@@ -88,6 +103,18 @@ export function buildAssetParameterGroups(
 		context.relations ?? []
 	)
 	const groups = ASSET_PARAMETER_CATEGORIES.flatMap((category) => {
+		if (category.id === "network" && networkDetailRows.length > 0) {
+			return groupNetworkDeviceDetailRows(asset.type, networkDetailRows).map((group) => {
+				const rows = group.rows.map((row) => ({ ...row, section: undefined }))
+				return {
+					id: group.id,
+					title: group.title,
+					summary: getParameterGroupSummary(rows),
+					icon: getParameterGroupIcon("network"),
+					rows,
+				}
+			})
+		}
 		const rows = sortDetailRows(asset.type, rowsByCategory.get(category.id) ?? [])
 		if (rows.length === 0) return []
 		return [
@@ -109,7 +136,7 @@ export function buildAssetParameterGroups(
 		icon: createElement(PlugIcon, { className: "size-4" }),
 		rows: switchPortRows,
 	}
-	const networkIndex = groups.findIndex((group) => group.title === "网络")
+	const networkIndex = groups.findIndex((group) => group.id === "switch-network-functions")
 	const insertAt = networkIndex >= 0 ? networkIndex + 1 : 0
 	return [...groups.slice(0, insertAt), switchPortGroup, ...groups.slice(insertAt)]
 }

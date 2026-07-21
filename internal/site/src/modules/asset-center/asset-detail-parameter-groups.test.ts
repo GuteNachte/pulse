@@ -308,14 +308,13 @@ const ont = {
 
 assertDeepEqual(
 	buildAssetParameterGroups(ont).map((group) => group.title),
-	["电源", "主板与平台", "网络"]
+	["电源", "主板与平台", "接入角色", "光纤接入", "路由与管理", "无线网络", "有线网络"]
 )
 assertDeepEqual(
 	buildAssetParameterGroups(ont)
-		.find((group) => group.title === "网络")
-		?.rows.map((row) => row.section)
-		.filter((section, index, sections) => sections.indexOf(section) === index),
-	["接入角色", "光纤接入", "路由与管理", "无线网络", "有线网络"]
+		.find((group) => group.title === "无线网络")
+		?.rows.map((row) => row.label),
+	["无线标准", "2.4 GHz 支持", "2.4 GHz 状态", "5 GHz 支持", "5 GHz 状态"]
 )
 
 const networkSwitch = {
@@ -351,18 +350,17 @@ const switchGroups = buildAssetParameterGroups(networkSwitch, {
 })
 assertDeepEqual(
 	switchGroups.map((group) => group.title),
-	["网络", "网口状态"]
+	["网络功能", "网口状态"]
 )
 assertDeepEqual(
 	switchGroups
-		.find((group) => group.title === "网络")
-		?.rows.map((row) => row.section)
-		.filter((section, index, sections) => sections.indexOf(section) === index),
-	["网络功能"]
+		.find((group) => group.title === "网络功能")
+		?.rows.map((row) => row.label),
+	["VLAN", "交换容量 Gbps", "MAC 地址表容量", "转发方式"]
 )
 assertDeepEqual(
-	switchGroups.find((group) => group.title === "网络")?.rows.map((row) => row.label),
-	["VLAN", "交换容量 Gbps", "MAC 地址表容量", "转发方式"]
+	switchGroups.find((group) => group.title === "网络功能")?.rows.map((row) => row.section),
+	[undefined, undefined, undefined, undefined]
 )
 assertDeepEqual(
 	switchGroups
