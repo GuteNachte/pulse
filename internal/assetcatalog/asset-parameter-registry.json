@@ -1,0 +1,4718 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "appearance",
+      "title": "外观与尺寸",
+      "order": 10
+    },
+    {
+      "id": "power",
+      "title": "电源",
+      "order": 20
+    },
+    {
+      "id": "platform",
+      "title": "主板与平台",
+      "order": 30
+    },
+    {
+      "id": "processor",
+      "title": "处理器",
+      "order": 40
+    },
+    {
+      "id": "graphics",
+      "title": "显卡",
+      "order": 50
+    },
+    {
+      "id": "memory",
+      "title": "内存",
+      "order": 60
+    },
+    {
+      "id": "storage",
+      "title": "存储",
+      "order": 70
+    },
+    {
+      "id": "network",
+      "title": "网络",
+      "order": 80
+    },
+    {
+      "id": "io",
+      "title": "接口与扩展",
+      "order": 90
+    },
+    {
+      "id": "display",
+      "title": "显示",
+      "order": 100
+    },
+    {
+      "id": "imaging",
+      "title": "影像",
+      "order": 110
+    },
+    {
+      "id": "audio",
+      "title": "音频",
+      "order": 120
+    },
+    {
+      "id": "sensors",
+      "title": "传感器",
+      "order": 130
+    },
+    {
+      "id": "thermal_environment",
+      "title": "散热与环境",
+      "order": 140
+    }
+  ],
+  "fields": [
+    {
+      "key": "access_technology",
+      "label": "线路接入技术",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "internet"
+      ],
+      "scope": "line",
+      "order": 10
+    },
+    {
+      "key": "account_note",
+      "label": "账号 / 平台备注",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker"
+      ],
+      "scope": "operational",
+      "order": 10
+    },
+    {
+      "key": "antenna_type",
+      "label": "天线形态",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "router",
+        "ap"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力",
+      "order": 10
+    },
+    {
+      "key": "asset_tag",
+      "label": "资产编号",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "router",
+        "gateway",
+        "ap",
+        "firewall",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker",
+        "camera",
+        "printer",
+        "ups",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot",
+        "custom"
+      ],
+      "scope": "dossier",
+      "order": 10
+    },
+    {
+      "key": "audio_detail",
+      "label": "音频详情",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker"
+      ],
+      "scope": "parameter",
+      "category": "audio",
+      "section": "音频规格",
+      "order": 10
+    },
+    {
+      "key": "audio_output",
+      "label": "音频输出",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格",
+      "order": 10
+    },
+    {
+      "key": "auth_mode",
+      "label": "联网认证方式",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "internet"
+      ],
+      "scope": "line",
+      "order": 20
+    },
+    {
+      "key": "auto_renew",
+      "label": "自动续费",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "internet"
+      ],
+      "scope": "line",
+      "order": 30
+    },
+    {
+      "key": "automation_note",
+      "label": "自动化备注",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot"
+      ],
+      "scope": "operational",
+      "order": 20
+    },
+    {
+      "key": "battery_capacity_mah",
+      "label": "电池容量",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "handheld"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池",
+      "order": 10
+    },
+    {
+      "key": "battery_count",
+      "label": "电池数量",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "ups"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池",
+      "order": 20
+    },
+    {
+      "key": "battery_life_note",
+      "label": "续航备注",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "handheld"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池",
+      "order": 30
+    },
+    {
+      "key": "battery_model",
+      "label": "电池型号",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "ups"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池",
+      "order": 40
+    },
+    {
+      "key": "battery_type",
+      "label": "电池类型",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池",
+      "order": 50
+    },
+    {
+      "key": "bay_count",
+      "label": "硬盘位数量",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "nas"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格",
+      "order": 10
+    },
+    {
+      "key": "billing_cycle",
+      "label": "计费周期",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "internet",
+        "web_endpoint"
+      ],
+      "scope": "line",
+      "order": 40
+    },
+    {
+      "key": "biometrics",
+      "label": "生物识别",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable"
+      ],
+      "scope": "parameter",
+      "category": "sensors",
+      "section": "传感能力",
+      "order": 10
+    },
+    {
+      "key": "bios_vendor",
+      "label": "BIOS 厂商",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "platform",
+      "section": "平台规格",
+      "order": 10
+    },
+    {
+      "key": "bluetooth_support",
+      "label": "蓝牙",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力",
+      "order": 20
+    },
+    {
+      "key": "bluetooth_version",
+      "label": "蓝牙版本",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力",
+      "order": 30
+    },
+    {
+      "key": "bmc",
+      "label": "带外管理",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "server"
+      ],
+      "scope": "parameter",
+      "category": "platform",
+      "section": "平台规格",
+      "order": 20
+    },
+    {
+      "key": "body_material",
+      "label": "机身材质",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "tv",
+        "speaker"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格",
+      "order": 10
+    },
+    {
+      "key": "cache_slots",
+      "label": "缓存盘位",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "nas"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格",
+      "order": 20
+    },
+    {
+      "key": "camera_summary",
+      "label": "摄像头摘要",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet"
+      ],
+      "scope": "parameter",
+      "category": "imaging",
+      "section": "影像规格",
+      "order": 10
+    },
+    {
+      "key": "capacity_va",
+      "label": "容量 VA",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "ups"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池",
+      "order": 60
+    },
+    {
+      "key": "capacity_w",
+      "label": "容量 W",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "ups"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池",
+      "order": 70
+    },
+    {
+      "key": "carrier",
+      "label": "运营商",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力",
+      "order": 40
+    },
+    {
+      "key": "case_form_factor",
+      "label": "机箱形态",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "physical_host"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格",
+      "order": 20
+    },
+    {
+      "key": "charging_power_w",
+      "label": "充电功率",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池",
+      "order": 80
+    },
+    {
+      "key": "chassis_model",
+      "label": "机箱型号",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "server"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格",
+      "order": 30
+    },
+    {
+      "key": "chassis_power_detail",
+      "label": "机箱 / 电源",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "server"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 2",
+      "order": 10
+    },
+    {
+      "key": "chassis_vendor",
+      "label": "机箱品牌",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "server"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格",
+      "order": 40
+    },
+    {
+      "key": "color",
+      "label": "外观颜色",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "text",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "dossier",
+      "order": 20
+    },
+    {
+      "key": "color_control",
+      "label": "调光 / 调色",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "light"
+      ],
+      "scope": "parameter",
+      "category": "display",
+      "section": "显示规格",
+      "order": 10
+    },
+    {
+      "key": "color_mode",
+      "label": "彩色能力",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "printer"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格",
+      "order": 20
+    },
+    {
+      "key": "color_rendering_index",
+      "label": "显色指数",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "light"
+      ],
+      "scope": "parameter",
+      "category": "display",
+      "section": "显示规格",
+      "order": 20
+    },
+    {
+      "key": "color_temperature_k",
+      "label": "色温 K",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "light"
+      ],
+      "scope": "parameter",
+      "category": "display",
+      "section": "显示规格",
+      "order": 30
+    },
+    {
+      "key": "colors_available",
+      "label": "官方配色",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格",
+      "order": 50
+    },
+    {
+      "key": "connection_type",
+      "label": "连接方式",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "camera",
+        "printer"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力",
+      "order": 50
+    },
+    {
+      "key": "controller_platform",
+      "label": "控制平台",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "smarthome_gateway",
+        "iot"
+      ],
+      "scope": "operational",
+      "order": 30
+    },
+    {
+      "key": "cooling_system",
+      "label": "散热",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone"
+      ],
+      "scope": "parameter",
+      "category": "thermal_environment",
+      "section": "环境与散热",
+      "order": 10
+    },
+    {
+      "key": "cpu_architecture",
+      "label": "CPU 架构",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "game_console",
+        "handheld"
+      ],
+      "scope": "parameter",
+      "category": "processor",
+      "section": "处理器规格",
+      "order": 10
+    },
+    {
+      "key": "cpu_cores",
+      "label": "CPU 核心",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet"
+      ],
+      "scope": "parameter",
+      "category": "processor",
+      "section": "处理器规格",
+      "order": 20
+    },
+    {
+      "key": "cpu_frequency",
+      "label": "CPU 频率",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet"
+      ],
+      "scope": "parameter",
+      "category": "processor",
+      "section": "处理器规格",
+      "order": 30
+    },
+    {
+      "key": "cpu_model",
+      "label": "CPU 型号",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld"
+      ],
+      "scope": "parameter",
+      "category": "processor",
+      "section": "处理器规格",
+      "order": 40
+    },
+    {
+      "key": "cpu_process",
+      "label": "制程 / 架构",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet"
+      ],
+      "scope": "parameter",
+      "category": "processor",
+      "section": "处理器规格",
+      "order": 50
+    },
+    {
+      "key": "cpu_socket_count",
+      "label": "CPU 插槽数量",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "physical_host",
+        "server"
+      ],
+      "scope": "parameter",
+      "category": "processor",
+      "section": "处理器规格",
+      "order": 60
+    },
+    {
+      "key": "cpu_vendor",
+      "label": "CPU 厂商",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "phone",
+        "tablet",
+        "wearable",
+        "game_console",
+        "handheld"
+      ],
+      "scope": "parameter",
+      "category": "processor",
+      "section": "处理器规格",
+      "order": 70
+    },
+    {
+      "key": "custom_category",
+      "label": "自定义分类",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "custom"
+      ],
+      "scope": "operational",
+      "order": 40
+    },
+    {
+      "key": "default_ethernet_speed_mbps",
+      "label": "默认电口速率 Mbps",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力",
+      "order": 60
+    },
+    {
+      "key": "default_optical_speed_mbps",
+      "label": "默认光口速率 Mbps",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力",
+      "order": 70
+    },
+    {
+      "key": "default_port_speed_mbps",
+      "label": "默认端口速率 Mbps",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "router",
+        "gateway",
+        "ap",
+        "firewall"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力",
+      "order": 80
+    },
+    {
+      "key": "dhcp_status",
+      "label": "DHCP",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 2",
+      "order": 10
+    },
+    {
+      "key": "dimensions",
+      "label": "机身尺寸",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格",
+      "order": 60
+    },
+    {
+      "key": "dimensions_mm",
+      "label": "外观尺寸 mm",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格",
+      "order": 70
+    },
+    {
+      "key": "display_brightness",
+      "label": "屏幕亮度",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "handheld",
+        "tv"
+      ],
+      "scope": "parameter",
+      "category": "display",
+      "section": "显示规格",
+      "order": 40
+    },
+    {
+      "key": "display_color_depth",
+      "label": "色深 / 色彩",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "ebook",
+        "tv"
+      ],
+      "scope": "parameter",
+      "category": "display",
+      "section": "显示规格",
+      "order": 50
+    },
+    {
+      "key": "display_outputs",
+      "label": "显示输出",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格",
+      "order": 30
+    },
+    {
+      "key": "display_protection",
+      "label": "屏幕保护",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "ebook",
+        "tv"
+      ],
+      "scope": "parameter",
+      "category": "display",
+      "section": "显示规格",
+      "order": 60
+    },
+    {
+      "key": "display_resolution",
+      "label": "屏幕分辨率",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv"
+      ],
+      "scope": "parameter",
+      "category": "display",
+      "section": "显示规格",
+      "order": 70
+    },
+    {
+      "key": "display_type",
+      "label": "屏幕类型",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "handheld",
+        "tv"
+      ],
+      "scope": "parameter",
+      "category": "display",
+      "section": "显示规格",
+      "order": 80
+    },
+    {
+      "key": "door_thickness",
+      "label": "适配门厚",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "lock"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格",
+      "order": 80
+    },
+    {
+      "key": "down_mbps",
+      "label": "下行带宽",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "internet"
+      ],
+      "scope": "line",
+      "order": 50
+    },
+    {
+      "key": "downstream_optical_port_count",
+      "label": "下联光口数量",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "number",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 2",
+      "order": 20
+    },
+    {
+      "key": "downstream_optical_status",
+      "label": "下联光口状态",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 2",
+      "order": 30
+    },
+    {
+      "key": "duplex",
+      "label": "双面",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "printer"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格",
+      "order": 40
+    },
+    {
+      "key": "dust_box_ml",
+      "label": "尘盒容量 ml",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "vacuum"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格",
+      "order": 30
+    },
+    {
+      "key": "ecc_memory",
+      "label": "ECC 内存",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "memory",
+      "section": "内存规格",
+      "order": 10
+    },
+    {
+      "key": "emergency_power",
+      "label": "应急供电",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "lock"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 2",
+      "order": 20
+    },
+    {
+      "key": "endpoint_scope",
+      "label": "检测范围",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "web_endpoint"
+      ],
+      "scope": "service",
+      "order": 10
+    },
+    {
+      "key": "energy_monitoring",
+      "label": "电量统计",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "plug"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 2",
+      "order": 30
+    },
+    {
+      "key": "entity_id",
+      "label": "实体 ID",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot"
+      ],
+      "scope": "operational",
+      "order": 50
+    },
+    {
+      "key": "ethernet_port_count",
+      "label": "电口数量",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 2",
+      "order": 40
+    },
+    {
+      "key": "ethernet_supported_speeds",
+      "label": "电口支持速率",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 2",
+      "order": 50
+    },
+    {
+      "key": "expected_owner",
+      "label": "承载 / 归属资产",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "web_endpoint"
+      ],
+      "scope": "service",
+      "order": 20
+    },
+    {
+      "key": "external_url",
+      "label": "外网检测 URL",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "url",
+      "assetTypes": [
+        "web_endpoint"
+      ],
+      "scope": "service",
+      "order": 30
+    },
+    {
+      "key": "field_of_view",
+      "label": "视场角",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "camera"
+      ],
+      "scope": "parameter",
+      "category": "imaging",
+      "section": "影像规格",
+      "order": 20
+    },
+    {
+      "key": "filesystem",
+      "label": "文件系统",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "nas"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格",
+      "order": 40
+    },
+    {
+      "key": "firmware_channel",
+      "label": "固件通道",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "iot"
+      ],
+      "scope": "operational",
+      "order": 60
+    },
+    {
+      "key": "fixed_ipv4",
+      "label": "IPv4",
+      "source": "metadata",
+      "capture": "agent_required",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "router",
+        "gateway",
+        "ont",
+        "switch",
+        "ap",
+        "firewall",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker",
+        "camera",
+        "printer",
+        "ups",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot",
+        "custom"
+      ],
+      "scope": "dossier",
+      "order": 30
+    },
+    {
+      "key": "form_factor",
+      "label": "机身形态",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格 2",
+      "order": 10
+    },
+    {
+      "key": "forwarding_method",
+      "label": "转发方式",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 2",
+      "order": 60
+    },
+    {
+      "key": "front_camera_detail",
+      "label": "前置影像",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet"
+      ],
+      "scope": "parameter",
+      "category": "imaging",
+      "section": "影像规格",
+      "order": 30
+    },
+    {
+      "key": "gateway_name",
+      "label": "所属网关",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot"
+      ],
+      "scope": "operational",
+      "order": 70
+    },
+    {
+      "key": "gateway_status",
+      "label": "主网关",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 2",
+      "order": 70
+    },
+    {
+      "key": "gpu_board_vendor",
+      "label": "显卡板卡品牌",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "graphics",
+      "section": "图形能力",
+      "order": 10
+    },
+    {
+      "key": "gpu_detail",
+      "label": "显卡品牌 / 型号",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "phone",
+        "tablet",
+        "game_console",
+        "handheld"
+      ],
+      "scope": "parameter",
+      "category": "graphics",
+      "section": "图形能力",
+      "order": 20
+    },
+    {
+      "key": "gpu_model",
+      "label": "GPU 芯片型号",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "phone",
+        "tablet",
+        "game_console",
+        "handheld"
+      ],
+      "scope": "parameter",
+      "category": "graphics",
+      "section": "图形能力",
+      "order": 30
+    },
+    {
+      "key": "gpu_vendor",
+      "label": "GPU 芯片厂商",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "graphics",
+      "section": "图形能力",
+      "order": 40
+    },
+    {
+      "key": "gpu_vram_gb",
+      "label": "显存 GB",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "number",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "graphics",
+      "section": "图形能力",
+      "order": 50
+    },
+    {
+      "key": "hdr_support",
+      "label": "HDR",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "game_console",
+        "handheld",
+        "tv"
+      ],
+      "scope": "parameter",
+      "category": "display",
+      "section": "显示规格 2",
+      "order": 10
+    },
+    {
+      "key": "height_mm",
+      "label": "高度 mm",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格 2",
+      "order": 20
+    },
+    {
+      "key": "hot_swap",
+      "label": "热插拔",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "nas"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格",
+      "order": 50
+    },
+    {
+      "key": "image_stabilization",
+      "label": "防抖 / 对焦",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet"
+      ],
+      "scope": "parameter",
+      "category": "imaging",
+      "section": "影像规格",
+      "order": 40
+    },
+    {
+      "key": "indicator_control",
+      "label": "指示灯控制",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 2",
+      "order": 80
+    },
+    {
+      "key": "infrared",
+      "label": "红外",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格",
+      "order": 50
+    },
+    {
+      "key": "installation_method",
+      "label": "安装方式",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格 2",
+      "order": 30
+    },
+    {
+      "key": "installation_position",
+      "label": "安装位置",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "sensor"
+      ],
+      "scope": "operational",
+      "order": 80
+    },
+    {
+      "key": "internal_model",
+      "label": "内部型号",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone"
+      ],
+      "scope": "dossier",
+      "order": 40
+    },
+    {
+      "key": "internal_url",
+      "label": "内网检测 URL",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "url",
+      "assetTypes": [
+        "web_endpoint"
+      ],
+      "scope": "service",
+      "order": 40
+    },
+    {
+      "key": "iot_capability",
+      "label": "设备能力",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "iot"
+      ],
+      "scope": "operational",
+      "order": 10
+    },
+    {
+      "key": "lan_1000_count",
+      "label": "1GbE LAN 数量",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "number",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 3",
+      "order": 10
+    },
+    {
+      "key": "lan_2500_count",
+      "label": "2.5GbE LAN 数量",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "number",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 3",
+      "order": 20
+    },
+    {
+      "key": "lan_port_count",
+      "label": "LAN 总数",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "number",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 3",
+      "order": 30
+    },
+    {
+      "key": "lan_subnet",
+      "label": "LAN 网段",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 3",
+      "order": 40
+    },
+    {
+      "key": "length_mm",
+      "label": "长度 mm",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格 2",
+      "order": 40
+    },
+    {
+      "key": "lens_spec",
+      "label": "镜头规格",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "camera"
+      ],
+      "scope": "parameter",
+      "category": "imaging",
+      "section": "影像规格",
+      "order": 50
+    },
+    {
+      "key": "light_kind",
+      "label": "灯具类型",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "light"
+      ],
+      "scope": "parameter",
+      "category": "display",
+      "section": "显示规格 2",
+      "order": 20
+    },
+    {
+      "key": "lightning_protection_kv",
+      "label": "防雷等级 kV",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "thermal_environment",
+      "section": "环境与散热",
+      "order": 20
+    },
+    {
+      "key": "link_aggregation_status",
+      "label": "链路聚合",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 3",
+      "order": 50
+    },
+    {
+      "key": "location",
+      "label": "位置",
+      "source": "asset",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "router",
+        "gateway",
+        "ap",
+        "firewall",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker",
+        "camera",
+        "printer",
+        "ups",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot",
+        "web_endpoint",
+        "custom"
+      ],
+      "scope": "dossier",
+      "order": 50
+    },
+    {
+      "key": "lock_body",
+      "label": "锁体类型",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "lock"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格",
+      "order": 60
+    },
+    {
+      "key": "luminous_flux_lm",
+      "label": "光通量 lm",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "light"
+      ],
+      "scope": "parameter",
+      "category": "display",
+      "section": "显示规格 2",
+      "order": 30
+    },
+    {
+      "key": "mac",
+      "label": "MAC",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "router",
+        "gateway",
+        "ont",
+        "switch",
+        "ap",
+        "firewall",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker",
+        "camera",
+        "printer",
+        "ups",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot",
+        "custom"
+      ],
+      "scope": "dossier",
+      "order": 60
+    },
+    {
+      "key": "mac_table_entries",
+      "label": "MAC 地址表容量",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 3",
+      "order": 60
+    },
+    {
+      "key": "management_access",
+      "label": "主要管理入口",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 3",
+      "order": 70
+    },
+    {
+      "key": "management_level",
+      "label": "管理级别",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 3",
+      "order": 80
+    },
+    {
+      "key": "management_url",
+      "label": "管理 URL",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "url",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "ont",
+        "switch",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker",
+        "camera",
+        "printer",
+        "ups",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot"
+      ],
+      "scope": "dossier",
+      "order": 70
+    },
+    {
+      "key": "manufacture_date",
+      "label": "生产日期",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "date",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "platform",
+      "section": "平台规格",
+      "order": 30
+    },
+    {
+      "key": "max_device_count",
+      "label": "最大接入数",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "smarthome_gateway"
+      ],
+      "scope": "operational",
+      "order": 20
+    },
+    {
+      "key": "max_memory_gb",
+      "label": "最大内存容量 GB",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "number",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "memory",
+      "section": "内存规格",
+      "order": 20
+    },
+    {
+      "key": "measurement_precision",
+      "label": "测量精度",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "sensor"
+      ],
+      "scope": "parameter",
+      "category": "sensors",
+      "section": "传感能力",
+      "order": 20
+    },
+    {
+      "key": "measurement_range",
+      "label": "测量范围",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "sensor"
+      ],
+      "scope": "parameter",
+      "category": "sensors",
+      "section": "传感能力",
+      "order": 30
+    },
+    {
+      "key": "memory_channel_count",
+      "label": "内存通道数量",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "number",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "memory",
+      "section": "内存规格",
+      "order": 30
+    },
+    {
+      "key": "memory_detail",
+      "label": "内存规格",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "phone",
+        "tablet",
+        "wearable",
+        "game_console",
+        "handheld"
+      ],
+      "scope": "parameter",
+      "category": "memory",
+      "section": "内存规格",
+      "order": 40
+    },
+    {
+      "key": "memory_gb",
+      "label": "内存 GB",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "number",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld"
+      ],
+      "scope": "parameter",
+      "category": "memory",
+      "section": "内存规格",
+      "order": 50
+    },
+    {
+      "key": "memory_speed_mhz",
+      "label": "当前内存频率 MHz",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "number",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "memory",
+      "section": "内存规格",
+      "order": 60
+    },
+    {
+      "key": "memory_type",
+      "label": "当前内存类型",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "phone",
+        "tablet"
+      ],
+      "scope": "parameter",
+      "category": "memory",
+      "section": "内存规格",
+      "order": 70
+    },
+    {
+      "key": "memory_vendor",
+      "label": "内存品牌",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "memory",
+      "section": "内存规格",
+      "order": 80
+    },
+    {
+      "key": "mobile_network",
+      "label": "蜂窝网络",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 4",
+      "order": 10
+    },
+    {
+      "key": "model",
+      "label": "型号 / 规格",
+      "source": "asset",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "router",
+        "gateway",
+        "ap",
+        "firewall",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker",
+        "camera",
+        "printer",
+        "ups",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot",
+        "custom"
+      ],
+      "scope": "dossier",
+      "order": 80
+    },
+    {
+      "key": "motherboard_model",
+      "label": "主板型号",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "platform",
+      "section": "平台规格",
+      "order": 40
+    },
+    {
+      "key": "motherboard_vendor",
+      "label": "主板品牌",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "platform",
+      "section": "平台规格",
+      "order": 50
+    },
+    {
+      "key": "mount_support",
+      "label": "安装方式",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格 2",
+      "order": 50
+    },
+    {
+      "key": "name",
+      "label": "资产名称",
+      "source": "asset",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "router",
+        "gateway",
+        "ap",
+        "firewall",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker",
+        "camera",
+        "printer",
+        "ups",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot",
+        "web_endpoint",
+        "custom"
+      ],
+      "scope": "dossier",
+      "order": 10
+    },
+    {
+      "key": "navigation",
+      "label": "导航避障",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "vacuum"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 4",
+      "order": 20
+    },
+    {
+      "key": "net_weight_g",
+      "label": "净重 g",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格 2",
+      "order": 60
+    },
+    {
+      "key": "neutral_wire",
+      "label": "零线要求",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "plug"
+      ],
+      "scope": "operational",
+      "order": 30
+    },
+    {
+      "key": "nfc",
+      "label": "NFC",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格",
+      "order": 70
+    },
+    {
+      "key": "nic_detail",
+      "label": "网卡品牌 / 型号",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 4",
+      "order": 30
+    },
+    {
+      "key": "nic_model",
+      "label": "有线网卡型号",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 4",
+      "order": 40
+    },
+    {
+      "key": "nic_vendor",
+      "label": "有线网卡品牌",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 4",
+      "order": 50
+    },
+    {
+      "key": "night_vision",
+      "label": "夜视能力",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "camera"
+      ],
+      "scope": "parameter",
+      "category": "imaging",
+      "section": "影像规格",
+      "order": 60
+    },
+    {
+      "key": "notes",
+      "label": "备注",
+      "source": "asset",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "router",
+        "gateway",
+        "ont",
+        "switch",
+        "ap",
+        "firewall",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker",
+        "camera",
+        "printer",
+        "ups",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot",
+        "internet",
+        "web_endpoint",
+        "custom"
+      ],
+      "scope": "dossier",
+      "order": 20
+    },
+    {
+      "key": "official_image_url",
+      "label": "官方图片",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "url",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker"
+      ],
+      "scope": "operational",
+      "order": 40
+    },
+    {
+      "key": "official_url",
+      "label": "官方网站",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "url",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "router",
+        "gateway",
+        "switch",
+        "ap",
+        "firewall",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker",
+        "camera",
+        "printer",
+        "ups",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot",
+        "custom"
+      ],
+      "scope": "dossier",
+      "order": 30
+    },
+    {
+      "key": "online_specs_summary",
+      "label": "资料规格摘要",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone"
+      ],
+      "scope": "operational",
+      "order": 50
+    },
+    {
+      "key": "onu_type",
+      "label": "ONU 类型",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "text",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 4",
+      "order": 60
+    },
+    {
+      "key": "operating_humidity_range",
+      "label": "工作湿度",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "thermal_environment",
+      "section": "环境与散热",
+      "order": 30
+    },
+    {
+      "key": "operating_role",
+      "label": "工作角色",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 4",
+      "order": 70
+    },
+    {
+      "key": "operating_temperature_range",
+      "label": "工作温度",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "thermal_environment",
+      "section": "环境与散热",
+      "order": 40
+    },
+    {
+      "key": "optical_connector",
+      "label": "光纤连接器",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "text",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 4",
+      "order": 80
+    },
+    {
+      "key": "optical_port_count",
+      "label": "光口数量",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 5",
+      "order": 10
+    },
+    {
+      "key": "optical_supported_speeds",
+      "label": "光口支持速率",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 5",
+      "order": 20
+    },
+    {
+      "key": "other_port_count",
+      "label": "其他端口数量",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 5",
+      "order": 30
+    },
+    {
+      "key": "outlet_count",
+      "label": "输出口数量",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "ups",
+        "plug"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 2",
+      "order": 40
+    },
+    {
+      "key": "package_name",
+      "label": "套餐名称",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "internet"
+      ],
+      "scope": "line",
+      "order": 60
+    },
+    {
+      "key": "package_weight_kg",
+      "label": "包装重 kg",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "mini_pc"
+      ],
+      "scope": "operational",
+      "order": 60
+    },
+    {
+      "key": "paper_size",
+      "label": "纸张规格",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "printer"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格",
+      "order": 80
+    },
+    {
+      "key": "pcie_slots",
+      "label": "PCIe 扩展槽",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "physical_host"
+      ],
+      "scope": "parameter",
+      "category": "platform",
+      "section": "平台规格",
+      "order": 60
+    },
+    {
+      "key": "poe_standard",
+      "label": "PoE 标准",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "ap"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 5",
+      "order": 40
+    },
+    {
+      "key": "pon_sn",
+      "label": "PON SN",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "text",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 5",
+      "order": 50
+    },
+    {
+      "key": "pon_standard",
+      "label": "PON 标准",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "text",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 5",
+      "order": 60
+    },
+    {
+      "key": "pon_uplink_capacity",
+      "label": "PON 上联能力",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "text",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 5",
+      "order": 70
+    },
+    {
+      "key": "port_count",
+      "label": "端口数量",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "router",
+        "gateway",
+        "ap",
+        "firewall"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 5",
+      "order": 80
+    },
+    {
+      "key": "port_isolation_status",
+      "label": "端口隔离",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 6",
+      "order": 10
+    },
+    {
+      "key": "positioning",
+      "label": "定位系统",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 6",
+      "order": 20
+    },
+    {
+      "key": "power_adapter_w",
+      "label": "电源",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 2",
+      "order": 50
+    },
+    {
+      "key": "power_input",
+      "label": "输入电源",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 2",
+      "order": 60
+    },
+    {
+      "key": "power_mode",
+      "label": "供电方式",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "router",
+        "gateway",
+        "switch",
+        "ap",
+        "firewall",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker",
+        "camera",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 2",
+      "order": 70
+    },
+    {
+      "key": "power_spec",
+      "label": "电源规格",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "text",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 2",
+      "order": 80
+    },
+    {
+      "key": "power_switch_supported",
+      "label": "电源开关",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 6",
+      "order": 30
+    },
+    {
+      "key": "preinstalled_os",
+      "label": "预装操作系统",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "mini_pc"
+      ],
+      "scope": "operational",
+      "order": 70
+    },
+    {
+      "key": "primary_nic_speed_mbps",
+      "label": "主网卡速率 Mbps",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "number",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 6",
+      "order": 40
+    },
+    {
+      "key": "print_resolution",
+      "label": "打印分辨率",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "printer"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格 2",
+      "order": 10
+    },
+    {
+      "key": "print_speed_ppm",
+      "label": "打印速度 PPM",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "printer"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格 2",
+      "order": 20
+    },
+    {
+      "key": "printer_type",
+      "label": "类型",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "printer"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格 2",
+      "order": 30
+    },
+    {
+      "key": "product_number",
+      "label": "产品编号",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "text",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "platform",
+      "section": "平台规格",
+      "order": 70
+    },
+    {
+      "key": "product_series",
+      "label": "产品系列",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "text",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "platform",
+      "section": "平台规格",
+      "order": 80
+    },
+    {
+      "key": "protected_assets",
+      "label": "保护设备",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "ups"
+      ],
+      "scope": "operational",
+      "order": 80
+    },
+    {
+      "key": "protocol",
+      "label": "协议",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "camera",
+        "ups",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 6",
+      "order": 50
+    },
+    {
+      "key": "psu_model",
+      "label": "电源型号 / 功率",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 3",
+      "order": 10
+    },
+    {
+      "key": "psu_vendor",
+      "label": "电源品牌",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 3",
+      "order": 20
+    },
+    {
+      "key": "public_ipv4",
+      "label": "公网 IPv4",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "text",
+      "assetTypes": [
+        "internet"
+      ],
+      "scope": "line",
+      "order": 70
+    },
+    {
+      "key": "public_ipv6",
+      "label": "公网 IPv6",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "text",
+      "assetTypes": [
+        "internet"
+      ],
+      "scope": "line",
+      "order": 80
+    },
+    {
+      "key": "purchase_date",
+      "label": "购买日期",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "date",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "router",
+        "gateway",
+        "ap",
+        "firewall",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker",
+        "camera",
+        "printer",
+        "ups",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot",
+        "custom"
+      ],
+      "scope": "operational",
+      "order": 10
+    },
+    {
+      "key": "purchase_price_cny",
+      "label": "购买价格（元）",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "router",
+        "gateway",
+        "ap",
+        "firewall",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker",
+        "camera",
+        "printer",
+        "ups",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot",
+        "custom"
+      ],
+      "scope": "operational",
+      "order": 20
+    },
+    {
+      "key": "rack_form_factor",
+      "label": "机架规格",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "server"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格 2",
+      "order": 70
+    },
+    {
+      "key": "radio_approval_code",
+      "label": "无线电型号核准编号",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "text",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 6",
+      "order": 60
+    },
+    {
+      "key": "radio_protocols",
+      "label": "无线协议",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "smarthome_gateway"
+      ],
+      "scope": "operational",
+      "order": 30
+    },
+    {
+      "key": "raid_controller",
+      "label": "RAID / HBA 控制器",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "server"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格",
+      "order": 60
+    },
+    {
+      "key": "raid_mode",
+      "label": "阵列 / RAID",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "nas"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格",
+      "order": 70
+    },
+    {
+      "key": "rated_current_a",
+      "label": "额定电流 A",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "plug"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 3",
+      "order": 30
+    },
+    {
+      "key": "rated_power_w",
+      "label": "额定功率 W",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "plug"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 3",
+      "order": 40
+    },
+    {
+      "key": "rear_camera_detail",
+      "label": "后置影像",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet"
+      ],
+      "scope": "parameter",
+      "category": "imaging",
+      "section": "影像规格",
+      "order": 70
+    },
+    {
+      "key": "rear_macro_camera",
+      "label": "微距",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone"
+      ],
+      "scope": "parameter",
+      "category": "imaging",
+      "section": "影像规格",
+      "order": 80
+    },
+    {
+      "key": "rear_main_camera",
+      "label": "主摄",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone"
+      ],
+      "scope": "parameter",
+      "category": "imaging",
+      "section": "影像规格 2",
+      "order": 10
+    },
+    {
+      "key": "rear_telephoto_camera",
+      "label": "长焦",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone"
+      ],
+      "scope": "parameter",
+      "category": "imaging",
+      "section": "影像规格 2",
+      "order": 20
+    },
+    {
+      "key": "rear_ultrawide_camera",
+      "label": "超广角",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone"
+      ],
+      "scope": "parameter",
+      "category": "imaging",
+      "section": "影像规格 2",
+      "order": 30
+    },
+    {
+      "key": "recurring_price_cny",
+      "label": "套餐费用（元）",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "internet",
+        "web_endpoint"
+      ],
+      "scope": "line",
+      "order": 10
+    },
+    {
+      "key": "redundant_psu",
+      "label": "冗余电源",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "server"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 3",
+      "order": 50
+    },
+    {
+      "key": "release_date",
+      "label": "上市日期",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "mini_pc"
+      ],
+      "scope": "operational",
+      "order": 40
+    },
+    {
+      "key": "renewal_date",
+      "label": "到期日期",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "date",
+      "assetTypes": [
+        "internet",
+        "web_endpoint"
+      ],
+      "scope": "line",
+      "order": 20
+    },
+    {
+      "key": "reporting_interval",
+      "label": "上报间隔",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "sensor"
+      ],
+      "scope": "operational",
+      "order": 50
+    },
+    {
+      "key": "reset_supported",
+      "label": "复位能力",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 6",
+      "order": 70
+    },
+    {
+      "key": "resolution",
+      "label": "分辨率",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "camera"
+      ],
+      "scope": "parameter",
+      "category": "imaging",
+      "section": "影像规格 2",
+      "order": 40
+    },
+    {
+      "key": "role",
+      "label": "用途 / 角色",
+      "source": "asset",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "router",
+        "gateway",
+        "ont",
+        "switch",
+        "ap",
+        "firewall",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker",
+        "camera",
+        "printer",
+        "ups",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot",
+        "internet",
+        "web_endpoint",
+        "custom"
+      ],
+      "scope": "dossier",
+      "order": 40
+    },
+    {
+      "key": "room",
+      "label": "房间",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot"
+      ],
+      "scope": "operational",
+      "order": 60
+    },
+    {
+      "key": "router_status",
+      "label": "主路由",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 6",
+      "order": 80
+    },
+    {
+      "key": "scan_resolution",
+      "label": "扫描分辨率",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "printer"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格 2",
+      "order": 40
+    },
+    {
+      "key": "screen_refresh_rate",
+      "label": "屏幕刷新率",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "game_console",
+        "handheld",
+        "tv"
+      ],
+      "scope": "parameter",
+      "category": "display",
+      "section": "显示规格 2",
+      "order": 40
+    },
+    {
+      "key": "screen_size",
+      "label": "屏幕 / 尺寸",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "handheld",
+        "tv"
+      ],
+      "scope": "parameter",
+      "category": "display",
+      "section": "显示规格 2",
+      "order": 50
+    },
+    {
+      "key": "security_throughput_gbps",
+      "label": "安全吞吐 Gbps",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "firewall"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 7",
+      "order": 10
+    },
+    {
+      "key": "sensor_detail",
+      "label": "传感器",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable"
+      ],
+      "scope": "parameter",
+      "category": "sensors",
+      "section": "传感能力",
+      "order": 40
+    },
+    {
+      "key": "sensor_kind",
+      "label": "传感器类型",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "sensor"
+      ],
+      "scope": "parameter",
+      "category": "sensors",
+      "section": "传感能力",
+      "order": 50
+    },
+    {
+      "key": "sensor_size",
+      "label": "传感器尺寸",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "camera"
+      ],
+      "scope": "parameter",
+      "category": "imaging",
+      "section": "影像规格 2",
+      "order": 50
+    },
+    {
+      "key": "serial_number",
+      "label": "序列号",
+      "source": "asset",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "router",
+        "gateway",
+        "ont",
+        "ap",
+        "firewall",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker",
+        "camera",
+        "printer",
+        "ups",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot",
+        "custom"
+      ],
+      "scope": "dossier",
+      "order": 50
+    },
+    {
+      "key": "service_category",
+      "label": "服务类型",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "web_endpoint"
+      ],
+      "scope": "service",
+      "order": 50
+    },
+    {
+      "key": "session_capacity",
+      "label": "并发会话数",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "firewall"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 7",
+      "order": 20
+    },
+    {
+      "key": "sim_detail",
+      "label": "SIM / 卡槽",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 7",
+      "order": 30
+    },
+    {
+      "key": "smart_category",
+      "label": "家居分类",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot"
+      ],
+      "scope": "operational",
+      "order": 70
+    },
+    {
+      "key": "speaker_detail",
+      "label": "扬声器 / 音频",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker"
+      ],
+      "scope": "parameter",
+      "category": "audio",
+      "section": "音频规格",
+      "order": 20
+    },
+    {
+      "key": "ssid_note",
+      "label": "SSID 备注",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "router",
+        "ap"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 7",
+      "order": 40
+    },
+    {
+      "key": "station_features",
+      "label": "基站能力",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "vacuum"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格 2",
+      "order": 50
+    },
+    {
+      "key": "status",
+      "label": "状态",
+      "source": "asset",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "router",
+        "gateway",
+        "ap",
+        "firewall",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker",
+        "camera",
+        "printer",
+        "ups",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot",
+        "web_endpoint",
+        "custom"
+      ],
+      "scope": "dossier",
+      "order": 60
+    },
+    {
+      "key": "storage_backplane",
+      "label": "背板 / 硬盘位",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "server"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格",
+      "order": 80
+    },
+    {
+      "key": "storage_detail",
+      "label": "当前硬盘品牌 / 型号",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格 2",
+      "order": 10
+    },
+    {
+      "key": "storage_gb",
+      "label": "存储容量 GB",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格 2",
+      "order": 20
+    },
+    {
+      "key": "storage_humidity_range",
+      "label": "存储湿度",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "thermal_environment",
+      "section": "环境与散热",
+      "order": 50
+    },
+    {
+      "key": "storage_media",
+      "label": "当前存储介质 / 总线",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格 2",
+      "order": 30
+    },
+    {
+      "key": "storage_model",
+      "label": "当前主存储型号",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格 2",
+      "order": 40
+    },
+    {
+      "key": "storage_options",
+      "label": "存储版本",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "ebook",
+        "game_console",
+        "handheld"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格 2",
+      "order": 50
+    },
+    {
+      "key": "storage_serial_note",
+      "label": "当前硬盘序列号备注",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格 2",
+      "order": 60
+    },
+    {
+      "key": "storage_slots",
+      "label": "官方扩展槽",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格 2",
+      "order": 70
+    },
+    {
+      "key": "storage_summary",
+      "label": "当前存储摘要",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格 2",
+      "order": 80
+    },
+    {
+      "key": "storage_target",
+      "label": "录像归属",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "camera"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格 3",
+      "order": 10
+    },
+    {
+      "key": "storage_temperature_range",
+      "label": "存储温度",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "thermal_environment",
+      "section": "环境与散热",
+      "order": 60
+    },
+    {
+      "key": "storage_vendor",
+      "label": "当前主存储品牌",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格 3",
+      "order": 20
+    },
+    {
+      "key": "stream_url",
+      "label": "流地址",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "url",
+      "assetTypes": [
+        "camera"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 7",
+      "order": 50
+    },
+    {
+      "key": "suction_pa",
+      "label": "吸力 Pa",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "vacuum"
+      ],
+      "scope": "parameter",
+      "category": "thermal_environment",
+      "section": "环境与散热",
+      "order": 70
+    },
+    {
+      "key": "supplies",
+      "label": "耗材",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "printer"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格 2",
+      "order": 60
+    },
+    {
+      "key": "supported_memory_type",
+      "label": "支持内存类型",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "memory",
+      "section": "内存规格 2",
+      "order": 10
+    },
+    {
+      "key": "supported_os",
+      "label": "支持的操作系统",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "mini_pc"
+      ],
+      "scope": "operational",
+      "order": 80
+    },
+    {
+      "key": "switching_capacity_gbps",
+      "label": "交换容量 Gbps",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 7",
+      "order": 60
+    },
+    {
+      "key": "topology",
+      "label": "拓扑类型",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "ups"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 3",
+      "order": 60
+    },
+    {
+      "key": "touch_sampling_rate",
+      "label": "触控采样率",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "handheld"
+      ],
+      "scope": "parameter",
+      "category": "display",
+      "section": "显示规格 2",
+      "order": 60
+    },
+    {
+      "key": "transcode_engine",
+      "label": "硬件转码",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "nas"
+      ],
+      "scope": "parameter",
+      "category": "graphics",
+      "section": "图形能力",
+      "order": 60
+    },
+    {
+      "key": "transfer_time_ms",
+      "label": "切换时间 ms",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "ups"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 3",
+      "order": 70
+    },
+    {
+      "key": "unlock_methods",
+      "label": "开锁方式",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "lock"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格 2",
+      "order": 70
+    },
+    {
+      "key": "up_mbps",
+      "label": "上行带宽",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "internet"
+      ],
+      "scope": "line",
+      "order": 30
+    },
+    {
+      "key": "url",
+      "label": "主访问 URL",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "url",
+      "assetTypes": [
+        "web_endpoint"
+      ],
+      "scope": "service",
+      "order": 60
+    },
+    {
+      "key": "usb_detail",
+      "label": "USB / 接口",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格 2",
+      "order": 80
+    },
+    {
+      "key": "usb_port_count",
+      "label": "USB 数量",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "number",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格 3",
+      "order": 10
+    },
+    {
+      "key": "usb_ports",
+      "label": "USB / 扩展接口",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格 3",
+      "order": 20
+    },
+    {
+      "key": "vendor",
+      "label": "厂商 / 品牌",
+      "source": "asset",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc",
+        "router",
+        "gateway",
+        "ap",
+        "firewall",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker",
+        "camera",
+        "printer",
+        "ups",
+        "smarthome_gateway",
+        "sensor",
+        "light",
+        "plug",
+        "lock",
+        "vacuum",
+        "iot",
+        "internet",
+        "custom"
+      ],
+      "scope": "dossier",
+      "order": 70
+    },
+    {
+      "key": "video_codec",
+      "label": "视频编码",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "camera"
+      ],
+      "scope": "parameter",
+      "category": "imaging",
+      "section": "影像规格 2",
+      "order": 60
+    },
+    {
+      "key": "video_recording",
+      "label": "视频规格",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet"
+      ],
+      "scope": "parameter",
+      "category": "imaging",
+      "section": "影像规格 2",
+      "order": 70
+    },
+    {
+      "key": "vlan_note",
+      "label": "VLAN / 网段备注",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "router",
+        "gateway",
+        "ap",
+        "firewall"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 7",
+      "order": 70
+    },
+    {
+      "key": "vlan_status",
+      "label": "VLAN",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 7",
+      "order": 80
+    },
+    {
+      "key": "voice_port_count",
+      "label": "电话接口数量",
+      "source": "metadata",
+      "capture": "agent_collectable",
+      "type": "number",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "io",
+      "section": "接口规格 3",
+      "order": 30
+    },
+    {
+      "key": "vpn_throughput_gbps",
+      "label": "VPN 吞吐 Gbps",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "firewall"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 8",
+      "order": 10
+    },
+    {
+      "key": "wan_port_count",
+      "label": "WAN 端口数量",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "router",
+        "gateway"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 8",
+      "order": 20
+    },
+    {
+      "key": "warranty_months",
+      "label": "保修期 月",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "switch"
+      ],
+      "scope": "operational",
+      "order": 10
+    },
+    {
+      "key": "water_resistance",
+      "label": "防尘防水",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格 2",
+      "order": 80
+    },
+    {
+      "key": "water_tank_ml",
+      "label": "水箱容量 ml",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "vacuum"
+      ],
+      "scope": "parameter",
+      "category": "storage",
+      "section": "存储规格 3",
+      "order": 30
+    },
+    {
+      "key": "waveform",
+      "label": "输出波形",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "ups"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 3",
+      "order": 80
+    },
+    {
+      "key": "weather_rating",
+      "label": "防护等级",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "camera"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格 3",
+      "order": 10
+    },
+    {
+      "key": "weight",
+      "label": "重量",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格 3",
+      "order": 20
+    },
+    {
+      "key": "weight_kg",
+      "label": "净重 kg",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格 3",
+      "order": 30
+    },
+    {
+      "key": "width_mm",
+      "label": "宽度 mm",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "number",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "appearance",
+      "section": "外观规格 3",
+      "order": 40
+    },
+    {
+      "key": "wifi_24_enabled",
+      "label": "2.4 GHz 状态",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 8",
+      "order": 30
+    },
+    {
+      "key": "wifi_24_supported",
+      "label": "2.4 GHz 支持",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 8",
+      "order": 40
+    },
+    {
+      "key": "wifi_5_enabled",
+      "label": "5 GHz 状态",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 8",
+      "order": 50
+    },
+    {
+      "key": "wifi_5_supported",
+      "label": "5 GHz 支持",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 8",
+      "order": 60
+    },
+    {
+      "key": "wifi_band",
+      "label": "无线频段",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "router",
+        "ap"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 8",
+      "order": 70
+    },
+    {
+      "key": "wifi_model",
+      "label": "无线网卡型号",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 8",
+      "order": 80
+    },
+    {
+      "key": "wifi_standard",
+      "label": "无线标准",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "router",
+        "ont",
+        "ap",
+        "phone",
+        "tablet",
+        "wearable",
+        "ebook",
+        "game_console",
+        "handheld",
+        "tv",
+        "speaker"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 9",
+      "order": 10
+    },
+    {
+      "key": "wifi_streams",
+      "label": "空间流",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "router",
+        "ap"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 9",
+      "order": 20
+    },
+    {
+      "key": "wifi_support",
+      "label": "Wi-Fi",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 9",
+      "order": 30
+    },
+    {
+      "key": "wifi_vendor",
+      "label": "无线网卡品牌",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 9",
+      "order": 40
+    },
+    {
+      "key": "wireless_charging",
+      "label": "无线充电",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "text",
+      "assetTypes": [
+        "phone",
+        "tablet"
+      ],
+      "scope": "parameter",
+      "category": "power",
+      "section": "供电与电池 4",
+      "order": 10
+    },
+    {
+      "key": "wireless_control",
+      "label": "无线 / WPS 控制",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 9",
+      "order": 50
+    },
+    {
+      "key": "wps_supported",
+      "label": "WPS",
+      "source": "metadata",
+      "capture": "manual",
+      "type": "select",
+      "assetTypes": [
+        "ont"
+      ],
+      "scope": "parameter",
+      "category": "network",
+      "section": "网络能力 9",
+      "order": 60
+    }
+  ]
+}
