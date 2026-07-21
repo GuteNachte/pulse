@@ -6,6 +6,7 @@ import { getMetadataString } from "../asset-schema"
 import { getInternetStatusLabel } from "../asset-type-specs"
 import { getInternetAddressAutoRefreshSettings } from "../asset-internet-address-status"
 import { getAssetDetailRelationRows } from "../asset-detail-relations"
+import { buildNetworkDeviceDetailModel, isNetworkDetailParameterGroup } from "../asset-network-detail-model"
 import {
 	AssetHardwareSpecsColumn,
 	AssetOverviewColumn,
@@ -17,6 +18,7 @@ import {
 	type InternetAddressAutoRefreshSettings,
 } from "./internet-address-auto-refresh-controls"
 import { AssetMediaShowcase, type AssetMediaShowcaseItem } from "./asset-media-showcase"
+import { AssetNetworkDetailTable } from "./asset-network-detail-table"
 
 export function AssetShowcaseWorkspace({
 	asset,
@@ -39,15 +41,22 @@ export function AssetShowcaseWorkspace({
 	onRefreshInternetAddresses?: () => void
 	onUpdateInternetAddressSettings?: (settings: InternetAddressAutoRefreshSettings) => void
 }) {
+	const networkDetailModel = useMemo(
+		() => buildNetworkDeviceDetailModel(asset, assets, interfaces, relations),
+		[asset, assets, interfaces, relations]
+	)
 	const parameterGroups = useMemo(() => {
 		const groups = buildAssetParameterGroups(asset, { interfaces, assets, relations })
+		if (networkDetailModel) {
+			return groups.filter((group) => !isNetworkDetailParameterGroup(asset.type, group.id))
+		}
 		const relationGroup = buildAssetRelationParameterGroup(asset, assets, interfaces, relations)
 		if (!relationGroup) return groups
 		const anchorTitle = asset.type === "internet" ? "线路参数" : "网络"
 		const anchorIndex = groups.findIndex((group) => group.title === anchorTitle)
 		const insertAt = anchorIndex >= 0 ? anchorIndex + 1 : groups.length
 		return [...groups.slice(0, insertAt), relationGroup, ...groups.slice(insertAt)]
-	}, [asset, assets, interfaces, relations])
+	}, [asset, assets, interfaces, networkDetailModel, relations])
 	const identitySections = useMemo(() => buildAssetIdentitySections(asset), [asset])
 	const internetAddressSettings = getInternetAddressAutoRefreshSettings(asset.metadata ?? {})
 	const internetAddressGroupActions =
@@ -75,13 +84,18 @@ export function AssetShowcaseWorkspace({
 					subtitle={asset.type === "internet" ? null : "主档与接入信息"}
 				/>
 			</aside>
-			<AssetHardwareSpecsColumn
-				groups={parameterGroups}
-				groupActions={internetAddressGroupActions}
-				title={asset.type === "internet" ? "线路参数" : "硬件档案"}
-				description={asset.type === "internet" ? "已确认的线路与套餐参数" : undefined}
-				emptyLabel={asset.type === "internet" ? "暂无已确认的线路参数。" : "暂无已确认的硬件参数。"}
-			/>
+			<div className="grid min-w-0 content-start gap-3">
+				{networkDetailModel ? <AssetNetworkDetailTable model={networkDetailModel} /> : null}
+				{parameterGroups.length > 0 || !networkDetailModel ? (
+					<AssetHardwareSpecsColumn
+						groups={parameterGroups}
+						groupActions={internetAddressGroupActions}
+						title={asset.type === "internet" ? "线路参数" : "硬件档案"}
+						description={asset.type === "internet" ? "已确认的线路与套餐参数" : undefined}
+						emptyLabel={asset.type === "internet" ? "暂无已确认的线路参数。" : "暂无已确认的硬件参数。"}
+					/>
+				) : null}
+			</div>
 		</section>
 	)
 }

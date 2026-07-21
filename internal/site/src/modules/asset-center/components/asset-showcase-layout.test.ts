@@ -39,6 +39,27 @@ assert.equal(
 	"switch details must merge port status into canonical parameter groups"
 )
 assert.equal(
+	workspace.includes("buildNetworkDeviceDetailModel(asset, assets, interfaces, relations)"),
+	true,
+	"network devices must build their tables from a structured display model"
+)
+assert.equal(
+	workspace.includes("isNetworkDetailParameterGroup(asset.type, group.id)"),
+	true,
+	"network capability and port groups must leave the standard two-column card grid"
+)
+assert.equal(
+	workspace.includes("<AssetNetworkDetailTable model={networkDetailModel} />"),
+	true,
+	"network devices must render the dedicated network detail panel"
+)
+assert.equal(
+	workspace.indexOf("<AssetNetworkDetailTable model={networkDetailModel} />") <
+		workspace.indexOf("<AssetHardwareSpecsColumn"),
+	true,
+	"attention-worthy network details must appear before secondary hardware cards"
+)
+assert.equal(
 	identityBuilderSource.includes('title: "接入关系"'),
 	false,
 	"the left device archive must not contain relationship sections"
