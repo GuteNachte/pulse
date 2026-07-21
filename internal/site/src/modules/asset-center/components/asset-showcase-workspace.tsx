@@ -5,7 +5,6 @@ import { getMetadataString } from "../asset-schema"
 import { getInternetStatusLabel } from "../asset-type-specs"
 import { getInternetAddressAutoRefreshSettings } from "../asset-internet-address-status"
 import { getAssetDetailRelationRows } from "../asset-detail-relations"
-import { buildSwitchPortStatusGroup } from "../asset-switch-port-status"
 import { AssetHardwareSpecsColumn, AssetOverviewColumn, type AssetParameterRow } from "./asset-parameter-columns"
 import {
 	InternetAddressAutoRefreshControls,
@@ -35,12 +34,7 @@ export function AssetShowcaseWorkspace({
 	onUpdateInternetAddressSettings?: (settings: InternetAddressAutoRefreshSettings) => void
 }) {
 	const parameterGroups = useMemo(() => {
-		const groups = buildAssetParameterGroups(asset)
-		const portStatusGroup = buildSwitchPortStatusGroup(asset, interfaces, assets, relations)
-		if (!portStatusGroup) return groups
-		const portCapabilitiesIndex = groups.findIndex((group) => group.title === "硬件与端口能力")
-		const insertAt = portCapabilitiesIndex >= 0 ? portCapabilitiesIndex + 1 : groups.length
-		return [...groups.slice(0, insertAt), portStatusGroup, ...groups.slice(insertAt)]
+		return buildAssetParameterGroups(asset, { interfaces, assets, relations })
 	}, [asset, assets, interfaces, relations])
 	const identitySections = useMemo(
 		() => buildAssetIdentitySections(asset, assets, interfaces, relations),

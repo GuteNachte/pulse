@@ -1,20 +1,22 @@
-import { NetworkIcon } from "lucide-react"
-import { createElement } from "react"
 import type { AssetInterfaceRecord, AssetRecord, AssetRelationRecord } from "@/types"
-import { formatAssetInterfaceKind, formatAssetInterfaceSpeed, isAssetInterfaceEnabled } from "./asset-interface-display.ts"
+import {
+	formatAssetInterfaceKind,
+	formatAssetInterfaceSpeed,
+	isAssetInterfaceEnabled,
+} from "./asset-interface-display.ts"
 import { getMetadataString } from "./asset-schema.ts"
-import type { AssetParameterGroup, AssetParameterRow } from "./components/asset-parameter-columns"
+import type { AssetParameterRow } from "./components/asset-parameter-columns"
 
 const switchPortKinds = new Set<AssetInterfaceRecord["kind"]>(["ethernet", "optical", "lan", "wan"])
 const portNameCollator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" })
 
-export function buildSwitchPortStatusGroup(
+export function buildSwitchPortStatusRows(
 	asset: AssetRecord,
 	interfaces: AssetInterfaceRecord[],
 	assets: AssetRecord[],
 	relations: AssetRelationRecord[]
-): AssetParameterGroup | undefined {
-	if (asset.type !== "switch") return undefined
+): AssetParameterRow[] {
+	if (asset.type !== "switch") return []
 	const ports = interfaces
 		.filter((item) => item.asset === asset.id && switchPortKinds.has(item.kind))
 		.slice()
@@ -22,19 +24,10 @@ export function buildSwitchPortStatusGroup(
 			const mediumOrder = getSwitchPortMediumOrder(left) - getSwitchPortMediumOrder(right)
 			return mediumOrder || portNameCollator.compare(left.name || left.id, right.name || right.id)
 		})
-	if (ports.length === 0) return undefined
+	if (ports.length === 0) return []
 
 	const assetMap = new Map(assets.map((item) => [item.id, item]))
-	const rows = ports.map((port, index) =>
-		buildSwitchPortRow(asset.id, port, index, assetMap, relations)
-	)
-	return {
-		id: "switch-port-status",
-		title: "网口状态",
-		summary: `${ports.filter((port) => port.connected === true).length} / ${ports.length} 已接线`,
-		icon: createElement(NetworkIcon, { className: "size-4" }),
-		rows,
-	}
+	return ports.map((port, index) => buildSwitchPortRow(asset.id, port, index, assetMap, relations))
 }
 
 function getSwitchPortMediumOrder(port: AssetInterfaceRecord) {
@@ -71,6 +64,7 @@ function buildSwitchPortRow(
 	return {
 		label: port.name || `端口 ${index + 1}`,
 		value: segments.join(" · "),
+		section: "网口状态",
 	}
 }
 

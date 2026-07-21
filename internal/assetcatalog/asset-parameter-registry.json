@@ -116,7 +116,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 9",
-      "order": 40
+      "order": 680
     },
     {
       "key": "asset_tag",
@@ -248,7 +248,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 2",
-      "order": 10
+      "order": 90
     },
     {
       "key": "battery_count",
@@ -262,7 +262,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 2",
-      "order": 40
+      "order": 120
     },
     {
       "key": "battery_life_note",
@@ -280,7 +280,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 2",
-      "order": 50
+      "order": 130
     },
     {
       "key": "battery_model",
@@ -294,7 +294,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 2",
-      "order": 30
+      "order": 110
     },
     {
       "key": "battery_type",
@@ -317,7 +317,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 2",
-      "order": 20
+      "order": 100
     },
     {
       "key": "bay_count",
@@ -331,7 +331,7 @@
       "scope": "parameter",
       "category": "storage",
       "section": "存储规格 2",
-      "order": 20
+      "order": 100
     },
     {
       "key": "billing_cycle",
@@ -391,7 +391,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 2",
-      "order": 70
+      "order": 150
     },
     {
       "key": "bluetooth_version",
@@ -412,7 +412,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 2",
-      "order": 80
+      "order": 160
     },
     {
       "key": "bmc",
@@ -445,7 +445,7 @@
       "scope": "parameter",
       "category": "appearance",
       "section": "外观规格 2",
-      "order": 50
+      "order": 130
     },
     {
       "key": "cache_slots",
@@ -459,7 +459,7 @@
       "scope": "parameter",
       "category": "storage",
       "section": "存储规格 2",
-      "order": 80
+      "order": 160
     },
     {
       "key": "camera_summary",
@@ -488,7 +488,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 2",
-      "order": 80
+      "order": 160
     },
     {
       "key": "capacity_w",
@@ -502,7 +502,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 3",
-      "order": 10
+      "order": 170
     },
     {
       "key": "carrier",
@@ -516,7 +516,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 3",
-      "order": 80
+      "order": 240
     },
     {
       "key": "case_form_factor",
@@ -545,7 +545,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 2",
-      "order": 60
+      "order": 140
     },
     {
       "key": "chassis_model",
@@ -560,7 +560,7 @@
       "scope": "parameter",
       "category": "appearance",
       "section": "外观规格 3",
-      "order": 30
+      "order": 190
     },
     {
       "key": "chassis_power_detail",
@@ -590,7 +590,7 @@
       "scope": "parameter",
       "category": "appearance",
       "section": "外观规格 3",
-      "order": 40
+      "order": 200
     },
     {
       "key": "color",
@@ -616,7 +616,7 @@
       "scope": "parameter",
       "category": "display",
       "section": "显示规格 2",
-      "order": 50
+      "order": 130
     },
     {
       "key": "color_mode",
@@ -630,7 +630,7 @@
       "scope": "parameter",
       "category": "io",
       "section": "接口规格 2",
-      "order": 80
+      "order": 160
     },
     {
       "key": "color_rendering_index",
@@ -644,7 +644,7 @@
       "scope": "parameter",
       "category": "display",
       "section": "显示规格 2",
-      "order": 40
+      "order": 120
     },
     {
       "key": "color_temperature_k",
@@ -658,7 +658,7 @@
       "scope": "parameter",
       "category": "display",
       "section": "显示规格 2",
-      "order": 30
+      "order": 110
     },
     {
       "key": "colors_available",
@@ -679,7 +679,7 @@
       "scope": "parameter",
       "category": "appearance",
       "section": "外观规格 2",
-      "order": 60
+      "order": 140
     },
     {
       "key": "connection_type",
@@ -694,7 +694,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 3",
-      "order": 50
+      "order": 210
     },
     {
       "key": "controller_platform",
@@ -869,7 +869,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 5",
-      "order": 30
+      "order": 350
     },
     {
       "key": "default_optical_speed_mbps",
@@ -883,7 +883,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 5",
-      "order": 60
+      "order": 380
     },
     {
       "key": "default_port_speed_mbps",
@@ -900,7 +900,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 4",
-      "order": 40
+      "order": 280
     },
     {
       "key": "dhcp_status",
@@ -914,7 +914,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 7",
-      "order": 10
+      "order": 490
     },
     {
       "key": "dimensions",
@@ -949,7 +949,7 @@
       "scope": "parameter",
       "category": "appearance",
       "section": "外观规格 2",
-      "order": 10
+      "order": 90
     },
     {
       "key": "display_brightness",
@@ -1016,7 +1016,7 @@
       "scope": "parameter",
       "category": "display",
       "section": "显示规格 2",
-      "order": 10
+      "order": 90
     },
     {
       "key": "display_resolution",
@@ -1069,7 +1069,7 @@
       "scope": "parameter",
       "category": "appearance",
       "section": "外观规格 3",
-      "order": 20
+      "order": 180
     },
     {
       "key": "down_mbps",
@@ -1095,7 +1095,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 6",
-      "order": 50
+      "order": 450
     },
     {
       "key": "downstream_optical_status",
@@ -1109,7 +1109,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 6",
-      "order": 60
+      "order": 460
     },
     {
       "key": "duplex",
@@ -1123,7 +1123,7 @@
       "scope": "parameter",
       "category": "io",
       "section": "接口规格 2",
-      "order": 20
+      "order": 100
     },
     {
       "key": "dust_box_ml",
@@ -1137,7 +1137,7 @@
       "scope": "parameter",
       "category": "storage",
       "section": "存储规格 3",
-      "order": 20
+      "order": 180
     },
     {
       "key": "ecc_memory",
@@ -1152,7 +1152,7 @@
       "scope": "parameter",
       "category": "memory",
       "section": "内存规格 2",
-      "order": 10
+      "order": 90
     },
     {
       "key": "emergency_power",
@@ -1166,7 +1166,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 3",
-      "order": 60
+      "order": 220
     },
     {
       "key": "endpoint_scope",
@@ -1192,7 +1192,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 3",
-      "order": 70
+      "order": 230
     },
     {
       "key": "entity_id",
@@ -1224,7 +1224,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 5",
-      "order": 10
+      "order": 330
     },
     {
       "key": "ethernet_supported_speeds",
@@ -1238,7 +1238,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 5",
-      "order": 20
+      "order": 340
     },
     {
       "key": "expected_owner",
@@ -1276,7 +1276,7 @@
       "scope": "parameter",
       "category": "imaging",
       "section": "影像规格 2",
-      "order": 40
+      "order": 120
     },
     {
       "key": "filesystem",
@@ -1290,7 +1290,7 @@
       "scope": "parameter",
       "category": "storage",
       "section": "存储规格 2",
-      "order": 60
+      "order": 140
     },
     {
       "key": "firmware_channel",
@@ -1370,7 +1370,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 9",
-      "order": 50
+      "order": 690
     },
     {
       "key": "front_camera_detail",
@@ -1417,7 +1417,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 6",
-      "order": 80
+      "order": 480
     },
     {
       "key": "gpu_board_vendor",
@@ -1559,7 +1559,7 @@
       "scope": "parameter",
       "category": "storage",
       "section": "存储规格 2",
-      "order": 70
+      "order": 150
     },
     {
       "key": "image_stabilization",
@@ -1574,7 +1574,7 @@
       "scope": "parameter",
       "category": "imaging",
       "section": "影像规格 2",
-      "order": 10
+      "order": 90
     },
     {
       "key": "indicator_control",
@@ -1588,7 +1588,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 7",
-      "order": 60
+      "order": 540
     },
     {
       "key": "infrared",
@@ -1616,7 +1616,7 @@
       "scope": "parameter",
       "category": "appearance",
       "section": "外观规格 2",
-      "order": 80
+      "order": 160
     },
     {
       "key": "installation_position",
@@ -1664,7 +1664,7 @@
         "iot"
       ],
       "scope": "operational",
-      "order": 10
+      "order": 90
     },
     {
       "key": "lan_1000_count",
@@ -1678,7 +1678,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 4",
-      "order": 80
+      "order": 320
     },
     {
       "key": "lan_2500_count",
@@ -1692,7 +1692,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 4",
-      "order": 70
+      "order": 310
     },
     {
       "key": "lan_port_count",
@@ -1706,7 +1706,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 4",
-      "order": 60
+      "order": 300
     },
     {
       "key": "lan_subnet",
@@ -1720,7 +1720,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 7",
-      "order": 20
+      "order": 500
     },
     {
       "key": "length_mm",
@@ -1751,7 +1751,7 @@
       "scope": "parameter",
       "category": "imaging",
       "section": "影像规格 2",
-      "order": 70
+      "order": 150
     },
     {
       "key": "light_kind",
@@ -1765,7 +1765,7 @@
       "scope": "parameter",
       "category": "display",
       "section": "显示规格 2",
-      "order": 60
+      "order": 140
     },
     {
       "key": "lightning_protection_kv",
@@ -1793,7 +1793,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 8",
-      "order": 60
+      "order": 620
     },
     {
       "key": "location",
@@ -1846,7 +1846,7 @@
       "scope": "parameter",
       "category": "io",
       "section": "接口规格 3",
-      "order": 30
+      "order": 190
     },
     {
       "key": "luminous_flux_lm",
@@ -1860,7 +1860,7 @@
       "scope": "parameter",
       "category": "display",
       "section": "显示规格 2",
-      "order": 20
+      "order": 100
     },
     {
       "key": "mac",
@@ -1914,7 +1914,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 8",
-      "order": 80
+      "order": 640
     },
     {
       "key": "management_access",
@@ -1928,7 +1928,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 8",
-      "order": 40
+      "order": 600
     },
     {
       "key": "management_level",
@@ -1942,7 +1942,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 8",
-      "order": 30
+      "order": 590
     },
     {
       "key": "management_url",
@@ -2003,7 +2003,7 @@
         "smarthome_gateway"
       ],
       "scope": "operational",
-      "order": 20
+      "order": 100
     },
     {
       "key": "max_memory_gb",
@@ -2091,7 +2091,7 @@
     },
     {
       "key": "memory_gb",
-      "label": "内存 GB",
+      "label": "内存容量 GB",
       "source": "metadata",
       "capture": "agent_collectable",
       "type": "number",
@@ -2178,7 +2178,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 3",
-      "order": 10
+      "order": 170
     },
     {
       "key": "model",
@@ -2303,7 +2303,7 @@
         "custom"
       ],
       "scope": "dossier",
-      "order": 10
+      "order": 90
     },
     {
       "key": "navigation",
@@ -2317,7 +2317,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 3",
-      "order": 40
+      "order": 200
     },
     {
       "key": "net_weight_g",
@@ -2331,7 +2331,7 @@
       "scope": "parameter",
       "category": "appearance",
       "section": "外观规格 2",
-      "order": 40
+      "order": 120
     },
     {
       "key": "neutral_wire",
@@ -2343,7 +2343,7 @@
         "plug"
       ],
       "scope": "operational",
-      "order": 30
+      "order": 110
     },
     {
       "key": "nfc",
@@ -2423,7 +2423,7 @@
       "scope": "parameter",
       "category": "imaging",
       "section": "影像规格 2",
-      "order": 50
+      "order": 130
     },
     {
       "key": "notes",
@@ -2465,7 +2465,7 @@
         "custom"
       ],
       "scope": "dossier",
-      "order": 20
+      "order": 100
     },
     {
       "key": "official_image_url",
@@ -2484,7 +2484,7 @@
         "speaker"
       ],
       "scope": "operational",
-      "order": 40
+      "order": 120
     },
     {
       "key": "official_url",
@@ -2523,7 +2523,7 @@
         "custom"
       ],
       "scope": "dossier",
-      "order": 30
+      "order": 110
     },
     {
       "key": "online_specs_summary",
@@ -2535,7 +2535,7 @@
         "phone"
       ],
       "scope": "operational",
-      "order": 50
+      "order": 130
     },
     {
       "key": "onu_type",
@@ -2549,7 +2549,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 6",
-      "order": 30
+      "order": 430
     },
     {
       "key": "operating_humidity_range",
@@ -2577,7 +2577,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 4",
-      "order": 10
+      "order": 250
     },
     {
       "key": "operating_temperature_range",
@@ -2605,7 +2605,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 6",
-      "order": 40
+      "order": 440
     },
     {
       "key": "optical_port_count",
@@ -2619,7 +2619,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 5",
-      "order": 40
+      "order": 360
     },
     {
       "key": "optical_supported_speeds",
@@ -2633,7 +2633,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 5",
-      "order": 50
+      "order": 370
     },
     {
       "key": "other_port_count",
@@ -2647,7 +2647,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 5",
-      "order": 70
+      "order": 390
     },
     {
       "key": "outlet_count",
@@ -2662,7 +2662,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 3",
-      "order": 20
+      "order": 180
     },
     {
       "key": "package_name",
@@ -2686,7 +2686,7 @@
         "mini_pc"
       ],
       "scope": "operational",
-      "order": 60
+      "order": 140
     },
     {
       "key": "paper_size",
@@ -2700,7 +2700,7 @@
       "scope": "parameter",
       "category": "io",
       "section": "接口规格 2",
-      "order": 10
+      "order": 90
     },
     {
       "key": "pcie_slots",
@@ -2728,7 +2728,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 9",
-      "order": 60
+      "order": 700
     },
     {
       "key": "pon_sn",
@@ -2742,7 +2742,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 6",
-      "order": 20
+      "order": 420
     },
     {
       "key": "pon_standard",
@@ -2756,7 +2756,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 5",
-      "order": 80
+      "order": 400
     },
     {
       "key": "pon_uplink_capacity",
@@ -2770,7 +2770,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 6",
-      "order": 10
+      "order": 410
     },
     {
       "key": "port_count",
@@ -2787,7 +2787,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 4",
-      "order": 30
+      "order": 270
     },
     {
       "key": "port_isolation_status",
@@ -2801,7 +2801,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 8",
-      "order": 50
+      "order": 610
     },
     {
       "key": "positioning",
@@ -2817,7 +2817,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 3",
-      "order": 30
+      "order": 190
     },
     {
       "key": "power_adapter_w",
@@ -2907,7 +2907,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 7",
-      "order": 80
+      "order": 560
     },
     {
       "key": "preinstalled_os",
@@ -2919,7 +2919,7 @@
         "mini_pc"
       ],
       "scope": "operational",
-      "order": 70
+      "order": 150
     },
     {
       "key": "primary_nic_speed_mbps",
@@ -2950,7 +2950,7 @@
       "scope": "parameter",
       "category": "io",
       "section": "接口规格 2",
-      "order": 50
+      "order": 130
     },
     {
       "key": "print_speed_ppm",
@@ -2964,7 +2964,7 @@
       "scope": "parameter",
       "category": "io",
       "section": "接口规格 2",
-      "order": 40
+      "order": 120
     },
     {
       "key": "printer_type",
@@ -2978,7 +2978,7 @@
       "scope": "parameter",
       "category": "io",
       "section": "接口规格 2",
-      "order": 70
+      "order": 150
     },
     {
       "key": "product_number",
@@ -3018,7 +3018,7 @@
         "ups"
       ],
       "scope": "operational",
-      "order": 80
+      "order": 160
     },
     {
       "key": "protocol",
@@ -3040,7 +3040,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 3",
-      "order": 60
+      "order": 220
     },
     {
       "key": "psu_model",
@@ -3134,7 +3134,7 @@
         "custom"
       ],
       "scope": "operational",
-      "order": 10
+      "order": 170
     },
     {
       "key": "purchase_price_cny",
@@ -3172,7 +3172,7 @@
         "custom"
       ],
       "scope": "operational",
-      "order": 20
+      "order": 180
     },
     {
       "key": "rack_form_factor",
@@ -3200,7 +3200,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 4",
-      "order": 20
+      "order": 260
     },
     {
       "key": "radio_protocols",
@@ -3212,7 +3212,7 @@
         "smarthome_gateway"
       ],
       "scope": "operational",
-      "order": 30
+      "order": 190
     },
     {
       "key": "raid_controller",
@@ -3226,7 +3226,7 @@
       "scope": "parameter",
       "category": "storage",
       "section": "存储规格 2",
-      "order": 50
+      "order": 130
     },
     {
       "key": "raid_mode",
@@ -3240,7 +3240,7 @@
       "scope": "parameter",
       "category": "storage",
       "section": "存储规格 2",
-      "order": 40
+      "order": 120
     },
     {
       "key": "rated_current_a",
@@ -3254,7 +3254,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 3",
-      "order": 80
+      "order": 240
     },
     {
       "key": "rated_power_w",
@@ -3268,7 +3268,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 4",
-      "order": 10
+      "order": 250
     },
     {
       "key": "rear_camera_detail",
@@ -3352,7 +3352,7 @@
         "web_endpoint"
       ],
       "scope": "line",
-      "order": 10
+      "order": 90
     },
     {
       "key": "redundant_psu",
@@ -3378,7 +3378,7 @@
         "mini_pc"
       ],
       "scope": "operational",
-      "order": 40
+      "order": 200
     },
     {
       "key": "renewal_date",
@@ -3391,7 +3391,7 @@
         "web_endpoint"
       ],
       "scope": "line",
-      "order": 20
+      "order": 100
     },
     {
       "key": "reporting_interval",
@@ -3403,7 +3403,7 @@
         "sensor"
       ],
       "scope": "operational",
-      "order": 50
+      "order": 210
     },
     {
       "key": "reset_supported",
@@ -3417,7 +3417,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 7",
-      "order": 70
+      "order": 550
     },
     {
       "key": "resolution",
@@ -3431,7 +3431,7 @@
       "scope": "parameter",
       "category": "imaging",
       "section": "影像规格 2",
-      "order": 20
+      "order": 100
     },
     {
       "key": "role",
@@ -3473,7 +3473,7 @@
         "custom"
       ],
       "scope": "dossier",
-      "order": 40
+      "order": 120
     },
     {
       "key": "room",
@@ -3491,7 +3491,7 @@
         "iot"
       ],
       "scope": "operational",
-      "order": 60
+      "order": 220
     },
     {
       "key": "router_status",
@@ -3505,7 +3505,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 6",
-      "order": 70
+      "order": 470
     },
     {
       "key": "scan_resolution",
@@ -3519,7 +3519,7 @@
       "scope": "parameter",
       "category": "io",
       "section": "接口规格 2",
-      "order": 60
+      "order": 140
     },
     {
       "key": "screen_refresh_rate",
@@ -3570,7 +3570,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 9",
-      "order": 10
+      "order": 650
     },
     {
       "key": "sensor_detail",
@@ -3614,7 +3614,7 @@
       "scope": "parameter",
       "category": "imaging",
       "section": "影像规格 2",
-      "order": 30
+      "order": 110
     },
     {
       "key": "serial_number",
@@ -3653,7 +3653,7 @@
         "custom"
       ],
       "scope": "dossier",
-      "order": 50
+      "order": 130
     },
     {
       "key": "service_category",
@@ -3679,7 +3679,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 9",
-      "order": 30
+      "order": 670
     },
     {
       "key": "sim_detail",
@@ -3694,7 +3694,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 3",
-      "order": 20
+      "order": 180
     },
     {
       "key": "smart_category",
@@ -3712,7 +3712,7 @@
         "iot"
       ],
       "scope": "operational",
-      "order": 70
+      "order": 230
     },
     {
       "key": "speaker_detail",
@@ -3747,7 +3747,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 7",
-      "order": 30
+      "order": 510
     },
     {
       "key": "station_features",
@@ -3761,7 +3761,7 @@
       "scope": "parameter",
       "category": "io",
       "section": "接口规格 3",
-      "order": 20
+      "order": 180
     },
     {
       "key": "status",
@@ -3800,7 +3800,7 @@
         "custom"
       ],
       "scope": "dossier",
-      "order": 60
+      "order": 140
     },
     {
       "key": "storage_backplane",
@@ -3814,7 +3814,7 @@
       "scope": "parameter",
       "category": "storage",
       "section": "存储规格 2",
-      "order": 30
+      "order": 110
     },
     {
       "key": "storage_detail",
@@ -3953,7 +3953,7 @@
       "scope": "parameter",
       "category": "storage",
       "section": "存储规格 2",
-      "order": 10
+      "order": 90
     },
     {
       "key": "storage_summary",
@@ -3984,7 +3984,7 @@
       "scope": "parameter",
       "category": "storage",
       "section": "存储规格 3",
-      "order": 10
+      "order": 170
     },
     {
       "key": "storage_temperature_range",
@@ -4029,7 +4029,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 3",
-      "order": 70
+      "order": 230
     },
     {
       "key": "suction_pa",
@@ -4057,7 +4057,7 @@
       "scope": "parameter",
       "category": "io",
       "section": "接口规格 2",
-      "order": 30
+      "order": 110
     },
     {
       "key": "supported_memory_type",
@@ -4086,7 +4086,7 @@
         "mini_pc"
       ],
       "scope": "operational",
-      "order": 80
+      "order": 240
     },
     {
       "key": "switching_capacity_gbps",
@@ -4100,7 +4100,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 8",
-      "order": 70
+      "order": 630
     },
     {
       "key": "topology",
@@ -4114,7 +4114,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 3",
-      "order": 30
+      "order": 190
     },
     {
       "key": "touch_sampling_rate",
@@ -4158,7 +4158,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 3",
-      "order": 50
+      "order": 210
     },
     {
       "key": "unlock_methods",
@@ -4172,7 +4172,7 @@
       "scope": "parameter",
       "category": "io",
       "section": "接口规格 3",
-      "order": 10
+      "order": 170
     },
     {
       "key": "up_mbps",
@@ -4184,7 +4184,7 @@
         "internet"
       ],
       "scope": "line",
-      "order": 30
+      "order": 110
     },
     {
       "key": "url",
@@ -4283,7 +4283,7 @@
         "custom"
       ],
       "scope": "dossier",
-      "order": 70
+      "order": 150
     },
     {
       "key": "video_codec",
@@ -4297,7 +4297,7 @@
       "scope": "parameter",
       "category": "imaging",
       "section": "影像规格 2",
-      "order": 60
+      "order": 140
     },
     {
       "key": "video_recording",
@@ -4329,7 +4329,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 8",
-      "order": 10
+      "order": 570
     },
     {
       "key": "vlan_status",
@@ -4343,7 +4343,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 8",
-      "order": 20
+      "order": 580
     },
     {
       "key": "voice_port_count",
@@ -4371,7 +4371,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 9",
-      "order": 20
+      "order": 660
     },
     {
       "key": "wan_port_count",
@@ -4386,7 +4386,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 4",
-      "order": 50
+      "order": 290
     },
     {
       "key": "warranty_months",
@@ -4398,7 +4398,7 @@
         "switch"
       ],
       "scope": "operational",
-      "order": 10
+      "order": 250
     },
     {
       "key": "water_resistance",
@@ -4415,7 +4415,7 @@
       "scope": "parameter",
       "category": "appearance",
       "section": "外观规格 2",
-      "order": 70
+      "order": 150
     },
     {
       "key": "water_tank_ml",
@@ -4429,7 +4429,7 @@
       "scope": "parameter",
       "category": "storage",
       "section": "存储规格 3",
-      "order": 30
+      "order": 190
     },
     {
       "key": "waveform",
@@ -4443,7 +4443,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 3",
-      "order": 40
+      "order": 200
     },
     {
       "key": "weather_rating",
@@ -4457,7 +4457,7 @@
       "scope": "parameter",
       "category": "appearance",
       "section": "外观规格 3",
-      "order": 10
+      "order": 170
     },
     {
       "key": "weight",
@@ -4478,7 +4478,7 @@
       "scope": "parameter",
       "category": "appearance",
       "section": "外观规格 2",
-      "order": 20
+      "order": 100
     },
     {
       "key": "weight_kg",
@@ -4492,7 +4492,7 @@
       "scope": "parameter",
       "category": "appearance",
       "section": "外观规格 2",
-      "order": 30
+      "order": 110
     },
     {
       "key": "width_mm",
@@ -4523,7 +4523,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 2",
-      "order": 40
+      "order": 120
     },
     {
       "key": "wifi_24_supported",
@@ -4537,7 +4537,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 2",
-      "order": 30
+      "order": 110
     },
     {
       "key": "wifi_5_enabled",
@@ -4551,7 +4551,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 2",
-      "order": 60
+      "order": 140
     },
     {
       "key": "wifi_5_supported",
@@ -4565,7 +4565,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 2",
-      "order": 50
+      "order": 130
     },
     {
       "key": "wifi_band",
@@ -4580,7 +4580,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 2",
-      "order": 10
+      "order": 90
     },
     {
       "key": "wifi_model",
@@ -4636,7 +4636,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 2",
-      "order": 20
+      "order": 100
     },
     {
       "key": "wifi_support",
@@ -4682,7 +4682,7 @@
       "scope": "parameter",
       "category": "power",
       "section": "供电与电池 2",
-      "order": 70
+      "order": 150
     },
     {
       "key": "wireless_control",
@@ -4696,7 +4696,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 7",
-      "order": 50
+      "order": 530
     },
     {
       "key": "wps_supported",
@@ -4710,7 +4710,7 @@
       "scope": "parameter",
       "category": "network",
       "section": "网络能力 7",
-      "order": 40
+      "order": 520
     }
   ]
 }

@@ -140,7 +140,7 @@ const fields = [...collected.values()]
 			...field,
 			scope,
 			...(category ? { category, section: `${baseSection}${sectionIndex ? ` ${sectionIndex + 1}` : ""}` } : {}),
-			order: ((counter % 8) + 1) * 10,
+			order: (counter + 1) * 10,
 		}
 	})
 

@@ -211,7 +211,7 @@ const hostSpecFields: AssetFieldDefinition[] = [
 	},
 	{
 		key: "memory_gb",
-		label: "内存 GB",
+		label: "内存容量 GB",
 		source: "metadata",
 		type: "number",
 		placeholder: "Agent 接入后可采集",

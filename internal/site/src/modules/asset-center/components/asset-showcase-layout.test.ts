@@ -18,14 +18,9 @@ assert.equal(
 	"desktop parameter navigation must not appear in the first column"
 )
 assert.equal(
-	workspace.includes("buildSwitchPortStatusGroup(asset, interfaces, assets, relations)"),
+	workspace.includes("buildAssetParameterGroups(asset, { interfaces, assets, relations })"),
 	true,
-	"switch details must derive a port status parameter group from interfaces and relations"
-)
-assert.equal(
-	workspace.includes('group.title === "硬件与端口能力"'),
-	true,
-	"switch port status must sit after the hardware port capability group"
+	"switch details must merge port status into canonical parameter groups"
 )
 assert.equal(
 	workspace.includes("xl:sticky xl:top-4"),

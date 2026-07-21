@@ -1,6 +1,6 @@
 import { buildAssetParameterGroups } from "./asset-detail-parameter-groups.ts"
 import { getAssetFormSections } from "./asset-schema.ts"
-import type { AssetRecord } from "@/types"
+import type { AssetInterfaceRecord, AssetRecord, AssetRelationRecord } from "@/types"
 
 function assertDeepEqual(actual: unknown, expected: unknown) {
 	if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -33,11 +33,11 @@ assertDeepEqual(
 		rows: group.rows.map((row) => [row.label, row.value]),
 	})),
 	[
+		{ title: "电源", rows: [["电池容量", "5500 mAh"]] },
 		{ title: "处理器", rows: [["芯片 / SoC", "天玑 8100"]] },
 		{ title: "内存", rows: [["运行内存", "12 GB"]] },
 		{ title: "存储", rows: [["存储容量", "256 GB"]] },
-		{ title: "屏幕", rows: [["屏幕 / 尺寸", "6.67 英寸"]] },
-		{ title: "电池与充电", rows: [["电池容量", "5500 mAh"]] },
+		{ title: "显示", rows: [["屏幕 / 尺寸", "6.67 英寸"]] },
 	]
 )
 
@@ -60,7 +60,7 @@ const host = {
 const hostGroups = buildAssetParameterGroups(host)
 assertDeepEqual(
 	hostGroups.map((group) => group.title),
-	["CPU", "内存"]
+	["处理器", "内存"]
 )
 
 const fullyProfiledHost = {
@@ -82,7 +82,7 @@ const fullyProfiledHost = {
 
 assertDeepEqual(
 	buildAssetParameterGroups(fullyProfiledHost).map((group) => group.title),
-	["外观尺寸", "主板", "CPU", "内存", "GPU", "硬盘", "网络", "电源", "接口"]
+	["外观与尺寸", "电源", "主板与平台", "处理器", "显卡", "内存", "存储", "网络", "接口与扩展"]
 )
 assertDeepEqual(
 	buildAssetParameterGroups(fullyProfiledHost)
@@ -92,7 +92,7 @@ assertDeepEqual(
 )
 assertDeepEqual(
 	buildAssetParameterGroups(fullyProfiledHost)
-		.find((group) => group.title === "接口")
+		.find((group) => group.title === "接口与扩展")
 		?.rows.map((row) => [row.label, row.value]),
 	[
 		["显示输出", "HDMI 2.1 x 2"],
@@ -130,7 +130,7 @@ assertDeepEqual(
 		.find((group) => group.title === "内存")
 		?.rows.map((row) => [row.label, row.value]),
 	[
-		["当前内存容量", "32 GB"],
+		["内存容量", "32 GB"],
 		["当前内存类型", "DDR5"],
 		["当前内存频率", "4800 MHz"],
 		["支持内存类型", "笔记本 DDR5"],
@@ -140,21 +140,13 @@ assertDeepEqual(
 	]
 )
 assertDeepEqual(
-	buildAssetParameterGroups(officialMiniPc)
-		.find((group) => group.title === "其他")
-		?.rows.map((row) => [row.label, row.value]),
-	[
-		["预装操作系统", "Windows 11"],
-		["支持的操作系统", "Windows 11"],
-		["包装重", "1.66 kg"],
-		["净重", "0.6 kg"],
-		["上市日期", "Q4'22"],
-	]
+	buildAssetParameterGroups(officialMiniPc).some((group) => group.title === "其他"),
+	false
 )
 assertDeepEqual(
 	hostGroups.find((group) => group.title === "内存")?.rows.map((row) => [row.label, row.value]),
 	[
-		["当前内存容量", "32 GB"],
+		["内存容量", "32 GB"],
 		["内存品牌", "Kingston"],
 		["内存规格", "16 GB x 2"],
 		["当前内存类型", "DDR5"],
@@ -175,7 +167,7 @@ const nas = {
 
 assertDeepEqual(
 	buildAssetParameterGroups(nas)
-		.filter((group) => group.title === "硬盘")
+		.filter((group) => group.title === "存储")
 		.flatMap((group) => group.rows.map((row) => [row.label, row.value])),
 	[
 		["硬盘位数量", "4"],
@@ -191,7 +183,7 @@ const nasEditFieldLabels = new Set(
 )
 const nasDetailFieldLabels = new Set(
 	buildAssetParameterGroups(nas)
-		.find((group) => group.title === "硬盘")
+		.find((group) => group.title === "存储")
 		?.rows.map((row) => row.label)
 )
 assertDeepEqual(
@@ -316,17 +308,49 @@ const ont = {
 
 assertDeepEqual(
 	buildAssetParameterGroups(ont).map((group) => group.title),
-	["光纤接入", "路由与管理", "无线网络", "有线网络", "其他端口与电源", "设备身份标识", "备注"]
+	["电源", "主板与平台", "网络"]
 )
 assertDeepEqual(
 	buildAssetParameterGroups(ont)
-		.find((group) => group.title === "设备身份标识")
-		?.rows.map((row) => [row.label, row.value]),
-	[
-		["产品编号", "未确认"],
-		["PON SN", "未确认"],
-		["设备序列号", "未确认"],
-		["MAC", "未确认"],
-		["无线电型号核准编号", "未确认"],
-	]
+		.find((group) => group.title === "网络")
+		?.rows.map((row) => row.section)
+		.filter((section, index, sections) => sections.indexOf(section) === index),
+	["接入角色", "光纤接入", "路由与管理", "无线网络", "有线网络"]
+)
+
+const networkSwitch = {
+	id: "switch-1",
+	user: "user-1",
+	name: "绿联 CM754",
+	type: "switch",
+	status: "active",
+	metadata: {
+		ethernet_port_count: 8,
+		default_ethernet_speed_mbps: 2500,
+		vlan_status: "disabled",
+	},
+} as unknown as AssetRecord
+const switchInterfaces = [
+	{
+		id: "switch-port-1",
+		asset: networkSwitch.id,
+		name: "电口 1",
+		kind: "ethernet",
+		speed_mbps: 2500,
+		connected: false,
+		metadata: { enabled: true, role: "uplink" },
+	},
+] as unknown as AssetInterfaceRecord[]
+const switchGroups = buildAssetParameterGroups(networkSwitch, {
+	interfaces: switchInterfaces,
+	assets: [networkSwitch],
+	relations: [] as AssetRelationRecord[],
+})
+assertDeepEqual(switchGroups.filter((group) => group.title === "网络").length, 1)
+assertDeepEqual(
+	switchGroups
+		.find((group) => group.title === "网络")
+		?.rows.map((row) => row.section)
+		.filter((section, index, sections) => sections.indexOf(section) === index),
+	["端口能力", "网络功能", "网口状态"]
 )
