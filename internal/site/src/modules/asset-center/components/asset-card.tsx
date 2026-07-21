@@ -148,7 +148,7 @@ export function AssetListItem({
 				<div className="hidden min-w-0 justify-items-end gap-1 md:grid">
 					<div className="flex min-w-0 justify-end gap-1">
 						{monitored && <AssetCardMetaTag tone="ok">监控</AssetCardMetaTag>}
-						<AssetCardMetaTag tone={completeness.tone}>{completeness.score}%</AssetCardMetaTag>
+						<AssetCompletenessScoreTag score={completeness.score} tone={completeness.tone} />
 					</div>
 					<div className="max-w-28 truncate text-[11px] text-muted-foreground">
 						{color || (parent ? `归属 ${parent.name}` : maintenanceCount > 0 ? `维护 ${maintenanceCount}` : "")}
@@ -533,6 +533,25 @@ function AssetCardMetaTag({ children, tone = "neutral" }: { children: ReactNode;
 			)}
 		>
 			{children}
+		</span>
+	)
+}
+
+function AssetCompletenessScoreTag({ score, tone }: { score: number; tone: AssetLifecycleTone }) {
+	return (
+		<span
+			className={cn(
+				"inline-flex w-11 shrink-0 justify-center rounded-md border px-1 py-0.5 text-[11px] font-medium tabular-nums",
+				tone === "danger"
+					? "border-red-200 bg-red-50 text-red-700"
+					: tone === "warning"
+						? "border-amber-200 bg-amber-50 text-amber-700"
+						: tone === "ok"
+							? "border-emerald-200 bg-emerald-50 text-emerald-700"
+							: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-300"
+			)}
+		>
+			{score}%
 		</span>
 	)
 }
