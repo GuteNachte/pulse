@@ -12,7 +12,6 @@ import {
 	ServerIcon,
 	ShieldIcon,
 	SmartphoneIcon,
-	StarIcon,
 	Trash2Icon,
 	WifiIcon,
 } from "lucide-react"
@@ -33,7 +32,8 @@ import {
 	type AssetLifecycleTone,
 } from "@/modules/asset-center/asset-profile-summary"
 import { assetListColumns, assetListDesktopGridClassName } from "@/modules/asset-center/asset-list-layout"
-import { buildAssetInterfaceDisplay, type AssetInterfaceDisplay } from "@/modules/asset-center/asset-interface-display"
+import { buildAssetInterfaceDisplay } from "@/modules/asset-center/asset-interface-display"
+import type { AssetNetworkUplinkDisplay } from "@/modules/asset-center/asset-network-uplink"
 import { getInternetStatusLabel } from "@/modules/asset-center/asset-type-specs"
 import type { AssetInterfaceRecord, AssetRecord, AssetStatus, AssetType } from "@/types"
 
@@ -61,6 +61,7 @@ export type AssetListItemProps = {
 	maintenanceCount: number
 	active: boolean
 	onActivate: () => void
+	uplink: AssetNetworkUplinkDisplay
 	hasInternetUplink?: boolean
 }
 
@@ -88,6 +89,7 @@ export function AssetListItem({
 	maintenanceCount,
 	active,
 	onActivate,
+	uplink,
 	hasInternetUplink,
 }: AssetListItemProps) {
 	const Icon = getAssetIcon(asset.type)
@@ -143,7 +145,7 @@ export function AssetListItem({
 						<span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{network.secondaryLabel}</span>
 					) : null}
 				</span>
-				<AssetInterfaceSpeedList className="hidden md:flex" display={network} />
+				<AssetNetworkUplinkCell className="hidden md:flex" display={uplink} />
 				<div className="hidden min-w-0 justify-items-end gap-1 md:grid">
 					<div className="flex min-w-0 justify-end gap-1">
 						{monitored && <AssetCardMetaTag tone="ok">监控</AssetCardMetaTag>}
@@ -308,36 +310,22 @@ function AssetListValue({ value, mono, className }: { value: string; mono?: bool
 	)
 }
 
-function AssetInterfaceSpeedList({ display, className }: { display: AssetInterfaceDisplay; className?: string }) {
-	if (display.speedMode === "not_applicable") {
-		return <AssetListValue className={className} value="无" />
-	}
-	if (display.speedMode === "error") {
-		return <AssetListValue className={className} value="接口读取失败" />
-	}
-	if (display.speedItems.length === 0) {
-		return <AssetListValue className={className} value="未设置" />
-	}
-
+function AssetNetworkUplinkCell({ display, className }: { display: AssetNetworkUplinkDisplay; className?: string }) {
 	return (
-		<span className={cn("min-w-0 flex-wrap content-center items-center gap-1", className)}>
-			{display.speedItems.map((item) => (
-				<span
-					key={item.id}
-					className={cn(
-						"inline-flex min-w-0 max-w-full items-center gap-1 rounded border border-border/70 bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground",
-						item.connected && "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300"
-					)}
-					title={`${item.label} · ${item.speedLabel}${item.connected ? " · 当前接入" : ""}${item.primary ? " · 主接口" : ""}`}
-				>
-					<span className="max-w-20 truncate text-foreground">{item.label}</span>
-					<span className="shrink-0 font-mono tabular-nums">{item.speedLabel}</span>
-					{item.connected ? <span className="shrink-0 font-medium">接入</span> : null}
-					{item.primary ? (
-						<StarIcon className="size-3 shrink-0 fill-amber-400 text-amber-500" aria-label="主接口" />
-					) : null}
-				</span>
-			))}
+		<span className={cn("min-w-0 content-center", className)} title={display.label}>
+			<span
+				className={cn(
+					"flex min-w-0 items-center gap-1.5 text-xs",
+					display.mode === "linked" || display.mode === "root" ? "text-foreground" : "text-muted-foreground"
+				)}
+			>
+				{display.mode === "root" ? (
+					<Globe2Icon className="size-3.5 shrink-0 text-muted-foreground" />
+				) : display.mode === "linked" ? (
+					<NetworkIcon className="size-3.5 shrink-0 text-muted-foreground" />
+				) : null}
+				<span className="truncate">{display.label}</span>
+			</span>
 		</span>
 	)
 }

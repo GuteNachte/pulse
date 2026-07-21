@@ -110,6 +110,7 @@ import {
 } from "@/modules/asset-center/asset-type-specs"
 import { buildInternetUplinkAssetIds, getAssetCompleteness } from "@/modules/asset-center/asset-profile-summary"
 import { buildAssetInterfaceDisplay, groupAssetInterfacesByAsset } from "@/modules/asset-center/asset-interface-display"
+import { buildAssetNetworkUplinks, unlinkedAssetNetworkUplink } from "@/modules/asset-center/asset-network-uplink"
 import { syncPrimaryInterface } from "@/modules/asset-center/asset-interface-sync"
 import { validateNewOntRequiredFields } from "@/modules/asset-center/asset-profile-validation"
 import type {
@@ -193,7 +194,7 @@ export default memo(function AssetsPage() {
 			const interfaceRequest = pb
 				.collection<AssetInterfaceRecord>("asset_interfaces")
 				.getFullList({
-					fields: "id,asset,name,kind,speed_mbps,connected,primary",
+					fields: "id,asset,name,kind,speed_mbps,connected,primary,metadata",
 					sort: "asset,-primary,name",
 					requestKey: null,
 				})
@@ -267,6 +268,10 @@ export default memo(function AssetsPage() {
 	const looseLocationGroups = useMemo(() => getLooseLocationGroups(assets, locations), [assets, locations])
 	const maintenanceByAsset = useMemo(() => groupMaintenanceByAsset(maintenance), [maintenance])
 	const interfacesByAsset = useMemo(() => groupAssetInterfacesByAsset(interfaces), [interfaces])
+	const networkUplinksByAsset = useMemo(
+		() => buildAssetNetworkUplinks(assets, interfaces, relations),
+		[assets, interfaces, relations]
+	)
 	const internetUplinkAssetIds = useMemo(() => buildInternetUplinkAssetIds(relations), [relations])
 
 	const filteredAssets = useMemo(() => {
@@ -973,6 +978,7 @@ export default memo(function AssetsPage() {
 											maintenanceCount={maintenanceByAsset.get(asset.id)?.length ?? 0}
 											active={activeAsset?.id === asset.id}
 											onActivate={() => setActiveAssetId(asset.id)}
+											uplink={networkUplinksByAsset.get(asset.id) ?? unlinkedAssetNetworkUplink}
 											hasInternetUplink={internetUplinkAssetIds.has(asset.id)}
 										/>
 									))}

@@ -4,7 +4,7 @@ export const assetListColumns = [
 	{ key: "location", label: "位置" },
 	{ key: "ipv4", label: "IPv4" },
 	{ key: "access", label: "网络接入方式" },
-	{ key: "interface_speed", label: "网卡速率" },
+	{ key: "uplink", label: "网络上联" },
 	{ key: "status", label: "状态 / 资料" },
 ] as const
 
