@@ -232,6 +232,7 @@ function getDetailRowSection(
 			return switchPortCapabilityFieldKeys.has(fieldKey) ? "端口能力" : "网络功能"
 		}
 		if (originalSection === "管理与网络能力") return "网络功能"
+		if (registrySection?.startsWith("网络能力")) return "网络功能"
 	}
 	if (assetType === "ont" && originalSection && !["身份与归属", "设备身份标识"].includes(originalSection)) {
 		return originalSection

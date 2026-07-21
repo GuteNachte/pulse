@@ -1,9 +1,7 @@
 import { ExternalLinkIcon, ListChecksIcon } from "lucide-react"
 import type { ReactNode } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { getAssetParameterSectionId } from "../asset-parameter-navigation"
 import type { AssetFieldDefinition } from "../asset-schema"
-import { AssetParameterNavigator } from "./asset-parameter-navigator"
 
 export type AssetParameterRow = {
 	label: string
@@ -82,7 +80,6 @@ export function AssetHardwareSpecsColumn({
 					</div>
 					{groups.length > 0 ? <CountTag>{groups.length} 类</CountTag> : null}
 				</div>
-				<AssetParameterNavigator groups={groups} variant="inline" className="mt-3" />
 			</CardHeader>
 			<CardContent className="grid items-stretch gap-2.5 p-3 lg:grid-cols-2">
 				{groups.length > 0 ? (
@@ -103,7 +100,7 @@ function HardwareSpecGroup({ group, action }: { group: AssetParameterGroup; acti
 	const hasNamedSections = rowSections.some((section) => section.title)
 	return (
 		<section
-			id={getAssetParameterSectionId(group.id)}
+			id={`asset-parameter-${group.id}`}
 			data-asset-parameter-group-id={group.id}
 			className="grid min-w-0 scroll-mt-28 content-start gap-2.5 rounded-md border border-border/70 bg-surface-soft p-3"
 		>

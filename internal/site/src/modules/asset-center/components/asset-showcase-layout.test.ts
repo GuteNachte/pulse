@@ -1,11 +1,24 @@
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 
 const workspace = readFileSync(new URL("./asset-showcase-workspace.tsx", import.meta.url), "utf8")
 const columns = readFileSync(new URL("./asset-parameter-columns.tsx", import.meta.url), "utf8")
 const media = readFileSync(new URL("./asset-media-showcase.tsx", import.meta.url), "utf8")
 const tags = readFileSync(new URL("./asset-showcase-tags.tsx", import.meta.url), "utf8")
 const page = readFileSync(new URL("../asset-detail-page.tsx", import.meta.url), "utf8")
+const navigatorModule = new URL("./asset-parameter-navigator.tsx", import.meta.url)
+const navigationRulesModule = new URL("../asset-parameter-navigation.ts", import.meta.url)
+
+assert.equal(
+	existsSync(navigatorModule),
+	false,
+	"the removed parameter directory component must not remain as dead code"
+)
+assert.equal(
+	existsSync(navigationRulesModule),
+	false,
+	"the removed parameter directory helper must not remain as dead code"
+)
 
 assert.equal(
 	workspace.includes("AssetParameterNavigator"),
@@ -29,21 +42,16 @@ assert.equal(
 )
 assert.equal(workspace.includes("xl:h-full"), false, "workspace must not force a nested viewport height")
 assert.equal(columns.includes("xl:overflow-y-auto"), false, "hardware archive must use page-level scrolling")
+assert.equal(columns.includes("id={`asset-parameter-"), true, "every parameter card must expose a stable anchor")
 assert.equal(
-	columns.includes("getAssetParameterSectionId(group.id)"),
-	true,
-	"every parameter card must expose a stable anchor"
-)
-assert.equal(columns.includes('variant="inline"'), true, "small screens must render compact inline navigation")
-assert.equal(
-	columns.includes('variant="inline" className="mt-3"'),
-	true,
-	"parameter navigation must stay with the parameter column on every screen size"
-)
-assert.equal(
-	columns.includes('className="mt-3 xl:hidden"'),
+	columns.includes("AssetParameterNavigator"),
 	false,
-	"desktop parameter navigation must not return to the first column"
+	"asset details must not render a parameter directory on any screen size"
+)
+assert.equal(
+	columns.includes('aria-label="参数目录"'),
+	false,
+	"asset details must not expose a parameter directory landmark"
 )
 assert.equal(
 	columns.includes('<div className="grid gap-2 sm:grid-cols-2">'),

@@ -328,6 +328,8 @@ const networkSwitch = {
 		ethernet_port_count: 8,
 		default_ethernet_speed_mbps: 2500,
 		switching_capacity_gbps: 60,
+		mac_table_entries: 4000,
+		forwarding_method: "store_and_forward",
 		vlan_status: "disabled",
 	},
 } as unknown as AssetRecord
@@ -360,7 +362,7 @@ assertDeepEqual(
 )
 assertDeepEqual(
 	switchGroups.find((group) => group.title === "网络")?.rows.map((row) => row.label),
-	["VLAN", "交换容量 Gbps"]
+	["VLAN", "交换容量 Gbps", "MAC 地址表容量", "转发方式"]
 )
 assertDeepEqual(
 	switchGroups
