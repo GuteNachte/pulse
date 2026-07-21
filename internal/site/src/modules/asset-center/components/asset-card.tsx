@@ -141,10 +141,10 @@ export function AssetListItem({
 				</div>
 				<AssetListValue className="hidden md:block" value={location} />
 				<AssetListValue className="hidden md:block" value={ip} mono={ip !== "未填写"} />
+				<AssetNetworkUplinkCell className="hidden md:flex" display={uplink} />
 				<span className="hidden min-w-0 content-center md:block">
 					<span className="block truncate text-xs text-foreground">{network.accessLabel}</span>
 				</span>
-				<AssetNetworkUplinkCell className="hidden md:flex" display={uplink} />
 				<div className="hidden min-w-0 justify-items-end gap-1 md:grid">
 					<div className="flex min-w-0 justify-end gap-1">
 						{monitored && <AssetCardMetaTag tone="ok">监控</AssetCardMetaTag>}
