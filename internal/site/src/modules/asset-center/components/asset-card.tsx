@@ -35,7 +35,7 @@ import { assetListColumns, assetListDesktopGridClassName } from "@/modules/asset
 import { buildAssetInterfaceDisplay } from "@/modules/asset-center/asset-interface-display"
 import type { AssetNetworkUplinkDisplay } from "@/modules/asset-center/asset-network-uplink"
 import { getInternetStatusLabel } from "@/modules/asset-center/asset-type-specs"
-import type { AssetInterfaceRecord, AssetRecord, AssetStatus, AssetType } from "@/types"
+import type { AssetInterfaceRecord, AssetRecord, AssetRelationRecord, AssetStatus, AssetType } from "@/types"
 
 export type AssetCardProps = {
 	asset: AssetRecord
@@ -55,6 +55,7 @@ export type AssetCardProps = {
 export type AssetListItemProps = {
 	asset: AssetRecord
 	interfaces: AssetInterfaceRecord[]
+	relations: AssetRelationRecord[]
 	interfaceLoadFailed: boolean
 	parent?: AssetRecord
 	monitored: boolean
@@ -83,6 +84,7 @@ export function AssetListHeader() {
 export function AssetListItem({
 	asset,
 	interfaces,
+	relations,
 	interfaceLoadFailed,
 	parent,
 	monitored,
@@ -97,7 +99,7 @@ export function AssetListItem({
 	const identity = getAssetIdentityLabel(asset)
 	const location = getAssetLocationLabel(asset)
 	const ip = getAssetIpLabel(asset)
-	const network = buildAssetInterfaceDisplay(asset, interfaces, { loadFailed: interfaceLoadFailed })
+	const network = buildAssetInterfaceDisplay(asset, interfaces, { loadFailed: interfaceLoadFailed, relations })
 	const assetTag = getMetadataString(asset.metadata, "asset_tag")
 	const assetTagLabel = assetTag || "未编号"
 	const color = getMetadataString(asset.metadata, "color") || getMetadataString(asset.metadata, "device_color")
@@ -141,9 +143,6 @@ export function AssetListItem({
 				<AssetListValue className="hidden md:block" value={ip} mono={ip !== "未填写"} />
 				<span className="hidden min-w-0 content-center md:block">
 					<span className="block truncate text-xs text-foreground">{network.accessLabel}</span>
-					{network.secondaryLabel ? (
-						<span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{network.secondaryLabel}</span>
-					) : null}
 				</span>
 				<AssetNetworkUplinkCell className="hidden md:flex" display={uplink} />
 				<div className="hidden min-w-0 justify-items-end gap-1 md:grid">

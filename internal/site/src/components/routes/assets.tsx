@@ -109,7 +109,11 @@ import {
 	validateOntAssetValues,
 } from "@/modules/asset-center/asset-type-specs"
 import { buildInternetUplinkAssetIds, getAssetCompleteness } from "@/modules/asset-center/asset-profile-summary"
-import { buildAssetInterfaceDisplay, groupAssetInterfacesByAsset } from "@/modules/asset-center/asset-interface-display"
+import {
+	buildAssetInterfaceDisplay,
+	groupAssetInterfacesByAsset,
+	groupAssetNetworkRelationsByAsset,
+} from "@/modules/asset-center/asset-interface-display"
 import { buildAssetNetworkUplinks, unlinkedAssetNetworkUplink } from "@/modules/asset-center/asset-network-uplink"
 import { syncPrimaryInterface } from "@/modules/asset-center/asset-interface-sync"
 import { validateNewOntRequiredFields } from "@/modules/asset-center/asset-profile-validation"
@@ -268,6 +272,7 @@ export default memo(function AssetsPage() {
 	const looseLocationGroups = useMemo(() => getLooseLocationGroups(assets, locations), [assets, locations])
 	const maintenanceByAsset = useMemo(() => groupMaintenanceByAsset(maintenance), [maintenance])
 	const interfacesByAsset = useMemo(() => groupAssetInterfacesByAsset(interfaces), [interfaces])
+	const relationsByAsset = useMemo(() => groupAssetNetworkRelationsByAsset(relations), [relations])
 	const networkUplinksByAsset = useMemo(
 		() => buildAssetNetworkUplinks(assets, interfaces, relations),
 		[assets, interfaces, relations]
@@ -311,6 +316,7 @@ export default memo(function AssetsPage() {
 			if (getAssetIpLabel(asset) !== "未填写") withIp += 1
 			const network = buildAssetInterfaceDisplay(asset, interfacesByAsset.get(asset.id) ?? [], {
 				loadFailed: interfaceLoadFailed,
+				relations: relationsByAsset.get(asset.id) ?? [],
 			})
 			if (!["未设置", "未接入", "接口读取失败"].includes(network.accessLabel)) withNetwork += 1
 			if (monitoredAssetIds.has(asset.id)) monitored += 1
@@ -325,7 +331,7 @@ export default memo(function AssetsPage() {
 			monitored,
 			profileAttention,
 		}
-	}, [filteredAssets, interfaceLoadFailed, interfacesByAsset, internetUplinkAssetIds, monitoredAssetIds])
+	}, [filteredAssets, interfaceLoadFailed, interfacesByAsset, internetUplinkAssetIds, monitoredAssetIds, relationsByAsset])
 	const activeAssetParent = activeAsset?.parent_asset ? assetsById.get(activeAsset.parent_asset) : undefined
 	const numberingSettings = useMemo(() => normalizeAssetNumberingSettings(numberingForm), [numberingForm])
 	const nextAssetTagPreview = useMemo(() => buildNextAssetTag(assets, numberingSettings), [assets, numberingSettings])
@@ -972,6 +978,7 @@ export default memo(function AssetsPage() {
 											key={asset.id}
 											asset={asset}
 											interfaces={interfacesByAsset.get(asset.id) ?? []}
+											relations={relationsByAsset.get(asset.id) ?? []}
 											interfaceLoadFailed={interfaceLoadFailed}
 											parent={asset.parent_asset ? assetsById.get(asset.parent_asset) : undefined}
 											monitored={monitoredAssetIds.has(asset.id)}

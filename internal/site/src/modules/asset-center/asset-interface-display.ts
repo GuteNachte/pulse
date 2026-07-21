@@ -1,7 +1,5 @@
-import type { AssetInterfaceKind, AssetInterfaceRecord, AssetRecord } from "@/types"
-import { getInternetBandwidthLabel } from "./asset-profile-summary.ts"
+import type { AssetInterfaceKind, AssetInterfaceRecord, AssetRecord, AssetRelationRecord } from "@/types"
 import { getMetadataString } from "./asset-schema.ts"
-import { getInternetOptionLabel } from "./asset-type-specs.ts"
 
 export type AssetInterfaceSpeedItem = {
 	id: string
@@ -19,8 +17,11 @@ export type AssetInterfaceDisplay = {
 	accessLabel: string
 	speedMode: "interfaces" | "not_applicable" | "error"
 	speedItems: AssetInterfaceSpeedItem[]
-	secondaryLabel?: string
 }
+
+type AssetAccessMedium = "Wi-Fi" | "网线" | "光纤"
+
+const assetAccessMediumOrder: AssetAccessMedium[] = ["Wi-Fi", "网线", "光纤"]
 
 export function groupAssetInterfacesByAsset(records: AssetInterfaceRecord[]) {
 	const grouped = new Map<string, AssetInterfaceRecord[]>()
@@ -30,30 +31,46 @@ export function groupAssetInterfacesByAsset(records: AssetInterfaceRecord[]) {
 	return grouped
 }
 
+export function groupAssetNetworkRelationsByAsset(records: AssetRelationRecord[]) {
+	const grouped = new Map<string, AssetRelationRecord[]>()
+	for (const record of records) {
+		if (record.kind !== "connected_to") continue
+		for (const assetId of [record.source_asset, record.target_asset]) {
+			grouped.set(assetId, [...(grouped.get(assetId) ?? []), record])
+		}
+	}
+	return grouped
+}
+
 export function buildAssetInterfaceDisplay(
 	asset: AssetRecord,
 	records: AssetInterfaceRecord[],
-	options: { loadFailed?: boolean } = {}
+	options: { loadFailed?: boolean; relations?: AssetRelationRecord[] } = {}
 ): AssetInterfaceDisplay {
-	if (asset.type === "internet" || asset.type === "web_endpoint") {
-		const accessTechnology = getMetadataString(asset.metadata, "access_technology")
-		const authMode = getMetadataString(asset.metadata, "auth_mode")
-		const bandwidth = asset.type === "internet" ? getInternetBandwidthLabel(asset) : ""
+	if (asset.type === "internet") {
 		return {
-			accessLabel:
-				asset.type === "internet"
-					? getInternetOptionLabel("access_technology", accessTechnology) || "未设置线路技术"
-					: "服务访问",
-			secondaryLabel:
-				asset.type === "internet"
-					? [getInternetOptionLabel("auth_mode", authMode), bandwidth].filter(Boolean).join(" · ") || undefined
-					: undefined,
+			accessLabel: getMetadataString(asset.metadata, "access_technology") === "ftth" ? "光纤" : "未设置",
 			speedMode: "not_applicable",
 			speedItems: [],
 		}
 	}
+	if (asset.type === "web_endpoint") {
+		return { accessLabel: "无", speedMode: "not_applicable", speedItems: [] }
+	}
 
-	if (options.loadFailed) {
+	const connectedMedia = new Set<AssetAccessMedium>()
+	for (const record of records) {
+		if (!record.connected) continue
+		const medium = getInterfaceAccessMedium(record.kind)
+		if (medium) connectedMedia.add(medium)
+	}
+	for (const relation of options.relations ?? []) {
+		const medium = getRelationAccessMedium(getMetadataString(relation.metadata, "link_kind"))
+		if (medium) connectedMedia.add(medium)
+	}
+	const accessLabel = assetAccessMediumOrder.filter((medium) => connectedMedia.has(medium)).join(" + ")
+
+	if (options.loadFailed && !accessLabel) {
 		return {
 			accessLabel: "接口读取失败",
 			speedMode: "error",
@@ -61,11 +78,8 @@ export function buildAssetInterfaceDisplay(
 		}
 	}
 
-	const connectedKinds = [
-		...new Set(records.filter((item) => item.connected).map((item) => formatAssetInterfaceKind(item.kind))),
-	]
 	return {
-		accessLabel: records.length === 0 ? "未设置" : connectedKinds.join(" + ") || "未接入",
+		accessLabel: accessLabel || (records.length > 0 || (options.relations?.length ?? 0) > 0 ? "未接入" : "未设置"),
 		speedMode: "interfaces",
 		speedItems: records.map((item) => {
 			const connectionNote = getMetadataString(item.metadata, "connection_note")
@@ -86,15 +100,44 @@ export function buildAssetInterfaceDisplay(
 				...(isSwitchPort && (role === "uplink" || role === "downlink" || role === "general") ? { role } : {}),
 				...(isSwitchPort
 					? {
-						negotiatedSpeedLabel:
-							Number.isFinite(negotiatedSpeed) && negotiatedSpeed > 0
-								? `协商 ${formatAssetInterfaceSpeed(negotiatedSpeed)}`
-								: "协商速率未确认",
-					}
+							negotiatedSpeedLabel:
+								Number.isFinite(negotiatedSpeed) && negotiatedSpeed > 0
+									? `协商 ${formatAssetInterfaceSpeed(negotiatedSpeed)}`
+									: "协商速率未确认",
+						}
 					: {}),
 				...(connectionNote ? { connectionNote } : {}),
 			}
 		}),
+	}
+}
+
+function getInterfaceAccessMedium(kind: AssetInterfaceKind): AssetAccessMedium | undefined {
+	switch (kind) {
+		case "wifi":
+			return "Wi-Fi"
+		case "ethernet":
+		case "lan":
+		case "wan":
+			return "网线"
+		case "pon":
+		case "optical":
+			return "光纤"
+		default:
+			return undefined
+	}
+}
+
+function getRelationAccessMedium(linkKind: string): AssetAccessMedium | undefined {
+	switch (linkKind) {
+		case "wifi":
+			return "Wi-Fi"
+		case "ethernet":
+			return "网线"
+		case "internet":
+			return "光纤"
+		default:
+			return undefined
 	}
 }
 
