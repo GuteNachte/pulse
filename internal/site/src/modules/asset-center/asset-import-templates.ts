@@ -1,3 +1,6 @@
+import { getAssetArchiveField } from "./asset-parameter-registry.ts"
+import type { AssetType } from "../../types.ts"
+
 const ASSET_IMPORT_TEMPLATE_ROWS: Record<string, string>[] = [
 	{
 		name: "联通千兆宽带",
@@ -12,7 +15,6 @@ const ASSET_IMPORT_TEMPLATE_ROWS: Record<string, string>[] = [
 		notes: "公网入口作为资产维护，可在网络拓扑里手动连接到路由器。",
 		parent_asset: "",
 		"metadata.fixed_ipv4": "",
-		"metadata.fixed_ipv6": "",
 		"metadata.mac": "",
 		"metadata.management_url": "",
 		"metadata.official_url": "",
@@ -85,7 +87,6 @@ const ASSET_IMPORT_TEMPLATE_ROWS: Record<string, string>[] = [
 		"metadata.operating_role": "ifttr_main_gateway",
 		"metadata.pon_standard": "10G-EPON",
 		"metadata.fixed_ipv4": "192.168.1.1",
-		"metadata.fixed_ipv6": "",
 		"metadata.mac": "",
 		"metadata.management_url": "http://192.168.1.1",
 		"metadata.official_url": "",
@@ -114,7 +115,6 @@ const ASSET_IMPORT_TEMPLATE_ROWS: Record<string, string>[] = [
 		notes: "无 IPv4 的交换机也可以作为手动资产维护。",
 		parent_asset: "",
 		"metadata.fixed_ipv4": "",
-		"metadata.fixed_ipv6": "",
 		"metadata.mac": "",
 		"metadata.management_url": "",
 		"metadata.official_url": "",
@@ -161,7 +161,6 @@ const ASSET_IMPORT_TEMPLATE_ROWS: Record<string, string>[] = [
 		notes: "",
 		parent_asset: "",
 		"metadata.fixed_ipv4": "192.168.1.30",
-		"metadata.fixed_ipv6": "",
 		"metadata.mac": "",
 		"metadata.management_url": "http://192.168.1.30",
 		"metadata.official_url": "",
@@ -208,7 +207,6 @@ const ASSET_IMPORT_TEMPLATE_ROWS: Record<string, string>[] = [
 		notes: "",
 		parent_asset: "飞牛 NAS",
 		"metadata.fixed_ipv4": "",
-		"metadata.fixed_ipv6": "",
 		"metadata.mac": "",
 		"metadata.management_url": "",
 		"metadata.official_url": "",
@@ -256,7 +254,6 @@ const ASSET_IMPORT_TEMPLATE_ROWS: Record<string, string>[] = [
 		notes: "智能家居设备第一阶段可以先手动建档。",
 		parent_asset: "",
 		"metadata.fixed_ipv4": "",
-		"metadata.fixed_ipv6": "",
 		"metadata.mac": "",
 		"metadata.management_url": "",
 		"metadata.official_url": "",
@@ -293,12 +290,12 @@ const ASSET_IMPORT_TEMPLATE_ROWS: Record<string, string>[] = [
 ]
 
 export function buildAssetImportCsvTemplate() {
-	return `\uFEFF${toCsv(ASSET_IMPORT_TEMPLATE_ROWS)}`
+	return `\uFEFF${toCsv(getSanitizedTemplateRows())}`
 }
 
 export function buildAssetImportJsonExample() {
 	return JSON.stringify(
-		ASSET_IMPORT_TEMPLATE_ROWS.map((row) => {
+		getSanitizedTemplateRows().map((row) => {
 			const metadata: Record<string, string> = {}
 			const asset: Record<string, string | Record<string, string>> = {}
 			for (const [key, value] of Object.entries(row)) {
@@ -318,9 +315,22 @@ export function buildAssetImportJsonExample() {
 	)
 }
 
+function getSanitizedTemplateRows() {
+	return ASSET_IMPORT_TEMPLATE_ROWS.map((row) => {
+		const type = row.type as AssetType
+		return Object.fromEntries(
+			Object.entries(row).filter(([key]) => {
+				if (!key.startsWith("metadata.")) return true
+				const definition = getAssetArchiveField(key.slice("metadata.".length))
+				return Boolean(definition && definition.scope !== "operational" && definition.assetTypes.includes(type))
+			})
+		)
+	})
+}
+
 function toCsv(rows: Record<string, string>[]) {
 	if (rows.length === 0) return ""
-	const headers = Object.keys(rows[0])
+	const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))]
 	const lines = [headers.join(",")]
 	for (const row of rows) {
 		lines.push(headers.map((header) => escapeCsvValue(row[header])).join(","))

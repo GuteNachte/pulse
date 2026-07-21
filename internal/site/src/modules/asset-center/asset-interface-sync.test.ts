@@ -1,12 +1,24 @@
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
+import { buildPrimaryInterfacePayload } from "./asset-interface-payload.ts"
+import type { AssetFormState } from "./asset-import.ts"
 
-const source = readFileSync(new URL("./asset-interface-sync.ts", import.meta.url), "utf8")
+const form = {
+	name: "测试主机",
+	type: "mini_pc",
+	status: "active",
+	parent_asset: "",
+	vendor: "",
+	model: "",
+	serial_number: "",
+	management_ip: "",
+	location: "",
+	role: "",
+	notes: "",
+	metadata: { fixed_ipv4: "192.168.1.10", fixed_ipv6: "2001:db8::10" },
+} as AssetFormState
 
-assert.equal(
-	source.includes('if (form.type === "ont") return null'),
-	true,
-	"ONT must skip the synthetic primary interface and use its explicit PON, optical, LAN and Wi-Fi interfaces"
-)
+assert.equal(buildPrimaryInterfacePayload("user-1", "asset-1", form)?.ipv6, "")
+assert.equal(buildPrimaryInterfacePayload("user-1", "internet-1", { ...form, type: "internet" }), null)
+assert.equal(buildPrimaryInterfacePayload("user-1", "ont-1", { ...form, type: "ont" }), null)
 
 console.log("asset interface sync contract passed")

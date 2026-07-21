@@ -132,7 +132,6 @@ function buildAssetIdentitySections(
 			title: "网络",
 			rows: compact([
 				{ label: "IPv4", value: firstNonEmpty(getMetadataString(metadata, "fixed_ipv4"), asset.management_ip) },
-				{ label: "IPv6", value: getMetadataString(metadata, "fixed_ipv6") },
 				{ label: "MAC", value: getMetadataString(metadata, "mac") },
 				linkRow("管理页面", getMetadataString(metadata, "management_url")),
 			]),

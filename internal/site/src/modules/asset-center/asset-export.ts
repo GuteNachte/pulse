@@ -19,6 +19,9 @@ export type AssetCenterSnapshotInput = {
 	assetAttachments: AssetAttachmentRecord[]
 }
 
+export function sanitizeAssetMetadataForArchive(metadata?: Record<string, unknown>) {
+	return Object.fromEntries(Object.entries(metadata ?? {}).filter(([key]) => key !== "fixed_ipv6"))
+}
 
 export function buildAssetExportCsv(
 	assets: AssetRecord[],
@@ -44,7 +47,7 @@ export function buildAssetExportCsv(
 			completeness: `${completeness.score}%`,
 			completeness_label: completeness.label,
 			notes: asset.notes || "",
-			metadata: JSON.stringify(asset.metadata ?? {}),
+			metadata: JSON.stringify(sanitizeAssetMetadataForArchive(asset.metadata)),
 		}
 	})
 	return `\uFEFF${toCsv(rows)}`
@@ -63,7 +66,10 @@ export function buildAssetCenterSnapshot(input: AssetCenterSnapshotInput) {
 				asset_maintenance: input.assetMaintenance.length,
 				asset_attachments: input.assetAttachments.length,
 			},
-			assets: input.assets,
+			assets: input.assets.map((asset) => ({
+				...asset,
+				metadata: sanitizeAssetMetadataForArchive(asset.metadata),
+			})),
 			asset_interfaces: input.assetInterfaces,
 			asset_relations: input.assetRelations,
 			asset_locations: input.assetLocations,

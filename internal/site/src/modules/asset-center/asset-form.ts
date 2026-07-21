@@ -39,7 +39,6 @@ const ASSET_MISSING_FIELD_ALIASES: Record<string, string[]> = {
 	management_ip: ["IPv4", "IP", "管理 IP", "固定 IP"],
 	official_url: ["官方网站", "厂家官网", "官网资料页", "说明书"],
 	fixed_ipv4: ["IPv4", "IP", "固定 IP", "固定 IPv4", "URL"],
-	fixed_ipv6: ["IPv6", "固定 IPv6"],
 	mac: ["MAC", "主 MAC", "管理 MAC"],
 	port_count: ["端口数量"],
 	default_port_speed_mbps: ["端口速率"],

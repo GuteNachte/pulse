@@ -1,8 +1,4 @@
-import {
-	ASSET_TYPE_OPTIONS,
-	buildFixedSpecAssetName,
-	buildInternetResourceName,
-} from "./asset-schema.ts"
+import { ASSET_TYPE_OPTIONS, buildFixedSpecAssetName, buildInternetResourceName } from "./asset-schema.ts"
 import type { AssetRecord, AssetStatus, AssetType } from "../../types.ts"
 import { normalizeInternetProvider, validateAssetImportMetadata } from "./asset-type-specs.ts"
 
@@ -134,7 +130,7 @@ export function buildImportPreviewRow(
 	const warnings: string[] = []
 	const type = normalizeAssetType(getImportString(raw, ["type", "资产类型", "类型"]))
 	const status = normalizeAssetStatus(getImportString(raw, ["status", "状态"]))
-	const metadata = extractImportMetadata(raw, type ?? "custom")
+	const metadata = extractImportMetadata(raw, type ?? "custom", warnings)
 	const name =
 		getImportString(raw, ["name", "资产名称", "名称"]).trim() ||
 		buildFixedSpecAssetName(
@@ -305,7 +301,7 @@ function getImportDuplicateKeys(form: AssetFormState) {
 	return keys
 }
 
-function extractImportMetadata(raw: Record<string, unknown>, type: AssetType) {
+function extractImportMetadata(raw: Record<string, unknown>, type: AssetType, warnings: string[]) {
 	const metadata: Record<string, string> = {}
 	const directMetadata = raw.metadata
 	if (directMetadata && typeof directMetadata === "object" && !Array.isArray(directMetadata)) {
@@ -324,6 +320,10 @@ function extractImportMetadata(raw: Record<string, unknown>, type: AssetType) {
 	for (const [metadataKey, aliases] of Object.entries(importMetadataAliases)) {
 		const text = getImportString(raw, aliases)
 		if (text && !metadata[metadataKey]) metadata[metadataKey] = text
+	}
+	if ("fixed_ipv6" in metadata) {
+		delete metadata.fixed_ipv6
+		warnings.push("已忽略历史字段 metadata.fixed_ipv6")
 	}
 	if (type !== "phone") {
 		delete metadata.internal_model
@@ -394,7 +394,6 @@ function normalizeMac(value: string) {
 
 const importMetadataAliases: Record<string, string[]> = {
 	fixed_ipv4: ["fixed_ipv4", "固定IPv4", "固定 IPv4", "ipv4", "IP", "ip"],
-	fixed_ipv6: ["fixed_ipv6", "固定IPv6", "固定 IPv6", "ipv6"],
 	internal_model: ["internal_model", "内部型号", "产品内部型号", "内部代号"],
 	mac: ["mac", "MAC", "主MAC", "主 MAC"],
 	management_url: ["management_url", "管理URL", "管理 URL"],
