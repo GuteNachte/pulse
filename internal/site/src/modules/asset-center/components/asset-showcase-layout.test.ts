@@ -56,10 +56,11 @@ assert.equal(
 	"desktop archives must not stretch every short row to full width"
 )
 assert.equal(
-	columns.includes('className="grid items-stretch gap-2.5 p-3 lg:auto-rows-fr lg:grid-cols-2"'),
+	columns.includes('className="grid items-stretch gap-2.5 p-3 lg:grid-cols-2"'),
 	true,
-	"desktop parameter cards must render two equal-height cards per row and keep every row consistent"
+	"desktop parameter cards must keep equal heights only within each row"
 )
+assert.equal(columns.includes("lg:auto-rows-fr"), false, "different parameter rows must keep natural heights")
 assert.equal(columns.includes('className="grid auto-rows-fr'), false, "small screens must keep natural card heights")
 assert.equal(
 	columns.includes("grid items-start gap-2.5 p-3 lg:grid-cols-2"),

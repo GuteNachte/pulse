@@ -84,7 +84,7 @@ export function AssetHardwareSpecsColumn({
 				</div>
 				<AssetParameterNavigator groups={groups} variant="inline" className="mt-3" />
 			</CardHeader>
-			<CardContent className="grid items-stretch gap-2.5 p-3 lg:auto-rows-fr lg:grid-cols-2">
+			<CardContent className="grid items-stretch gap-2.5 p-3 lg:grid-cols-2">
 				{groups.length > 0 ? (
 					groups.map((group) => <HardwareSpecGroup key={group.id} group={group} action={groupActions?.[group.title]} />)
 				) : (
