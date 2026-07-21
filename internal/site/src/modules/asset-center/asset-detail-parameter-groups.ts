@@ -38,6 +38,16 @@ export type AssetParameterGroupContext = {
 	assets?: AssetRecord[]
 }
 
+const switchPortCapabilityFieldKeys = new Set([
+	"ethernet_port_count",
+	"ethernet_supported_speeds",
+	"default_ethernet_speed_mbps",
+	"optical_port_count",
+	"optical_supported_speeds",
+	"default_optical_speed_mbps",
+	"other_port_count",
+])
+
 export function buildAssetParameterGroups(
 	asset: AssetRecord,
 	context: AssetParameterGroupContext = {}
@@ -50,6 +60,7 @@ export function buildAssetParameterGroups(
 		formSections.flatMap((section) => section.fields.map((field) => [field.key, section.title] as const))
 	)
 	const rowsByCategory = new Map<AssetParameterCategoryId, AssetParameterRow[]>()
+	const switchPortCapabilityRows: AssetParameterRow[] = []
 	for (const field of fields.sort(
 		(left, right) => (getAssetArchiveField(left.key)?.order ?? 0) - (getAssetArchiveField(right.key)?.order ?? 0)
 	)) {
@@ -57,22 +68,19 @@ export function buildAssetParameterGroups(
 		if (definition?.scope !== "parameter" || !definition.category) continue
 		const value = getAssetFieldDisplayValue(asset, field)
 		if (!value) continue
-		const rows = rowsByCategory.get(definition.category) ?? []
-		rows.push({
+		const row = {
 			...fieldToParameterRow(field, value),
 			section: getDetailRowSection(asset.type, field.key, originalSectionByKey.get(field.key), definition.section),
-		})
+		}
+		if (asset.type === "switch" && switchPortCapabilityFieldKeys.has(field.key)) {
+			switchPortCapabilityRows.push(row)
+			continue
+		}
+		const rows = rowsByCategory.get(definition.category) ?? []
+		rows.push(row)
 		rowsByCategory.set(definition.category, rows)
 	}
 
-	const switchPortCapabilityRows =
-		asset.type === "switch" ? (rowsByCategory.get("network") ?? []).filter((row) => row.section === "端口能力") : []
-	if (asset.type === "switch") {
-		rowsByCategory.set(
-			"network",
-			(rowsByCategory.get("network") ?? []).filter((row) => row.section !== "端口能力")
-		)
-	}
 	const switchPortDetailRows = buildSwitchPortStatusRows(
 		asset,
 		context.interfaces ?? [],
@@ -220,7 +228,9 @@ function getDetailRowSection(
 	registrySection: string | undefined
 ) {
 	if (assetType === "switch") {
-		if (originalSection === "硬件与端口能力") return "端口能力"
+		if (originalSection === "硬件与端口能力") {
+			return switchPortCapabilityFieldKeys.has(fieldKey) ? "端口能力" : "网络功能"
+		}
 		if (originalSection === "管理与网络能力") return "网络功能"
 	}
 	if (assetType === "ont" && originalSection && !["身份与归属", "设备身份标识"].includes(originalSection)) {

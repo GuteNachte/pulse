@@ -327,6 +327,7 @@ const networkSwitch = {
 	metadata: {
 		ethernet_port_count: 8,
 		default_ethernet_speed_mbps: 2500,
+		switching_capacity_gbps: 60,
 		vlan_status: "disabled",
 	},
 } as unknown as AssetRecord
@@ -358,9 +359,17 @@ assertDeepEqual(
 	["网络功能"]
 )
 assertDeepEqual(
+	switchGroups.find((group) => group.title === "网络")?.rows.map((row) => row.label),
+	["VLAN", "交换容量 Gbps"]
+)
+assertDeepEqual(
 	switchGroups
 		.find((group) => group.title === "网口状态")
 		?.rows.map((row) => row.section)
 		.filter((section, index, sections) => sections.indexOf(section) === index),
 	["端口能力", "端口明细"]
+)
+assertDeepEqual(
+	switchGroups.find((group) => group.title === "网口状态")?.rows.some((row) => row.label === "交换容量 Gbps"),
+	false
 )
