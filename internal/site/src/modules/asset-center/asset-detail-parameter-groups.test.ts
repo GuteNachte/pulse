@@ -302,13 +302,14 @@ const ont = {
 		lan_port_count: 4,
 		lan_2500_count: 1,
 		lan_1000_count: 3,
+		usb_port_count: 1,
 		power_spec: "DC 12V / 2A",
 	},
 } as unknown as AssetRecord
 
 assertDeepEqual(
 	buildAssetParameterGroups(ont).map((group) => group.title),
-	["电源", "主板与平台", "接入角色", "光纤接入", "路由与管理", "无线网络", "有线网络"]
+	["接入角色", "光纤接入", "路由与管理", "无线网络", "有线网络", "主板与平台", "接口与扩展", "电源"]
 )
 assertDeepEqual(
 	buildAssetParameterGroups(ont)
@@ -324,6 +325,8 @@ const networkSwitch = {
 	type: "switch",
 	status: "active",
 	metadata: {
+		dimensions_mm: "220 × 136 × 28",
+		power_input: "12V / 1A",
 		ethernet_port_count: 8,
 		default_ethernet_speed_mbps: 2500,
 		switching_capacity_gbps: 60,
@@ -350,7 +353,7 @@ const switchGroups = buildAssetParameterGroups(networkSwitch, {
 })
 assertDeepEqual(
 	switchGroups.map((group) => group.title),
-	["网络功能", "网口状态"]
+	["网络功能", "网口状态", "电源", "外观与尺寸"]
 )
 assertDeepEqual(
 	switchGroups

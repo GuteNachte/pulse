@@ -58,6 +58,13 @@ const switchPortCapabilityFieldKeys = new Set([
 	"other_port_count",
 ])
 
+const networkDeviceSecondaryGroupOrder = [
+	"asset-parameter-platform",
+	"asset-parameter-io",
+	"asset-parameter-power",
+	"asset-parameter-appearance",
+] as const
+
 export function buildAssetParameterGroups(
 	asset: AssetRecord,
 	context: AssetParameterGroupContext = {}
@@ -128,7 +135,9 @@ export function buildAssetParameterGroups(
 		]
 	})
 	const switchPortRows = [...switchPortCapabilityRows, ...switchPortDetailRows]
-	if (asset.type !== "switch" || switchPortRows.length === 0) return groups
+	if (asset.type !== "switch" || switchPortRows.length === 0) {
+		return prioritizeNetworkDeviceGroups(asset.type, groups)
+	}
 	const switchPortGroup: AssetParameterGroup = {
 		id: "switch-port-status",
 		title: "网口状态",
@@ -138,7 +147,27 @@ export function buildAssetParameterGroups(
 	}
 	const networkIndex = groups.findIndex((group) => group.id === "switch-network-functions")
 	const insertAt = networkIndex >= 0 ? networkIndex + 1 : 0
-	return [...groups.slice(0, insertAt), switchPortGroup, ...groups.slice(insertAt)]
+	return prioritizeNetworkDeviceGroups(asset.type, [
+		...groups.slice(0, insertAt),
+		switchPortGroup,
+		...groups.slice(insertAt),
+	])
+}
+
+function prioritizeNetworkDeviceGroups(assetType: AssetRecord["type"], groups: AssetParameterGroup[]) {
+	if (!NETWORK_ASSET_TYPES.includes(assetType)) return groups
+	return groups
+		.map((group, index) => ({ group, index, priority: getNetworkDeviceGroupPriority(group.id) }))
+		.sort((left, right) => left.priority - right.priority || left.index - right.index)
+		.map(({ group }) => group)
+}
+
+function getNetworkDeviceGroupPriority(groupId: string) {
+	if (!groupId.startsWith("asset-parameter-")) return 0
+	const secondaryIndex = networkDeviceSecondaryGroupOrder.indexOf(
+		groupId as (typeof networkDeviceSecondaryGroupOrder)[number]
+	)
+	return secondaryIndex >= 0 ? secondaryIndex + 1 : networkDeviceSecondaryGroupOrder.length + 1
 }
 
 function buildServiceGroups(asset: AssetRecord) {
