@@ -36,6 +36,8 @@ import { buildAssetInterfaceDisplay } from "@/modules/asset-center/asset-interfa
 import type { AssetNetworkUplinkDisplay } from "@/modules/asset-center/asset-network-uplink"
 import { getInternetStatusLabel } from "@/modules/asset-center/asset-type-specs"
 import type { AssetInterfaceRecord, AssetRecord, AssetRelationRecord, AssetStatus, AssetType } from "@/types"
+import { getAssetCompletenessLevel } from "../asset-completeness-level"
+import { AssetCompletenessScoreTag } from "./asset-completeness-score-tag"
 
 export type AssetCardProps = {
 	asset: AssetRecord
@@ -145,12 +147,12 @@ export function AssetListItem({
 				<span className="hidden min-w-0 content-center md:block">
 					<span className="block truncate text-xs text-foreground">{network.accessLabel}</span>
 				</span>
-				<div className="hidden min-w-0 justify-items-end gap-1 md:grid">
-					<div className="flex min-w-0 justify-end gap-1">
+				<div className="hidden min-w-0 grid-cols-[minmax(0,1fr)_2.75rem] items-center gap-1 md:grid">
+					<div className="min-w-0 justify-self-end">
 						{monitored && <AssetCardMetaTag tone="ok">监控</AssetCardMetaTag>}
-						<AssetCompletenessScoreTag score={completeness.score} tone={completeness.tone} />
 					</div>
-					<div className="max-w-28 truncate text-[11px] text-muted-foreground">
+					<AssetCompletenessScoreTag score={completeness.score} />
+					<div className="col-span-2 max-w-full truncate text-right text-[11px] text-muted-foreground">
 						{color || (parent ? `归属 ${parent.name}` : maintenanceCount > 0 ? `维护 ${maintenanceCount}` : "")}
 					</div>
 				</div>
@@ -175,7 +177,14 @@ export type AssetPreviewPanelProps = {
 	hasInternetUplink?: boolean
 }
 
-export function AssetPreviewPanel({ asset, parent, monitored, maintenanceCount, readOnly, hasInternetUplink }: AssetPreviewPanelProps) {
+export function AssetPreviewPanel({
+	asset,
+	parent,
+	monitored,
+	maintenanceCount,
+	readOnly,
+	hasInternetUplink,
+}: AssetPreviewPanelProps) {
 	if (!asset) {
 		return (
 			<div className="grid min-h-[24rem] place-items-center rounded-lg border border-dashed border-border/70 bg-card p-6 text-center">
@@ -193,6 +202,7 @@ export function AssetPreviewPanel({ asset, parent, monitored, maintenanceCount, 
 		.filter((row) => !hiddenPreviewSummaryLabels.has(row.label))
 		.slice(0, 3)
 	const completeness = getAssetCompleteness(asset, { hasInternetUplink })
+	const completenessLevel = getAssetCompletenessLevel(completeness.score)
 	const assetTag = getMetadataString(asset.metadata, "asset_tag")
 	const mac = getMetadataString(asset.metadata, "mac")
 	const color = getMetadataString(asset.metadata, "color") || getMetadataString(asset.metadata, "device_color")
@@ -241,16 +251,7 @@ export function AssetPreviewPanel({ asset, parent, monitored, maintenanceCount, 
 				</div>
 				<div className="h-1.5 overflow-hidden rounded-full bg-card">
 					<div
-						className={cn(
-							"h-full rounded-full",
-							completeness.tone === "danger"
-								? "bg-red-500"
-								: completeness.tone === "warning"
-									? "bg-amber-500"
-									: completeness.tone === "ok"
-										? "bg-emerald-500"
-										: "bg-muted-foreground/45"
-						)}
+						className={cn("h-full rounded-full", completenessLevel.barClassName)}
 						style={{ width: `${completeness.score}%` }}
 					/>
 				</div>
@@ -364,6 +365,7 @@ export function AssetCard({
 	const summaryRows = getAssetSummaryRows(asset).slice(0, 4)
 	const detailHref = getPagePath($router, "asset", { id: asset.id })
 	const completeness = getAssetCompleteness(asset, { hasInternetUplink })
+	const completenessLevel = getAssetCompletenessLevel(completeness.score)
 	const visibleTags = [
 		...(monitored ? [{ key: "monitor", label: "已监控", tone: "ok" as AssetLifecycleTone }] : []),
 		{ key: "profile", label: completeness.label, tone: completeness.tone },
@@ -434,16 +436,7 @@ export function AssetCard({
 					</div>
 					<div className="h-1.5 overflow-hidden rounded-full bg-surface-soft">
 						<div
-							className={cn(
-								"h-full rounded-full",
-								completeness.tone === "danger"
-									? "bg-red-500"
-									: completeness.tone === "warning"
-										? "bg-amber-500"
-										: completeness.tone === "ok"
-											? "bg-emerald-500"
-											: "bg-muted-foreground/45"
-							)}
+							className={cn("h-full rounded-full", completenessLevel.barClassName)}
 							style={{ width: `${completeness.score}%` }}
 						/>
 					</div>
@@ -466,7 +459,9 @@ export function AssetCard({
 				</div>
 				<div className="mt-auto flex items-center justify-between border-t border-border/70 pt-2">
 					<span className="text-xs">
-						{asset.type === "internet" ? getInternetStatusLabel(asset.status || "active") : getStatusLabel(asset.status || "active")}
+						{asset.type === "internet"
+							? getInternetStatusLabel(asset.status || "active")
+							: getStatusLabel(asset.status || "active")}
 					</span>
 					<div className="flex items-center gap-3 text-xs font-medium">
 						{onIdentify && !readOnly && (
@@ -533,25 +528,6 @@ function AssetCardMetaTag({ children, tone = "neutral" }: { children: ReactNode;
 			)}
 		>
 			{children}
-		</span>
-	)
-}
-
-function AssetCompletenessScoreTag({ score, tone }: { score: number; tone: AssetLifecycleTone }) {
-	return (
-		<span
-			className={cn(
-				"inline-flex w-11 shrink-0 justify-center rounded-md border px-1 py-0.5 text-[11px] font-medium tabular-nums",
-				tone === "danger"
-					? "border-red-200 bg-red-50 text-red-700"
-					: tone === "warning"
-						? "border-amber-200 bg-amber-50 text-amber-700"
-						: tone === "ok"
-							? "border-emerald-200 bg-emerald-50 text-emerald-700"
-							: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-300"
-			)}
-		>
-			{score}%
 		</span>
 	)
 }

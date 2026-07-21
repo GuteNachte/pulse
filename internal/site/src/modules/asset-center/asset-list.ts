@@ -18,6 +18,7 @@ import type {
 	SystemRecord,
 	WebsiteMonitorRecord,
 } from "@/types"
+import { getAssetCompletenessLevel } from "./asset-completeness-level"
 
 export type AssetMonitorFilter = "all" | "monitored" | "unmonitored" | "monitorable"
 export type AssetProfileFilter = "all" | "complete" | "usable" | "attention" | "incomplete" | "critical"
@@ -198,16 +199,17 @@ function matchesProfileFilter(asset: AssetRecord, filter: AssetProfileFilter, in
 	if (filter === "all") return true
 	const context = { hasInternetUplink: internetUplinkAssetIds?.has(asset.id) }
 	const completeness = getAssetCompleteness(asset, context)
+	const level = getAssetCompletenessLevel(completeness.score)
 	switch (filter) {
 		case "complete":
-			return completeness.score >= 90
+			return level.key === "complete"
 		case "usable":
-			return completeness.score >= 70 && completeness.score < 90
+			return level.key === "usable"
 		case "attention":
 			return needsAssetProfileAttention(asset, context)
 		case "incomplete":
-			return completeness.score >= 45 && completeness.score < 70
+			return level.key === "incomplete"
 		case "critical":
-			return completeness.score < 45
+			return level.key === "critical"
 	}
 }

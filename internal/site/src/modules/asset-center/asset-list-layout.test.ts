@@ -12,17 +12,19 @@ assert.match(assetListDesktopGridClassName, /minmax\(12rem,1\.25fr\)/)
 assert.match(assetListDesktopGridClassName, /minmax\(10rem/)
 
 const assetCardSource = readFileSync(new URL("./components/asset-card.tsx", import.meta.url), "utf8")
+const scoreTagSource = readFileSync(new URL("./components/asset-completeness-score-tag.tsx", import.meta.url), "utf8")
 assert.ok(
 	assetCardSource.indexOf("<AssetNetworkUplinkCell") < assetCardSource.indexOf("{network.accessLabel}"),
 	"资产行应先显示网络上联，再显示网络接入方式"
 )
 assert.ok(
-	assetCardSource.includes("<AssetCompletenessScoreTag score={completeness.score} tone={completeness.tone} />"),
+	assetCardSource.includes("<AssetCompletenessScoreTag score={completeness.score} />"),
 	"资料完整度百分比应使用统一标签组件"
 )
-for (const className of ["w-11", "justify-center", "tabular-nums"]) {
-	assert.ok(assetCardSource.includes(className), `资料完整度标签缺少固定尺寸样式 ${className}`)
+for (const className of ["h-5", "w-11", "items-center", "justify-center", "font-mono", "tabular-nums"]) {
+	assert.ok(scoreTagSource.includes(className), `资料完整度标签缺少固定尺寸样式 ${className}`)
 }
-assert.ok(assetCardSource.includes("border-sky-200 bg-sky-50 text-sky-700"), "资料可用状态应使用清晰且独立的蓝色标签")
+assert.ok(scoreTagSource.includes("h-5 w-11"), "资料完整度标签必须固定为 44 × 20px")
+assert.ok(assetCardSource.includes("grid-cols-[minmax(0,1fr)_2.75rem]"), "资料完整度应占据列表状态列最右侧固定槽位")
 
 console.log("asset list layout contract passed")

@@ -11,6 +11,7 @@ import {
 	isPhoneVariantSpecRequired,
 } from "./asset-schema.ts"
 import { formatInternetBandwidth, getAssetTypeOptionLabel, getInternetOptionLabel } from "./asset-type-specs.ts"
+import { getAssetCompletenessLevel, type AssetCompletenessTone } from "./asset-completeness-level.ts"
 
 export function getInternetBandwidthLabel(asset: AssetRecord) {
 	const down = getMetadataNumber(asset.metadata, "down_mbps")
@@ -26,7 +27,7 @@ export function getAssetLocationLabel(asset: AssetRecord) {
 	return asset.location?.trim() || getMetadataString(asset.metadata, "room") || "未填写位置"
 }
 
-export type AssetLifecycleTone = "neutral" | "ok" | "warning" | "danger"
+export type AssetLifecycleTone = AssetCompletenessTone
 
 export type AssetCompletenessStatus = {
 	score: number
@@ -46,10 +47,8 @@ export function getAssetCompleteness(
 	const checks = getAssetCompletenessChecks(asset, context)
 	const missing = checks.filter((check) => !check.ok).map((check) => check.label)
 	const score = checks.length > 0 ? Math.round(((checks.length - missing.length) / checks.length) * 100) : 100
-	if (score >= 90) return { score, label: "资料完整", tone: "ok", missing }
-	if (score >= 70) return { score, label: "资料可用", tone: "neutral", missing }
-	if (score >= 45) return { score, label: "资料待补", tone: "warning", missing }
-	return { score, label: "资料缺口大", tone: "danger", missing }
+	const level = getAssetCompletenessLevel(score)
+	return { score, label: level.label, tone: level.tone, missing }
 }
 
 export function needsAssetProfileAttention(asset: AssetRecord, context: AssetCompletenessContext = {}) {
