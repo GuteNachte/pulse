@@ -17,6 +17,7 @@ assert.deepEqual(
 	internetAssetTypeSpec.sections.flatMap((section) => section.fields.map((field) => field.key)),
 	[
 		"vendor",
+		"role",
 		"access_technology",
 		"auth_mode",
 		"down_mbps",
@@ -31,10 +32,16 @@ assert.deepEqual(
 		"notes",
 	]
 )
-assert.deepEqual(internetAssetTypeSpec.providerOptions.map((option) => option.label), ["中国电信", "中国联通", "中国移动"])
-assert.deepEqual(internetAssetTypeSpec.statusOptions.map((option) => option.value), ["active", "inactive", "retired"])
+assert.deepEqual(
+	internetAssetTypeSpec.providerOptions.map((option) => option.label),
+	["中国电信", "中国联通", "中国移动"]
+)
+assert.deepEqual(
+	internetAssetTypeSpec.statusOptions.map((option) => option.value),
+	["active", "inactive", "retired"]
+)
 assert.equal(internetAssetTypeSpec.notApplicable.location, true)
-assert.equal(internetAssetTypeSpec.notApplicable.role, true)
+assert.equal(internetAssetTypeSpec.notApplicable.role, false)
 assert.equal(internetAssetTypeSpec.notApplicable.interfaces, true)
 assert.equal(internetAssetTypeSpec.detailTitle, "线路档案")
 assert.equal(normalizeInternetProvider("联通"), "中国联通")
@@ -46,7 +53,7 @@ assert.equal(getInternetStatusLabel("inactive"), "暂停服务")
 assert.equal(getInternetStatusLabel("retired"), "已注销")
 assert.deepEqual(getAssetTypeCapabilities("internet"), {
 	showLocation: false,
-	showRole: false,
+	showRole: true,
 	showHardware: false,
 	showInterfaces: false,
 })
@@ -82,18 +89,15 @@ assert.deepEqual(
 )
 
 const ontFields = ontAssetTypeSpec.sections.flatMap((section) => section.fields.map((field) => field.key))
-const ontLanSubnetField = ontAssetTypeSpec.sections.flatMap((section) => section.fields).find((field) => field.key === "lan_subnet")
-assert.deepEqual(ontAssetTypeSpec.sections.map((section) => section.title), [
-	"身份与归属",
-	"光纤接入",
-	"路由与管理",
-	"无线网络",
-	"有线网络",
-	"其他端口与电源",
-	"设备身份标识",
-	"备注",
-])
+const ontLanSubnetField = ontAssetTypeSpec.sections
+	.flatMap((section) => section.fields)
+	.find((field) => field.key === "lan_subnet")
+assert.deepEqual(
+	ontAssetTypeSpec.sections.map((section) => section.title),
+	["身份与归属", "光纤接入", "路由与管理", "无线网络", "有线网络", "其他端口与电源", "设备身份标识", "备注"]
+)
 assert.equal(new Set(ontFields).size, ontFields.length)
+assert.equal(ontFields.includes("role"), true)
 assert.equal(ontLanSubnetField?.placeholder, "例如 192.168.1.0/24")
 assert.equal(ontLanSubnetField?.pattern, "(?:\\d{1,3}\\.){3}\\d{1,3}/(?:[0-9]|[12][0-9]|3[0-2])")
 assert.deepEqual(
@@ -141,8 +145,11 @@ assert.deepEqual(
 const switchSpec = getAssetTypeSpec("switch")
 assert.ok(switchSpec)
 assert.equal(switchSpec.detailTitle, "交换机档案")
+assert.equal(switchSpec.notApplicable.role, false)
 const switchFields = switchSpec.sections.flatMap((section) => section.fields.map((field) => field.key))
 for (const key of [
+	"role",
+	"official_url",
 	"management_level",
 	"management_access",
 	"ethernet_port_count",
@@ -169,8 +176,10 @@ for (const key of [
 	"vlan_status",
 	"port_isolation_status",
 	"link_aggregation_status",
-]) assert.equal(switchFields.includes(key), true, "交换机规格缺少 " + key)
-for (const key of ["poe_status", "poe_standard", "poe_budget_w"]) assert.equal(switchFields.includes(key), false, "交换机规格不应包含 " + key)
+])
+	assert.equal(switchFields.includes(key), true, `交换机规格缺少 ${key}`)
+for (const key of ["poe_status", "poe_standard", "poe_budget_w"])
+	assert.equal(switchFields.includes(key), false, `交换机规格不应包含 ${key}`)
 assert.equal(switchFields.includes("wifi_standard"), false)
 assert.equal(switchFields.includes("wan_port_count"), false)
 assert.equal(getAssetTypeOptionLabel("switch", "management_level", "smart"), "轻管理")

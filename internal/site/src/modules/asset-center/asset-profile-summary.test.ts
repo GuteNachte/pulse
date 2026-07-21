@@ -57,7 +57,7 @@ const internet = {
 } as unknown as AssetRecord
 
 assertEqual(getAssetCompleteness(internet, { hasInternetUplink: false }), {
-	score: 88,
+	score: 89,
 	label: "资料可用",
 	tone: "neutral",
 	missing: ["接入设备"],
@@ -71,10 +71,17 @@ assertEqual(getAssetCompleteness(internet, { hasInternetUplink: true }), {
 assertEqual(getAssetLocationLabel(internet), "无")
 assertEqual(getAssetLocationLabel(phone), "家 / 卧室")
 assertEqual(
-	[...buildInternetUplinkAssetIds([
-		{ source_asset: "asset-internet", target_asset: "router-1", kind: "connected_to", metadata: { link_kind: "internet" } },
-		{ source_asset: "other", target_asset: "router-1", kind: "connected_to", metadata: { link_kind: "ethernet" } },
-	] as never[])],
+	[
+		...buildInternetUplinkAssetIds([
+			{
+				source_asset: "asset-internet",
+				target_asset: "router-1",
+				kind: "connected_to",
+				metadata: { link_kind: "internet" },
+			},
+			{ source_asset: "other", target_asset: "router-1", kind: "connected_to", metadata: { link_kind: "ethernet" } },
+		] as never[]),
+	],
 	["asset-internet"]
 )
 
@@ -86,6 +93,7 @@ const ont = {
 	model: "V271-20",
 	status: "active",
 	location: "家 / 弱电箱",
+	role: "家庭主路由 / 主网关",
 	metadata: {
 		product_series: "Huawei OptiXstar",
 		carrier: "中国联通",
@@ -107,3 +115,31 @@ assertEqual(getAssetSummaryRows(ont), [
 	{ label: "位置", value: "家 / 弱电箱" },
 ])
 assertEqual(getAssetCompleteness(ont).missing.includes("内部型号 / 搜索代码"), false)
+assertEqual(getAssetCompleteness({ ...ont, role: "" } as unknown as AssetRecord).missing.includes("用途 / 角色"), true)
+
+const networkSwitch = {
+	id: "asset-switch",
+	type: "switch",
+	name: "家庭汇聚交换机",
+	vendor: "绿联",
+	model: "CM754-15812",
+	status: "active",
+	location: "家 / 弱电箱",
+	role: "家庭网络汇聚交换机",
+	management_ip: "192.168.1.150",
+	metadata: {
+		official_url: "https://www.lulian.cn/product/1738.html",
+		mac: "AA:BB:CC:DD:EE:FF",
+		ethernet_port_count: 8,
+		optical_port_count: 1,
+		default_ethernet_speed_mbps: 2500,
+		default_optical_speed_mbps: 10000,
+	},
+} as unknown as AssetRecord
+
+assertEqual(getAssetCompleteness(networkSwitch), {
+	score: 100,
+	label: "资料完整",
+	tone: "ok",
+	missing: [],
+})

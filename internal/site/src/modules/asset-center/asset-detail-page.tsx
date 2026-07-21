@@ -37,7 +37,6 @@ import {
 	isPhoneVariantSpecRequired,
 } from "./asset-schema"
 import {
-	getAssetTypeOptionLabel,
 	getInternetStatusLabel,
 	normalizeInternetProvider,
 	validateInternetAssetValues,
@@ -652,10 +651,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				return
 			}
 		}
-		const normalizedRole =
-			targetType === "ont"
-				? getAssetTypeOptionLabel("ont", "operating_role", String(metadata.operating_role ?? ""))
-				: form.get("role")?.toString().trim() || ""
+		const normalizedRole = form.get("role")?.toString().trim() || ""
 		setSaving(true)
 		try {
 			await pb.collection("assets").update(asset.id, {
@@ -670,7 +666,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				serial_number: form.get("serial_number")?.toString().trim() || "",
 				management_ip: managementIp,
 				location: targetType === "internet" ? asset.location || "" : form.get("location")?.toString().trim() || "",
-				role: targetType === "internet" ? asset.role || "" : normalizedRole,
+				role: normalizedRole,
 				notes: form.get("notes")?.toString().trim() || "",
 				metadata,
 			})
@@ -1210,7 +1206,11 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 				<DialogContent className="max-w-3xl">
 					<DialogHeader>
 						<DialogTitle>{asset.type === "switch" ? "网口设置" : "网卡管理"}</DialogTitle>
-						<DialogDescription>{asset.type === "switch" ? "逐口维护端口角色、支持速率、协商速率、启用与接线状态。" : "维护这个资产的全部网卡、接入方式、速率和当前接入状态。"}</DialogDescription>
+						<DialogDescription>
+							{asset.type === "switch"
+								? "逐口维护端口角色、支持速率、协商速率、启用与接线状态。"
+								: "维护这个资产的全部网卡、接入方式、速率和当前接入状态。"}
+						</DialogDescription>
 					</DialogHeader>
 					<AssetInterfaceManager
 						interfaces={state.interfaces}

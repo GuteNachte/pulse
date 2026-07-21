@@ -48,9 +48,9 @@ function buildAssetShowcaseTags(asset: AssetRecord) {
 
 	if (asset.type !== "internet") {
 		add("位置", asset.location || "未填写", asset.location ? "strong" : "neutral")
-		add("用途", asset.role || "未填写", asset.role ? "strong" : "neutral")
 		add("颜色", color)
 	}
+	add("用途", asset.role || "未填写", asset.role ? "strong" : "neutral")
 	asset.tags?.slice(0, 4).forEach((tag) => {
 		add("标签", tag)
 	})

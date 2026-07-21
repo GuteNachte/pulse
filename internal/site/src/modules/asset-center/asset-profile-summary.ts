@@ -39,7 +39,10 @@ export type AssetCompletenessContext = {
 	hasInternetUplink?: boolean
 }
 
-export function getAssetCompleteness(asset: AssetRecord, context: AssetCompletenessContext = {}): AssetCompletenessStatus {
+export function getAssetCompleteness(
+	asset: AssetRecord,
+	context: AssetCompletenessContext = {}
+): AssetCompletenessStatus {
 	const checks = getAssetCompletenessChecks(asset, context)
 	const missing = checks.filter((check) => !check.ok).map((check) => check.label)
 	const score = checks.length > 0 ? Math.round(((checks.length - missing.length) / checks.length) * 100) : 100
@@ -76,7 +79,11 @@ export function getAssetSummaryRows(asset: AssetRecord): { label: string; value:
 	const metadata = asset.metadata
 	if (asset.type === "internet") {
 		pushRow(rows, "运营商", asset.vendor)
-		pushRow(rows, "线路技术", getInternetOptionLabel("access_technology", getMetadataString(metadata, "access_technology")))
+		pushRow(
+			rows,
+			"线路技术",
+			getInternetOptionLabel("access_technology", getMetadataString(metadata, "access_technology"))
+		)
 		pushRow(rows, "认证方式", getInternetOptionLabel("auth_mode", getMetadataString(metadata, "auth_mode")))
 		pushRow(rows, "带宽", getInternetBandwidthLabel(asset), true)
 		pushRow(
@@ -209,6 +216,7 @@ function getAssetCompletenessChecks(asset: AssetRecord, context: AssetCompletene
 			{ label: "资源名称", ok: Boolean(asset.name?.trim()) },
 			{ label: "运营商", ok: Boolean(asset.vendor?.trim()) },
 			{ label: "使用状态", ok: Boolean(asset.status) },
+			{ label: "用途 / 角色", ok: Boolean(asset.role?.trim()) },
 			{ label: "线路接入技术", ok: Boolean(getMetadataString(metadata, "access_technology")) },
 			{ label: "联网认证方式", ok: Boolean(getMetadataString(metadata, "auth_mode")) },
 			{ label: "下行带宽", ok: (getMetadataNumber(metadata, "down_mbps") ?? 0) > 0 },
@@ -227,6 +235,7 @@ function getAssetCompletenessChecks(asset: AssetRecord, context: AssetCompletene
 	if (asset.type === "ont") {
 		return [
 			{ label: "资产名称", ok: Boolean(asset.name?.trim()) },
+			{ label: "用途 / 角色", ok: Boolean(asset.role?.trim()) },
 			{ label: "厂商 / 品牌", ok: Boolean(asset.vendor?.trim()) },
 			{ label: "型号", ok: Boolean(asset.model?.trim()) },
 			{ label: "位置", ok: Boolean(asset.location?.trim()) },
@@ -237,6 +246,25 @@ function getAssetCompletenessChecks(asset: AssetRecord, context: AssetCompletene
 			{ label: "无线标准", ok: Boolean(getMetadataString(metadata, "wifi_standard")) },
 			{ label: "LAN 端口", ok: (getMetadataNumber(metadata, "lan_port_count") ?? 0) > 0 },
 		]
+	}
+	if (asset.type === "switch") {
+		const portCount =
+			(getMetadataNumber(metadata, "ethernet_port_count") ?? 0) +
+			(getMetadataNumber(metadata, "optical_port_count") ?? 0) +
+			(getMetadataNumber(metadata, "other_port_count") ?? 0)
+		const hasPortSpeed =
+			(getMetadataNumber(metadata, "default_ethernet_speed_mbps") ?? 0) > 0 ||
+			(getMetadataNumber(metadata, "default_optical_speed_mbps") ?? 0) > 0
+		checks.push(
+			{ label: "厂商 / 品牌", ok: Boolean(asset.vendor?.trim()) },
+			{ label: "型号", ok: Boolean(asset.model?.trim()) },
+			{ label: "厂家资料页", ok: hasOfficialReference },
+			{ label: "IPv4", ok: Boolean(getMetadataString(metadata, "fixed_ipv4") || asset.management_ip?.trim()) },
+			{ label: "MAC", ok: Boolean(getMetadataString(metadata, "mac")) },
+			{ label: "端口数量", ok: portCount > 0 },
+			{ label: "端口速率", ok: hasPortSpeed }
+		)
+		return checks
 	}
 	if (NETWORK_ASSET_TYPES.includes(asset.type)) {
 		checks.push(
@@ -378,4 +406,3 @@ function formatSpeed(value?: number) {
 	}
 	return `${value}M`
 }
-

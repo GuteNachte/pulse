@@ -336,13 +336,13 @@ export function AssetEditWorkbench({
 												onChange={(value) => setStatusValue(value as NonNullable<AssetRecord["status"]>)}
 											/>
 										)}
-									{isOnt ? (
-										<>
-											{renderUniversalArchiveField("carrier")}
-											{renderUniversalArchiveField("operating_role")}
-										</>
-									) : null}
-									{capabilities.showRole && !isOnt ? renderUniversalArchiveField("role") : null}
+										{isOnt ? (
+											<>
+												{renderUniversalArchiveField("carrier")}
+												{renderUniversalArchiveField("operating_role")}
+											</>
+										) : null}
+										{capabilities.showRole ? renderUniversalArchiveField("role") : null}
 										{capabilities.showHardware ? renderUniversalArchiveField("official_url") : null}
 									</>
 								)}

@@ -42,6 +42,7 @@ assert.equal(serviceRequiredFields.has("role"), true)
 const internetRequiredFields = getRequiredAssetProfileFieldKeys("internet")
 assert.equal(internetRequiredFields.has("name"), true)
 assert.equal(internetRequiredFields.has("vendor"), true)
+assert.equal(internetRequiredFields.has("role"), true)
 assert.equal(internetRequiredFields.has("asset_tag"), true)
 assert.equal(internetRequiredFields.has("type"), false)
 assert.equal(internetRequiredFields.has("model"), false)
@@ -62,7 +63,18 @@ assert.deepEqual(
 )
 
 const ontRequiredFields = getRequiredAssetProfileFieldKeys("ont")
-for (const key of ["name", "type", "vendor", "model", "status", "location", "asset_tag", "fixed_ipv4", "carrier", "operating_role"]) {
+for (const key of [
+	"name",
+	"type",
+	"vendor",
+	"model",
+	"status",
+	"location",
+	"asset_tag",
+	"fixed_ipv4",
+	"carrier",
+	"operating_role",
+]) {
 	assert.equal(ontRequiredFields.has(key), true, `ONT 顶部字段缺少 ${key}`)
 }
 assert.deepEqual(

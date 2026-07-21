@@ -138,7 +138,7 @@ export const internetAssetTypeSpec: AssetTypeSpec = {
 	detailTitle: "线路档案",
 	providerOptions: internetProviderOptions,
 	statusOptions: internetStatusOptions,
-	notApplicable: { location: true, role: true, interfaces: true, hardware: true },
+	notApplicable: { location: true, role: false, interfaces: true, hardware: true },
 	sections: [
 		{
 			title: "基础资料",
@@ -151,6 +151,14 @@ export const internetAssetTypeSpec: AssetTypeSpec = {
 					source: "asset",
 					type: "select",
 					options: internetProviderOptions,
+				},
+				{
+					key: "role",
+					label: "用途 / 角色",
+					group: "基础资料",
+					inputMode: "manual_required",
+					source: "asset",
+					placeholder: "例如 家庭宽带主线路",
 				},
 			],
 		},
@@ -292,6 +300,14 @@ export const ontAssetTypeSpec: AssetTypeSpec = {
 		{
 			title: "身份与归属",
 			fields: [
+				{
+					key: "role",
+					label: "用途 / 角色",
+					group: "身份与归属",
+					inputMode: "manual_required",
+					source: "asset",
+					placeholder: "例如 家庭主路由 / 主网关",
+				},
 				capturedField("product_series", "产品系列", "身份与归属"),
 				fixedChoiceField("carrier", "运营商", "身份与归属", ontCarrierOptions),
 				fixedChoiceField("operating_role", "工作角色", "身份与归属", ontOperatingRoleOptions),
@@ -413,46 +429,202 @@ export const switchAssetTypeSpec: AssetTypeSpec = {
 	detailTitle: "交换机档案",
 	providerOptions: [],
 	statusOptions: ontStatusOptions,
-	notApplicable: { location: false, role: true, interfaces: false, hardware: false },
+	notApplicable: { location: false, role: false, interfaces: false, hardware: false },
 	sections: [
 		{
 			title: "接入信息",
 			fields: [
+				{
+					key: "role",
+					label: "用途 / 角色",
+					group: "接入信息",
+					inputMode: "manual_required",
+					source: "asset",
+					placeholder: "例如 家庭网络汇聚交换机",
+				},
+				{
+					key: "official_url",
+					label: "厂家资料页",
+					group: "接入信息",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "url",
+				},
 				{ key: "fixed_ipv4", label: "管理 IPv4", group: "接入信息", inputMode: "manual_optional", source: "metadata" },
 				{ key: "fixed_ipv6", label: "管理 IPv6", group: "接入信息", inputMode: "manual_optional", source: "metadata" },
 				{ key: "mac", label: "MAC", group: "接入信息", inputMode: "manual_optional", source: "metadata" },
-				{ key: "management_url", label: "管理 URL", group: "接入信息", inputMode: "manual_optional", source: "metadata", type: "url" },
+				{
+					key: "management_url",
+					label: "管理 URL",
+					group: "接入信息",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "url",
+				},
 			],
 		},
 		{
 			title: "硬件与端口能力",
 			fields: [
-				{ key: "ethernet_port_count", label: "电口数量", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
-				{ key: "optical_port_count", label: "光口数量", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
-				{ key: "other_port_count", label: "其他端口数量", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
-				{ key: "default_ethernet_speed_mbps", label: "默认电口速率 Mbps", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
-				{ key: "default_optical_speed_mbps", label: "默认光口速率 Mbps", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
-				{ key: "switching_capacity_gbps", label: "交换容量 Gbps", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", type: "number" },
-				{ key: "ethernet_supported_speeds", label: "电口支持速率", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", placeholder: "10 / 100 / 1000 / 2500 Mbps" },
-				{ key: "optical_supported_speeds", label: "光口支持速率", group: "硬件与端口能力", inputMode: "manual_optional", source: "metadata", placeholder: "10 Gbps" },
+				{
+					key: "ethernet_port_count",
+					label: "电口数量",
+					group: "硬件与端口能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "optical_port_count",
+					label: "光口数量",
+					group: "硬件与端口能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "other_port_count",
+					label: "其他端口数量",
+					group: "硬件与端口能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "default_ethernet_speed_mbps",
+					label: "默认电口速率 Mbps",
+					group: "硬件与端口能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "default_optical_speed_mbps",
+					label: "默认光口速率 Mbps",
+					group: "硬件与端口能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "switching_capacity_gbps",
+					label: "交换容量 Gbps",
+					group: "硬件与端口能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "ethernet_supported_speeds",
+					label: "电口支持速率",
+					group: "硬件与端口能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "10 / 100 / 1000 / 2500 Mbps",
+				},
+				{
+					key: "optical_supported_speeds",
+					label: "光口支持速率",
+					group: "硬件与端口能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "10 Gbps",
+				},
 				fixedChoiceField("power_mode", "供电方式", "硬件与端口能力", switchPowerModeOptions),
 			],
 		},
 		{
 			title: "设备与环境",
 			fields: [
-				{ key: "net_weight_g", label: "净重 g", group: "设备与环境", inputMode: "manual_optional", source: "metadata", type: "number" },
-				{ key: "dimensions_mm", label: "外观尺寸 mm", group: "设备与环境", inputMode: "manual_optional", source: "metadata", placeholder: "长 × 宽 × 高" },
-				{ key: "installation_method", label: "安装方式", group: "设备与环境", inputMode: "manual_optional", source: "metadata", placeholder: "桌面 / 壁挂" },
+				{
+					key: "net_weight_g",
+					label: "净重 g",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "dimensions_mm",
+					label: "外观尺寸 mm",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "长 × 宽 × 高",
+				},
+				{
+					key: "installation_method",
+					label: "安装方式",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "桌面 / 壁挂",
+				},
 				fixedChoiceField("forwarding_method", "转发方式", "设备与环境", switchForwardingMethodOptions),
-				{ key: "mac_table_entries", label: "MAC 地址表容量", group: "设备与环境", inputMode: "manual_optional", source: "metadata", type: "number" },
-				{ key: "lightning_protection_kv", label: "防雷等级 kV", group: "设备与环境", inputMode: "manual_optional", source: "metadata", type: "number" },
-				{ key: "power_input", label: "输入电源", group: "设备与环境", inputMode: "manual_optional", source: "metadata", placeholder: "12V 1.5A Max" },
-				{ key: "operating_temperature_range", label: "工作温度", group: "设备与环境", inputMode: "manual_optional", source: "metadata", placeholder: "0°C ~ 40°C" },
-				{ key: "operating_humidity_range", label: "工作湿度", group: "设备与环境", inputMode: "manual_optional", source: "metadata", placeholder: "10% ~ 90% RH 无凝结" },
-				{ key: "storage_temperature_range", label: "存储温度", group: "设备与环境", inputMode: "manual_optional", source: "metadata", placeholder: "-40°C ~ 70°C" },
-				{ key: "storage_humidity_range", label: "存储湿度", group: "设备与环境", inputMode: "manual_optional", source: "metadata", placeholder: "5% ~ 90% RH 无凝结" },
-				{ key: "warranty_months", label: "保修期 月", group: "设备与环境", inputMode: "manual_optional", source: "metadata", type: "number" },
+				{
+					key: "mac_table_entries",
+					label: "MAC 地址表容量",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "lightning_protection_kv",
+					label: "防雷等级 kV",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "power_input",
+					label: "输入电源",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "12V 1.5A Max",
+				},
+				{
+					key: "operating_temperature_range",
+					label: "工作温度",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "0°C ~ 40°C",
+				},
+				{
+					key: "operating_humidity_range",
+					label: "工作湿度",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "10% ~ 90% RH 无凝结",
+				},
+				{
+					key: "storage_temperature_range",
+					label: "存储温度",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "-40°C ~ 70°C",
+				},
+				{
+					key: "storage_humidity_range",
+					label: "存储湿度",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "5% ~ 90% RH 无凝结",
+				},
+				{
+					key: "warranty_months",
+					label: "保修期 月",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
 			],
 		},
 		{
@@ -465,7 +637,12 @@ export const switchAssetTypeSpec: AssetTypeSpec = {
 				fixedChoiceField("link_aggregation_status", "链路聚合", "管理与网络能力", switchFeatureStatusOptions),
 			],
 		},
-		{ title: "备注", fields: [{ key: "notes", label: "备注", group: "备注", inputMode: "manual_optional", source: "asset", span: "full" }] },
+		{
+			title: "备注",
+			fields: [
+				{ key: "notes", label: "备注", group: "备注", inputMode: "manual_optional", source: "asset", span: "full" },
+			],
+		},
 	],
 }
 
@@ -527,7 +704,9 @@ export function getInternetOptionLabel(fieldKey: string, value: string) {
 }
 
 export function getAssetTypeOptionLabel(type: AssetType, fieldKey: string, value: string) {
-	const field = getAssetTypeSpec(type)?.sections.flatMap((section) => section.fields).find((item) => item.key === fieldKey)
+	const field = getAssetTypeSpec(type)
+		?.sections.flatMap((section) => section.fields)
+		.find((item) => item.key === fieldKey)
 	return field?.options?.find((option) => option.value === value)?.label ?? value
 }
 
@@ -546,7 +725,7 @@ const sensitiveAssetMetadataKeys = new Set([
 export function validateAssetImportMetadata(type: AssetType, metadata: Record<string, string>) {
 	const errors: string[] = []
 	const allowed =
-		 type === "ont" || type === "switch"
+		type === "ont" || type === "switch"
 			? new Set([
 					"asset_tag",
 					"official_url",

@@ -4,6 +4,7 @@ import { buildInternetResourceName, getAssetFormSections, isInternetResourceAsse
 const internetFields = getAssetFormSections("internet").flatMap((section) => section.fields.map((field) => field.key))
 assert.deepEqual(internetFields, [
 	"vendor",
+	"role",
 	"access_technology",
 	"auth_mode",
 	"down_mbps",

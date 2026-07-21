@@ -19,7 +19,7 @@ export function getRequiredAssetProfileFieldKeys(type: AssetRecord["type"]) {
 		return new Set(["name", "type", "location", "status", "role"])
 	}
 	if (type === "internet") {
-		return new Set(["name", "vendor", "asset_tag"])
+		return new Set(["name", "vendor", "asset_tag", "role"])
 	}
 	const keys = new Set([
 		"name",
