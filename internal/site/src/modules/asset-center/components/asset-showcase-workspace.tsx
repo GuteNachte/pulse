@@ -137,7 +137,6 @@ function buildAssetRelationParameterGroup(
 	interfaces: AssetInterfaceRecord[],
 	relations: AssetRelationRecord[]
 ): AssetParameterGroup | undefined {
-	if (asset.type !== "internet" && asset.type !== "ont") return undefined
 	const relationRows = getAssetDetailRelationRows(asset.id, assets, interfaces, relations)
 	const rows =
 		asset.type === "internet" && relationRows.length === 0

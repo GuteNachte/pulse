@@ -56,8 +56,39 @@ assert.deepEqual(
 		] as never
 	),
 	[
-		{ label: "互联网接入", value: "宽带 · PON 上联" },
-		{ label: "无线终端", value: "手机 · 5 GHz Wi-Fi" },
+		{ label: "上联", value: "宽带 · PON 上联" },
+		{ label: "下联", value: "手机 · 5 GHz Wi-Fi" },
+	]
+)
+
+assert.deepEqual(
+	getAssetDetailRelationRows(
+		"switch",
+		assets as never,
+		[
+			{ id: "switch-uplink", asset: "switch", name: "电口 1", kind: "ethernet", metadata: { role: "uplink" } },
+			{ id: "switch-downlink", asset: "switch", name: "电口 4", kind: "ethernet", metadata: { role: "downlink" } },
+		] as never,
+		[
+			{
+				id: "switch-ont",
+				source_asset: "ont",
+				target_asset: "switch",
+				kind: "connected_to",
+				metadata: { link_kind: "ethernet", target_interface: "switch-uplink" },
+			},
+			{
+				id: "switch-host",
+				source_asset: "switch",
+				target_asset: "host",
+				kind: "connected_to",
+				metadata: { link_kind: "ethernet", source_interface: "switch-downlink" },
+			},
+		] as never
+	),
+	[
+		{ label: "上联", value: "光猫 · 电口 1" },
+		{ label: "下联", value: "主机 · 电口 4" },
 	]
 )
 

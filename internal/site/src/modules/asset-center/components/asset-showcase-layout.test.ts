@@ -49,6 +49,11 @@ assert.equal(
 	"access relationships must be composed into the right parameter cards"
 )
 assert.equal(
+	workspace.includes('asset.type !== "internet" && asset.type !== "ont"'),
+	false,
+	"every asset type with saved relationships must receive a right-side relationship card"
+)
+assert.equal(
 	workspace.includes("xl:sticky xl:top-4"),
 	true,
 	"desktop archive column must remain visible while the page scrolls"

@@ -1,4 +1,5 @@
 import { HOST_ASSET_TYPES, NETWORK_ASSET_TYPES, getAssetTypeLabel, getMetadataString } from "./asset-schema.ts"
+import { getAssetNetworkRelationDirection } from "./asset-network-uplink.ts"
 import { formatSpeed } from "./asset-runtime-hardware.ts"
 import type {
 	AssetInterfaceKind,
@@ -286,6 +287,7 @@ export function getAssetDetailRelationRows(
 	const assetMap = new Map(assets.map((item) => [item.id, item]))
 	const interfaceMap = new Map(interfaces.map((item) => [item.id, item]))
 	const linkKindPriority: Record<string, number> = { internet: 0, ethernet: 1, wifi: 2 }
+	const directionPriority = { uplink: 0, downlink: 1, ambiguous: 2 }
 	return relations
 		.filter((relation) => relation.source_asset === assetId || relation.target_asset === assetId)
 		.map((relation) => {
@@ -302,17 +304,21 @@ export function getAssetDetailRelationRows(
 				getMetadataString(relation.metadata, currentIsSource ? "target_interface" : "source_interface")
 			)
 			const linkKind = getMetadataString(relation.metadata, "link_kind")
+			const direction =
+				relation.kind === "connected_to" ? getAssetNetworkRelationDirection(assetId, relation, interfaceMap) : undefined
 			return {
 				label:
-					linkKind === "internet"
-						? "互联网接入"
-						: linkKind === "wifi"
-							? "无线终端"
-							: linkKind === "ethernet"
-								? "有线连接"
+					direction === "uplink"
+						? "上联"
+						: direction === "downlink"
+							? "下联"
+							: direction
+								? "方向待确认"
 								: getRelationKindLabel(relation.kind),
-				value: [peerAsset?.name ?? "未知资产", currentInterface?.name ?? peerInterface?.name].filter(Boolean).join(" · "),
-				priority: linkKindPriority[linkKind] ?? 9,
+				value: [peerAsset?.name ?? "未知资产", currentInterface?.name ?? peerInterface?.name]
+					.filter(Boolean)
+					.join(" · "),
+				priority: direction ? directionPriority[direction] * 10 + (linkKindPriority[linkKind] ?? 9) : 99,
 			}
 		})
 		.sort((left, right) => left.priority - right.priority || left.value.localeCompare(right.value, "zh-CN"))

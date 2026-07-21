@@ -7,6 +7,8 @@ export type AssetNetworkUplinkDisplay = {
 	peerAssetIds: string[]
 }
 
+export type AssetNetworkRelationDirection = "uplink" | "downlink" | "ambiguous"
+
 export const unlinkedAssetNetworkUplink: AssetNetworkUplinkDisplay = {
 	mode: "unlinked",
 	label: "未关联",
@@ -48,7 +50,7 @@ function buildAssetNetworkUplink(
 	if (relations.length === 0) return unlinkedAssetNetworkUplink
 
 	const peerAssetIds = relations
-		.filter((relation) => getUplinkDirection(asset.id, relation, interfaceMap) > 0)
+		.filter((relation) => getAssetNetworkRelationDirection(asset.id, relation, interfaceMap) === "uplink")
 		.map((relation) => getPeerAssetId(asset.id, relation))
 		.filter((peerAssetId, index, values) => Boolean(assetMap.get(peerAssetId)) && values.indexOf(peerAssetId) === index)
 	const peerAssets = peerAssetIds
@@ -66,11 +68,11 @@ function buildAssetNetworkUplink(
 	}
 }
 
-function getUplinkDirection(
+export function getAssetNetworkRelationDirection(
 	assetId: string,
 	relation: AssetRelationRecord,
 	interfaceMap: Map<string, AssetInterfaceRecord>
-) {
+): AssetNetworkRelationDirection {
 	const currentIsSource = relation.source_asset === assetId
 	const currentInterface = interfaceMap.get(
 		getMetadataString(relation.metadata, currentIsSource ? "source_interface" : "target_interface")
@@ -81,15 +83,15 @@ function getUplinkDirection(
 	const currentRole = getMetadataString(currentInterface?.metadata, "role")
 	const peerRole = getMetadataString(peerInterface?.metadata, "role")
 
-	if (currentRole === "uplink") return 1
-	if (currentRole === "downlink") return -1
-	if (peerRole === "downlink") return 1
-	if (peerRole === "uplink") return -1
+	if (currentRole === "uplink") return "uplink"
+	if (currentRole === "downlink") return "downlink"
+	if (peerRole === "downlink") return "uplink"
+	if (peerRole === "uplink") return "downlink"
 
 	const linkKind = getMetadataString(relation.metadata, "link_kind")
-	if (linkKind === "internet") return currentIsSource ? -1 : 1
-	if (linkKind === "wifi") return currentIsSource ? 1 : -1
-	return 0
+	if (linkKind === "internet") return currentIsSource ? "downlink" : "uplink"
+	if (linkKind === "wifi") return currentIsSource ? "uplink" : "downlink"
+	return "ambiguous"
 }
 
 function getPeerAssetId(assetId: string, relation: AssetRelationRecord) {
