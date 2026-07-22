@@ -49,7 +49,7 @@ export default function Navbar() {
 	const isActiveRoute = (route: string, href?: string) => page?.route === route || (href ? currentPath === href : false)
 	const assetsPath = getPagePath($router, "assets")
 	const smarthomePath = getPagePath($router, "smarthome")
-	const networkPath = getPagePath($router, "network")
+	const networkPath = getPagePath($router, "network", { domain: "home" })
 	const containersPath = getPagePath($router, "containers")
 	const clientsPath = getPagePath($router, "clients")
 	const websitesPath = getPagePath($router, "websites")

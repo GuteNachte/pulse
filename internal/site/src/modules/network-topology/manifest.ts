@@ -10,7 +10,7 @@ export const networkTopologyModule: PulseModuleManifest = {
 	defaultEnabled: true,
 	required: false,
 	dependencies: ["asset-center"],
-	routes: ["/network", "/"],
+	routes: ["/network/home", "/network/technology", "/"],
 	collections: ["assets", "asset_interfaces", "asset_relations", "network_layouts", "system_details"],
 	jobs: ["拓扑布局保存", "机器网卡叠加"],
 	agentCapabilities: ["网络详情", "基础流量"],
@@ -19,6 +19,9 @@ export const networkTopologyModule: PulseModuleManifest = {
 		"internal/site/src/components/routes/network.tsx",
 		"internal/site/src/components/routes/home-network-topology.tsx",
 		"internal/site/src/lib/network-topology.ts",
+		"internal/site/src/modules/network-topology/components/topology-workspace.tsx",
+		"internal/site/src/modules/network-topology/pulse-adapter.ts",
+		"internal/site/src/modules/network-topology/use-topology-workspace-data.ts",
 	],
 	icon: NetworkIcon,
 }

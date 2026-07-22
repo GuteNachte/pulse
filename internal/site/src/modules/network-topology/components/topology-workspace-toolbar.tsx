@@ -1,7 +1,8 @@
 import { Redo2Icon, SaveIcon, Undo2Icon, WandSparklesIcon } from "lucide-react"
+import { getPagePath } from "@nanostores/router"
 import { Button } from "../../../components/ui/button.tsx"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip.tsx"
-import { Link } from "../../../components/router.tsx"
+import { $router, Link } from "../../../components/router.tsx"
 import { cn } from "../../../lib/utils.ts"
 import type { TopologyDomain } from "../topology-domain.ts"
 
@@ -32,11 +33,12 @@ export function TopologyWorkspaceToolbar({
 }: TopologyWorkspaceToolbarProps) {
 	return (
 		<div className="flex min-h-12 min-w-0 flex-wrap items-center gap-2 border-b border-border bg-background px-3 py-1.5">
+			<h1 className="me-1 shrink-0 text-sm font-semibold">网络拓扑</h1>
 			<nav aria-label="网络拓扑页面" className="flex shrink-0 items-center gap-1 rounded-md bg-surface-soft p-0.5">
-				<NetworkLink href="/network/home" active={domain === "home"}>
+				<NetworkLink href={getPagePath($router, "network", { domain: "home" })} active={domain === "home"}>
 					家庭网络
 				</NetworkLink>
-				<NetworkLink href="/network/technology" active={domain === "technology"}>
+				<NetworkLink href={getPagePath($router, "network", { domain: "technology" })} active={domain === "technology"}>
 					科技网
 				</NetworkLink>
 			</nav>

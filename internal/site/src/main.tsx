@@ -95,7 +95,7 @@ const App = memo(() => {
 		return <NotFoundPage />
 	}
 
-	const pageParams = page.params as { id?: string; name?: unknown }
+	const pageParams = page.params as { id?: string; name?: unknown; domain?: unknown }
 	const settingsName = typeof pageParams.name === "string" ? pageParams.name : undefined
 	const moduleId = getModuleForAppRoute(page.route, settingsName)
 	if (moduleId && moduleSettings[moduleId]?.effectiveEnabled === false) {
@@ -109,7 +109,7 @@ const App = memo(() => {
 	} else if (page.route === "smarthome") {
 		return <Smarthome />
 	} else if (page.route === "network") {
-		return <NetworkTopology />
+		return <NetworkTopology domain={pageParams.domain} />
 	} else if (page.route === "clients") {
 		return <Clients />
 	} else if (page.route === "system") {

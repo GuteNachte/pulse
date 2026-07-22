@@ -5,7 +5,7 @@ const routePaths = {
 	asset: "/assets/:id",
 	assets: "/assets",
 	smarthome: "/smarthome",
-	network: "/network",
+	network: "/network/:domain?",
 	clients: "/clients",
 	containers: "/containers",
 	websites: "/websites",

@@ -1,3 +1,4 @@
+import "@xyflow/react/dist/style.css"
 import {
 	Background,
 	BackgroundVariant,
@@ -14,6 +15,7 @@ import {
 	type Viewport,
 } from "@xyflow/react"
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react"
+import { cn } from "../../../lib/utils.ts"
 import { createSuggestedLayout } from "../auto-layout.ts"
 import type { TopologyLayoutV2, TopologyPoint } from "../layout-v2.ts"
 import type { SaveTopologyLayoutResult } from "../layout-persistence.ts"
@@ -35,6 +37,8 @@ export type TopologyWorkspaceProps = {
 	layout: TopologyLayoutV2
 	loadedUpdated?: string
 	readOnly?: boolean
+	overview?: boolean
+	layoutPersisted?: boolean
 	onSave?: (state: TopologyWorkspaceState) => Promise<SaveTopologyLayoutResult>
 	onConnect?: (connection: Connection) => void
 	onNodeOpen?: (node: Node<TopologyFreeNodeData>) => void
@@ -57,6 +61,8 @@ function TopologyWorkspaceCanvas({
 	layout,
 	loadedUpdated,
 	readOnly = false,
+	overview = false,
+	layoutPersisted = true,
 	onSave,
 	onConnect,
 	onNodeOpen,
@@ -144,6 +150,7 @@ function TopologyWorkspaceCanvas({
 		}),
 		[graph.edges, graph.nodes]
 	)
+	const effectiveDirty = state.dirty || !layoutPersisted
 
 	const handleAutoLayout = useCallback(() => {
 		dispatch({ type: "apply-snapshot", snapshot: createSuggestedLayout(graph) })
@@ -177,7 +184,7 @@ function TopologyWorkspaceCanvas({
 		[graph.nodes, onEdgeOpen, readOnly]
 	)
 	const handleSave = useCallback(async () => {
-		if (!onSave || readOnly || !state.dirty) return
+		if (!onSave || readOnly || !effectiveDirty) return
 		dispatch({ type: "save-started" })
 		const result = await onSave(state)
 		if (result.status === "saved") {
@@ -187,29 +194,38 @@ function TopologyWorkspaceCanvas({
 		} else {
 			dispatch({ type: "save-failed", message: getErrorMessage(result.error) })
 		}
-	}, [onSave, readOnly, state])
+	}, [effectiveDirty, onSave, readOnly, state])
 	const handleMoveEnd = useCallback((_event: MouseEvent | TouchEvent | null, viewport: Viewport) => {
 		dispatch({ type: "set-viewport", viewport })
 	}, [])
 
 	return (
 		<>
-			<section className="grid min-h-[620px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
-				<TopologyWorkspaceToolbar
-					domain={domain}
-					stats={stats}
-					dirty={state.dirty}
-					readOnly={readOnly}
-					canUndo={state.canUndo}
-					canRedo={state.canRedo}
-					onUndo={() => dispatch({ type: "undo" })}
-					onRedo={() => dispatch({ type: "redo" })}
-					onAutoLayout={handleAutoLayout}
-					onSave={handleSave}
-				/>
+			<section
+				className={cn(
+					"grid overflow-hidden bg-background",
+					overview
+						? "h-[min(56vh,560px)] min-h-[420px] grid-rows-[minmax(0,1fr)]"
+						: "min-h-[620px] grid-rows-[auto_minmax(0,1fr)]"
+				)}
+			>
+				{overview ? null : (
+					<TopologyWorkspaceToolbar
+						domain={domain}
+						stats={stats}
+						dirty={effectiveDirty}
+						readOnly={readOnly}
+						canUndo={state.canUndo}
+						canRedo={state.canRedo}
+						onUndo={() => dispatch({ type: "undo" })}
+						onRedo={() => dispatch({ type: "redo" })}
+						onAutoLayout={handleAutoLayout}
+						onSave={handleSave}
+					/>
+				)}
 				<div className="min-h-0 bg-background">
 					<ReactFlow
-						className="pulse-topology-flow pulse-free-topology-flow"
+						className={cn("pulse-topology-flow pulse-free-topology-flow", overview && "pulse-topology-flow-readonly")}
 						nodes={nodes}
 						edges={edges}
 						nodeTypes={nodeTypes}
@@ -222,7 +238,11 @@ function TopologyWorkspaceCanvas({
 						fitViewOptions={{ padding: 0.18, maxZoom: 1 }}
 						nodesConnectable={!readOnly}
 						nodesDraggable={!readOnly}
-						elementsSelectable
+						elementsSelectable={!overview}
+						panOnDrag={!overview}
+						zoomOnScroll={!overview}
+						zoomOnPinch={!overview}
+						zoomOnDoubleClick={!overview}
 						onNodesChange={onNodesChange}
 						onEdgesChange={onEdgesChange}
 						onConnect={readOnly ? undefined : handleConnect}
@@ -231,10 +251,11 @@ function TopologyWorkspaceCanvas({
 						onNodeDragStop={(_event, node) =>
 							dispatch({ type: "move-node", id: node.id, position: { ...node.position } })
 						}
-						onMoveEnd={handleMoveEnd}
+						onMoveEnd={overview ? undefined : handleMoveEnd}
+						proOptions={{ hideAttribution: true }}
 					>
 						<Background variant={BackgroundVariant.Dots} gap={24} size={1.2} color="var(--border)" />
-						<Controls showInteractive={false} position="bottom-left" />
+						{overview ? null : <Controls showInteractive={false} position="bottom-left" />}
 					</ReactFlow>
 				</div>
 			</section>
