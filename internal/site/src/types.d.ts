@@ -923,7 +923,9 @@ export interface NetworkLayoutRecord extends RecordModel {
 	user: string
 	key: string
 	layout?: {
+		version?: 2
 		nodes?: Record<string, { x: number; y: number }>
+		edge_waypoints?: Record<string, { x: number; y: number }[]>
 		connection_modes?: Record<string, ("wired" | "wireless")[]>
 		selected?: string
 		viewport?: { x: number; y: number; zoom: number }
