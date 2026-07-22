@@ -28,6 +28,7 @@ export type TopologyWorkspaceState = {
 export type TopologyWorkspaceAction =
 	| { type: "move-node"; id: string; position: TopologyPoint }
 	| { type: "set-edge-waypoints"; id: string; waypoints: TopologyPoint[] }
+	| { type: "apply-snapshot"; snapshot: CanvasSnapshot }
 	| { type: "set-viewport"; viewport: TopologyViewport }
 	| { type: "undo" }
 	| { type: "redo" }
@@ -83,6 +84,8 @@ export function reduceWorkspace(
 					[action.id]: action.waypoints.map((point) => ({ ...point })),
 				},
 			})
+		case "apply-snapshot":
+			return pushSnapshot(state, action.snapshot)
 		case "set-viewport":
 			return finalizeState({
 				...state,

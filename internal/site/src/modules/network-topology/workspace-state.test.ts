@@ -71,3 +71,22 @@ test("tracks viewport changes, conflicts and clean domain switches", () => {
 	assert.equal(state.canUndo, false)
 	assert.equal(state.saveStatus, "idle")
 })
+
+test("applies auto-layout as one undoable canvas snapshot", () => {
+	let state = createWorkspaceState("home", createEmptyLayout())
+	state = reduceWorkspace(state, {
+		type: "apply-snapshot",
+		snapshot: {
+			nodes: {
+				"asset:a": { x: 80, y: 72 },
+				"asset:b": { x: 416, y: 72 },
+			},
+			edgeWaypoints: { "relation-a": [] },
+		},
+	})
+	assert.deepEqual(state.layout.nodes["asset:b"], { x: 416, y: 72 })
+	assert.equal(state.history.past.length, 1)
+
+	state = reduceWorkspace(state, { type: "undo" })
+	assert.deepEqual(state.layout.nodes, {})
+})
