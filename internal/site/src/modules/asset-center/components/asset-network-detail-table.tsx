@@ -24,6 +24,8 @@ export function AssetNetworkDetailTable({ model }: { model: NetworkDeviceDetailM
 		[interfaceFilter, model.interfaces]
 	)
 	const showFilter = model.interfaces.length > INTERFACE_FILTER_THRESHOLD
+	const showRelations = model.interfaces.length === 0 && model.relations.length > 0
+	const subtitle = model.interfaces.length > 0 ? "设备能力与真实接口状态" : "设备能力与接入关系"
 	const hasContent = model.capabilitySections.length > 0 || model.interfaces.length > 0 || model.relations.length > 0
 	if (!hasContent) return null
 
@@ -37,12 +39,12 @@ export function AssetNetworkDetailTable({ model }: { model: NetworkDeviceDetailM
 						</span>
 						<div className="min-w-0">
 							<CardTitle className="truncate text-base">网络详情</CardTitle>
-							<div className="mt-0.5 text-[11px] text-muted-foreground">设备能力、真实接口与上下联关系</div>
+							<div className="mt-0.5 text-[11px] text-muted-foreground">{subtitle}</div>
 						</div>
 					</div>
 					<div className="hidden shrink-0 items-center gap-1.5 sm:flex">
 						{model.interfaces.length > 0 ? <Badge variant="secondary">{model.interfaces.length} 个接口</Badge> : null}
-						{model.relations.length > 0 ? <Badge variant="secondary">{model.relations.length} 条关系</Badge> : null}
+						{showRelations ? <Badge variant="secondary">{model.relations.length} 条关系</Badge> : null}
 					</div>
 				</div>
 			</CardHeader>
@@ -57,7 +59,7 @@ export function AssetNetworkDetailTable({ model }: { model: NetworkDeviceDetailM
 						onFilterChange={setInterfaceFilter}
 					/>
 				) : null}
-				{model.relations.length > 0 ? <NetworkRelationTable rows={model.relations} /> : null}
+				{showRelations ? <NetworkRelationTable rows={model.relations} /> : null}
 			</CardContent>
 		</Card>
 	)

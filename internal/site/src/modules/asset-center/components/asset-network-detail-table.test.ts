@@ -11,6 +11,19 @@ for (const title of ["网络详情", "网络能力", "网口状态", "接入关�
 	assert.equal(source.includes(title), true, `network detail panel must render ${title}`)
 }
 
+assert.equal(
+	source.includes("const showRelations = model.interfaces.length === 0 && model.relations.length > 0"),
+	true,
+	"relations must only render as a fallback when no interface state is available"
+)
+assert.equal(
+	source.includes("showRelations ? <NetworkRelationTable rows={model.relations} /> : null"),
+	true,
+	"interface-backed network details must not repeat the relation table"
+)
+assert.equal(source.includes("设备能力与真实接口状态"), true)
+assert.equal(source.includes("设备能力与接入关系"), true)
+
 for (const heading of [
 	"分类",
 	"参数",
