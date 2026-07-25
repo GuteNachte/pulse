@@ -118,7 +118,7 @@ export default memo(function SmarthomePage() {
 	}
 
 	return (
-		<div className="grid gap-4">
+		<div className="grid pulse-card-gap">
 			<section className="rounded-lg border border-border/70 bg-card p-2 shadow-none">
 				<div className="grid gap-4 rounded-md bg-surface-soft p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
 					<div className="flex min-w-0 items-center gap-3">
@@ -245,7 +245,7 @@ export default memo(function SmarthomePage() {
 							</Button>
 						</EmptyState>
 					) : (
-						<div className="grid gap-4">
+						<div className="grid pulse-card-gap">
 							{groupedAssets.map((group) => (
 								<section key={group.name} className="grid gap-2">
 									<div className="flex min-w-0 items-center justify-between gap-3">
@@ -254,7 +254,7 @@ export default memo(function SmarthomePage() {
 											{group.assets.length} 个
 										</Badge>
 									</div>
-									<div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+									<div className="grid pulse-card-gap md:grid-cols-2 2xl:grid-cols-3">
 										{group.assets.map((asset) => (
 											<SmarthomeAssetCard key={asset.id} asset={asset} gateway={gatewayByAsset.get(asset.id)} />
 										))}

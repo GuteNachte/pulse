@@ -40,8 +40,8 @@ export default function AgentHealthCard({ system }: { system: SystemRecord }) {
 					<Badge variant={cap ? "success" : "warning"}>{cap ? "已上报能力" : "旧版或未上报能力"}</Badge>
 				</div>
 			</CardHeader>
-			<CardContent className="grid gap-3 p-3 sm:p-4">
-				<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+			<CardContent className="grid pulse-card-gap p-3 sm:p-4">
+				<div className="grid pulse-card-gap sm:grid-cols-2 xl:grid-cols-4">
 					<InfoTile
 						icon={InfoIcon}
 						label="Agent 版本"
@@ -60,7 +60,7 @@ export default function AgentHealthCard({ system }: { system: SystemRecord }) {
 					<InfoTile icon={ClockIcon} label="心跳状态" value={heartbeatStatus} />
 				</div>
 
-				<div className="grid gap-3 lg:grid-cols-2">
+				<div className="grid pulse-card-gap lg:grid-cols-2">
 					<CapabilitySection
 						title="声明采集能力"
 						icon={BadgeCheckIcon}

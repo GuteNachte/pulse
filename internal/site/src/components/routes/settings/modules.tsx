@@ -22,7 +22,7 @@ export default function ModulesSettingsPage() {
 	}, [query])
 
 	return (
-		<div className="grid gap-4">
+		<div className="grid pulse-card-gap">
 			<section className="rounded-lg border border-border/70 bg-surface-soft p-2 shadow-none">
 				<div className="rounded-md border border-border/70 bg-card p-3 shadow-none">
 					<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -35,7 +35,7 @@ export default function ModulesSettingsPage() {
 								<h3 className="mt-1 text-lg font-semibold text-foreground">模块说明</h3>
 							</div>
 						</div>
-						<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+						<div className="grid grid-cols-2 pulse-card-gap sm:grid-cols-3">
 							<SummaryTile label="总模块" value={pulseModules.length} />
 							<SummaryTile label="可选模块" value={pulseModules.filter((module) => !module.required).length} />
 							<SummaryTile

@@ -380,6 +380,40 @@
       "order": 30
     },
     {
+      "key": "bios_version",
+      "label": "BIOS 版本",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "text",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "platform",
+      "section": "平台规格",
+      "order": 45
+    },
+    {
+      "key": "bios_date",
+      "label": "BIOS 日期",
+      "source": "metadata",
+      "capture": "future_collectable",
+      "type": "date",
+      "assetTypes": [
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
+      ],
+      "scope": "parameter",
+      "category": "platform",
+      "section": "平台规格",
+      "order": 55
+    },
+    {
       "key": "bluetooth_support",
       "label": "蓝牙",
       "source": "metadata",
@@ -716,7 +750,8 @@
       "capture": "manual",
       "type": "text",
       "assetTypes": [
-        "phone"
+        "phone",
+        "nas"
       ],
       "scope": "parameter",
       "category": "thermal_environment",
@@ -742,13 +777,17 @@
     },
     {
       "key": "cpu_cores",
-      "label": "CPU 核心",
+      "label": "CPU 核心 / 线程",
       "source": "metadata",
       "capture": "manual",
       "type": "text",
       "assetTypes": [
         "phone",
-        "tablet"
+        "tablet",
+        "physical_host",
+        "nas",
+        "server",
+        "mini_pc"
       ],
       "scope": "parameter",
       "category": "processor",
@@ -994,7 +1033,8 @@
       "capture": "manual",
       "type": "text",
       "assetTypes": [
-        "mini_pc"
+        "mini_pc",
+        "nas"
       ],
       "scope": "parameter",
       "category": "io",
@@ -2326,7 +2366,8 @@
       "capture": "manual",
       "type": "number",
       "assetTypes": [
-        "switch"
+        "switch",
+        "nas"
       ],
       "scope": "parameter",
       "category": "appearance",
@@ -2558,7 +2599,8 @@
       "capture": "manual",
       "type": "text",
       "assetTypes": [
-        "switch"
+        "switch",
+        "nas"
       ],
       "scope": "parameter",
       "category": "thermal_environment",
@@ -2586,7 +2628,8 @@
       "capture": "manual",
       "type": "text",
       "assetTypes": [
-        "switch"
+        "switch",
+        "nas"
       ],
       "scope": "parameter",
       "category": "thermal_environment",
@@ -2709,7 +2752,8 @@
       "capture": "manual",
       "type": "text",
       "assetTypes": [
-        "physical_host"
+        "physical_host",
+        "nas"
       ],
       "scope": "parameter",
       "category": "platform",
@@ -2840,7 +2884,8 @@
       "capture": "manual",
       "type": "text",
       "assetTypes": [
-        "switch"
+        "switch",
+        "nas"
       ],
       "scope": "parameter",
       "category": "power",
@@ -3948,7 +3993,8 @@
       "capture": "manual",
       "type": "text",
       "assetTypes": [
-        "mini_pc"
+        "mini_pc",
+        "nas"
       ],
       "scope": "parameter",
       "category": "storage",
@@ -4239,7 +4285,8 @@
       "capture": "manual",
       "type": "text",
       "assetTypes": [
-        "mini_pc"
+        "mini_pc",
+        "nas"
       ],
       "scope": "parameter",
       "category": "io",

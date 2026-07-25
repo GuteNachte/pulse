@@ -14,7 +14,7 @@ type AssetExportDialogProps = {
 	saving: boolean
 	onOpenChange: (open: boolean) => void
 	onExportCsv: () => void
-	onExportSnapshot: () => void
+	onExportPackage: () => void
 }
 
 export function AssetExportDialog({
@@ -23,7 +23,7 @@ export function AssetExportDialog({
 	saving,
 	onOpenChange,
 	onExportCsv,
-	onExportSnapshot,
+	onExportPackage,
 }: AssetExportDialogProps) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -45,13 +45,13 @@ export function AssetExportDialog({
 					</button>
 					<button
 						type="button"
-						onClick={onExportSnapshot}
+						onClick={onExportPackage}
 						disabled={saving}
 						className="grid gap-2 rounded-md border border-border/70 bg-card p-4 text-left transition-colors hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-60"
 					>
-						<span className="text-sm font-semibold text-foreground">完整主数据 JSON</span>
+						<span className="text-sm font-semibold text-foreground">可恢复资产迁移包</span>
 						<span className="text-xs leading-5 text-muted-foreground">
-							导出资产、接口、关系、位置、维护记录和附件索引，适合备份或迁移前留档。
+							包含资产、接口、关系、位置、维护记录、附件和设备图片，可在其他 Pulse 实例恢复。
 						</span>
 					</button>
 				</div>

@@ -509,7 +509,7 @@ export default function DisksTable({ systemId, os }: { systemId?: string; os?: O
 	return (
 		<div className="grid gap-3">
 			{!systemId && (
-				<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+				<div className="grid pulse-card-gap sm:grid-cols-2 lg:grid-cols-4">
 					<SmartSummaryCard label="采集设备" value={`${summary.total} 块`} detail={`来自 ${summary.systems} 台机器`} />
 					<SmartSummaryCard
 						label="健康状态"

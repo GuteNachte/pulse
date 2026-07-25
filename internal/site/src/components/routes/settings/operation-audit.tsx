@@ -100,7 +100,7 @@ export default function OperationAuditSettings() {
 	const globalCount = records.filter((record) => !record.system).length
 
 	return (
-		<div className="grid gap-4">
+		<div className="grid pulse-card-gap">
 			<div className="rounded-lg border border-border/70 bg-surface-soft p-3 sm:flex sm:items-center sm:justify-between sm:gap-4">
 				<div className="min-w-0">
 					<h3 className="text-lg font-semibold ">操作审计</h3>

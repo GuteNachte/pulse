@@ -302,7 +302,7 @@ export default function SettingsLayout() {
 				</div>
 			</CardHeader>
 			<CardContent className="p-0 pt-4">
-				<div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
+				<div className="grid pulse-card-gap lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
 					<aside className="min-w-0 self-start overflow-visible rounded-lg border border-border/70 bg-surface-soft p-2">
 						<SidebarNav items={visibleItems} />
 					</aside>

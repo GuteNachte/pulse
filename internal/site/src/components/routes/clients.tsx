@@ -37,7 +37,7 @@ export default memo(() => {
 
 	return useMemo(
 		() => (
-			<div className="flex flex-col gap-4">
+			<div className="flex flex-col pulse-card-gap">
 				<AddSystemDialog open={addSystemDialogOpen} setOpen={setAddSystemDialogOpen} initialAssetId={initialAssetId} />
 				<NotificationFailuresBanner />
 				<ActiveAlerts />

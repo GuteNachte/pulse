@@ -94,6 +94,29 @@ export function getAssetNetworkRelationDirection(
 	return "ambiguous"
 }
 
+export function resolveAssetNetworkRelationEndpoints(
+	relation: AssetRelationRecord,
+	interfaceMap: Map<string, AssetInterfaceRecord>
+) {
+	const sourceInterface = interfaceMap.get(getMetadataString(relation.metadata, "source_interface"))
+	const targetInterface = interfaceMap.get(getMetadataString(relation.metadata, "target_interface"))
+	const sourceDirection = getAssetNetworkRelationDirection(relation.source_asset, relation, interfaceMap)
+	if (sourceDirection === "uplink") {
+		return {
+			upstreamAssetId: relation.target_asset,
+			downstreamAssetId: relation.source_asset,
+			upstreamInterface: targetInterface,
+			downstreamInterface: sourceInterface,
+		}
+	}
+	return {
+		upstreamAssetId: relation.source_asset,
+		downstreamAssetId: relation.target_asset,
+		upstreamInterface: sourceInterface,
+		downstreamInterface: targetInterface,
+	}
+}
+
 function getPeerAssetId(assetId: string, relation: AssetRelationRecord) {
 	return relation.source_asset === assetId ? relation.target_asset : relation.source_asset
 }

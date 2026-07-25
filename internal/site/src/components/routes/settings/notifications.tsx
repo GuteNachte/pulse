@@ -477,7 +477,7 @@ const SettingsNotificationsPage = ({
 	}
 
 	return (
-		<div className="grid gap-4">
+		<div className="grid pulse-card-gap">
 			{!hideTitle && (
 				<>
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -515,8 +515,8 @@ const SettingsNotificationsPage = ({
 				onRemove={removeMobileChannel}
 			/>
 
-			<div className="hidden gap-4 md:grid">
-				<div className="grid gap-3 md:grid-cols-3">
+			<div className="hidden pulse-card-gap md:grid">
+				<div className="grid pulse-card-gap md:grid-cols-3">
 					<StatusCard
 						icon={<CheckCircle2Icon className="size-4 text-green-600" />}
 						title="站内告警"
@@ -740,11 +740,11 @@ function NotificationDiagnosticsPanel({
 				</Badge>
 			</div>
 
-			<div className="grid gap-2 lg:grid-cols-2">
+			<div className="grid pulse-card-gap lg:grid-cols-2">
 				<div className="grid gap-2 rounded-lg bg-card p-3 shadow-none">
 					<div className="text-sm font-semibold">通道健康</div>
 					{channelHealth.length ? (
-						<div className="grid gap-2">
+						<div className="grid pulse-card-gap">
 							{channelHealth.map((item) => (
 								<div key={item.target} className="grid gap-1 rounded-md bg-surface-soft p-2 text-xs shadow-none">
 									<div className="flex min-w-0 items-center justify-between gap-2">
@@ -782,7 +782,7 @@ function NotificationDiagnosticsPanel({
 				<div className="grid gap-2 rounded-lg bg-card p-3 shadow-none">
 					<div className="text-sm font-semibold">重复告警冷却</div>
 					{activeCooldowns.length ? (
-						<div className="grid gap-2">
+						<div className="grid pulse-card-gap">
 							{activeCooldowns.map((item) => (
 								<div
 									key={`${item.title}-${item.nextAllowed}`}

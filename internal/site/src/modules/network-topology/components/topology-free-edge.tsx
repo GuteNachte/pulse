@@ -2,6 +2,11 @@ import { BaseEdge, EdgeLabelRenderer, type Edge, type EdgeProps } from "@xyflow/
 import { CircleDotIcon, PlusIcon, WifiIcon } from "lucide-react"
 import { useState } from "react"
 import { cn } from "../../../lib/utils.ts"
+import {
+	getTopologyEdgePathPoints,
+	getTopologyPathMidpoint,
+	getTopologyWaypointAddPoint,
+} from "../canvas-core/edge-routing.ts"
 import { buildWaypointPath } from "../canvas-core/waypoints.ts"
 import type { TopologyPoint } from "../layout-v2.ts"
 import type { PulseTopologyEdgeData } from "../pulse-adapter.ts"
@@ -10,6 +15,8 @@ export const TOPOLOGY_FREE_EDGE_TYPE = "pulseTopologyFree"
 
 export type TopologyFreeEdgeData = PulseTopologyEdgeData & {
 	readOnly?: boolean
+	onSelect?: () => void
+	onOpen?: () => void
 	onAddWaypoint?: (index: number, point: TopologyPoint) => void
 	onMoveWaypoint?: (index: number, point: TopologyPoint) => void
 	onDeleteWaypoint?: (index: number) => void
@@ -45,9 +52,9 @@ function MediaEdge({
 	const source = { x: props.sourceX, y: props.sourceY }
 	const target = { x: props.targetX, y: props.targetY }
 	const controlPoints = [source, ...data.waypoints, target]
-	const pathPoints = medium === "wifi" ? getWirelessPoints(controlPoints) : getOrthogonalPoints(controlPoints)
-	const path = buildWaypointPath(pathPoints, medium === "wifi" ? "smooth" : "orthogonal")
-	const labelPoint = getCenterPoint(controlPoints)
+	const pathPoints = getTopologyEdgePathPoints(controlPoints, medium)
+	const path = buildWaypointPath(pathPoints, "orthogonal")
+	const labelPoint = getTopologyPathMidpoint(pathPoints)
 	const selected = Boolean(props.selected)
 
 	return (
@@ -57,13 +64,18 @@ function MediaEdge({
 					<BaseEdge
 						id={`${props.id}-underlay`}
 						path={path}
+						interactionWidth={0}
 						className="pulse-free-edge pulse-free-edge-fiber-underlay"
 					/>
 				) : null}
 				<BaseEdge
 					id={props.id}
 					path={path}
-					interactionWidth={24}
+					interactionWidth={0}
+					onClick={() => {
+						data.onSelect?.()
+						data.onOpen?.()
+					}}
 					onMouseEnter={() => setHovered(true)}
 					onMouseLeave={() => setHovered(false)}
 					className={cn(
@@ -75,51 +87,25 @@ function MediaEdge({
 						selected && "is-selected"
 					)}
 				/>
-				<EndpointMarkers medium={medium} source={source} target={target} />
+				{/* biome-ignore lint/a11y/noStaticElementInteractions: React Flow owns keyboard focus on the enclosing edge. */}
+				<path
+					d={path}
+					fill="none"
+					stroke="transparent"
+					strokeWidth={24}
+					pointerEvents="stroke"
+					className="react-flow__edge-interaction"
+					onClick={() => {
+						data.onSelect?.()
+						data.onOpen?.()
+					}}
+				/>
 			</g>
 			{medium !== "wired" ? <MediumMarker medium={medium} point={labelPoint} /> : null}
 			<EdgeDetails data={data} point={labelPoint} visible={hovered || selected} />
-			{selected && !data.readOnly ? <WaypointControls data={data} source={source} target={target} /> : null}
-		</>
-	)
-}
-
-function EndpointMarkers({
-	medium,
-	source,
-	target,
-}: {
-	medium: "wired" | "wifi" | "fiber"
-	source: TopologyPoint
-	target: TopologyPoint
-}) {
-	if (medium === "wifi") return null
-	if (medium === "fiber") {
-		return (
-			<>
-				<circle cx={source.x} cy={source.y} r="4" className="pulse-free-endpoint pulse-free-endpoint-fiber" />
-				<circle cx={target.x} cy={target.y} r="4" className="pulse-free-endpoint pulse-free-endpoint-fiber" />
-			</>
-		)
-	}
-	return (
-		<>
-			<rect
-				x={source.x - 3}
-				y={source.y - 3}
-				width="6"
-				height="6"
-				rx="1"
-				className="pulse-free-endpoint pulse-free-endpoint-wired"
-			/>
-			<rect
-				x={target.x - 3}
-				y={target.y - 3}
-				width="6"
-				height="6"
-				rx="1"
-				className="pulse-free-endpoint pulse-free-endpoint-wired"
-			/>
+			{selected && !data.readOnly ? (
+				<WaypointControls data={data} medium={medium} source={source} target={target} />
+			) : null}
 		</>
 	)
 }
@@ -160,10 +146,12 @@ function EdgeDetails({ data, point, visible }: { data: TopologyFreeEdgeData; poi
 
 function WaypointControls({
 	data,
+	medium,
 	source,
 	target,
 }: {
 	data: TopologyFreeEdgeData
+	medium: "wired" | "wifi" | "fiber"
 	source: TopologyPoint
 	target: TopologyPoint
 }) {
@@ -177,14 +165,18 @@ function WaypointControls({
 					aria-label={`移动折点 ${index + 1}`}
 					className="nodrag nopan pulse-free-waypoint"
 					style={{ transform: `translate(-50%, -50%) translate(${point.x}px, ${point.y}px)` }}
-					onDoubleClick={() => data.onDeleteWaypoint?.(index)}
+					onPointerDown={(event) => event.stopPropagation()}
+					onDoubleClick={(event) => {
+						event.stopPropagation()
+						data.onDeleteWaypoint?.(index)
+					}}
 					onPointerMove={(event) => {
 						if (event.buttons === 1) data.onMoveWaypoint?.(index, { x: event.clientX, y: event.clientY })
 					}}
 				/>
 			))}
 			{points.slice(0, -1).map((point, index) => {
-				const midpoint = getMidpoint(point, points[index + 1])
+				const midpoint = getTopologyWaypointAddPoint(point, points[index + 1], medium)
 				return (
 					<button
 						key={`segment-${index}`}
@@ -192,7 +184,11 @@ function WaypointControls({
 						aria-label={`在第 ${index + 1} 段添加折点`}
 						className="nodrag nopan pulse-free-waypoint-add"
 						style={{ transform: `translate(-50%, -50%) translate(${midpoint.x}px, ${midpoint.y}px)` }}
-						onClick={() => data.onAddWaypoint?.(index, midpoint)}
+						onPointerDown={(event) => event.stopPropagation()}
+						onClick={(event) => {
+							event.stopPropagation()
+							data.onAddWaypoint?.(index, midpoint)
+						}}
 					>
 						<PlusIcon aria-hidden="true" />
 					</button>
@@ -200,34 +196,6 @@ function WaypointControls({
 			})}
 		</EdgeLabelRenderer>
 	)
-}
-
-function getOrthogonalPoints(points: TopologyPoint[]) {
-	const result: TopologyPoint[] = [points[0]]
-	for (let index = 1; index < points.length; index += 1) {
-		const previous = result.at(-1) ?? points[index - 1]
-		const next = points[index]
-		if (previous.x !== next.x && previous.y !== next.y) {
-			result.push({ x: next.x, y: previous.y })
-		}
-		result.push(next)
-	}
-	return result
-}
-
-function getWirelessPoints(points: TopologyPoint[]) {
-	if (points.length > 2) return points
-	const [source, target] = points
-	const midpoint = getMidpoint(source, target)
-	return [source, { x: midpoint.x, y: midpoint.y - 42 }, target]
-}
-
-function getCenterPoint(points: TopologyPoint[]) {
-	return points.length > 2 ? points[Math.floor(points.length / 2)] : getMidpoint(points[0], points[1])
-}
-
-function getMidpoint(a: TopologyPoint, b: TopologyPoint) {
-	return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
 }
 
 function formatSpeed(speedMbps: number) {

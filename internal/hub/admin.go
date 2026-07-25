@@ -25,9 +25,13 @@ type appUserRecord struct {
 }
 
 type appBackupRecord struct {
-	Key      string `json:"key"`
-	Size     int64  `json:"size"`
-	Modified string `json:"modified"`
+	Key          string `json:"key"`
+	Size         int64  `json:"size"`
+	Modified     string `json:"modified"`
+	Type         string `json:"type"`
+	PulseVersion string `json:"pulse_version,omitempty"`
+	Checksum     string `json:"checksum"`
+	Scope        string `json:"scope"`
 }
 
 type createAppUserRequest struct {
@@ -301,11 +305,23 @@ func (h *Hub) listBackups(e *core.RequestEvent) error {
 	backups := make([]appBackupRecord, 0, len(files))
 	for _, file := range files {
 		modified, _ := types.ParseDateTime(file.ModTime)
-		backups = append(backups, appBackupRecord{
+		record := appBackupRecord{
 			Key:      file.Key,
 			Size:     file.Size,
 			Modified: modified.String(),
-		})
+			Type:     "legacy",
+			Checksum: "unchecked",
+			Scope:    "instance",
+		}
+		if localPath, cleanup, err := h.downloadBackupToTemporary(file.Key); err == nil {
+			if manifest, manifestErr := readPortableBackupManifest(localPath); manifestErr == nil {
+				record.Type = "pulse"
+				record.PulseVersion = manifest.PulseVersion
+				record.Scope = manifest.Scope
+			}
+			cleanup()
+		}
+		backups = append(backups, record)
 	}
 	sort.Slice(backups, func(i, j int) bool {
 		return backups[i].Modified > backups[j].Modified
@@ -328,7 +344,7 @@ func (h *Hub) createBackup(e *core.RequestEvent) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	if err := e.App.CreateBackup(ctx, name); err != nil {
+	if _, err := h.createPortableBackup(ctx, name); err != nil {
 		h.createOperationAudit(e, "", "create_backup", name, "", "failed", err.Error(), operationFailureFailed)
 		return e.BadRequestError("Failed to create backup", err)
 	}
@@ -393,6 +409,13 @@ func (h *Hub) restoreBackup(e *core.RequestEvent) error {
 	if key == "" || filepath.Base(key) != key || !backupNamePattern.MatchString(key) {
 		h.createOperationAudit(e, "", "restore_backup", key, "", "failed", "Invalid backup name", operationFailureInvalidRequest)
 		return e.BadRequestError("Invalid backup name", nil)
+	}
+	if localPath, cleanup, err := h.downloadBackupToTemporary(key); err == nil {
+		_, _, portableErr := readPortableBackupPackage(localPath)
+		cleanup()
+		if portableErr == nil {
+			return h.startPortableRestore(e, key)
+		}
 	}
 
 	app := e.App

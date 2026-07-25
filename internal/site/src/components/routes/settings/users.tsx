@@ -248,7 +248,7 @@ export default function Users() {
 		selectedUser && selectedUser.id !== currentUserId && !(selectedUser.role === "admin" && adminCount <= 1)
 
 	return (
-		<div className="grid gap-4">
+		<div className="grid pulse-card-gap">
 			<div className="hidden rounded-lg border border-border/70 bg-surface-soft p-3 shadow-none md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4">
 				<div className="grid gap-1">
 					<h3 className="text-lg font-semibold ">用户管理</h3>
@@ -507,7 +507,7 @@ function UserFields({
 	disableRoleChange?: boolean
 }) {
 	return (
-		<div className="grid gap-4">
+		<div className="grid pulse-card-gap">
 			<div className="grid gap-2 rounded-lg border border-border/70 bg-card p-3 shadow-none">
 				<Label htmlFor="username">用户名</Label>
 				<Input
@@ -563,7 +563,7 @@ function UserFields({
 
 function RoleExplanationPanel() {
 	return (
-		<div className="hidden rounded-lg border border-border/70 bg-surface-soft p-2 shadow-none md:grid md:grid-cols-3 md:gap-2">
+		<div className="hidden pulse-card-gap rounded-lg border border-border/70 bg-surface-soft p-2 shadow-none md:grid md:grid-cols-3">
 			{roleExplanations.map((role) => {
 				const Icon = role.icon
 				return (
@@ -598,7 +598,7 @@ function DesktopUsersOverview({
 	currentUsername?: string
 }) {
 	return (
-		<div className="hidden grid-cols-4 gap-2 md:grid">
+		<div className="hidden grid-cols-4 pulse-card-gap md:grid">
 			<OverviewCard
 				label="账号总数"
 				value={`${total} 个`}

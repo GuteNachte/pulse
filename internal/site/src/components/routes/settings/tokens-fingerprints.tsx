@@ -100,7 +100,7 @@ const SectionIntro = memo(({ stats }: { stats: TokenStats }) => {
 						</div>
 					</div>
 				</div>
-				<div className="mt-2 grid gap-2 md:grid-cols-4">
+				<div className="mt-2 grid pulse-card-gap md:grid-cols-4">
 					<TokenStatCard label="Token 总数" value={`${stats.total} 个`} detail="当前可见接入凭据" />
 					<TokenStatCard label="已连接 Agent" value={`${stats.connected} 个`} detail="Agent 在线" />
 					<TokenStatCard label="已绑定设备" value={`${stats.bound} 个`} detail="已记录设备指纹" />

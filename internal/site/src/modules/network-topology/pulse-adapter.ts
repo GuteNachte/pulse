@@ -8,6 +8,7 @@ import type {
 } from "../../types.ts"
 import type { TopologyPoint } from "./layout-v2.ts"
 import type { TopologyLayoutV2 } from "./layout-v2.ts"
+import { normalizeHandleId } from "./canvas-core/handles.ts"
 import { getRelationDomain, getRelationMedium, type TopologyDomain, type TopologyMedium } from "./topology-domain.ts"
 import { assetNodeId } from "./topology-identifiers.ts"
 
@@ -29,6 +30,11 @@ export type PulseTopologyNodeData =
 export type PulseTopologyEdgeData = {
 	relation: AssetRelationRecord
 	medium?: TopologyMedium
+	branch?: {
+		parentRelationId: string
+		ratio: number
+		endpoint: "source" | "target"
+	}
 	sourceInterface?: AssetInterfaceRecord
 	targetInterface?: AssetInterfaceRecord
 	diagnosticCodes: string[]
@@ -71,6 +77,7 @@ export function buildPulseTopologyGraph({
 		(relation) => isNetworkRelation(relation) && getEffectiveRelationDomain(relation, assetsById) === domain
 	)
 	const interfaceUseCounts = countInterfaceUses(domainRelations)
+	const relationsById = new Map(domainRelations.map((relation) => [relation.id, relation]))
 	const includedAssetIds = collectIncludedAssetIds(domainRelations, assets, layout)
 	const nodes = includedAssetIds.map((assetId) =>
 		createNode({
@@ -82,7 +89,7 @@ export function buildPulseTopologyGraph({
 		})
 	)
 	const edges = domainRelations.map((relation) =>
-		createEdge({ relation, assetsById, interfacesById, interfaceUseCounts, layout })
+		createEdge({ relation, relationsById, assetsById, interfacesById, interfaceUseCounts, layout })
 	)
 
 	return { nodes, edges }
@@ -96,9 +103,7 @@ function getEffectiveRelationDomain(
 	if (explicitDomain) return explicitDomain
 	const source = assetsById.get(relation.source_asset)
 	const target = assetsById.get(relation.target_asset)
-	const legacyText = [source?.name, source?.role, target?.name, target?.role, relation.label]
-		.filter(Boolean)
-		.join(" ")
+	const legacyText = [source?.name, source?.role, target?.name, target?.role, relation.label].filter(Boolean).join(" ")
 	return LEGACY_TECHNOLOGY_PATTERN.test(legacyText) ? "technology" : "home"
 }
 
@@ -106,11 +111,7 @@ function isNetworkRelation(relation: AssetRelationRecord) {
 	return relation.kind === "connected_to" || relation.kind === "depends_on"
 }
 
-function collectIncludedAssetIds(
-	relations: AssetRelationRecord[],
-	assets: AssetRecord[],
-	layout: TopologyLayoutV2
-) {
+function collectIncludedAssetIds(relations: AssetRelationRecord[], assets: AssetRecord[], layout: TopologyLayoutV2) {
 	const result: string[] = []
 	const seen = new Set<string>()
 	const add = (id: string) => {
@@ -159,12 +160,14 @@ function createNode({
 
 function createEdge({
 	relation,
+	relationsById,
 	assetsById,
 	interfacesById,
 	interfaceUseCounts,
 	layout,
 }: {
 	relation: AssetRelationRecord
+	relationsById: Map<string, AssetRelationRecord>
 	assetsById: Map<string, AssetRecord>
 	interfacesById: Map<string, AssetInterfaceRecord>
 	interfaceUseCounts: Map<string, number>
@@ -192,16 +195,41 @@ function createEdge({
 		id: relation.id,
 		source: assetNodeId(relation.source_asset),
 		target: assetNodeId(relation.target_asset),
+		sourceHandle: normalizeHandleId(getMetadataString(relation.metadata, "source_handle")),
+		targetHandle: normalizeHandleId(getMetadataString(relation.metadata, "target_handle"), "left"),
 		type: "pulseTopologyFree",
 		data: {
 			relation,
 			medium: getRelationMedium(relation.metadata),
+			branch: resolveSavedBranch(relation, relationsById),
 			sourceInterface,
 			targetInterface,
 			diagnosticCodes: [...diagnosticCodes],
 			waypoints: (layout.edgeWaypoints[relation.id] ?? []).map(clonePoint),
 		},
 	}
+}
+
+function resolveSavedBranch(
+	relation: AssetRelationRecord,
+	relationsById: Map<string, AssetRelationRecord>
+): PulseTopologyEdgeData["branch"] {
+	const parentRelationId = getMetadataString(relation.metadata, "branch_from_relation")
+	const parent = relationsById.get(parentRelationId)
+	const rawRatio = relation.metadata?.branch_ratio
+	const ratio = typeof rawRatio === "number" ? rawRatio : Number(rawRatio)
+	if (!parent || !Number.isFinite(ratio)) return undefined
+	const explicitEndpoint = getMetadataString(relation.metadata, "branch_endpoint")
+	let endpoint: "source" | "target" | undefined
+	if (explicitEndpoint === "source" || explicitEndpoint === "target") {
+		endpoint = explicitEndpoint
+	} else if (relation.source_asset === parent.source_asset && relation.target_asset !== parent.target_asset) {
+		endpoint = "source"
+	} else if (relation.target_asset === parent.target_asset && relation.source_asset !== parent.source_asset) {
+		endpoint = "target"
+	}
+	if (!endpoint) return undefined
+	return { parentRelationId, ratio: Math.min(1, Math.max(0, ratio)), endpoint }
 }
 
 function groupInterfacesByAsset(interfaces: AssetInterfaceRecord[]) {
@@ -225,11 +253,7 @@ function countInterfaceUses(relations: AssetRelationRecord[]) {
 	return counts
 }
 
-function getOwnedInterface(
-	interfacesById: Map<string, AssetInterfaceRecord>,
-	interfaceId: string,
-	assetId: string
-) {
+function getOwnedInterface(interfacesById: Map<string, AssetInterfaceRecord>, interfaceId: string, assetId: string) {
 	if (!interfaceId) return undefined
 	const item = interfacesById.get(interfaceId)
 	return item?.asset === assetId ? item : undefined

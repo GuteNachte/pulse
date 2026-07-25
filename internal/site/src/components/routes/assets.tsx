@@ -64,11 +64,14 @@ import {
 } from "@/modules/asset-center/asset-form"
 import {
 	buildNextAssetTag,
-	loadAssetNumberingSettings,
+	defaultAssetNumberingSettings,
 	normalizeAssetNumberingSettings,
-	saveAssetNumberingSettings,
 	type AssetNumberingSettings,
 } from "@/modules/asset-center/asset-numbering"
+import {
+	loadDurableAssetNumberingSettings,
+	saveDurableAssetNumberingSettings,
+} from "@/modules/asset-center/asset-numbering-client"
 import {
 	buildArchivedLocationPayload,
 	buildLocationPath,
@@ -77,11 +80,12 @@ import {
 } from "@/modules/asset-center/asset-location"
 import type { AssetLocationPresetSelection } from "@/modules/asset-center/asset-location-dialog"
 import {
-	buildAssetCenterSnapshot,
 	buildAssetExportCsv,
 	downloadTextFile,
 	formatAssetExportTimestamp,
 } from "@/modules/asset-center/asset-export"
+import { downloadAssetMigrationPackage } from "@/modules/asset-center/asset-migration-client"
+import type { AssetMigrationResult } from "@/modules/asset-center/asset-migration"
 import { buildAssetImportCsvTemplate, buildAssetImportJsonExample } from "@/modules/asset-center/asset-import-templates"
 import {
 	buildAssetLocationOptions,
@@ -119,7 +123,6 @@ import { syncPrimaryInterface } from "@/modules/asset-center/asset-interface-syn
 import { validateNewOntRequiredFields } from "@/modules/asset-center/asset-profile-validation"
 import type {
 	AssetInterfaceRecord,
-	AssetAttachmentRecord,
 	AssetLocationRecord,
 	AssetMaintenanceRecord,
 	AssetRelationRecord,
@@ -158,7 +161,7 @@ export default memo(function AssetsPage() {
 	const [editing, setEditing] = useState<AssetRecord | null>(null)
 	const [profileFocus, setProfileFocus] = useState(false)
 	const [form, setForm] = useState<AssetFormState>(emptyAssetForm)
-	const [numberingForm, setNumberingForm] = useState<AssetNumberingSettings>(() => loadAssetNumberingSettings())
+	const [numberingForm, setNumberingForm] = useState<AssetNumberingSettings>(defaultAssetNumberingSettings)
 	const [importText, setImportText] = useState("")
 	const [importPreviewRows, setImportPreviewRows] = useState<AssetImportPreviewRow[]>([])
 	const [activeAssetId, setActiveAssetId] = useState("")
@@ -257,6 +260,18 @@ export default memo(function AssetsPage() {
 		document.title = pageTitle("资产中心")
 		loadAssets()
 	}, [loadAssets])
+
+	useEffect(() => {
+		let cancelled = false
+		loadDurableAssetNumberingSettings()
+			.then((settings) => {
+				if (!cancelled) setNumberingForm(settings)
+			})
+			.catch((error) => console.warn("load asset numbering settings", error))
+		return () => {
+			cancelled = true
+		}
+	}, [])
 
 	const physicalParents = useMemo(
 		() => assets.filter((asset) => !["internet", "vm", "web_endpoint"].includes(asset.type)),
@@ -398,24 +413,31 @@ export default memo(function AssetsPage() {
 	}
 
 	function openNumberingSettingsDialog() {
-		setNumberingForm(loadAssetNumberingSettings())
 		setNumberingDialogOpen(true)
 	}
 
-	function saveNumberingSettings() {
+	async function saveNumberingSettings() {
 		const normalized = normalizeAssetNumberingSettings(numberingForm)
 		const nextForm: AssetNumberingSettings = {
 			prefix: normalized.prefix,
 			digits: String(normalized.digits),
 			nextSequence: String(normalized.nextSequence),
 		}
-		saveAssetNumberingSettings(nextForm)
-		setNumberingForm(nextForm)
-		setNumberingDialogOpen(false)
-		toast({
-			title: "编号已保存",
-			description: `下一个编号：${buildNextAssetTag(assets, normalized)}`,
-		})
+		setSaving(true)
+		try {
+			await saveDurableAssetNumberingSettings(nextForm)
+			setNumberingForm(nextForm)
+			setNumberingDialogOpen(false)
+			toast({
+				title: "编号已保存",
+				description: `下一个编号：${buildNextAssetTag(assets, normalized)}`,
+			})
+		} catch (error) {
+			console.error("save asset numbering settings", error)
+			toast({ title: "编号保存失败", description: "请检查用户设置权限。", variant: "destructive" })
+		} finally {
+			setSaving(false)
+		}
 	}
 
 	function downloadImportCsvTemplate() {
@@ -446,54 +468,27 @@ export default memo(function AssetsPage() {
 		toast({ title: "资产清单已导出", description: `已导出当前筛选的 ${filteredAssets.length} 个资产。` })
 	}
 
-	async function exportFullAssetSnapshot() {
+	async function exportFullAssetMigrationPackage() {
 		setSaving(true)
 		try {
-			const [interfaceRecords, relationRecords, locationRecords, maintenanceRecords, attachmentRecords] =
-				await Promise.all([
-					pb.collection<AssetInterfaceRecord>("asset_interfaces").getFullList({
-						sort: "asset,name",
-						requestKey: null,
-					}),
-					pb.collection<AssetRelationRecord>("asset_relations").getFullList({
-						sort: "source_asset,target_asset,kind",
-						requestKey: null,
-					}),
-					pb.collection<AssetLocationRecord>("asset_locations").getFullList({
-						sort: "sort_order,kind,name",
-						requestKey: null,
-					}),
-					pb.collection<AssetMaintenanceRecord>("asset_maintenance").getFullList({
-						sort: "asset,-event_date,-created",
-						requestKey: null,
-					}),
-					pb.collection<AssetAttachmentRecord>("asset_attachments").getFullList({
-						sort: "asset,kind,title",
-						requestKey: null,
-					}),
-				])
-			const exportedAt = new Date()
-			downloadTextFile(
-				`pulse-asset-center-${formatAssetExportTimestamp(exportedAt)}.json`,
-				buildAssetCenterSnapshot({
-					exportedAt,
-					assets,
-					assetInterfaces: interfaceRecords,
-					assetRelations: relationRecords,
-					assetLocations: locationRecords,
-					assetMaintenance: maintenanceRecords,
-					assetAttachments: attachmentRecords,
-				}),
-				"application/json;charset=utf-8"
-			)
+			await downloadAssetMigrationPackage()
 			setExportDialogOpen(false)
-			toast({ title: "资产中心快照已导出", description: "已包含资产、接口、关系、位置、维护记录和附件索引。" })
+			toast({ title: "资产迁移包已导出", description: "已包含资产主数据、附件和设备图片，可用于恢复。" })
 		} catch (error) {
-			console.error("export asset snapshot", error)
+			console.error("export asset migration package", error)
 			toast({ title: "资产导出失败", description: "请检查资产集合权限或 Hub 日志。", variant: "destructive" })
 		} finally {
 			setSaving(false)
 		}
+	}
+
+	async function handleAssetMigrationApplied(result: AssetMigrationResult) {
+		await loadAssets()
+		setImportDialogOpen(false)
+		toast({
+			title: "资产迁移完成",
+			description: `新增 ${result.created}，合并 ${result.merged}，覆盖 ${result.replaced}，跳过 ${result.skipped}。`,
+		})
 	}
 
 	function loadImportFile(file: File | null) {
@@ -822,16 +817,25 @@ export default memo(function AssetsPage() {
 	}
 
 	return (
-		<div className="grid gap-4">
+		<div className="grid pulse-card-gap">
 			<section className="rounded-lg border border-border/70 bg-card p-2 shadow-none">
-				<div className="grid gap-4 rounded-md bg-surface-soft p-4">
+				<div className="rounded-md bg-surface-soft p-4">
 					<div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-						<div className="flex min-w-0 items-center gap-3">
+						<div className="flex min-w-0 flex-1 items-center gap-3">
 							<div className="grid size-10 shrink-0 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
 								<ArchiveIcon className="size-5" />
 							</div>
 							<div className="min-w-0">
-								<h1 className="truncate text-2xl font-semibold text-foreground">资产中心</h1>
+								<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+									<h1 className="shrink-0 text-2xl font-semibold text-foreground">资产中心</h1>
+									<section aria-label="资产概览" className="flex min-w-0 flex-wrap items-center gap-1.5">
+										<SummaryPill label="总资产" value={counts.total} />
+										<SummaryPill label="已监控" value={counts.monitored} />
+										<SummaryPill label="位置数" value={counts.locations} />
+										<SummaryPill label="需关注" value={counts.attention} />
+										<SummaryPill label="待补资料" value={counts.profileAttention} />
+									</section>
+								</div>
 								<p className="mt-1 text-sm text-muted-foreground">统一管理家庭硬件资产，并把可采集设备接入监控</p>
 							</div>
 						</div>
@@ -858,17 +862,10 @@ export default memo(function AssetsPage() {
 							</Button>
 						</div>
 					</div>
-					<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
-						<SummaryPill label="总资产" value={counts.total} />
-						<SummaryPill label="已监控" value={counts.monitored} />
-						<SummaryPill label="位置数" value={counts.locations} />
-						<SummaryPill label="需关注" value={counts.attention} />
-						<SummaryPill label="待补资料" value={counts.profileAttention} />
-					</div>
 				</div>
 			</section>
 
-			<Card className="overflow-hidden border-border/70 bg-card shadow-none">
+			<Card className="overflow-visible border-border/70 bg-card shadow-none">
 				<CardHeader className="border-b border-border/70 bg-surface-soft px-4 py-3">
 					<div className="flex min-w-0 flex-wrap items-center gap-2">
 						<div className="mr-auto min-w-40">
@@ -959,7 +956,7 @@ export default memo(function AssetsPage() {
 					) : filteredAssets.length === 0 ? (
 						<EmptyState loading={false} loadingText="正在读取资产" emptyText="暂无匹配资产" />
 					) : (
-						<div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+						<div className="grid pulse-card-gap xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start">
 							<div className="min-w-0 overflow-hidden rounded-lg border border-border/70">
 								<div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 bg-surface-soft px-3 py-2">
 									<div className="flex min-h-9 min-w-0 flex-wrap items-center gap-2 text-sm text-foreground">
@@ -971,7 +968,7 @@ export default memo(function AssetsPage() {
 										<ListInsight label="待补" value={filteredInsights.profileAttention} tone="warning" />
 									</div>
 								</div>
-								<div className="max-h-[calc(100vh-18rem)] min-h-[24rem] overflow-y-auto bg-card">
+								<div className="min-h-[28rem] bg-card xl:min-h-[calc(100dvh-20rem)]">
 									<AssetListHeader />
 									{filteredAssets.map((asset) => (
 										<AssetListItem
@@ -1018,9 +1015,9 @@ export default memo(function AssetsPage() {
 						<AssetTypePicker selectedType={form.type} onSelect={(type) => selectType(type)} />
 					) : (
 						<div className="min-h-0 overflow-y-auto pr-1">
-							<div className={cn("grid gap-4", editing && "lg:grid-cols-[13rem_minmax(0,1fr)]")}>
+							<div className={cn("grid pulse-card-gap", editing && "lg:grid-cols-[13rem_minmax(0,1fr)]")}>
 								{editing && <AssetTypeRail selectedType={form.type} onSelect={(type) => setFormValue("type", type)} />}
-								<div className="grid content-start gap-4">
+								<div className="grid content-start pulse-card-gap">
 									{profileFocus && editingCompleteness && (
 										<div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">
 											<div className="flex flex-wrap items-start justify-between gap-3">
@@ -1187,18 +1184,19 @@ export default memo(function AssetsPage() {
 				onValueChange={setImportText}
 				onLoadFile={loadImportFile}
 				onDownloadCsvTemplate={downloadImportCsvTemplate}
-				onDownloadJsonExample={downloadImportJsonExample}
-				onPreview={previewImportAssets}
-				onImport={importAssets}
+					onDownloadJsonExample={downloadImportJsonExample}
+					onPreview={previewImportAssets}
+					onImport={importAssets}
+					onMigrationApplied={handleAssetMigrationApplied}
 			/>
 
 			<AssetExportDialog
 				open={exportDialogOpen}
 				assetCount={filteredAssets.length}
-				saving={saving}
-				onOpenChange={setExportDialogOpen}
-				onExportCsv={exportFilteredCsv}
-				onExportSnapshot={exportFullAssetSnapshot}
+					saving={saving}
+					onOpenChange={setExportDialogOpen}
+					onExportCsv={exportFilteredCsv}
+					onExportPackage={exportFullAssetMigrationPackage}
 			/>
 		</div>
 	)
@@ -1378,9 +1376,9 @@ function isValidIpv4(value: string) {
 
 function SummaryPill({ label, value }: { label: string; value: number }) {
 	return (
-		<div className="rounded-md border border-border/70 bg-card px-3 py-2">
-			<div className="text-xs text-muted-foreground">{label}</div>
-			<div className="mt-1 font-mono text-lg font-semibold tabular-nums">{value}</div>
+		<div className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border/70 bg-card px-2.5">
+			<span className="text-xs text-muted-foreground">{label}</span>
+			<span className="font-mono text-sm font-semibold tabular-nums text-foreground">{value}</span>
 		</div>
 	)
 }

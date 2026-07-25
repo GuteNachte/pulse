@@ -134,7 +134,7 @@ export function AgentPlatformColumn({
 				</div>
 			</div>
 
-			<div className="grid gap-3 p-3">
+			<div className="grid pulse-card-gap p-3">
 				<SectionBlock title="安装方式">
 					<div className="mb-2 flex flex-wrap gap-2">
 						<Badge variant="outline">Agent 主动连接 Hub</Badge>
@@ -301,8 +301,8 @@ export function AgentInstallWorkbench({ releases, hubUrl }: { releases: AgentRel
 				</div>
 			</div>
 
-			<div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(520px,1.2fr)]">
-				<div className="grid content-start gap-3">
+			<div className="grid pulse-card-gap p-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(520px,1.2fr)]">
+				<div className="grid content-start pulse-card-gap">
 					<WorkbenchPanel title="安装目标" icon={MonitorCogIcon}>
 						<Tabs value={target} onValueChange={(value) => setTarget(value as AgentInstallTarget)}>
 							<TabsList className="grid w-full grid-cols-4">
@@ -478,7 +478,7 @@ export function AgentInstallWorkbench({ releases, hubUrl }: { releases: AgentRel
 					)}
 				</div>
 
-				<div className="grid min-w-0 content-start gap-3">
+				<div className="grid min-w-0 content-start pulse-card-gap">
 					<WorkbenchPanel
 						title="代码预览"
 						icon={FileCode2Icon}
@@ -570,7 +570,7 @@ export function AgentReleaseRepositoryPanel({ releases }: { releases: AgentRelea
 	const windowsReleases = releases.filter((release) => release.platform === "windows")
 	const linuxReleases = releases.filter((release) => release.platform === "linux")
 	return (
-		<div className="grid gap-3 lg:grid-cols-2">
+		<div className="grid pulse-card-gap lg:grid-cols-2">
 			<SectionBlock title="Windows 版本仓库">
 				<ReleaseRepository
 					releases={windowsReleases}

@@ -121,8 +121,8 @@ export function WebsiteDetailPanel({
 					</div>
 				</div>
 			</div>
-			<div className="grid min-w-0 gap-4 bg-surface-soft p-3 sm:p-4">
-				<div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+			<div className="grid min-w-0 pulse-card-gap bg-surface-soft p-3 sm:p-4">
+				<div className="grid min-w-0 pulse-card-gap sm:grid-cols-2 xl:grid-cols-6">
 					<DetailMetric label="归属机器" value={systemName || "未归属"} />
 					<DetailMetric label="监控地址" value={`${targets.filter((target) => target.url).length} 个`} />
 					<DetailMetric label="检测间隔" value={`${Math.round((selected.interval_seconds || 300) / 60)} 分钟`} />
@@ -150,7 +150,7 @@ export function WebsiteDetailPanel({
 						IPv6 访问。
 					</div>
 				)}
-				<div className="grid min-w-0 gap-3 md:grid-cols-[repeat(2,minmax(0,1fr))]">
+				<div className="grid min-w-0 pulse-card-gap md:grid-cols-[repeat(2,minmax(0,1fr))]">
 					{detailTargets.map((target) => (
 						<TargetStatusCard key={target.id} target={target} check={latestChecks[target.id]} />
 					))}

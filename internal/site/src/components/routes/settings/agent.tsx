@@ -215,7 +215,7 @@ export default function AgentSettings() {
 	}
 
 	return (
-		<div className="grid gap-5">
+		<div className="grid pulse-card-gap">
 			<section className="hidden overflow-hidden rounded-lg border border-border/70 bg-surface-soft shadow-none md:block">
 				<div className="border-b border-border/70 bg-card px-5 py-4">
 					<div className="flex min-w-0 items-start justify-between gap-4">
@@ -237,7 +237,7 @@ export default function AgentSettings() {
 						</Button>
 					</div>
 				</div>
-				<div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
+				<div className="grid pulse-card-gap p-4 sm:grid-cols-2 xl:grid-cols-4">
 					<AgentOverviewStat
 						icon={RocketIcon}
 						label="可更新"
@@ -269,7 +269,7 @@ export default function AgentSettings() {
 
 			<AgentInstallWorkbench releases={releases} hubUrl={agentHubURL} />
 
-			<div className="hidden gap-4 md:grid">
+			<div className="hidden pulse-card-gap md:grid">
 				<AgentUpdatesPanel
 					summaries={summaries}
 					updatingSystemId={updatingSystemId}

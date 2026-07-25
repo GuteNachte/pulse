@@ -124,7 +124,7 @@ export default function About() {
 	}, [runtimeEnvironment])
 
 	return (
-		<div className="grid gap-4 md:gap-5">
+		<div className="grid pulse-card-gap">
 			<section className="overflow-hidden rounded-lg border border-border/70 bg-surface-soft">
 				<div className="border-b border-border/70 bg-card px-4 py-4 sm:px-5">
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -157,8 +157,8 @@ export default function About() {
 					</div>
 				</div>
 
-				<div className="grid gap-4 p-3 sm:p-4">
-					<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+				<div className="grid pulse-card-gap p-3 sm:p-4">
+					<div className="grid pulse-card-gap sm:grid-cols-2 xl:grid-cols-4">
 						{versionItems.map((item) => (
 							<VersionSummaryCard key={item.label} {...item} />
 						))}
@@ -344,7 +344,7 @@ function ReadinessChecks({ checks }: { checks: PulseReadinessCheck[] }) {
 					{counts.ok > 0 && <Badge variant="success">通过 {counts.ok}</Badge>}
 				</div>
 			</div>
-			<div className="grid gap-2 lg:grid-cols-2">
+			<div className="grid pulse-card-gap lg:grid-cols-2">
 				{checks.map((check) => (
 					<div key={check.id} className="grid gap-2 rounded-lg border border-border/70 bg-card px-4 py-3">
 						<div className="flex min-w-0 items-center justify-between gap-2">

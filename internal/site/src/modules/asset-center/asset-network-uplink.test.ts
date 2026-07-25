@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { buildAssetNetworkUplinks } from "./asset-network-uplink.ts"
+import { buildAssetNetworkUplinks, resolveAssetNetworkRelationEndpoints } from "./asset-network-uplink.ts"
 import type { AssetInterfaceRecord, AssetRecord, AssetRelationRecord } from "@/types"
 
 const assets = [
@@ -83,5 +83,25 @@ assert.deepEqual(uplinks.get("phone"), { mode: "linked", label: "华为 iFTTR �
 assert.deepEqual(uplinks.get("unknown-a"), { mode: "ambiguous", label: "上联未明确", peerAssetIds: [] })
 assert.deepEqual(uplinks.get("orphan"), { mode: "unlinked", label: "未关联", peerAssetIds: [] })
 assert.deepEqual(uplinks.get("website"), { mode: "not_applicable", label: "无", peerAssetIds: [] })
+
+const interfaceMap = new Map(interfaces.map((item) => [item.id, item]))
+assert.deepEqual(resolveAssetNetworkRelationEndpoints(relations[0], interfaceMap), {
+	upstreamAssetId: "internet",
+	downstreamAssetId: "ont",
+	upstreamInterface: undefined,
+	downstreamInterface: interfaces[0],
+})
+assert.deepEqual(resolveAssetNetworkRelationEndpoints(relations[4], interfaceMap), {
+	upstreamAssetId: "ont",
+	downstreamAssetId: "phone",
+	upstreamInterface: interfaces[2],
+	downstreamInterface: interfaces[7],
+})
+assert.deepEqual(resolveAssetNetworkRelationEndpoints(relations[2], interfaceMap), {
+	upstreamAssetId: "switch",
+	downstreamAssetId: "mini",
+	upstreamInterface: interfaces[4],
+	downstreamInterface: interfaces[6],
+})
 
 console.log("asset network uplink contract passed")

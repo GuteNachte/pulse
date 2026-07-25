@@ -1,10 +1,14 @@
 import { useStore } from "@nanostores/react"
 import { getPagePath } from "@nanostores/router"
-import { memo, useEffect } from "react"
+import type { Edge, Node } from "@xyflow/react"
+import { memo, useCallback, useEffect, useState } from "react"
 import { $router, navigate } from "@/components/router"
 import { isReadOnlyUser } from "@/lib/api"
 import { pageTitle } from "@/lib/branding"
 import { $systems } from "@/lib/stores"
+import type { TopologyFreeEdgeData } from "@/modules/network-topology/components/topology-free-edge"
+import type { TopologyFreeNodeData } from "@/modules/network-topology/components/topology-free-node"
+import { TopologyInspectorSheet } from "@/modules/network-topology/components/topology-inspector-sheet"
 import { TopologyWorkspace } from "@/modules/network-topology/components/topology-workspace"
 import type { TopologyDomain } from "@/modules/network-topology/topology-domain"
 import { useTopologyWorkspaceData } from "@/modules/network-topology/use-topology-workspace-data"
@@ -17,6 +21,21 @@ export default memo(function NetworkTopologyPage({ domain }: { domain?: unknown 
 	const routeDomainValid = domain === "home" || domain === "technology"
 	const normalizedDomain = routeDomainValid ? routeDomain : readLastDomain()
 	const view = useTopologyWorkspaceData(normalizedDomain, systems)
+	const [inspectedNode, setInspectedNode] = useState<Node<TopologyFreeNodeData>>()
+	const [inspectedEdge, setInspectedEdge] = useState<Edge<TopologyFreeEdgeData>>()
+	const handleNodeOpen = useCallback((node: Node<TopologyFreeNodeData>) => {
+		setInspectedNode(node)
+		setInspectedEdge(undefined)
+	}, [])
+	const handleEdgeOpen = useCallback((edge: Edge<TopologyFreeEdgeData>) => {
+		setInspectedNode(undefined)
+		setInspectedEdge(edge)
+	}, [])
+	const handleInspectorOpenChange = useCallback((open: boolean) => {
+		if (open) return
+		setInspectedNode(undefined)
+		setInspectedEdge(undefined)
+	}, [])
 
 	useEffect(() => {
 		document.title = pageTitle(normalizedDomain === "technology" ? "科技网拓扑" : "家庭网络拓扑")
@@ -45,6 +64,18 @@ export default memo(function NetworkTopologyPage({ domain }: { domain?: unknown 
 				layoutPersisted={view.layoutPersisted}
 				readOnly={isReadOnlyUser()}
 				onSave={view.save}
+				onRelationsChanged={view.reload}
+				onNodeOpen={handleNodeOpen}
+				onEdgeOpen={handleEdgeOpen}
+			/>
+			<TopologyInspectorSheet
+				open={Boolean(inspectedNode || inspectedEdge)}
+				onOpenChange={handleInspectorOpenChange}
+				node={inspectedNode}
+				edge={inspectedEdge}
+				nodes={view.graph.nodes}
+				domain={normalizedDomain}
+				readOnly={isReadOnlyUser()}
 				onRelationsChanged={view.reload}
 			/>
 		</section>

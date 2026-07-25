@@ -73,9 +73,9 @@ export function SystemDetailContent({
 	const hasNetworkDetail = hasCollectedNetworkDetail(chartData, details)
 
 	return (
-		<section className="grid gap-4">
+		<section className="grid pulse-card-gap">
 			{view === "overview" && (
-				<div className="grid gap-4 xl:grid-cols-2">
+				<div className="grid pulse-card-gap xl:grid-cols-2">
 					<CpuChart {...coreProps} />
 					<LoadAverageChart chartData={chartData} grid={grid} dataEmpty={dataEmpty} />
 					{!compactMobile && (
@@ -93,21 +93,21 @@ export function SystemDetailContent({
 			)}
 
 			{view === "memory" && (
-				<div className="grid gap-4">
+				<div className="grid pulse-card-gap">
 					<MemoryChart {...coreProps} />
 					<SwapChart chartData={chartData} grid={grid} dataEmpty={dataEmpty} systemStats={systemStats} />
 				</div>
 			)}
 
 			{view === "disk" && (
-				<div className="grid gap-4">
+				<div className="grid pulse-card-gap">
 					<RootDiskCharts systemData={systemData} />
 					{maybeHasSmartData && <LazySmartTable systemId={system.id} os={details?.os} />}
 				</div>
 			)}
 
 			{view === "network" && (
-				<div className="grid gap-4">
+				<div className="grid pulse-card-gap">
 					{hasNetworkDetail ? (
 						<>
 							<PrimaryNetworkInterfaceInfoCard details={details} chartData={chartData} />
@@ -124,10 +124,10 @@ export function SystemDetailContent({
 			)}
 
 			{view === "containers" && (
-				<div className="grid gap-4">
+				<div className="grid pulse-card-gap">
 					{hasContainers ? (
 						<>
-							<div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+							<div className="grid grid-cols-1 pulse-card-gap xl:grid-cols-2">
 								<ContainerCpuChart chartData={chartData} grid={grid} dataEmpty={dataEmpty} isPodman={isPodman} />
 								<ContainerMemoryChart chartData={chartData} grid={grid} dataEmpty={dataEmpty} isPodman={isPodman} />
 							</div>
@@ -141,7 +141,7 @@ export function SystemDetailContent({
 			)}
 
 			{view === "gpu" && (
-				<div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+				<div className="grid grid-cols-1 pulse-card-gap xl:grid-cols-2">
 					{hasGpuData && lastGpus && (
 						<GpuDetailCharts
 							chartData={chartData}
@@ -160,7 +160,7 @@ export function SystemDetailContent({
 			{view === "websites" && <SystemWebsiteMonitorsCard systemId={system.id} />}
 
 			{view === "history" && (
-				<div className="grid gap-4">
+				<div className="grid pulse-card-gap">
 					<AgentHealthCard system={system} />
 					<OperationHistoryCard systemId={system.id} />
 				</div>

@@ -29,7 +29,15 @@ Pulse 由两个主要组件组成：
 
 ## 本地开发
 
-源码开发环境推荐使用项目脚本启动 Hub 和 Vite：
+Windows 日常开发直接双击项目根目录的 `Start-Pulse-Dev.cmd`。它会启动或复用 Hub 与 Vite，健康检查通过后自动打开 Web 页面；优先使用 PowerShell 7，未安装时兼容回退到 Windows PowerShell 5.1。
+
+首次需要桌面入口时运行：
+
+```powershell
+pwsh -NoProfile -File supplemental\scripts\install-dev-shortcut.ps1
+```
+
+需要强制重启时仍使用标准维护命令：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\run-hub-dev.ps1 -Restart

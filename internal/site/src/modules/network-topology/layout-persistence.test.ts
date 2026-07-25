@@ -22,12 +22,12 @@ test("detects a remote update immediately before saving", async () => {
 		layoutKey: "network-home",
 		userId: "user-a",
 		collection: {
-			getOne: async () => record("layout-a", "2026-07-22 20:00:00.000Z"),
-			update: async (...args: unknown[]) => {
+			getOne: () => Promise.resolve(record("layout-a", "2026-07-22 20:00:00.000Z")),
+			update: (...args: unknown[]) => {
 				updateCalls.push(args)
-				return record("layout-a", "2026-07-22 20:01:00.000Z")
+				return Promise.resolve(record("layout-a", "2026-07-22 20:01:00.000Z"))
 			},
-			create: async () => record("layout-a", "2026-07-22 20:01:00.000Z"),
+			create: () => Promise.resolve(record("layout-a", "2026-07-22 20:01:00.000Z")),
 		},
 	})
 
@@ -50,12 +50,12 @@ test("serializes and saves an unchanged existing layout", async () => {
 		layoutKey: "network-home",
 		userId: "user-a",
 		collection: {
-			getOne: async () => record("layout-a", "2026-07-22 19:00:00.000Z"),
-			update: async (id, payload) => {
+			getOne: () => Promise.resolve(record("layout-a", "2026-07-22 19:00:00.000Z")),
+			update: (id, payload) => {
 				updateCalls.push({ id, payload })
-				return record(id, "2026-07-22 19:01:00.000Z")
+				return Promise.resolve(record(id, "2026-07-22 19:01:00.000Z"))
 			},
-			create: async () => record("layout-a", "2026-07-22 19:01:00.000Z"),
+			create: () => Promise.resolve(record("layout-a", "2026-07-22 19:01:00.000Z")),
 		},
 	})
 
@@ -84,15 +84,11 @@ test("creates a missing layout and returns request failures without throwing", a
 		layoutKey: "network-technology",
 		userId: "user-a",
 		collection: {
-			getOne: async () => {
-				throw new Error("not used")
-			},
-			update: async () => {
-				throw new Error("not used")
-			},
-			create: async (payload) => {
+			getOne: () => Promise.reject(new Error("not used")),
+			update: () => Promise.reject(new Error("not used")),
+			create: (payload) => {
 				createCalls.push(payload)
-				return record("layout-new", "2026-07-22 21:00:00.000Z")
+				return Promise.resolve(record("layout-new", "2026-07-22 21:00:00.000Z"))
 			},
 		},
 	})
@@ -107,13 +103,9 @@ test("creates a missing layout and returns request failures without throwing", a
 		layoutKey: "network-home",
 		userId: "user-a",
 		collection: {
-			getOne: async () => record("layout-a", "2026-07-22 19:00:00.000Z"),
-			update: async () => {
-				throw error
-			},
-			create: async () => {
-				throw error
-			},
+			getOne: () => Promise.resolve(record("layout-a", "2026-07-22 19:00:00.000Z")),
+			update: () => Promise.reject(error),
+			create: () => Promise.reject(error),
 		},
 	})
 	assert.deepEqual(failed, { status: "failed", error })

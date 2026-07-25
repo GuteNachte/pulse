@@ -73,7 +73,7 @@ export function AssetListHeader() {
 		<div className="sticky top-0 z-10 hidden grid-cols-[minmax(0,1fr)_2.75rem] border-b border-border/70 bg-surface-soft text-[11px] font-medium text-muted-foreground md:grid">
 			<div className={cn("grid items-center gap-3 px-3 py-2", assetListDesktopGridClassName)}>
 				{assetListColumns.map((column) => (
-					<span key={column.key} className="truncate">
+					<span key={column.key} className={cn("truncate", column.key === "status" && "text-right")}>
 						{column.label}
 					</span>
 				))}
@@ -148,8 +148,12 @@ export function AssetListItem({
 					<span className="block truncate text-xs text-foreground">{network.accessLabel}</span>
 				</span>
 				<div className="hidden min-w-0 grid-cols-[minmax(0,1fr)_2.75rem] items-center gap-1 md:grid">
-					<div className="min-w-0 justify-self-end">
-						{monitored && <AssetCardMetaTag tone="ok">监控</AssetCardMetaTag>}
+					<div className="flex min-w-0 items-center justify-end">
+						{monitored && (
+							<AssetCardMetaTag tone="ok" className="inline-flex h-5 items-center py-0">
+								监控
+							</AssetCardMetaTag>
+						)}
 					</div>
 					<AssetCompletenessScoreTag score={completeness.score} />
 					<div className="col-span-2 max-w-full truncate text-right text-[11px] text-muted-foreground">
@@ -221,7 +225,7 @@ export function AssetPreviewPanel({
 			: ""
 
 	return (
-		<aside className="sticky top-4 grid max-h-[calc(100vh-7rem)] min-h-[24rem] content-start gap-3 overflow-y-auto rounded-lg border border-border/70 bg-card p-4 shadow-none">
+		<aside className="grid min-h-[24rem] content-start gap-3 rounded-lg border border-border/70 bg-card p-4 shadow-none xl:sticky xl:top-16 xl:self-start xl:max-h-[calc(100dvh-5rem)] xl:overflow-y-auto">
 			<div className="flex min-w-0 items-start gap-3">
 				<div className="grid size-11 shrink-0 place-items-center rounded-md border border-border/70 bg-surface-soft text-muted-foreground">
 					<Icon className="size-5" />
@@ -513,7 +517,15 @@ function InfoRow({ label, value, mono }: { label: string; value: string; mono?: 
 	)
 }
 
-function AssetCardMetaTag({ children, tone = "neutral" }: { children: ReactNode; tone?: AssetLifecycleTone }) {
+function AssetCardMetaTag({
+	children,
+	tone = "neutral",
+	className,
+}: {
+	children: ReactNode
+	tone?: AssetLifecycleTone
+	className?: string
+}) {
 	return (
 		<span
 			className={cn(
@@ -524,7 +536,8 @@ function AssetCardMetaTag({ children, tone = "neutral" }: { children: ReactNode;
 						? "border-amber-200 bg-amber-50 text-amber-700"
 						: tone === "ok"
 							? "border-emerald-200 bg-emerald-50 text-emerald-700"
-							: "border-border/70 bg-card text-muted-foreground"
+							: "border-border/70 bg-card text-muted-foreground",
+				className
 			)}
 		>
 			{children}

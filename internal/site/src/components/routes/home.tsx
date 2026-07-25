@@ -228,7 +228,7 @@ export default memo(() => {
 					unitNet={userSettings.unitNet}
 				/>
 			) : (
-				<div className="grid gap-5">
+				<div className="grid pulse-card-gap">
 					<NotificationFailuresBanner />
 					<ActiveAlerts />
 
@@ -254,14 +254,14 @@ export default memo(() => {
 						</div>
 					</section>
 
-					<section className="grid gap-4">
+					<section className="grid pulse-card-gap">
 						{moduleEnabled("network-topology") && (
 							<Suspense fallback={<EmptyState loading loadingText="正在加载网络拓扑" emptyText="暂无网络拓扑" />}>
 								<HomeNetworkTopology systems={homeSystems} />
 							</Suspense>
 						)}
 
-						<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+						<div className="grid pulse-card-gap sm:grid-cols-2 xl:grid-cols-5">
 							{moduleEnabled("asset-center") && (
 								<MetricCard
 									href={assetSummaryHref}
@@ -315,7 +315,7 @@ export default memo(() => {
 						</div>
 					</section>
 
-					<section className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.55fr)]">
+					<section className="grid pulse-card-gap xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.55fr)]">
 						<Card className="overflow-hidden border-border/70 bg-card shadow-none">
 							<CardHeader className="border-b border-border/70 bg-surface-soft px-5 py-4">
 								<div className="flex items-center justify-between gap-3">
@@ -337,7 +337,7 @@ export default memo(() => {
 								{recentSystems.length === 0 ? (
 									<EmptyState loading={false} loadingText="正在读取客户端数据" emptyText="暂无客户端数据" />
 								) : (
-									<div className="grid gap-3 md:grid-cols-2">
+									<div className="grid pulse-card-gap md:grid-cols-2">
 										{recentSystems.map((system) => (
 											<RecentSystemCard key={system.id} system={system} unitNet={userSettings.unitNet} />
 										))}
@@ -346,7 +346,7 @@ export default memo(() => {
 							</CardContent>
 						</Card>
 
-						<div className="grid content-start gap-4">
+						<div className="grid content-start pulse-card-gap">
 							<Card className="overflow-hidden border-border/70 bg-card shadow-none">
 								<CardHeader className="border-b border-border/70 bg-surface-soft px-5 py-4">
 									<CardTitle className="text-xl">状态分布</CardTitle>

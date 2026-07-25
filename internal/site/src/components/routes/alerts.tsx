@@ -235,8 +235,8 @@ export default function AlertsCenter() {
 					</div>
 				</CardHeader>
 				<CardContent className="p-0 pt-4">
-					<div className="grid gap-4">
-						<div className="grid gap-3 md:grid-cols-3">
+					<div className="grid pulse-card-gap">
+						<div className="grid pulse-card-gap md:grid-cols-3">
 							<AlertSummaryCard
 								title="当前未恢复"
 								value={loading ? "..." : currentAlerts.length}
@@ -389,7 +389,7 @@ function CurrentAlertsList({
 		)
 	}
 	return (
-		<div className="grid gap-2">
+		<div className="grid pulse-card-gap">
 			{records.map((record) => (
 				<div
 					key={record.id}
@@ -486,7 +486,7 @@ function AlertDetailSheet({
 					</SheetDescription>
 				</SheetHeader>
 				{record && (
-					<div className="grid gap-4 px-4 py-4 sm:px-6">
+					<div className="grid pulse-card-gap px-4 py-4 sm:px-6">
 						<div className="grid gap-2 sm:grid-cols-2">
 							<AlertDetailRow label="状态" value={alertStateLabel(record)} />
 							<AlertDetailRow label="级别" value={alertSeverityLabel(record)} />

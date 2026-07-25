@@ -43,7 +43,7 @@ test("loads the home topology layout with only graph-required fields", async () 
 			collection: "asset_interfaces",
 			options: {
 				sort: "created",
-				fields: "id,user,asset,name,kind,ipv4,ipv6,mac,speed_mbps,created,updated",
+				fields: "id,user,asset,name,kind,ipv4,ipv6,mac,speed_mbps,connected,primary,source,metadata,created,updated",
 				requestKey: null,
 			},
 		},
@@ -69,7 +69,7 @@ test("loads the home topology layout with only graph-required fields", async () 
 test("uses the independent technology topology layout key", async () => {
 	let layoutOptions: Record<string, unknown> | undefined
 	const emptyCollection = <T>() => ({
-		getFullList: async () => [] as T[],
+		getFullList: () => Promise.resolve([] as T[]),
 	})
 	await loadTopologyData({
 		collections: {
@@ -77,9 +77,9 @@ test("uses the independent technology topology layout key", async () => {
 			interfaces: emptyCollection<AssetInterfaceRecord>(),
 			relations: emptyCollection<AssetRelationRecord>(),
 			layouts: {
-				getFullList: async (options) => {
+				getFullList: (options) => {
 					layoutOptions = options
-					return []
+					return Promise.resolve([])
 				},
 			},
 			details: emptyCollection<SystemDetailsRecord>(),

@@ -67,7 +67,7 @@ export function StatusSummaryCards({
 	})
 
 	return (
-		<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6">
+		<div className="grid pulse-card-gap sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6">
 			{items.map((item) => (
 				<MetricOverviewCard
 					key={item.key}

@@ -161,6 +161,10 @@ func (h *Hub) registerApiRouteGroup(se *core.ServeEvent, prefix string) error {
 	apiAuth.DELETE("/important-monitoring/rules/{kind}/{id}", h.deleteImportantMonitoringRule).BindFunc(excludeReadOnlyRole).BindFunc(clientMonitoringModule)
 	apiAuth.DELETE("/systems/{id}", h.deleteSystemAndRelatedData).BindFunc(excludeReadOnlyRole).BindFunc(clientMonitoringModule)
 	apiAuth.POST("/assets/{id}/enrichment-reports", h.generateAssetEnrichmentReport).BindFunc(excludeReadOnlyRole).BindFunc(assetCenterModule)
+	apiAuth.POST("/assets/migrations/export", h.exportAssetMigrationPackage).BindFunc(excludeReadOnlyRole).BindFunc(assetCenterModule)
+	apiAuth.POST("/assets/migrations/upload", h.uploadAssetMigrationPackage).BindFunc(excludeReadOnlyRole).BindFunc(assetCenterModule)
+	apiAuth.POST("/assets/migrations/{id}/preflight", h.preflightAssetMigrationUpload).BindFunc(excludeReadOnlyRole).BindFunc(assetCenterModule)
+	apiAuth.POST("/assets/migrations/{id}/apply", h.applyAssetMigrationUpload).BindFunc(excludeReadOnlyRole).BindFunc(assetCenterModule)
 	apiAuth.POST("/assets/{id}/internet-addresses/refresh", h.refreshInternetPublicAddresses).BindFunc(excludeReadOnlyRole).BindFunc(assetCenterModule)
 	apiAuth.POST("/assets/{id}/internet-addresses/settings", h.updateInternetPublicAddressSettings).BindFunc(excludeReadOnlyRole).BindFunc(assetCenterModule)
 	apiAuth.POST("/assets/{id}/visuals/turntable", h.generateAssetTurntableVisual).BindFunc(excludeReadOnlyRole).BindFunc(assetCenterModule)
@@ -195,9 +199,12 @@ func (h *Hub) registerApiRouteGroup(se *core.ServeEvent, prefix string) error {
 	apiAuth.DELETE("/users/{id}", h.deleteAppUser).BindFunc(requireAdminRole)
 	apiAuth.GET("/backups", h.listBackups).BindFunc(requireAdminRole).BindFunc(maintenanceModule)
 	apiAuth.POST("/backups", h.createBackup).BindFunc(requireAdminRole).BindFunc(maintenanceModule)
+	apiAuth.POST("/backups/upload", h.uploadPortableBackup).BindFunc(requireAdminRole).BindFunc(maintenanceModule)
+	apiAuth.POST("/backups/{key}/preflight", h.preflightPortableBackup).BindFunc(requireAdminRole).BindFunc(maintenanceModule)
 	apiAuth.GET("/backups/{key}", h.downloadBackup).BindFunc(requireAdminRole).BindFunc(maintenanceModule)
 	apiAuth.DELETE("/backups/{key}", h.deleteBackup).BindFunc(requireAdminRole).BindFunc(maintenanceModule)
 	apiAuth.POST("/backups/{key}/restore", h.restoreBackup).BindFunc(requireAdminRole).BindFunc(maintenanceModule)
+	apiAuth.GET("/backups/tasks/{id}", h.getPortableRestoreTask).BindFunc(requireAdminRole).BindFunc(maintenanceModule)
 	apiAuth.POST("/website-monitors/{id}/check", h.checkWebsiteMonitorNow).BindFunc(excludeReadOnlyRole).BindFunc(websiteMonitoringModule)
 	// /containers routes
 	if enabled, _ := utils.GetEnv("CONTAINER_DETAILS"); enabled != "false" {

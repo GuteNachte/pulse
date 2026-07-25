@@ -316,6 +316,7 @@ $agentHubUrl = if (-not [string]::IsNullOrWhiteSpace($env:PULSE_HUB_AGENT_HUB_UR
     Get-DefaultAgentHubUrl -Port $HubPort
 }
 $env:PULSE_HUB_AGENT_HUB_URL = $agentHubUrl
+$lanAddress = Get-PreferredAgentHubIPv4Address
 Write-Step "Agent Hub URL: $agentHubUrl"
 
 if ($Restart) {
@@ -333,7 +334,7 @@ if ($Stop) {
     $docker = Get-Command docker -ErrorAction SilentlyContinue
     if ($docker) {
         try {
-            docker info | Out-Null
+            docker info 2>$null | Out-Null
             $existing = docker ps -a --filter "name=^/pulse-hub$" --format "{{.Names}}" 2>$null
             if ($existing -eq "pulse-hub") {
                 Write-Step "Removing local Docker container 'pulse-hub' so port $HubPort stays clean"
@@ -346,7 +347,7 @@ if ($Stop) {
 
 $viteListening = Get-NetTCPConnection -LocalPort $VitePort -State Listen -ErrorAction SilentlyContinue
 if (-not $viteListening) {
-    Write-Step "Starting Vite on http://127.0.0.1:$VitePort"
+    Write-Step "Starting Vite on all IPv4 interfaces (port $VitePort)"
     $nodePath = (Get-Command node.exe -ErrorAction Stop).Source
     $viteCli = Join-Path $siteDir "node_modules\vite\bin\vite.js"
     if (-not (Test-Path $viteCli)) {
@@ -354,7 +355,7 @@ if (-not $viteListening) {
     }
     Start-DevProcess `
         -FilePath $nodePath `
-        -ArgumentList @($viteCli, "--host", "127.0.0.1", "--port", "$VitePort") `
+        -ArgumentList @($viteCli, "--host", "0.0.0.0", "--port", "$VitePort") `
         -WorkingDirectory $siteDir `
         -StandardOutputPath (Join-Path $logDir "vite.out.log") `
         -StandardErrorPath (Join-Path $logDir "vite.err.log") `
@@ -397,8 +398,12 @@ do {
         $health = Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 -Uri "http://127.0.0.1:$HubPort/api/health"
         if ($health.StatusCode -eq 200) {
             Write-Step "Ready:"
-            Write-Step "  Dev UI:  http://localhost:$VitePort"
-            Write-Step "  Hub API: http://127.0.0.1:$HubPort"
+            Write-Step "  Local UI:  http://localhost:$VitePort"
+            if ($lanAddress) {
+                Write-Step "  LAN UI:    http://${lanAddress}:$VitePort"
+                Write-Step "  LAN Hub:   http://${lanAddress}:$HubPort"
+            }
+            Write-Step "  Local Hub: http://127.0.0.1:$HubPort"
             return
         }
     } catch {

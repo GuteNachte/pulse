@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs"
 
 const workspace = readFileSync(new URL("./asset-showcase-workspace.tsx", import.meta.url), "utf8")
 const columns = readFileSync(new URL("./asset-parameter-columns.tsx", import.meta.url), "utf8")
+const globalStyles = readFileSync(new URL("../../../index.css", import.meta.url), "utf8")
 const media = readFileSync(new URL("./asset-media-showcase.tsx", import.meta.url), "utf8")
 const tags = readFileSync(new URL("./asset-showcase-tags.tsx", import.meta.url), "utf8")
 const page = readFileSync(new URL("../asset-detail-page.tsx", import.meta.url), "utf8")
@@ -103,10 +104,11 @@ assert.equal(
 	"desktop archives must not stretch every short row to full width"
 )
 assert.equal(
-	columns.includes('className="grid items-stretch gap-2.5 p-3 lg:grid-cols-2"'),
+	columns.includes('className="grid items-stretch pulse-card-gap p-3 lg:grid-cols-2"'),
 	true,
 	"desktop parameter cards must keep equal heights only within each row"
 )
+assert.equal(globalStyles.includes("--pulse-card-gap: 10px;"), true, "shared card spacing must remain 10px")
 assert.equal(columns.includes("lg:auto-rows-fr"), false, "different parameter rows must keep natural heights")
 assert.equal(columns.includes('className="grid auto-rows-fr'), false, "small screens must keep natural card heights")
 assert.equal(
@@ -120,7 +122,7 @@ assert.equal(
 	"long parameter groups must not force a full-width desktop card"
 )
 assert.equal(
-	workspace.includes('className="grid items-start gap-4 xl:grid-cols'),
+	workspace.includes('className="grid items-start pulse-card-gap xl:grid-cols'),
 	true,
 	"workspace spacing must stay compact"
 )

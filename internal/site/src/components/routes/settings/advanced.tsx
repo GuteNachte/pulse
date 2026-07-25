@@ -15,7 +15,7 @@ export default function Advanced() {
 	const tokenHref = getPagePath($router, "settings", { name: "tokens" })
 
 	return (
-		<div className="grid gap-4 md:gap-5">
+		<div className="grid pulse-card-gap">
 			<MobileAdvancedSettingsView pocketbaseHref={pocketbaseHref} tokenHref={tokenHref} />
 			<section className="hidden overflow-hidden rounded-lg border border-border/70 bg-surface-soft shadow-none md:block">
 				<div className="border-b border-border/70 bg-card px-5 py-4">
@@ -61,7 +61,7 @@ export default function Advanced() {
 							</div>
 						</div>
 					</div>
-					<div className="grid gap-3 lg:grid-cols-2">
+					<div className="grid pulse-card-gap lg:grid-cols-2">
 						<a
 							href={pocketbaseHref}
 							className="group rounded-lg border border-border/70 bg-card p-3 shadow-none transition-[background-color,border-color,transform] duration-150 ease-out hover:bg-surface-soft active:scale-[0.96]"

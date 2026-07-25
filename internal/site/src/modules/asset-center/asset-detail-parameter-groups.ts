@@ -296,7 +296,11 @@ function getDetailRowSection(
 	if (assetType === "ont" && originalSection === "身份与归属") return "接入角色"
 	if (assetType === "ont" && originalSection === "设备身份标识") return "网络标识"
 	if (fieldKey === "power_spec") return "供电规格"
-	return registrySection
+	return normalizeDetailSectionTitle(registrySection)
+}
+
+function normalizeDetailSectionTitle(section: string | undefined) {
+	return section?.replace(/\s+\d+$/, "")
 }
 
 function sortDetailRows(assetType: AssetRecord["type"], rows: AssetParameterRow[]) {

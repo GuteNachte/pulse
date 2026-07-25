@@ -11,7 +11,8 @@ type TopologyCollection<T> = {
 }
 
 const assetFields = "id,name,type,vendor,model,management_ip,role,metadata"
-const interfaceFields = "id,user,asset,name,kind,ipv4,ipv6,mac,speed_mbps,created,updated"
+const interfaceFields =
+	"id,user,asset,name,kind,ipv4,ipv6,mac,speed_mbps,connected,primary,source,metadata,created,updated"
 const relationFields = "id,source_asset,target_asset,kind,label,metadata"
 const layoutFields = "id,key,layout,updated"
 const systemDetailsFields = "id,network_interfaces"

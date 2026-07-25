@@ -58,7 +58,7 @@ export default function Navbar() {
 	const moduleEnabled = (id: PulseModuleId) => moduleSettings[id]?.effectiveEnabled !== false
 
 	return (
-		<div className="my-1 flex h-10 items-center rounded-none border-0 bg-transparent px-1 pe-0 sm:px-2 md:my-4 md:h-16 md:rounded-lg md:border md:border-border md:bg-card md:px-5 md:shadow-none">
+		<div className="my-1 flex h-10 items-center rounded-none border-0 bg-transparent px-1 pe-0 sm:px-2 md:my-[10px] md:h-16 md:rounded-lg md:border md:border-border md:bg-card md:px-5 md:shadow-none">
 			<Link
 				href={getPagePath($router, "home")}
 				aria-label="首页"

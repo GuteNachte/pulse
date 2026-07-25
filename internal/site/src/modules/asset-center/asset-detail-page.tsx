@@ -241,6 +241,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			const {
 				asset: assetRecord,
 				interfaces,
+				allInterfaces,
 				relations,
 			} = await loadAssetDetailPrimaryData(
 				{
@@ -254,7 +255,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			setState((current) =>
 				applyAssetDetailPrimaryData(
 					current,
-					{ asset: assetRecord, interfaces, relations },
+					{ asset: assetRecord, interfaces, allInterfaces, relations },
 					{ preserveSecondaryData: preserveContent }
 				)
 			)
@@ -429,7 +430,12 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 			metadata: {
 				enabled: form.get("enabled") !== "no",
 				role: form.get("interface_role")?.toString() || "",
-				...(kind === "wifi" ? { band: form.get("band")?.toString() || "" } : {}),
+				...(kind === "wifi"
+					? {
+							wifi_standard: form.get("wifi_standard")?.toString() || "",
+							band: form.get("band")?.toString() || "",
+						}
+					: {}),
 				connection_note: form.get("connection_note")?.toString().trim() || "",
 				notes: form.get("notes")?.toString().trim() || "",
 			},
@@ -1074,7 +1080,7 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 	const AssetIcon = getAssetIcon(asset.type)
 	const assetTag = getMetadataString(asset.metadata, "asset_tag")
 	return (
-		<div className="grid gap-4">
+		<div className="grid pulse-card-gap">
 			<section className="rounded-lg border border-border/70 bg-card px-4 py-3 shadow-none">
 				<div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
 					<div className="min-w-0">
@@ -1282,15 +1288,32 @@ export default memo(function AssetDetailPage({ id }: { id: string }) {
 									defaultValue={getMetadataString(editingInterface?.metadata, "role") || "lan"}
 								/>
 								{interfaceKindDraft === "wifi" ? (
-									<SelectField
-										name="band"
-										label="无线频段"
-										options={[
-											{ value: "2.4 GHz", label: "2.4 GHz" },
-											{ value: "5 GHz", label: "5 GHz" },
-										]}
-										defaultValue={getMetadataString(editingInterface?.metadata, "band") || "5 GHz"}
-									/>
+									<>
+										<SelectField
+											name="wifi_standard"
+											label="无线标准"
+											placeholder="选择标准"
+											options={[
+												{ value: "Wi-Fi 4", label: "Wi-Fi 4" },
+												{ value: "Wi-Fi 5", label: "Wi-Fi 5" },
+												{ value: "Wi-Fi 6", label: "Wi-Fi 6" },
+												{ value: "Wi-Fi 6E", label: "Wi-Fi 6E" },
+												{ value: "Wi-Fi 7", label: "Wi-Fi 7" },
+											]}
+											defaultValue={getMetadataString(editingInterface?.metadata, "wifi_standard")}
+										/>
+										<SelectField
+											name="band"
+											label="无线频段"
+											placeholder="选择频段"
+											options={[
+												{ value: "2.4 GHz", label: "2.4 GHz" },
+												{ value: "5 GHz", label: "5 GHz" },
+												{ value: "6 GHz", label: "6 GHz" },
+											]}
+											defaultValue={getMetadataString(editingInterface?.metadata, "band")}
+										/>
+									</>
 								) : null}
 								<SelectField
 									name="connected"

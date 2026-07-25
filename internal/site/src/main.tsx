@@ -270,7 +270,7 @@ const Layout = () => {
 						className={cn(
 							"container",
 							!isMobile &&
-								"sticky top-0 z-40 bg-background/95 py-1 backdrop-blur supports-[backdrop-filter]:bg-background/85"
+								"sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85"
 						)}
 					>
 						<Navbar />

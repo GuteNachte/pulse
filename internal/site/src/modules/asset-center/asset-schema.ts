@@ -268,6 +268,28 @@ const hostHardwareDetailFields: AssetFieldDefinition[] = [
 		capture: "future_collectable",
 	},
 	{
+		key: "bios_version",
+		label: "BIOS 版本",
+		source: "metadata",
+		placeholder: "例如 1.20 / F20",
+		capture: "future_collectable",
+	},
+	{
+		key: "bios_date",
+		label: "BIOS 日期",
+		source: "metadata",
+		type: "date",
+		placeholder: "例如 2024-03-06",
+		capture: "future_collectable",
+	},
+	{
+		key: "cpu_cores",
+		label: "CPU 核心 / 线程",
+		source: "metadata",
+		placeholder: "例如 8 核 / 16 线程",
+		capture: "future_collectable",
+	},
+	{
 		key: "gpu_detail",
 		label: "显卡品牌 / 型号",
 		source: "metadata",
@@ -500,6 +522,18 @@ const hostTypeSpecificFields: Partial<Record<AssetType, AssetFieldDefinition[]>>
 		{ key: "release_date", label: "上市日期", source: "metadata", placeholder: "例如 Q4'22 / 2022-10" },
 	],
 }
+
+const nasPlatformFields: AssetFieldDefinition[] = [
+	{ key: "storage_slots", label: "官方存储接口", source: "metadata", placeholder: "SATA 3.0 x1 / M.2 Key-M 2280 x1" },
+	{ key: "pcie_slots", label: "扩展接口", source: "metadata", placeholder: "mPCIe x1" },
+	{ key: "display_outputs", label: "显示输出", source: "metadata", placeholder: "DP x1 / HDMI x1" },
+	{ key: "usb_ports", label: "外部接口", source: "metadata", placeholder: "USB / 串口 / SIM 卡槽 / 天线孔" },
+	{ key: "power_input", label: "输入电源", source: "metadata", placeholder: "DC 12V 10A" },
+	{ key: "cooling_system", label: "散热", source: "metadata", placeholder: "主动散热 / 智能机箱风扇" },
+	{ key: "net_weight_g", label: "净重 g", source: "metadata", type: "number", placeholder: "1250" },
+	{ key: "operating_temperature_range", label: "工作温度", source: "metadata", placeholder: "0°C 至 50°C" },
+	{ key: "operating_humidity_range", label: "工作湿度", source: "metadata", placeholder: "5% 至 90% RH，无凝露" },
+]
 
 export function getHostTypeSpecificFields(type: AssetType) {
 	return hostTypeSpecificFields[type] ?? []
@@ -1174,6 +1208,7 @@ export function getAssetFormSections(type: AssetType): AssetFieldSection[] {
 			{ title: "Agent 可采集规格", fields: hostSpecFields },
 			{ title: "硬件细节", fields: getHostHardwareDetailFields(type) },
 			...(typeSpecificFields.length ? [{ title: getHostTypeSpecificTitle(type), fields: typeSpecificFields }] : []),
+			...(type === "nas" ? [{ title: "NAS 平台与扩展", fields: nasPlatformFields }] : []),
 			{ title: "购买信息", fields: purchaseInfoFields },
 			{ title: "备注", fields: [{ key: "notes", label: "备注", source: "asset", span: "full" }] },
 		]

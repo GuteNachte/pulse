@@ -41,9 +41,9 @@ export default function SettingsProfilePage({ userSettings }: { userSettings: Us
 	}
 
 	return (
-		<div className="grid w-full gap-4 md:gap-5">
+		<div className="grid w-full pulse-card-gap">
 			<MobileGeneralSettingsForm userSettings={userSettings} isLoading={isLoading} onSubmit={handleSubmit} />
-			<form onSubmit={handleSubmit} className="hidden flex-col gap-4 md:flex">
+			<form onSubmit={handleSubmit} className="hidden flex-col pulse-card-gap md:flex">
 				<section className="rounded-lg border border-border/70 bg-surface-soft p-2 shadow-none">
 					<div className="rounded-md border border-border/70 bg-card p-3 shadow-none">
 						<div className="flex min-w-0 items-center justify-between gap-4">
@@ -69,7 +69,7 @@ export default function SettingsProfilePage({ userSettings }: { userSettings: Us
 							</Button>
 						</div>
 					</div>
-					<div className="mt-2 grid gap-2 lg:grid-cols-4">
+					<div className="mt-2 grid pulse-card-gap lg:grid-cols-4">
 						<PreferenceSummaryCard icon={PaletteIcon} label="主题" value={getThemeLabel(theme)} detail="当前显示模式" />
 						<PreferenceSummaryCard
 							icon={ClockIcon}
@@ -276,7 +276,7 @@ function DesktopSettingSection({
 				</div>
 				<p className="mt-2 text-pretty text-xs leading-relaxed text-muted-foreground">{description}</p>
 			</div>
-			<div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">{children}</div>
+			<div className="grid min-w-0 pulse-card-gap sm:grid-cols-2 xl:grid-cols-3">{children}</div>
 		</section>
 	)
 }

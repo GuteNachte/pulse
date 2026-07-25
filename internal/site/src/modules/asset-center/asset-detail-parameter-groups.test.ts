@@ -69,11 +69,28 @@ const fullyProfiledHost = {
 	metadata: {
 		form_factor: "迷你主机",
 		motherboard_model: "AMD FP7",
+		motherboard_vendor: "Shenzhen Meigao Electronic Equipment Co., Ltd.",
+		bios_vendor: "American Megatrends International, LLC.",
+		bios_version: "1.20",
+		bios_date: "2024-03-06",
+		cpu_vendor: "AMD",
 		cpu_model: "AMD Ryzen 9 6900HX",
+		cpu_cores: "8 核 / 16 线程",
 		memory_gb: 32,
+		memory_vendor: "Hynix",
+		memory_detail: "16 GB x 2",
 		gpu_model: "Radeon 680M",
+		gpu_vendor: "AMD",
+		gpu_detail: "处理器集成显卡",
 		storage_summary: "1 TB NVMe SSD",
+		storage_vendor: "Great Wall",
+		storage_model: "GW3300 1TB",
+		storage_media: "NVMe SSD",
 		primary_nic_speed_mbps: 2500,
+		nic_vendor: "Intel",
+		nic_model: "I225-V",
+		wifi_vendor: "MediaTek",
+		wifi_model: "RZ608 Wi-Fi 6E 80MHz",
 		power_adapter_w: 120,
 		display_outputs: "HDMI 2.1 x 2",
 		usb_ports: "USB4 x 2",
@@ -89,6 +106,40 @@ assertDeepEqual(
 		.find((group) => group.title === "电源")
 		?.rows.map((row) => [row.label, row.value]),
 	[["电源", "120"]]
+)
+assertDeepEqual(
+	buildAssetParameterGroups(fullyProfiledHost)
+		.find((group) => group.title === "主板与平台")
+		?.rows.map((row) => [row.label, row.value]),
+	[
+		["主板品牌", "Shenzhen Meigao Electronic Equipment Co., Ltd."],
+		["主板型号", "AMD FP7"],
+		["BIOS 厂商", "American Megatrends International, LLC."],
+		["BIOS 版本", "1.20"],
+		["BIOS 日期", "2024-03-06"],
+	]
+)
+assertDeepEqual(
+	buildAssetParameterGroups(fullyProfiledHost)
+		.find((group) => group.title === "处理器")
+		?.rows.map((row) => [row.label, row.value]),
+	[
+		["CPU 厂商", "AMD"],
+		["CPU 型号", "AMD Ryzen 9 6900HX"],
+		["CPU 核心 / 线程", "8 核 / 16 线程"],
+	]
+)
+assertDeepEqual(
+	buildAssetParameterGroups(fullyProfiledHost)
+		.find((group) => group.title === "网络")
+		?.rows.map((row) => [row.label, row.value]),
+	[
+		["主网卡速率", "2500 Mbps"],
+		["有线网卡品牌", "Intel"],
+		["有线网卡型号", "I225-V"],
+		["无线网卡品牌", "MediaTek"],
+		["无线网卡型号", "RZ608 Wi-Fi 6E 80MHz"],
+	]
 )
 assertDeepEqual(
 	buildAssetParameterGroups(fullyProfiledHost)
@@ -131,6 +182,8 @@ assertDeepEqual(
 		?.rows.map((row) => [row.label, row.value]),
 	[
 		["内存容量", "32 GB"],
+		["内存品牌", "Hynix"],
+		["内存规格", "16 GB x 2"],
 		["当前内存类型", "DDR5"],
 		["当前内存频率", "4800 MHz"],
 		["支持内存类型", "笔记本 DDR5"],
@@ -162,6 +215,8 @@ const nas = {
 		bay_count: 4,
 		raid_mode: "RAID 5",
 		filesystem: "Btrfs",
+		storage_slots: "SATA 3.0 x1；M.2 Key-M 2280 x1",
+		net_weight_g: 1250,
 	},
 } as unknown as AssetRecord
 
@@ -170,6 +225,7 @@ assertDeepEqual(
 		.filter((group) => group.title === "存储")
 		.flatMap((group) => group.rows.map((row) => [row.label, row.value])),
 	[
+		["官方存储接口", "SATA 3.0 x1；M.2 Key-M 2280 x1"],
 		["硬盘位数量", "4"],
 		["阵列 / RAID", "RAID 5"],
 		["文件系统", "Btrfs"],
@@ -187,8 +243,14 @@ const nasDetailFieldLabels = new Set(
 		?.rows.map((row) => row.label)
 )
 assertDeepEqual(
-	[...nasDetailFieldLabels].sort(),
+	[...nasDetailFieldLabels].filter((label) => ["硬盘位数量", "阵列 / RAID", "文件系统"].includes(label)).sort(),
 	[...nasEditFieldLabels].filter((label) => ["硬盘位数量", "阵列 / RAID", "文件系统"].includes(label)).sort()
+)
+assertDeepEqual(
+	buildAssetParameterGroups(nas)
+		.flatMap((group) => group.rows.map((row) => row.section))
+		.some((section) => /\s+\d+$/.test(section ?? "")),
+	false
 )
 
 const internet = {

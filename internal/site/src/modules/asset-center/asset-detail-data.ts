@@ -73,6 +73,7 @@ type PagedCollection<T> = {
 export type AssetDetailPrimaryData = {
 	asset: AssetRecord
 	interfaces: AssetInterfaceRecord[]
+	allInterfaces: AssetInterfaceRecord[]
 	relations: AssetRelationRecord[]
 }
 
@@ -87,7 +88,7 @@ export function applyAssetDetailPrimaryData(
 			asset: data.asset,
 			assets: [data.asset],
 			interfaces: data.interfaces,
-			allInterfaces: data.interfaces,
+			allInterfaces: data.allInterfaces,
 			relations: data.relations,
 		}
 	}
@@ -115,13 +116,8 @@ export async function loadAssetDetailPrimaryData(
 	},
 	assetId: string
 ): Promise<AssetDetailPrimaryData> {
-	const [asset, interfaces, relations] = await Promise.all([
+	const [asset, relations] = await Promise.all([
 		collections.assets.getOne(assetId, { requestKey: null }),
-		collections.interfaces.getFullList({
-			filter: `asset="${escapePocketBaseFilterValue(assetId)}"`,
-			sort: "-primary,kind,name",
-			requestKey: null,
-		}),
 		collections.relations.getFullList({
 			filter: `source_asset="${escapePocketBaseFilterValue(assetId)}" || target_asset="${escapePocketBaseFilterValue(assetId)}"`,
 			sort: "kind,created",
@@ -129,7 +125,26 @@ export async function loadAssetDetailPrimaryData(
 			requestKey: null,
 		}),
 	])
-	return { asset, interfaces, relations }
+	const relationInterfaceIds = Array.from(
+		new Set(
+			relations.flatMap((relation) =>
+				[relation.metadata?.source_interface, relation.metadata?.target_interface].filter(
+					(value): value is string => typeof value === "string" && value.trim().length > 0
+				)
+			)
+		)
+	)
+	const interfaceFilter = [
+		`asset="${escapePocketBaseFilterValue(assetId)}"`,
+		...relationInterfaceIds.map((interfaceId) => `id="${escapePocketBaseFilterValue(interfaceId)}"`),
+	].join(" || ")
+	const allInterfaces = await collections.interfaces.getFullList({
+		filter: interfaceFilter,
+		sort: "-primary,kind,name",
+		requestKey: null,
+	})
+	const interfaces = allInterfaces.filter((record) => record.asset === assetId)
+	return { asset, interfaces, allInterfaces, relations }
 }
 
 export type AssetDetailSecondaryData = {

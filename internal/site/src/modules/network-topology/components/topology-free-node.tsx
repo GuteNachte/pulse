@@ -13,11 +13,16 @@ import {
 import { memo } from "react"
 import { getAssetTypeLabel } from "../../../lib/network-topology.ts"
 import { cn } from "../../../lib/utils.ts"
+import type { TopologyHandleId } from "../canvas-core/handles.ts"
 import type { PulseTopologyNodeData } from "../pulse-adapter.ts"
+import type { TopologyMedium } from "../topology-domain.ts"
 
 export const TOPOLOGY_FREE_NODE_TYPE = "pulseTopologyFree"
 
-export type TopologyFreeNodeData = PulseTopologyNodeData & { readOnly?: boolean }
+export type TopologyFreeNodeData = PulseTopologyNodeData & {
+	readOnly?: boolean
+	handleMedia?: Partial<Record<TopologyHandleId, TopologyMedium>>
+}
 
 export const TopologyFreeNode = memo(function TopologyFreeNode({
 	data,
@@ -41,10 +46,15 @@ export const TopologyFreeNode = memo(function TopologyFreeNode({
 				data.diagnosticCodes.length > 0 && "border-amber-500/45"
 			)}
 		>
-			<TopologyHandle id="top" position={Position.Top} readOnly={data.readOnly} />
-			<TopologyHandle id="right" position={Position.Right} readOnly={data.readOnly} />
-			<TopologyHandle id="bottom" position={Position.Bottom} readOnly={data.readOnly} />
-			<TopologyHandle id="left" position={Position.Left} readOnly={data.readOnly} />
+			<TopologyHandle id="top" position={Position.Top} medium={data.handleMedia?.top} readOnly={data.readOnly} />
+			<TopologyHandle id="right" position={Position.Right} medium={data.handleMedia?.right} readOnly={data.readOnly} />
+			<TopologyHandle
+				id="bottom"
+				position={Position.Bottom}
+				medium={data.handleMedia?.bottom}
+				readOnly={data.readOnly}
+			/>
+			<TopologyHandle id="left" position={Position.Left} medium={data.handleMedia?.left} readOnly={data.readOnly} />
 
 			<div className="grid size-9 place-items-center rounded-md border border-border bg-surface-soft text-muted-foreground">
 				<Icon aria-hidden="true" className="size-[18px] stroke-[1.8]" />
@@ -83,10 +93,12 @@ export const TopologyFreeNode = memo(function TopologyFreeNode({
 function TopologyHandle({
 	id,
 	position,
+	medium,
 	readOnly,
 }: {
-	id: "top" | "right" | "bottom" | "left"
+	id: TopologyHandleId
 	position: Position
+	medium?: TopologyMedium
 	readOnly?: boolean
 }) {
 	return (
@@ -95,7 +107,7 @@ function TopologyHandle({
 			type="source"
 			position={position}
 			isConnectable={!readOnly}
-			className={cn("pulse-free-handle", readOnly && "is-readonly")}
+			className={cn("pulse-free-handle", medium && "is-connected", medium && `is-${medium}`, readOnly && "is-readonly")}
 		/>
 	)
 }

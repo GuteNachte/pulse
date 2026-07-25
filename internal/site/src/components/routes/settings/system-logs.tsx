@@ -108,7 +108,7 @@ export default function SystemLogs() {
 			: undefined
 
 	return (
-		<div className="grid gap-4">
+		<div className="grid pulse-card-gap">
 			<div className="rounded-lg border border-border/70 bg-surface-soft p-3 sm:flex sm:items-center sm:justify-between sm:gap-4">
 				<div className="min-w-0">
 					<h3 className="text-lg font-semibold ">系统日志</h3>
@@ -126,7 +126,7 @@ export default function SystemLogs() {
 				</Button>
 			</div>
 
-			<div className="grid gap-2 sm:grid-cols-3">
+			<div className="grid pulse-card-gap sm:grid-cols-3">
 				<LogSummaryCard label="本页日志" value={`${visibleLogs.length} 条`} detail={`第 ${currentPage + 1} 页`} />
 				<LogSummaryCard
 					label="风险事件"

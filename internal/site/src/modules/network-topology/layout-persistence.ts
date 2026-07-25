@@ -10,10 +10,7 @@ export type SaveTopologyLayoutResult =
 	| { status: "failed"; error: unknown }
 
 type LayoutCollection = {
-	getOne: (
-		id: string,
-		options: { fields: string; requestKey: null }
-	) => Promise<NetworkLayoutRecord>
+	getOne: (id: string, options: { fields: string; requestKey: null }) => Promise<NetworkLayoutRecord>
 	update: (id: string, payload: Record<string, unknown>) => Promise<NetworkLayoutRecord>
 	create: (payload: Record<string, unknown>) => Promise<NetworkLayoutRecord>
 }
@@ -53,9 +50,7 @@ export async function saveTopologyLayout({
 			key: layoutKey,
 			layout: serializeTopologyLayout(layout),
 		}
-		const saved = record
-			? await collection.update(record.id, payload)
-			: await collection.create(payload)
+		const saved = record ? await collection.update(record.id, payload) : await collection.create(payload)
 		return { status: "saved", updated: saved.updated }
 	} catch (error) {
 		return { status: "failed", error }

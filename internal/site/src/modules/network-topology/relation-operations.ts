@@ -1,4 +1,5 @@
 import type { AssetInterfaceRecord, AssetRelationRecord } from "../../types.ts"
+import { normalizeHandleId, type TopologyHandleId } from "./canvas-core/handles.ts"
 import { withTopologyMetadata, type TopologyDomain, type TopologyMedium } from "./topology-domain.ts"
 
 export type NetworkRelationPayload = {
@@ -21,6 +22,8 @@ export type BuildNetworkRelationInput = {
 	targetAsset: string
 	sourceInterface: string
 	targetInterface: string
+	sourceHandle?: TopologyHandleId
+	targetHandle?: TopologyHandleId
 	domain: TopologyDomain
 	medium: TopologyMedium
 	interfaces: AssetInterfaceRecord[]
@@ -74,6 +77,8 @@ export function buildNetworkRelationPayload(
 					...input.metadata,
 					source_interface: input.sourceInterface,
 					target_interface: input.targetInterface,
+					source_handle: normalizeHandleId(input.sourceHandle ?? input.metadata?.source_handle),
+					target_handle: normalizeHandleId(input.targetHandle ?? input.metadata?.target_handle, "left"),
 				},
 				{ domain: input.domain, medium: input.medium }
 			),

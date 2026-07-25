@@ -25,22 +25,33 @@ function assertDeepEqual(actual: unknown, expected: unknown) {
 }
 
 const calls: Array<{ collection: string; options: Record<string, unknown> }> = []
-const asset = { id: "asset-1", name: "RedmiK50" } as unknown as AssetRecord
-const interfaces = [{ id: "interface-1", asset: "asset-1" }] as unknown as AssetInterfaceRecord[]
-const relations = [{ id: "relation-1", source_asset: "asset-1" }] as unknown as AssetRelationRecord[]
+const escapedAssetId = 'asset"bad\\id'
+const primaryAsset = { id: escapedAssetId, name: "RedmiK50" } as unknown as AssetRecord
+const primaryInterfaces = [
+	{ id: "interface-1", asset: escapedAssetId },
+	{ id: "peer-interface", asset: "asset-2" },
+] as unknown as AssetInterfaceRecord[]
+const relations = [
+	{
+		id: "relation-1",
+		source_asset: "asset-2",
+		target_asset: 'asset"bad\\id',
+		metadata: { source_interface: "peer-interface", target_interface: "interface-1" },
+	},
+] as unknown as AssetRelationRecord[]
 
 const primary = await loadAssetDetailPrimaryData(
 	{
 		assets: {
 			getOne(id, options) {
 				calls.push({ collection: "assets", options: { id, ...options } })
-				return Promise.resolve(asset)
+				return Promise.resolve(primaryAsset)
 			},
 		},
 		interfaces: {
 			getFullList(options) {
 				calls.push({ collection: "asset_interfaces", options })
-				return Promise.resolve(interfaces)
+				return Promise.resolve(primaryInterfaces)
 			},
 		},
 		relations: {
@@ -50,23 +61,37 @@ const primary = await loadAssetDetailPrimaryData(
 			},
 		},
 	},
-	'asset"bad\\id'
+	escapedAssetId
 )
 
-assertDeepEqual(primary, { asset, interfaces, relations })
+assertDeepEqual(primary, {
+	asset: primaryAsset,
+	interfaces: [primaryInterfaces[0]],
+	allInterfaces: primaryInterfaces,
+	relations,
+})
 assertDeepEqual(
 	calls.map((call) => ({ collection: call.collection, filter: call.options.filter, sort: call.options.sort })),
 	[
 		{ collection: "assets", filter: undefined, sort: undefined },
-		{ collection: "asset_interfaces", filter: 'asset="asset\\"bad\\\\id"', sort: "-primary,kind,name" },
 		{
 			collection: "asset_relations",
 			filter: 'source_asset="asset\\"bad\\\\id" || target_asset="asset\\"bad\\\\id"',
 			sort: "kind,created",
 		},
+		{
+			collection: "asset_interfaces",
+			filter: 'asset="asset\\"bad\\\\id" || id="peer-interface" || id="interface-1"',
+			sort: "-primary,kind,name",
+		},
 	]
 )
 
+const asset = { id: "asset-1", name: "RedmiK50" } as unknown as AssetRecord
+const interfaces = [
+	{ id: "interface-1", asset: "asset-1" },
+	{ id: "peer-interface", asset: "asset-2" },
+] as unknown as AssetInterfaceRecord[]
 const baseState = {
 	asset,
 	assets: [asset],
@@ -114,7 +139,12 @@ const refreshedInterfaces = [{ id: "interface-2", asset: "asset-1" }] as unknown
 const refreshedRelations = [{ id: "relation-2", source_asset: "asset-1" }] as unknown as AssetRelationRecord[]
 const refreshState = applyAssetDetailPrimaryData(
 	{ ...baseState, ...secondary, editCatalogLoaded: true },
-	{ asset: refreshedAsset, interfaces: refreshedInterfaces, relations: refreshedRelations },
+	{
+		asset: refreshedAsset,
+		interfaces: refreshedInterfaces,
+		allInterfaces: refreshedInterfaces,
+		relations: refreshedRelations,
+	},
 	{ preserveSecondaryData: true }
 )
 assertDeepEqual(refreshState.asset?.name, "RedmiK50 已更新")
@@ -149,7 +179,7 @@ assertDeepEqual(
 )
 assertDeepEqual(
 	catalogState.allInterfaces.map((item) => item.id),
-	["interface-1"]
+	["interface-1", "peer-interface"]
 )
 if (
 	applyAssetDetailEditCatalog(baseState, {

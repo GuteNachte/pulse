@@ -33,7 +33,10 @@ test("drops invalid points and restores a safe viewport", () => {
 			invalid: { x: Number.NaN, y: 3 },
 		},
 		edge_waypoints: {
-			relation: [{ x: 4, y: 5 }, { x: Number.POSITIVE_INFINITY, y: 6 }],
+			relation: [
+				{ x: 4, y: 5 },
+				{ x: Number.POSITIVE_INFINITY, y: 6 },
+			],
 		},
 		viewport: { x: 0, y: 0, zoom: 0 },
 	})

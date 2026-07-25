@@ -47,10 +47,7 @@ export function cloneSnapshot(snapshot: CanvasSnapshot): CanvasSnapshot {
 	return {
 		nodes: Object.fromEntries(Object.entries(snapshot.nodes).map(([id, point]) => [id, { ...point }])),
 		edgeWaypoints: Object.fromEntries(
-			Object.entries(snapshot.edgeWaypoints).map(([id, points]) => [
-				id,
-				points.map((point) => ({ ...point })),
-			])
+			Object.entries(snapshot.edgeWaypoints).map(([id, points]) => [id, points.map((point) => ({ ...point }))])
 		),
 	}
 }

@@ -74,7 +74,7 @@ export default memo(function NetworkSheet({
 					title={t`Network traffic of public interfaces`}
 					description="展示主网卡信息、上下行流量和接口累计流量。"
 				>
-					<div className="grid gap-4">
+					<div className="grid pulse-card-gap">
 						<PrimaryNetworkInterfaceInfoCard details={details} chartData={chartData} />
 						<NetworkDetailContent chartData={chartData} dataEmpty={dataEmpty} grid={grid} maxValues={maxValues} />
 					</div>
@@ -117,7 +117,7 @@ export function NetworkDetailContent({
 	}
 
 	return (
-		<div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+		<div className="grid grid-cols-1 pulse-card-gap xl:grid-cols-2">
 			<ChartCard
 				empty={dataEmpty}
 				grid={grid}
@@ -246,7 +246,7 @@ function NetworkInterfaceInfoCard({ networkInterface }: { networkInterface?: Net
 					<h3 className="truncate text-base font-semibold">{title}</h3>
 					{subtitle && <p className="mt-1 truncate text-xs text-muted-foreground">{subtitle}</p>}
 				</div>
-				<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+				<div className="grid pulse-card-gap sm:grid-cols-2 xl:grid-cols-4">
 					{rows.map((row) => (
 						<div key={row.label} className="min-w-0 rounded-md border border-border bg-card px-3 py-2">
 							<div className="text-[11px] font-medium text-muted-foreground">{row.label}</div>

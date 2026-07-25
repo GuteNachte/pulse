@@ -166,7 +166,7 @@ export default function AISettings() {
 	}
 
 	return (
-		<div className="grid gap-4 md:gap-5">
+		<div className="grid pulse-card-gap">
 			<section className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-none">
 				<div className="border-b border-border/70 bg-card px-4 py-3 md:px-5 md:py-4">
 					<div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -195,8 +195,8 @@ export default function AISettings() {
 						</div>
 					</div>
 				</div>
-				<div className="grid gap-4 p-4 md:p-5">
-					<div className="grid gap-4">
+				<div className="grid pulse-card-gap p-4 md:p-5">
+					<div className="grid pulse-card-gap">
 						<AssetMediaStoreSettingsPanel />
 						<SettingsPanel
 							icon={BrainCircuitIcon}
@@ -220,7 +220,7 @@ export default function AISettings() {
 							/>
 						</SettingsPanel>
 
-						<div className="grid gap-4 xl:grid-cols-2">
+						<div className="grid pulse-card-gap xl:grid-cols-2">
 							<SettingsPanel
 								icon={SparklesIcon}
 								title="资料补全 Agent"
@@ -303,7 +303,7 @@ export default function AISettings() {
 						</div>
 					</div>
 
-					<div className="grid gap-3 md:grid-cols-2">
+					<div className="grid pulse-card-gap md:grid-cols-2">
 						<ConfigStatusCard
 							icon={SparklesIcon}
 							title="文本模型接入"
@@ -317,7 +317,7 @@ export default function AISettings() {
 							active={form.visualEnabled}
 						/>
 					</div>
-					<div className="grid gap-3 md:grid-cols-2">
+					<div className="grid pulse-card-gap md:grid-cols-2">
 						<AgentTaskStatusCard title="资料补全 Agent" task={latestEnrichmentTask} />
 						<AgentTaskStatusCard title="设备图片 Agent" task={latestVisualTask} />
 					</div>

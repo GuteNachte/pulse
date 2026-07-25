@@ -113,7 +113,7 @@ export function AssetLocationSettingsDialog({
 					<DialogTitle>位置</DialogTitle>
 					<DialogDescription>维护位置与房间 / 子位置，资产录入时直接复用。</DialogDescription>
 				</DialogHeader>
-				<div className="grid min-h-0 gap-4 overflow-y-auto pr-1 md:grid-cols-[minmax(0,1fr)_20rem]">
+				<div className="grid min-h-0 pulse-card-gap overflow-y-auto pr-1 md:grid-cols-[minmax(0,1fr)_20rem]">
 					<div className="grid content-start gap-3">
 						<div className="grid gap-2 rounded-lg border border-border/70 bg-card p-3">
 							<div className="flex items-center justify-between gap-3 text-sm">

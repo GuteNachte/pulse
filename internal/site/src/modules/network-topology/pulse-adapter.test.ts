@@ -1,11 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import type {
-	AssetInterfaceRecord,
-	AssetRecord,
-	AssetRelationRecord,
-	SystemRecord,
-} from "../../types.ts"
+import type { AssetInterfaceRecord, AssetRecord, AssetRelationRecord, SystemRecord } from "../../types.ts"
 import { createEmptyLayout } from "./layout-v2.ts"
 import { buildPulseTopologyGraph } from "./pulse-adapter.ts"
 
@@ -15,12 +10,7 @@ function asset(id: string, name: string, type: AssetRecord["type"] = "custom", r
 	return { id, name, type, role } as AssetRecord
 }
 
-function networkInterface(
-	id: string,
-	assetId: string,
-	kind: AssetInterfaceRecord["kind"],
-	name = id
-) {
+function networkInterface(id: string, assetId: string, kind: AssetInterfaceRecord["kind"], name = id) {
 	return { id, asset: assetId, kind, name } as AssetInterfaceRecord
 }
 
@@ -59,6 +49,8 @@ test("builds the selected domain from real assets, interfaces and saved layout",
 		link_kind: "wifi",
 		source_interface: routerWifi.id,
 		target_interface: phoneWifi.id,
+		source_handle: "bottom",
+		target_handle: "top",
 	})
 	const technologyRelation = relation("relation-technology", technologyRouter.id, phone.id, {
 		network_domain: "technology",
@@ -94,8 +86,15 @@ test("builds the selected domain from real assets, interfaces and saved layout",
 	assert.equal(graph.edges[1].data?.medium, "wifi")
 	assert.equal(graph.edges[1].data?.sourceInterface?.id, routerWifi.id)
 	assert.equal(graph.edges[1].data?.targetInterface?.id, phoneWifi.id)
+	assert.equal(graph.edges[0].sourceHandle, "right")
+	assert.equal(graph.edges[0].targetHandle, "left")
+	assert.equal(graph.edges[1].sourceHandle, "bottom")
+	assert.equal(graph.edges[1].targetHandle, "top")
 	assert.deepEqual(graph.edges[1].data?.waypoints, [{ x: 540, y: 210 }])
-	assert.deepEqual(graph.edges.map((edge) => edge.id), [homeFiberRelation.id, homeWifiRelation.id])
+	assert.deepEqual(
+		graph.edges.map((edge) => edge.id),
+		[homeFiberRelation.id, homeWifiRelation.id]
+	)
 })
 
 test("uses legacy network names only when a relation has no explicit domain", () => {
@@ -129,8 +128,14 @@ test("uses legacy network names only when a relation has no explicit domain", ()
 		layout: createEmptyLayout(),
 	})
 
-	assert.deepEqual(home.edges.map((edge) => edge.id), [explicitHome.id])
-	assert.deepEqual(technology.edges.map((edge) => edge.id), [legacyTechnology.id])
+	assert.deepEqual(
+		home.edges.map((edge) => edge.id),
+		[explicitHome.id]
+	)
+	assert.deepEqual(
+		technology.edges.map((edge) => edge.id),
+		[legacyTechnology.id]
+	)
 	assert.ok(home.nodes.some((node) => node.id === assetNodeId(technologyRouter.id)))
 	assert.ok(technology.nodes.some((node) => node.id === assetNodeId(technologyRouter.id)))
 })
@@ -194,4 +199,37 @@ test("marks an interface reused by multiple relations as a conflict", () => {
 	})
 
 	assert.ok(graph.edges.every((edge) => edge.data?.diagnosticCodes.includes("interface-conflict")))
+})
+
+test("preserves a saved line branch as a rendered edge attachment", () => {
+	const gateway = asset("gateway", "主网关", "gateway")
+	const switchAsset = asset("switch", "交换机", "switch")
+	const client = asset("client", "客户端", "physical_host")
+	const parent = relation("parent", gateway.id, switchAsset.id, {
+		network_domain: "home",
+		link_kind: "ethernet",
+	})
+	const branch = relation("branch", gateway.id, client.id, {
+		network_domain: "home",
+		link_kind: "ethernet",
+		branch_from_relation: parent.id,
+		branch_ratio: 0.6,
+		branch_endpoint: "source",
+	})
+
+	const graph = buildPulseTopologyGraph({
+		domain: "home",
+		assets: [gateway, switchAsset, client],
+		interfaces: [],
+		relations: [parent, branch],
+		systems: [],
+		details: [],
+		layout: createEmptyLayout(),
+	})
+
+	assert.deepEqual(graph.edges[1].data?.branch, {
+		parentRelationId: parent.id,
+		ratio: 0.6,
+		endpoint: "source",
+	})
 })

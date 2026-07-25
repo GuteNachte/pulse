@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { buildAssetTagCandidates, buildNextAssetTag } from "./asset-numbering.ts"
+import { buildAssetTagCandidates, buildNextAssetTag, resolveAssetNumberingSettings } from "./asset-numbering.ts"
 
 const settings = { prefix: "ASSET-", digits: 4, nextSequence: 1 }
 const assets = [
@@ -16,3 +16,16 @@ assert.deepEqual(buildAssetTagCandidates(assets, settings), [
 	"ASSET-0008",
 ])
 assert.equal(buildNextAssetTag(assets, settings), "ASSET-0004")
+
+assert.deepEqual(
+	resolveAssetNumberingSettings(
+		{ prefix: "NET-", digits: "5", nextSequence: "12" },
+		{ prefix: "LOCAL-", digits: "3", nextSequence: "2" }
+	),
+	{ prefix: "NET-", digits: "5", nextSequence: "12" }
+)
+assert.deepEqual(resolveAssetNumberingSettings(null, { prefix: "LOCAL-", digits: "3", nextSequence: "2" }), {
+	prefix: "LOCAL-",
+	digits: "3",
+	nextSequence: "2",
+})

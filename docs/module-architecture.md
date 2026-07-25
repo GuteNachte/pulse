@@ -172,3 +172,10 @@ agent/modules/<module-id>/
 - 智能家居模块已新增第一版 `/smarthome` 只读总览和 `smarthome` manifest，页面只读取资产中心里的智能家居资产，不做自动发现、不伪造实时控制状态；网关归属优先读取 `asset_relations` 中指向 `smarthome_gateway` 资产的真实关系，没有关系时才回退到 `metadata.gateway_name`，后续接 Home Assistant / Matter / Zigbee 时继续保持资产中心主数据来源。
 - 后续新增大功能必须 module-first。
 - 后续每次维护旧功能，都顺手减少跨模块耦合。
+
+## 数据迁移与维护模块边界
+
+- 资产迁移包属于 `asset-center` 模块，只迁移当前账号的资产集合、引用关系和对应文件，不承担账号、监控历史或全局设置恢复。
+- 完整实例便携备份属于 `maintenance` 模块，以 PocketBase 原生备份为数据库载荷，并补充版本清单、哈希、外置媒体、上传预检、恢复任务和自动安全备份。
+- 两类包都必须由 Hub 执行安全检查、路径限制和哈希核验；前端只负责文件选择、预检展示、模式 / 目标选择和任务状态显示。
+- 恢复任务状态必须位于可替换数据树之外，确保 PocketBase 恢复并重启后仍可继续外置文件放置和核验。

@@ -20,6 +20,8 @@ test("builds a canonical network relation payload without dropping metadata", ()
 		targetAsset: "asset-b",
 		sourceInterface: "if-a",
 		targetInterface: "if-b",
+		sourceHandle: "bottom",
+		targetHandle: "top",
 		domain: "technology",
 		medium: "wired",
 		metadata: { keep: true },
@@ -33,6 +35,8 @@ test("builds a canonical network relation payload without dropping metadata", ()
 			keep: true,
 			source_interface: "if-a",
 			target_interface: "if-b",
+			source_handle: "bottom",
+			target_handle: "top",
 			network_domain: "technology",
 			link_kind: "ethernet",
 		})

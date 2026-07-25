@@ -43,6 +43,19 @@ export function saveAssetNumberingSettings(settings: AssetNumberingSettings) {
 	window.localStorage.setItem(assetNumberingStorageKey, JSON.stringify(settings))
 }
 
+export function resolveAssetNumberingSettings(
+	server: Partial<AssetNumberingSettings> | null | undefined,
+	legacy: Partial<AssetNumberingSettings> | null | undefined
+): AssetNumberingSettings {
+	const source = server ?? legacy ?? defaultAssetNumberingSettings
+	return {
+		prefix: typeof source.prefix === "string" ? source.prefix : defaultAssetNumberingSettings.prefix,
+		digits: typeof source.digits === "string" ? source.digits : defaultAssetNumberingSettings.digits,
+		nextSequence:
+			typeof source.nextSequence === "string" ? source.nextSequence : defaultAssetNumberingSettings.nextSequence,
+	}
+}
+
 export function normalizeAssetNumberingSettings(settings: AssetNumberingSettings): NormalizedAssetNumberingSettings {
 	return {
 		prefix: settings.prefix.trim() || defaultAssetNumberingSettings.prefix,

@@ -7,7 +7,7 @@ import { releaseHistory, type ReleaseNote } from "./release-history"
 
 export default function ReleaseHistoryPanel() {
 	return (
-		<section className="grid gap-3 rounded-lg border border-border/70 bg-surface-soft p-3 sm:p-4">
+		<section className="grid pulse-card-gap rounded-lg border border-border/70 bg-surface-soft p-3 sm:p-4">
 			<div className="rounded-lg border border-border/70 bg-surface-soft p-3 shadow-none sm:p-4">
 				<div className="flex min-w-0 items-center gap-2">
 					<div className="grid size-8 shrink-0 place-items-center rounded-md border border-border/70 bg-surface-soft">
@@ -21,7 +21,7 @@ export default function ReleaseHistoryPanel() {
 					</div>
 				</div>
 			</div>
-			<div className="grid gap-3">
+			<div className="grid pulse-card-gap">
 				{releaseHistory.map((release, index) => (
 					<ReleaseNoteCard key={release.version} release={release} defaultOpen={false} latest={index === 0} />
 				))}
@@ -71,9 +71,9 @@ function ReleaseNoteCard({
 				</Button>
 			</div>
 			{open && (
-				<div className="grid gap-4 border-t border-border/70 bg-surface-soft p-3 sm:p-4">
+				<div className="grid pulse-card-gap border-t border-border/70 bg-surface-soft p-3 sm:p-4">
 					<MobileReleaseBadges badges={release.badges} />
-					<div className="grid gap-3 lg:grid-cols-2">
+					<div className="grid pulse-card-gap lg:grid-cols-2">
 						{release.sections.map((section) => (
 							<section
 								key={section.title}

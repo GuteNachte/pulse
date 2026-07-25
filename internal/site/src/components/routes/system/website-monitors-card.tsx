@@ -118,7 +118,7 @@ export function SystemWebsiteMonitorsCard({ systemId }: { systemId: string }) {
 				{loading ? (
 					<EmptyState loading loadingText="正在读取互联网服务监控" emptyText="暂无归属服务" className="min-h-32" />
 				) : monitors.length ? (
-					<div className="grid gap-3">
+					<div className="grid pulse-card-gap">
 						{monitors.map((monitor) => (
 							<SystemWebsiteMonitorRow
 								key={monitor.id}

@@ -1,6 +1,7 @@
 import { MarkerType, type Edge, type Node, type Viewport } from "@xyflow/react"
 import { formatBytes } from "@/lib/utils"
 import { mapAssetInterfaceKindToNetworkPortType } from "@/modules/network-topology/workspace-data"
+import { assetNodeId } from "@/modules/network-topology/topology-identifiers"
 import type {
 	AssetInterfaceRecord,
 	AssetRecord,
@@ -194,13 +195,13 @@ export function buildTopologyGraph({
 		nodes: normalizedNodes,
 		edges: normalizedEdges,
 		stats: {
-			devices: networkAssets.filter((asset) => asset.type !== "internet").length,
+			devices: networkAssets.filter((asset) => !isUpstreamNetworkAsset(asset)).length,
 			systems: normalizedNodes.filter((node) => node.data.kind === "system").length,
 			links: normalizedEdges.length,
 			ports: topologyPorts.filter((port) => nodeIdSet.has(getPortOwnerNodeId(port))).length,
 			onlineSystems: normalizedNodes.filter((node) => node.data.status === "up").length,
 			wirelessLinks: normalizedEdges.filter((edge) => edge.data?.link.kind === "wifi").length,
-			internetAccesses: normalizedNodes.filter((node) => node.data.asset?.type === "internet").length,
+			internetAccesses: normalizedNodes.filter((node) => isInternetNodeData(node.data)).length,
 		},
 	}
 }
@@ -353,9 +354,7 @@ export function snapTopologyPosition(position: { x: number; y: number }) {
 	}
 }
 
-export function assetNodeId(id: string) {
-	return `asset:${id}`
-}
+export { assetNodeId }
 
 export function systemNodeId(id: string) {
 	return `system:${id}`
@@ -485,7 +484,13 @@ function getPositionKey(position: { x: number; y: number }) {
 }
 
 function isInternetNodeData(data: TopologyNodeData) {
-	return data.asset?.type === "internet"
+	return isUpstreamNetworkAsset(data.asset)
+}
+
+function isUpstreamNetworkAsset(asset?: AssetRecord) {
+	if (!asset) return false
+	if (asset.type === "internet") return true
+	return asset.type === "custom" && /科技网|单位网|办公网|上游网络/i.test(`${asset.name} ${asset.role ?? ""}`)
 }
 
 function normalizeTopologyEdgeDirections(edges: Edge<TopologyEdgeData>[], internetNodeIds: Set<string>) {

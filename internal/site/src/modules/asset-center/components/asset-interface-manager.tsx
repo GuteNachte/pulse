@@ -1,7 +1,5 @@
-import { PencilIcon, PlusIcon, StarIcon, Trash2Icon } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
 	formatAssetInterfaceKind,
 	formatAssetInterfaceSpeed,
@@ -31,11 +29,13 @@ export function AssetInterfaceManager({
 }: AssetInterfaceManagerProps) {
 	const isSwitch = assetType === "switch"
 	return (
-		<div className="grid gap-2.5">
+		<div className="grid pulse-card-gap">
 			<div className="flex items-center justify-between gap-3">
 				<div className="min-w-0">
 					<div className="text-sm font-semibold text-foreground">{isSwitch ? "接口" : "网卡"}</div>
-					<div className="text-xs text-muted-foreground">{isSwitch ? "端口能力、协商速率与当前接线状态" : "网络接入方式、网卡速率与当前接入状态"}</div>
+					<div className="text-xs text-muted-foreground">
+						{isSwitch ? "端口能力、协商速率与当前接线状态" : "网络接入方式、网卡速率与当前接入状态"}
+					</div>
 				</div>
 				{readOnly ? null : (
 					<Button type="button" variant="outline" size="sm" className="h-8 min-h-8 shrink-0" onClick={onAdd}>
@@ -89,31 +89,37 @@ function AssetInterfaceRow({
 	const isSwitch = assetType === "switch"
 	const role = getMetadataString(record.metadata, "role")
 	const negotiatedSpeed = Number(record.metadata?.negotiated_speed_mbps)
+	const wifiStandard = getMetadataString(record.metadata, "wifi_standard")
+	const wifiBand = getMetadataString(record.metadata, "band")
+	const accessSpec =
+		record.kind === "wifi"
+			? [wifiStandard || "Wi-Fi 制式待确认", wifiBand || "频段待确认"]
+			: `${record.speed_mbps ? formatAssetInterfaceSpeed(record.speed_mbps) : "速率待确认"}`
+	const summary = [
+		formatAssetInterfaceKind(record.kind),
+		...(Array.isArray(accessSpec) ? accessSpec : [accessSpec]),
+		isSwitch && ["uplink", "downlink", "general"].includes(role)
+			? role === "uplink"
+				? "上联"
+				: role === "downlink"
+					? "下联"
+					: "通用"
+			: "",
+		isSwitch && Number.isFinite(negotiatedSpeed) && negotiatedSpeed > 0
+			? `协商 ${formatAssetInterfaceSpeed(negotiatedSpeed)}`
+			: "",
+		enabled ? "启用" : "未启用",
+		record.connected ? "已接入" : "未接入",
+	]
+		.filter(Boolean)
+		.join(" · ")
 
 	return (
 		<div className="grid gap-2 rounded-md border border-border/70 bg-card p-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
 			<div className="min-w-0">
 				<div className="flex min-w-0 flex-wrap items-center gap-1.5">
 					<span className="truncate text-sm font-medium text-foreground">{record.name || "未命名网卡"}</span>
-					<Badge variant="secondary">{formatAssetInterfaceKind(record.kind)}</Badge>
-					<Badge variant="outline">{isSwitch ? `支持速率 ${record.speed_mbps ? formatAssetInterfaceSpeed(record.speed_mbps) : "未填"}` : `网卡速率 ${record.speed_mbps ? formatAssetInterfaceSpeed(record.speed_mbps) : "未填"}`}</Badge>
-					{isSwitch ? <Badge variant="outline">{Number.isFinite(negotiatedSpeed) && negotiatedSpeed > 0 ? `协商速率 ${formatAssetInterfaceSpeed(negotiatedSpeed)}` : "协商速率未确认"}</Badge> : null}
-					{isSwitch && ["uplink", "downlink", "general"].includes(role) ? <Badge variant="secondary">{role === "uplink" ? "上联" : role === "downlink" ? "下联" : "通用"}</Badge> : null}
-					<Badge variant={enabled ? "success" : "secondary"}>{enabled ? "启用" : "未启用"}</Badge>
-					{record.kind === "wifi" ? null : (
-						<Badge variant={record.connected ? "success" : "outline"}>{record.connected ? "已接线" : "未接线"}</Badge>
-					)}
-					{record.primary ? (
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<Badge variant="warning" aria-label="主接口">
-									<StarIcon className="fill-current" />
-									主接口
-								</Badge>
-							</TooltipTrigger>
-							<TooltipContent>资产的首选网络接口</TooltipContent>
-						</Tooltip>
-					) : null}
+					<span className="truncate text-xs text-muted-foreground">{summary}</span>
 				</div>
 				{compact || !addressSummary ? null : (
 					<div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{addressSummary}</div>

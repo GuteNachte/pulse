@@ -8,21 +8,33 @@ import {
 	RotateCcwIcon,
 	ShieldCheckIcon,
 	Trash2Icon,
+	UploadIcon,
 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { MobileBackupsView, type MobileBackupItem } from "@/components/mobile/mobile-backups"
 import { OperationConfirmDialog } from "@/components/operation-confirm-dialog"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/components/ui/use-toast"
-import { pb } from "@/lib/api"
+import {
+	createPortableBackup,
+	deleteBackup as deleteBackupFile,
+	downloadBackup as downloadBackupFile,
+	getRestoreTask,
+	listBackups,
+	preflightPortableBackup,
+	startPortableRestore,
+	uploadPortableBackup,
+} from "@/modules/maintenance/backup-client"
+import {
+	buildBackupRow,
+	getRestoreTaskStageLabel,
+	type BackupPreflight,
+	type BackupRecord,
+	type RestoreTask,
+} from "@/modules/maintenance/backup-model"
 import { SettingsTableEmptyRow } from "./settings-empty-state"
-
-type BackupRecord = {
-	key: string
-	size: number
-	modified: string
-}
 
 export default function Backups() {
 	const [backups, setBackups] = useState<BackupRecord[]>([])
@@ -32,6 +44,11 @@ export default function Backups() {
 	const [deleteTarget, setDeleteTarget] = useState<BackupRecord | null>(null)
 	const [restoring, setRestoring] = useState(false)
 	const [deleting, setDeleting] = useState(false)
+	const [uploading, setUploading] = useState(false)
+	const [preflight, setPreflight] = useState<BackupPreflight | null>(null)
+	const [restoreTask, setRestoreTask] = useState<RestoreTask | null>(null)
+	const [assetMediaRoot, setAssetMediaRoot] = useState("")
+	const uploadInputRef = useRef<HTMLInputElement | null>(null)
 	const { toast } = useToast()
 	const mobileBackups = useMemo<MobileBackupItem[]>(
 		() =>
@@ -49,8 +66,7 @@ export default function Backups() {
 	const loadBackups = useCallback(async () => {
 		setLoading(true)
 		try {
-			const data = await pb.send<{ items: BackupRecord[] }>("/api/pulse/backups", {})
-			setBackups(data.items)
+			setBackups(await listBackups())
 		} catch (error) {
 			console.error(error)
 			toast({ title: "加载备份失败", description: "请确认当前用户是管理员。", variant: "destructive" })
@@ -63,10 +79,7 @@ export default function Backups() {
 		setCreating(true)
 		try {
 			const name = `pulse_backup_${formatBackupStamp(new Date())}.zip`
-			await pb.send("/api/pulse/backups", {
-				method: "POST",
-				body: { name },
-			})
+			await createPortableBackup(name)
 			toast({ title: "备份已创建", description: name })
 			await loadBackups()
 		} catch (error) {
@@ -80,23 +93,7 @@ export default function Backups() {
 	const downloadBackup = useCallback(
 		async (backup: BackupRecord) => {
 			try {
-				const response = await fetch(`/api/pulse/backups/${encodeURIComponent(backup.key)}`, {
-					headers: {
-						Authorization: pb.authStore.token,
-					},
-				})
-				if (!response.ok) {
-					throw new Error(`HTTP ${response.status}`)
-				}
-				const blob = await response.blob()
-				const url = URL.createObjectURL(blob)
-				const link = document.createElement("a")
-				link.href = url
-				link.download = backup.key
-				document.body.appendChild(link)
-				link.click()
-				link.remove()
-				URL.revokeObjectURL(url)
+				await downloadBackupFile(backup)
 			} catch (error) {
 				console.error(error)
 				toast({ title: "下载备份失败", description: "请稍后重试。", variant: "destructive" })
@@ -109,29 +106,28 @@ export default function Backups() {
 		if (!restoreTarget) return
 		setRestoring(true)
 		try {
-			await pb.send(`/api/pulse/backups/${encodeURIComponent(restoreTarget.key)}/restore`, {
-				method: "POST",
-			})
+			const task = await startPortableRestore(restoreTarget.key, { asset_media_root: assetMediaRoot })
+			if (task.id) {
+				setRestoreTask(task)
+				pollRestoreTask(task.id).catch((error) => console.error("poll restore task", error))
+			}
 			toast({
 				title: "正在还原备份",
 				description: "Hub 会重启并恢复到该备份的数据状态，请稍后刷新页面重新登录。",
 			})
-			setRestoreTarget(null)
+			if (!task.id) setRestoreTarget(null)
 		} catch (error) {
 			console.error(error)
 			toast({ title: "还原备份失败", description: "请确认备份文件有效，并检查后台日志。", variant: "destructive" })
-		} finally {
 			setRestoring(false)
 		}
-	}, [restoreTarget, toast])
+	}, [assetMediaRoot, restoreTarget, toast])
 
 	const deleteBackup = useCallback(async () => {
 		if (!deleteTarget) return
 		setDeleting(true)
 		try {
-			await pb.send(`/api/pulse/backups/${encodeURIComponent(deleteTarget.key)}`, {
-				method: "DELETE",
-			})
+			await deleteBackupFile(deleteTarget)
 			toast({ title: "备份已删除", description: deleteTarget.key })
 			setDeleteTarget(null)
 			await loadBackups()
@@ -142,6 +138,62 @@ export default function Backups() {
 			setDeleting(false)
 		}
 	}, [deleteTarget, loadBackups, toast])
+
+	const prepareRestore = useCallback(
+		async (backup: BackupRecord) => {
+			setRestoreTarget(backup)
+			setPreflight(null)
+			setRestoreTask(null)
+			if (backup.type !== "pulse") return
+			try {
+				const result = await preflightPortableBackup(backup.key)
+				setPreflight(result)
+				setAssetMediaRoot(result.target.asset_media_root)
+			} catch (error) {
+				console.error(error)
+				toast({ title: "备份预检失败", description: "无法确认该备份是否可恢复。", variant: "destructive" })
+			}
+		},
+		[toast]
+	)
+
+	const uploadBackup = useCallback(
+		async (file: File | null) => {
+			if (!file) return
+			setUploading(true)
+			try {
+				const uploaded = await uploadPortableBackup(file)
+				await loadBackups()
+				await prepareRestore(uploaded)
+				toast({ title: "备份已上传", description: uploaded.key })
+			} catch (error) {
+				console.error(error)
+				toast({ title: "备份上传失败", description: "请确认文件是 Pulse 完整备份。", variant: "destructive" })
+			} finally {
+				setUploading(false)
+			}
+		},
+		[loadBackups, prepareRestore, toast]
+	)
+
+	async function pollRestoreTask(id: string) {
+		for (let attempt = 0; attempt < 180; attempt += 1) {
+			await new Promise((resolve) => window.setTimeout(resolve, 2000))
+			try {
+				const task = await getRestoreTask(id)
+				setRestoreTask(task)
+				if (["success", "failed", "rolled_back", "manual_recovery_required"].includes(task.status)) {
+					setRestoring(false)
+					if (task.status === "success") {
+						toast({ title: "恢复完成", description: "请使用备份中的管理员账号重新登录。" })
+					}
+					return
+				}
+			} catch {
+				// Hub 恢复期间会短暂断开，继续等待重启。
+			}
+		}
+	}
 
 	useEffect(() => {
 		loadBackups()
@@ -161,7 +213,7 @@ export default function Backups() {
 	function restoreMobileBackup(item: MobileBackupItem) {
 		const backup = getBackupFromMobileItem(item)
 		if (backup) {
-			setRestoreTarget(backup)
+			prepareRestore(backup).catch((error) => console.error("prepare restore", error))
 		}
 	}
 
@@ -173,7 +225,7 @@ export default function Backups() {
 	}
 
 	return (
-		<div className="grid gap-4">
+		<div className="grid pulse-card-gap">
 			<div className="hidden rounded-lg border border-border/70 bg-surface-soft p-2 shadow-none md:block">
 				<div className="rounded-md border border-border/70 bg-card p-3 shadow-none">
 					<div className="flex flex-row items-center justify-between gap-4">
@@ -187,6 +239,25 @@ export default function Backups() {
 							</div>
 						</div>
 						<div className="flex gap-2">
+							<input
+								ref={uploadInputRef}
+								type="file"
+								accept=".zip,.pulse-backup.zip,application/zip"
+								className="hidden"
+								onChange={(event) => {
+									uploadBackup(event.target.files?.[0] ?? null).catch((error) => console.error("upload backup", error))
+									event.currentTarget.value = ""
+								}}
+							/>
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => uploadInputRef.current?.click()}
+								disabled={uploading || creating}
+							>
+								<UploadIcon data-icon="inline-start" />
+								{uploading ? "上传中" : "上传备份"}
+							</Button>
 							<Button
 								variant="outline"
 								size="sm"
@@ -209,7 +280,7 @@ export default function Backups() {
 						</div>
 					</div>
 				</div>
-				<div className="mt-2 grid grid-cols-3 gap-2">
+				<div className="mt-2 grid grid-cols-3 pulse-card-gap">
 					<BackupSummaryCard
 						icon={DatabaseIcon}
 						label="备份文件"
@@ -261,6 +332,8 @@ export default function Backups() {
 					<TableHeader className="bg-surface-soft">
 						<TableRow>
 							<TableHead>文件</TableHead>
+							<TableHead className="w-40">类型 / 版本</TableHead>
+							<TableHead className="w-28">校验</TableHead>
 							<TableHead className="w-32">大小</TableHead>
 							<TableHead className="w-44">时间</TableHead>
 							<TableHead className="w-24 text-right">操作</TableHead>
@@ -268,47 +341,55 @@ export default function Backups() {
 					</TableHeader>
 					<TableBody>
 						{backups.length ? (
-							backups.map((backup) => (
-								<TableRow key={backup.key}>
-									<TableCell className="font-mono text-xs">{backup.key}</TableCell>
-									<TableCell className="tabular-nums">{formatBytes(backup.size)}</TableCell>
-									<TableCell className="whitespace-nowrap text-muted-foreground">
-										{formatTime(backup.modified)}
-									</TableCell>
-									<TableCell className="text-right">
-										<Button
-											variant="ghost"
-											size="icon"
-											className="transition-transform active:scale-[0.96]"
-											title="下载备份"
-											onClick={() => downloadBackup(backup)}
-										>
-											<DownloadIcon className="size-4" />
-										</Button>
-										<Button
-											variant="ghost"
-											size="icon"
-											className="transition-transform active:scale-[0.96]"
-											title="还原备份"
-											onClick={() => setRestoreTarget(backup)}
-										>
-											<RotateCcwIcon className="size-4" />
-										</Button>
-										<Button
-											variant="ghost"
-											size="icon"
-											className="transition-transform active:scale-[0.96]"
-											title="删除备份"
-											onClick={() => setDeleteTarget(backup)}
-										>
-											<Trash2Icon className="size-4" />
-										</Button>
-									</TableCell>
-								</TableRow>
-							))
+							backups.map((backup) => {
+								const row = buildBackupRow(backup)
+								return (
+									<TableRow key={backup.key}>
+										<TableCell className="font-mono text-xs">{backup.key}</TableCell>
+										<TableCell>
+											<div className="text-sm font-medium">{row.typeLabel}</div>
+											<div className="text-xs text-muted-foreground">{row.versionLabel}</div>
+										</TableCell>
+										<TableCell className="text-sm text-muted-foreground">{row.checksumLabel}</TableCell>
+										<TableCell className="tabular-nums">{formatBytes(backup.size)}</TableCell>
+										<TableCell className="whitespace-nowrap text-muted-foreground">
+											{formatTime(backup.modified)}
+										</TableCell>
+										<TableCell className="text-right">
+											<Button
+												variant="ghost"
+												size="icon"
+												className="transition-transform active:scale-[0.96]"
+												title="下载备份"
+												onClick={() => downloadBackup(backup)}
+											>
+												<DownloadIcon className="size-4" />
+											</Button>
+											<Button
+												variant="ghost"
+												size="icon"
+												className="transition-transform active:scale-[0.96]"
+												title="还原备份"
+												onClick={() => prepareRestore(backup)}
+											>
+												<RotateCcwIcon className="size-4" />
+											</Button>
+											<Button
+												variant="ghost"
+												size="icon"
+												className="transition-transform active:scale-[0.96]"
+												title="删除备份"
+												onClick={() => setDeleteTarget(backup)}
+											>
+												<Trash2Icon className="size-4" />
+											</Button>
+										</TableCell>
+									</TableRow>
+								)
+							})
 						) : (
 							<SettingsTableEmptyRow
-								colSpan={4}
+								colSpan={6}
 								loading={loading}
 								loadingText="正在读取备份列表"
 								emptyText="暂无备份"
@@ -324,12 +405,38 @@ export default function Backups() {
 				description="还原会用备份内容替换当前数据，并触发 Hub 重启。备份内可能包含用户、Token、通知配置和操作审计，请只还原可信备份。"
 				confirmLabel="确认还原"
 				confirmVariant="destructive"
+				confirmDisabled={restoreTarget?.type === "pulse" && (!preflight || preflight.status === "blocked")}
 				running={restoring}
 				progressTitle="正在还原备份"
-				progressDescription="Hub 会替换数据并重启，完成前请不要重复操作。"
+				progressDescription={
+					restoreTask ? getRestoreTaskStageLabel(restoreTask.stage) : "Hub 会替换数据并重启，完成前请不要重复操作。"
+				}
 				onConfirm={restoreBackup}
 			>
 				<BackupTargetSummary backup={restoreTarget} />
+				{preflight?.manifest.external.asset_media.included ? (
+					<div className="grid gap-1.5">
+						<label htmlFor="asset-media-root" className="text-xs text-muted-foreground">
+							设备图片恢复目录
+						</label>
+						<Input
+							id="asset-media-root"
+							value={assetMediaRoot}
+							onChange={(event) => setAssetMediaRoot(event.target.value)}
+							disabled={restoring}
+						/>
+					</div>
+				) : null}
+				{preflight?.checks.map((check) => (
+					<div key={check.code} className="text-xs text-muted-foreground">
+						{check.message}
+					</div>
+				))}
+				{preflight?.blockers.map((check) => (
+					<div key={check.code} className="text-xs text-destructive">
+						{check.message}
+					</div>
+				))}
 			</OperationConfirmDialog>
 			<OperationConfirmDialog
 				open={Boolean(deleteTarget)}

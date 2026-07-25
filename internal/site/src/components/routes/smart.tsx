@@ -9,7 +9,7 @@ export default function Smart() {
 	}, [])
 
 	return (
-		<div className="grid gap-4">
+		<div className="grid pulse-card-gap">
 			<ActiveAlerts />
 			<section className="rounded-lg border border-border/70 bg-card p-4 shadow-none sm:p-5">
 				<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

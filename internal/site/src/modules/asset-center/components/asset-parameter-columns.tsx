@@ -81,7 +81,7 @@ export function AssetHardwareSpecsColumn({
 					{groups.length > 0 ? <CountTag>{groups.length} 类</CountTag> : null}
 				</div>
 			</CardHeader>
-			<CardContent className="grid items-stretch gap-2.5 p-3 lg:grid-cols-2">
+			<CardContent className="grid items-stretch pulse-card-gap p-3 lg:grid-cols-2">
 				{groups.length > 0 ? (
 					groups.map((group) => <HardwareSpecGroup key={group.id} group={group} action={groupActions?.[group.title]} />)
 				) : (

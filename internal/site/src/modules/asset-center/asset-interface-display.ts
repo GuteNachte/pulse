@@ -19,10 +19,6 @@ export type AssetInterfaceDisplay = {
 	speedItems: AssetInterfaceSpeedItem[]
 }
 
-type AssetAccessMedium = "Wi-Fi" | "网线" | "光纤"
-
-const assetAccessMediumOrder: AssetAccessMedium[] = ["Wi-Fi", "网线", "光纤"]
-
 export function groupAssetInterfacesByAsset(records: AssetInterfaceRecord[]) {
 	const grouped = new Map<string, AssetInterfaceRecord[]>()
 	for (const record of records) {
@@ -48,8 +44,11 @@ export function buildAssetInterfaceDisplay(
 	options: { loadFailed?: boolean; relations?: AssetRelationRecord[] } = {}
 ): AssetInterfaceDisplay {
 	if (asset.type === "internet") {
+		const accessInterfaces = records.filter((record) => record.connected && isAccessInterface(record.kind))
+		const interfaceLabel = accessInterfaces.map((record) => formatAssetAccessInterface(asset, record))[0]
 		return {
-			accessLabel: getMetadataString(asset.metadata, "access_technology") === "ftth" ? "光纤" : "未设置",
+			accessLabel:
+				getMetadataString(asset.metadata, "access_technology") === "ftth" ? "光纤" : interfaceLabel || "未设置",
 			speedMode: "not_applicable",
 			speedItems: [],
 		}
@@ -58,17 +57,22 @@ export function buildAssetInterfaceDisplay(
 		return { accessLabel: "无", speedMode: "not_applicable", speedItems: [] }
 	}
 
-	const connectedMedia = new Set<AssetAccessMedium>()
-	for (const record of records) {
-		if (!record.connected) continue
-		const medium = getInterfaceAccessMedium(record.kind)
-		if (medium) connectedMedia.add(medium)
+	const connectedInterfaces = records.filter((record) => record.connected && isAccessInterface(record.kind))
+	const uplinkInterfaces = connectedInterfaces.filter(
+		(record) => getMetadataString(record.metadata, "role") === "uplink"
+	)
+	const accessInterfaces = (uplinkInterfaces.length > 0 ? uplinkInterfaces : connectedInterfaces)
+		.slice()
+		.sort((left, right) => getAccessInterfacePriority(left.kind) - getAccessInterfacePriority(right.kind))
+	const accessLabels = new Set(accessInterfaces.map((record) => formatAssetAccessInterface(asset, record)))
+
+	if (accessLabels.size === 0) {
+		for (const relation of options.relations ?? []) {
+			const label = formatRelationAccessLabel(asset, relation)
+			if (label) accessLabels.add(label)
+		}
 	}
-	for (const relation of options.relations ?? []) {
-		const medium = getRelationAccessMedium(getMetadataString(relation.metadata, "link_kind"))
-		if (medium) connectedMedia.add(medium)
-	}
-	const accessLabel = assetAccessMediumOrder.filter((medium) => connectedMedia.has(medium)).join(" + ")
+	const accessLabel = [...accessLabels].join(" + ")
 
 	if (options.loadFailed && !accessLabel) {
 		return {
@@ -112,33 +116,80 @@ export function buildAssetInterfaceDisplay(
 	}
 }
 
-function getInterfaceAccessMedium(kind: AssetInterfaceKind): AssetAccessMedium | undefined {
+function isAccessInterface(kind: AssetInterfaceKind) {
 	switch (kind) {
 		case "wifi":
-			return "Wi-Fi"
 		case "ethernet":
 		case "lan":
 		case "wan":
-			return "网线"
 		case "pon":
 		case "optical":
-			return "光纤"
+			return true
 		default:
-			return undefined
+			return false
 	}
 }
 
-function getRelationAccessMedium(linkKind: string): AssetAccessMedium | undefined {
-	switch (linkKind) {
-		case "wifi":
-			return "Wi-Fi"
-		case "ethernet":
-			return "网线"
-		case "internet":
-			return "光纤"
-		default:
-			return undefined
+function getAccessInterfacePriority(kind: AssetInterfaceKind) {
+	if (kind === "wifi") return 0
+	if (kind === "pon" || kind === "optical") return 2
+	return 1
+}
+
+function formatAssetAccessInterface(asset: AssetRecord, record: AssetInterfaceRecord) {
+	if (record.kind === "wifi") {
+		return formatWifiAccessLabel(
+			getMetadataString(record.metadata, "wifi_standard") || getMetadataString(asset.metadata, "wifi_standard"),
+			getMetadataString(record.metadata, "band") || extractWifiBand(record.name)
+		)
 	}
+	if (record.kind === "pon" || record.kind === "optical") {
+		return `光纤 · ${record.speed_mbps ? formatAssetInterfaceSpeed(record.speed_mbps) : "速率待确认"}`
+	}
+	return `网线 · ${record.speed_mbps ? formatAssetInterfaceSpeed(record.speed_mbps) : "速率待确认"}`
+}
+
+function formatRelationAccessLabel(asset: AssetRecord, relation: AssetRelationRecord) {
+	const linkKind = getMetadataString(relation.metadata, "link_kind")
+	if (linkKind === "wifi") {
+		return formatWifiAccessLabel(
+			getMetadataString(relation.metadata, "wifi_standard") || getMetadataString(asset.metadata, "wifi_standard"),
+			getMetadataString(relation.metadata, "wifi_band") || getMetadataString(relation.metadata, "band")
+		)
+	}
+	if (linkKind === "ethernet") {
+		const speed = Number(relation.metadata?.speed_mbps)
+		return `网线 · ${Number.isFinite(speed) && speed > 0 ? formatAssetInterfaceSpeed(speed) : "速率待确认"}`
+	}
+	if (linkKind === "internet") {
+		const speed = Number(relation.metadata?.speed_mbps)
+		return `光纤 · ${Number.isFinite(speed) && speed > 0 ? formatAssetInterfaceSpeed(speed) : "速率待确认"}`
+	}
+	return undefined
+}
+
+function formatWifiAccessLabel(standardValue: string, bandValue: string) {
+	const standard = normalizeWifiStandard(standardValue)
+	const band = normalizeWifiBand(bandValue)
+	return `${standard || "Wi-Fi · 制式待确认"} · ${band || "频段待确认"}`
+}
+
+function normalizeWifiStandard(value: string) {
+	const match = value.trim().match(/wi[\s-]*fi\s*(\d+)/i)
+	return match ? `Wi-Fi ${match[1]}` : ""
+}
+
+function normalizeWifiBand(value: string) {
+	const normalized = value.trim().toLowerCase().replace(/\s+/g, "")
+	if (/^2\.4g(?:hz)?$/.test(normalized)) return "2.4 GHz"
+	if (/^5g(?:hz)?$/.test(normalized)) return "5 GHz"
+	if (/^6g(?:hz)?$/.test(normalized)) return "6 GHz"
+	return ""
+}
+
+function extractWifiBand(value: string) {
+	const match = value.match(/(?:^|\s)(2\.4|5|6)\s*GHz/i)
+	return match ? `${match[1]} GHz` : ""
 }
 
 export function isAssetInterfaceEnabled(record: AssetInterfaceRecord) {

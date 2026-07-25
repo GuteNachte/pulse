@@ -155,7 +155,7 @@ export function WebsiteMonitorListPanel({
 					</Select>
 				</div>
 			</div>
-			<div className="grid max-h-none min-h-0 flex-1 content-start gap-2 overflow-visible bg-card p-2 sm:grid-cols-2 lg:grid-cols-1 lg:overflow-auto">
+			<div className="grid max-h-none min-h-0 flex-1 content-start pulse-card-gap overflow-visible bg-card p-2 sm:grid-cols-2 lg:grid-cols-1 lg:overflow-auto">
 				{filteredMonitors.length ? (
 					filteredMonitors.map((monitor) => (
 						<MonitorCard

@@ -63,6 +63,22 @@ const nasFields = getSectionFieldKeys("nas", "NAS 存储参数")
 assert.equal(nasFields.includes("bay_count"), true)
 assert.equal(nasFields.includes("raid_mode"), true)
 
+const nasPlatformFields = getSectionFieldKeys("nas", "NAS 平台与扩展")
+assert.deepEqual(
+	[
+		"storage_slots",
+		"pcie_slots",
+		"display_outputs",
+		"usb_ports",
+		"power_input",
+		"cooling_system",
+		"net_weight_g",
+		"operating_temperature_range",
+		"operating_humidity_range",
+	].filter((key) => !nasPlatformFields.includes(key)),
+	[]
+)
+
 const serverFields = getSectionFieldKeys("server", "服务器平台参数")
 assert.equal(serverFields.includes("bmc"), true)
 assert.equal(serverFields.includes("redundant_psu"), true)

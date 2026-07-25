@@ -21,7 +21,7 @@ export default memo(() => {
 					<ContainersTable />
 				</MobilePageShell>
 			) : (
-				<div className="grid gap-4">
+				<div className="grid pulse-card-gap">
 					<ActiveAlerts />
 					<ContainersTable />
 				</div>

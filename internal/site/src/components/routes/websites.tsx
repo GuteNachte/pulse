@@ -446,7 +446,7 @@ export default memo(function Websites() {
 	}
 
 	const content = (
-		<div className="grid gap-4">
+		<div className="grid pulse-card-gap">
 			{showEmptyMonitorWorkspace ? (
 				<EmptyState
 					loading={false}
@@ -471,7 +471,7 @@ export default memo(function Websites() {
 						))}
 				</EmptyState>
 			) : (
-				<div className="grid gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
+				<div className="grid pulse-card-gap lg:grid-cols-[380px_minmax(0,1fr)]">
 					<WebsiteMonitorListPanel
 						filteredMonitors={filteredMonitors}
 						hasActiveFilter={Boolean(search.trim() || systemFilter || statusFilter !== "all")}
@@ -600,7 +600,7 @@ export default memo(function Websites() {
 	}
 
 	return (
-		<div className="grid gap-4">
+		<div className="grid pulse-card-gap">
 			<ActiveAlerts />
 			{content}
 		</div>

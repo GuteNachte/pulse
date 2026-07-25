@@ -128,7 +128,7 @@ export function AssetMediaEditorDialog({
 					<DialogTitle>编辑图片</DialogTitle>
 					<DialogDescription>{title} · 固定 16:9 白底画布，空白区域会按白色保存。</DialogDescription>
 				</DialogHeader>
-				<div className="grid min-h-0 gap-4 overflow-y-auto p-4 sm:grid-cols-[minmax(0,1fr)_12rem] sm:p-6">
+				<div className="grid min-h-0 pulse-card-gap overflow-y-auto p-4 sm:grid-cols-[minmax(0,1fr)_12rem] sm:p-6">
 					<div className="grid min-h-0 place-items-center rounded-lg border border-border/70 bg-surface-soft p-3">
 						<div
 							ref={setStageNode}

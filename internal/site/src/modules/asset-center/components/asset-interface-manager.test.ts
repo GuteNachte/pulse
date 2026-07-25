@@ -3,12 +3,11 @@ import { readFileSync } from "node:fs"
 
 const source = readFileSync(new URL("./asset-interface-manager.tsx", import.meta.url), "utf8")
 
-for (const text of ["添加网卡", "网络接入方式", "网卡速率", "当前接入", "主接口", "编辑", "删除"]) {
+for (const text of ["添加网卡", "网络接入方式", "网卡速率", "编辑", "删除"]) {
 	assert.equal(source.includes(text), true, `missing ${text}`)
 }
-for (const text of ["启用", "未启用", "已接线", "未接线"]) {
-	assert.equal(source.includes(text), true, `missing interface state ${text}`)
-}
+assert.equal(source.includes("<Badge"), false, "interface summaries should not render status badges")
+assert.equal(source.includes("主接口"), false, "interface summaries should not render the primary badge")
 assert.equal(source.includes("手机连接中"), false)
 
 assert.equal(source.includes("onAdd"), true)
@@ -23,7 +22,13 @@ for (const text of ["AssetInterfaceManager", "onAddInterface", "onEditInterface"
 
 const detailPage = readFileSync(new URL("../asset-detail-page.tsx", import.meta.url), "utf8")
 assert.equal(detailPage.includes("交换机（待建档）"), true, "interface connection note needs a neutral example")
-assert.equal(detailPage.includes('...(kind === "wifi"'), true, "non-Wi-Fi interfaces must not send an empty wireless band")
+assert.equal(
+	detailPage.includes('...(kind === "wifi"'),
+	true,
+	"non-Wi-Fi interfaces must not send an empty wireless band"
+)
+assert.equal(detailPage.includes('name="wifi_standard"'), true, "Wi-Fi interfaces need a standard field")
+assert.equal(detailPage.includes('wifi_standard: form.get("wifi_standard")'), true, "Wi-Fi standard must be persisted")
 assert.equal(
 	detailPage.includes("if (!open && interfaceDialogOpen) return"),
 	true,

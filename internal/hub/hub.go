@@ -74,6 +74,9 @@ func onAfterBootstrapAndMigrations(app core.App, fn func(app core.App) error) er
 // StartHub sets up event handlers and starts the PocketBase server
 func (h *Hub) StartHub() error {
 	h.App.OnServe().BindFunc(func(e *core.ServeEvent) error {
+		if err := h.resumePendingPortableRestore(); err != nil {
+			h.Logger().Error("Failed to resume portable restore", "err", err)
+		}
 		// sync systems with config
 		if err := config.SyncSystems(e); err != nil {
 			return err

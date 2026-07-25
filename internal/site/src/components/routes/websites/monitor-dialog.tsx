@@ -76,7 +76,7 @@ export function MonitorDialog({
 					<DialogTitle>{form.id ? "编辑互联网服务监控" : "添加互联网服务监控"}</DialogTitle>
 					<DialogDescription>每个地址都会独立检测，并在卡片里显示独立状态条。</DialogDescription>
 				</DialogHeader>
-				<div className="grid max-h-[calc(100dvh-12rem)] gap-3 overflow-y-auto bg-surface-soft px-4 py-4 sm:px-6">
+				<div className="grid max-h-[calc(100dvh-12rem)] pulse-card-gap overflow-y-auto bg-surface-soft px-4 py-4 sm:px-6">
 					<section className="grid gap-4 rounded-lg border border-border/70 bg-card p-3 shadow-none sm:p-4">
 						<div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_220px]">
 							<FormField label="名称">

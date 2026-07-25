@@ -36,6 +36,8 @@ Get-Content docs\module-architecture.md -Raw -Encoding UTF8
 
 ## 3. 开发环境固定规则
 
+- Windows 日常一键启动：双击项目根目录 `Start-Pulse-Dev.cmd`；启动器优先使用 PowerShell 7，未安装时回退到 Windows PowerShell 5.1，健康检查成功后自动打开 Web 页面。
+- 桌面快捷方式：`pwsh -NoProfile -File supplemental\scripts\install-dev-shortcut.ps1`；可重复执行并更新同名快捷方式。
 - 本地源码预览：`powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\run-hub-dev.ps1`
 - 强制重启本地开发服务：`powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\run-hub-dev.ps1 -Restart`
 - Hub 入口固定：`http://localhost:8090`

@@ -136,7 +136,7 @@ export default memo(function SystemDetail({ id }: { id: string }) {
 					<SystemDetailContent {...detailContentProps} compactMobile />
 				</MobileSystemDetail>
 			) : (
-				<div className="grid gap-4">
+				<div className="grid pulse-card-gap">
 					{/* system info */}
 					<InfoBar
 						system={system}

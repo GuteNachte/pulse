@@ -170,3 +170,10 @@ docker logs --tail=100 pulse-agent
 
 
 
+
+## 数据持久化与恢复检查
+
+- Hub 必须保留 `./pulse_data:/pulse_data` 绑定挂载；升级镜像、重建容器或执行恢复时都不得删除宿主机 `pulse_data`。
+- 禁止使用匿名卷替换 `/pulse_data`，也不要在 `docker compose down` 时附加 `-v`。
+- 正式迁移前创建并下载 Pulse 完整实例备份；恢复外置设备图片时填写 FlyNAS 上实际可写的绝对目录。
+- 恢复完成后重新登录并核对资产数量、接口与关系、两套网络拓扑、监控记录、附件和设备图片，再进行旧实例下线。

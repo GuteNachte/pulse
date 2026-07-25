@@ -34,6 +34,7 @@ import {
 } from "../../../components/ui/sheet.tsx"
 import { pb } from "../../../lib/api.ts"
 import type { AssetInterfaceRecord, AssetRecord, AssetRelationRecord } from "../../../types.ts"
+import type { TopologyHandleId } from "../canvas-core/handles.ts"
 import { getRelationDomain, getRelationMedium, type TopologyDomain, type TopologyMedium } from "../topology-domain.ts"
 import { deleteNetworkRelation, saveNetworkRelation } from "../relation-operations.ts"
 
@@ -45,6 +46,9 @@ export type TopologyConnectionSheetProps = {
 	interfaces: AssetInterfaceRecord[]
 	domain: TopologyDomain
 	relation?: AssetRelationRecord
+	metadata?: Record<string, unknown>
+	sourceHandle?: TopologyHandleId
+	targetHandle?: TopologyHandleId
 	readOnly: boolean
 	onSaved: (relation: AssetRelationRecord) => void | Promise<void>
 	onDeleted: (relationId: string) => void | Promise<void>
@@ -58,6 +62,9 @@ export function TopologyConnectionSheet({
 	interfaces,
 	domain,
 	relation,
+	metadata,
+	sourceHandle,
+	targetHandle,
 	readOnly,
 	onSaved,
 	onDeleted,
@@ -78,16 +85,17 @@ export function TopologyConnectionSheet({
 	const [saving, setSaving] = useState(false)
 	const [deleting, setDeleting] = useState(false)
 	const [error, setError] = useState("")
+	const relationMetadata = metadata ?? relation?.metadata
 
 	useEffect(() => {
 		if (!open) return
-		setSourceInterface(getMetadataString(relation?.metadata, "source_interface"))
-		setTargetInterface(getMetadataString(relation?.metadata, "target_interface"))
-		setSelectedDomain(getRelationDomain(relation?.metadata) ?? domain)
-		setMedium(getRelationMedium(relation?.metadata) ?? "wired")
+		setSourceInterface(getMetadataString(relationMetadata, "source_interface"))
+		setTargetInterface(getMetadataString(relationMetadata, "target_interface"))
+		setSelectedDomain(getRelationDomain(relationMetadata) ?? domain)
+		setMedium(getRelationMedium(relationMetadata) ?? "wired")
 		setLabel(relation?.label ?? "")
 		setError("")
-	}, [domain, open, relation])
+	}, [domain, open, relation, relationMetadata])
 
 	async function handleSave(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault()
@@ -111,10 +119,12 @@ export function TopologyConnectionSheet({
 				targetAsset: targetAsset.id,
 				sourceInterface,
 				targetInterface,
+				sourceHandle,
+				targetHandle,
 				domain: selectedDomain,
 				medium,
 				interfaces,
-				metadata: relation?.metadata,
+				metadata: relationMetadata,
 				label,
 			},
 			collection: getRelationCollection(),

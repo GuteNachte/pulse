@@ -95,7 +95,7 @@ export const diskDataFns = {
 
 export function RootDiskCharts({ systemData }: { systemData: SystemData }) {
 	return (
-		<div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+		<div className="grid grid-cols-1 pulse-card-gap xl:grid-cols-2">
 			<DiskUsageChart systemData={systemData} />
 			<DiskIOChart systemData={systemData} />
 		</div>

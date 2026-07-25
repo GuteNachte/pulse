@@ -40,7 +40,7 @@ export function AssetTypePicker({ selectedType, onSelect }: AssetTypePickerProps
 
 	return (
 		<div className="min-h-0 overflow-y-auto pr-1">
-			<div className="grid gap-2">
+			<div className="grid pulse-card-gap">
 				{groups.map(([group, items]) => (
 					<div key={group} className="rounded-lg border border-border/70 bg-card">
 						<button
@@ -62,7 +62,7 @@ export function AssetTypePicker({ selectedType, onSelect }: AssetTypePickerProps
 							</span>
 						</button>
 						{openGroups.has(group) && (
-							<div className="grid gap-2 border-t border-border/70 p-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+							<div className="grid pulse-card-gap border-t border-border/70 p-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
 								{items.map((item) => {
 									const Icon = getAssetIcon(item.value)
 									const active = selectedType === item.value

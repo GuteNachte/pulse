@@ -75,8 +75,8 @@ export function AssetShowcaseWorkspace({
 			: undefined
 
 	return (
-		<section className="grid items-start gap-4 xl:grid-cols-[minmax(23rem,0.78fr)_minmax(0,1.62fr)] 2xl:grid-cols-[minmax(25rem,0.72fr)_minmax(0,1.68fr)]">
-			<aside className="grid content-start gap-3 xl:sticky xl:top-4">
+		<section className="grid items-start pulse-card-gap xl:grid-cols-[minmax(23rem,0.78fr)_minmax(0,1.62fr)] 2xl:grid-cols-[minmax(25rem,0.72fr)_minmax(0,1.68fr)]">
+			<aside className="grid content-start pulse-card-gap xl:sticky xl:top-4">
 				<AssetMediaShowcase covers={media?.covers ?? []} />
 				<AssetOverviewColumn
 					sections={identitySections}
@@ -84,7 +84,7 @@ export function AssetShowcaseWorkspace({
 					subtitle={asset.type === "internet" ? null : "主档与接入信息"}
 				/>
 			</aside>
-			<div className="grid min-w-0 content-start gap-3">
+			<div className="grid min-w-0 content-start pulse-card-gap">
 				{networkDetailModel ? <AssetNetworkDetailTable model={networkDetailModel} /> : null}
 				{parameterGroups.length > 0 || !networkDetailModel ? (
 					<AssetHardwareSpecsColumn

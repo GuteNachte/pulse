@@ -4,11 +4,15 @@
 
 本机用于开发和发布前测试，飞牛 / Linux / NAS 用于正式部署。两边都使用同一套 Hub 镜像和同一套数据目录结构。本机测试分两层：
 
+- Windows 日常一键启动：双击项目根目录 `Start-Pulse-Dev.cmd`。启动器优先调用 PowerShell 7，未安装时回退到 Windows PowerShell 5.1；它只复用标准源码启动脚本，健康检查通过后才打开 `http://localhost:5173`。运行 `pwsh -NoProfile -File supplemental\scripts\install-dev-shortcut.ps1` 可在当前用户桌面创建或更新“Pulse 开发环境”快捷方式。
+- 本地源码联调：运行 `supplemental\scripts\run-hub-dev.ps1`，Hub 固定监听 `0.0.0.0:8090`，Vite 固定监听 `0.0.0.0:5173`；本机使用 `http://localhost:5173`，同一局域网设备使用脚本自动输出的 `http://<本机局域网 IPv4>:5173`。前端 API 与实时连接继续走 Vite 同源代理，不需要在浏览器端写死 Hub 地址。
 - 本机浏览器测试：固定访问 `http://127.0.0.1:8090`，使用普通 bridge 网络和端口映射。
 - 本机发布前网络等价检查：临时使用 `network_mode: host`，只验证容器内部健康检查。
 - 飞牛 / Linux / NAS 正式部署：固定使用 Hub + Hub 同机 Agent 的同机 Compose，两个容器都使用 `network_mode: host`，Hub 容器内监听 `0.0.0.0:8090`。
 
 本机测试不要再使用 `8091`，也不要把 Vite dev server 当成 Hub 入口。Windows Docker Desktop 的 host 网络不会稳定暴露给 Windows 浏览器，因此页面验收使用端口映射，正式网络模式用 `-HostCheck` 单独覆盖。
+
+源码联调需要局域网访问时，Windows 防火墙仅允许对 `5173` 和 `8090` 放行本地子网；不要直接对公网地址开放开发端口。启动脚本不会自动修改系统防火墙。
 
 ## 本机 Docker 测试
 
@@ -155,3 +159,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-
 
 
 
+
+## 资产迁移与完整备份
+
+- 资产中心“导出”生成 `.pulse-assets.zip`，用于选择性迁移当前账号的资产主数据、附件和设备图片；导入前必须先看预检结果，再选择仅新增、合并补全或覆盖匹配项。
+- 设置 -> 备份管理生成完整实例备份，适合从开发环境迁移到正式部署。完整备份包含管理员账号、用户设置、资产与拓扑、监控历史、PocketBase 文件；设备图片目录在 `pulse_data` 外时也会一并封装。
+- 完整备份包含 Token、通知配置和其他敏感信息，只能存放在可信位置。恢复会覆盖目标实例，开始前 Hub 会自动创建安全备份。
+- 本地恢复演练只能使用 `%TEMP%` 下的新数据目录，不得将测试恢复指向仓库当前 `pulse_data`。
