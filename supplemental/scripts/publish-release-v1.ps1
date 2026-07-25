@@ -2,6 +2,9 @@ param(
     [string]$Version = "1.0.6-beta.1",
     [string]$HubImage = "",
     [string]$LinuxAgentImage = "",
+    [string]$PublicHubImage = "",
+    [string]$PublicAgentImage = "",
+    [string]$PublicOutputDirectory = "",
     [switch]$SkipPush,
     [switch]$SkipAgentBuild,
     [switch]$SkipLinuxAgentImageBuild,
@@ -95,6 +98,26 @@ try {
         }
     }
 
+    $publicPackageRequested = -not [string]::IsNullOrWhiteSpace($PublicHubImage) -or
+        -not [string]::IsNullOrWhiteSpace($PublicAgentImage) -or
+        -not [string]::IsNullOrWhiteSpace($PublicOutputDirectory)
+    if ($publicPackageRequested) {
+        if ([string]::IsNullOrWhiteSpace($PublicHubImage) -or [string]::IsNullOrWhiteSpace($PublicAgentImage)) {
+            throw "PublicHubImage and PublicAgentImage are both required when preparing a public release package."
+        }
+        if ([string]::IsNullOrWhiteSpace($PublicOutputDirectory)) {
+            $PublicOutputDirectory = "build/public-release/$Version"
+        }
+        & (Join-Path $PSScriptRoot "package-public-release.ps1") `
+            -Version $Version `
+            -HubImage $PublicHubImage `
+            -AgentImage $PublicAgentImage `
+            -OutputDirectory $PublicOutputDirectory
+        if ($LASTEXITCODE -ne 0) {
+            throw "Public release packaging failed with exit code $LASTEXITCODE"
+        }
+    }
+
     if ($DryRun) {
         Write-Host "Dry run $Version ready; images were not pushed and deployment should not use these outputs directly."
     } else {
@@ -105,6 +128,9 @@ try {
     Write-Host "  Windows agent: build/releases/agent/$Version/pulse-agent_windows_amd64.exe"
     if (-not $SkipAndroidAppBuild) {
         Write-Host "  Android APK: internal/site/android/app/build/outputs/apk/debug/app-debug.apk"
+    }
+    if ($publicPackageRequested) {
+        Write-Host "  Public package: $PublicOutputDirectory"
     }
 } finally {
     Pop-Location

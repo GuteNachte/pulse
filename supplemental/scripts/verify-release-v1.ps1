@@ -5,6 +5,7 @@ param(
     [string]$BuildDir = "build/releases/agent",
     [string]$DataDir = "pulse_data",
     [string]$HubUrl = "",
+    [string]$PublicReleaseDirectory = "",
     [switch]$SkipRegistry,
     [switch]$SkipAgentArtifacts,
     [switch]$SkipAndroidApk
@@ -153,6 +154,65 @@ function Test-HubRuntime {
     }
 }
 
+function Test-PublicReleasePackage {
+    param(
+        [System.Collections.Generic.List[string]]$Failures,
+        [string]$Directory
+    )
+
+    $packageRoot = if ([System.IO.Path]::IsPathRooted($Directory)) {
+        $Directory
+    } else {
+        Join-Path $repoRoot $Directory
+    }
+    if (-not (Test-Path -LiteralPath $packageRoot -PathType Container)) {
+        Add-VerifyFailure $Failures "Public release package directory is missing: $packageRoot"
+        return
+    }
+
+    $expectedNames = @(
+        "pulse-agent-$Version.exe",
+        "pulse-android-$Version.apk",
+        "docker-compose.yml",
+        "pulse-agent.yml",
+        "LICENSE",
+        "THIRD_PARTY_NOTICES.md",
+        "release-manifest.json",
+        "SHA256SUMS"
+    ) | Sort-Object
+    $actualNames = @(Get-ChildItem -LiteralPath $packageRoot -File | Select-Object -ExpandProperty Name | Sort-Object)
+    Assert-EqualValue $Failures "Public package file allowlist" ($expectedNames -join "|") ($actualNames -join "|")
+
+    $manifestPath = Join-Path $packageRoot "release-manifest.json"
+    if (Assert-FileExists $Failures $manifestPath "Public release manifest") {
+        try {
+            $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+            Assert-EqualValue $Failures "Public release manifest schema" "pulse.public.release.v1" $manifest.schema
+            Assert-EqualValue $Failures "Public release manifest version" $Version $manifest.version
+        } catch {
+            Add-VerifyFailure $Failures "Public release manifest is invalid JSON: $($_.Exception.Message)"
+        }
+    }
+
+    $checksumPath = Join-Path $packageRoot "SHA256SUMS"
+    if (-not (Assert-FileExists $Failures $checksumPath "Public release checksums")) {
+        return
+    }
+    foreach ($line in Get-Content -LiteralPath $checksumPath) {
+        if ($line -notmatch '^(?<hash>[a-f0-9]{64})  (?<name>\S+)$') {
+            Add-VerifyFailure $Failures "Invalid SHA256SUMS line: $line"
+            continue
+        }
+        $path = Join-Path $packageRoot $Matches.name
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            Add-VerifyFailure $Failures "SHA256SUMS references missing file: $($Matches.name)"
+            continue
+        }
+        $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
+        Assert-EqualValue $Failures "Public package hash $($Matches.name)" $Matches.hash $actualHash
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($HubImage)) {
     $HubImage = "registry.example.com/infra/pulse-hub:$Version"
 }
@@ -183,6 +243,10 @@ try {
 
     if (-not $SkipAndroidApk) {
         Test-AndroidApkVersion $failures
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($PublicReleaseDirectory)) {
+        Test-PublicReleasePackage $failures $PublicReleaseDirectory
     }
 
     if (-not $SkipRegistry) {

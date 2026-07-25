@@ -6,6 +6,7 @@
 
 ### Web / Hub
 
+- 新增离线公开发布包：`package-public-release.ps1` 只收录 Windows Agent、Android APK、公开 Hub / Agent Compose、许可证、第三方声明、JSON 清单和 SHA256 校验文件；公开镜像必须是带当前显式版本的 GHCR `pulse-hub` / `pulse-agent`，源模板中的内部或示例仓库不会进入输出。固定构建时间与相同输入会生成逐文件哈希一致的结果，现有私有 Harbor 发布仅在显式传入公开参数时才附加生成该包。
 - 新增统一版本更新入口 `supplemental/scripts/set-pulse-version.ps1`：一次更新 Web、Hub、Agent、Android、Docker / Compose、发布脚本与部署文档的显式版本号；每项规则校验预期匹配数，写入后自动执行完整版本一致性检查，失败会按原始字节恢复全部已修改文件，重复执行同一版本不会产生文件变化。本轮已将公开测试版本统一为 `1.0.6-beta.1`。
 - 新增公开仓库安全门禁：仓库自带 PowerShell 审计会检查运行数据、数据库、备份、日志、凭据、私钥、本地媒体、私有基础设施地址和完整 Git 历史，并通过固定 Gitleaks `8.30.1` 的最小权限 GitHub Actions 执行；许可证保留上游版权并补充 Pulse 修改署名，安全报告统一走 GitHub Private Vulnerability Reporting，新增本地数据、默认无遥测和主动外连边界说明。源码、测试、安装模板及历史文档中的私人 Gitea / Harbor 地址已替换为保留示例，审计同时识别原文和正则转义形式，历史净化在仓库外安全镜像和提交映射保护下完成；审计只检查待发布分支 `HEAD`，不会被共享仓库中的其他私有分支误阻塞。内部镜像仍可通过发布脚本参数显式传入；正式 GHCR 默认镜像等待公开仓库身份确认后在分发阶段落地，本阶段不执行外部发布。
 - 新增 Windows 开发环境一键启动入口：项目根目录 `Start-Pulse-Dev.cmd` 自动启动或复用 Hub 与 Vite，优先调用 PowerShell 7、未安装时回退到 Windows PowerShell 5.1，并只在健康检查成功后打开 Web；桌面“Pulse 开发环境”快捷方式可通过仓库脚本重复生成，启动失败会保留真实错误，不再出现只有页面外壳却没有资产数据的假启动。

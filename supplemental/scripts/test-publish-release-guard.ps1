@@ -52,7 +52,11 @@ foreach ($required in @(
     "Resolve-PulseVersion -Version `$Version",
     "`$resolvedVersion.AndroidVersionCode",
     "`$agentArgs.DryRun = `$true",
-    "`$hubArgs.DryRun = `$true"
+    "`$hubArgs.DryRun = `$true",
+    "[string]`$PublicHubImage",
+    "[string]`$PublicAgentImage",
+    "[string]`$PublicOutputDirectory",
+    "package-public-release.ps1"
 )) {
     Assert-Contains -ScriptName $releaseScriptName -Script $releaseScript -Needle $required
 }
@@ -61,7 +65,10 @@ $verifyScriptName = "verify-release-v1.ps1"
 $verifyScript = Get-Content -LiteralPath (Join-Path $PSScriptRoot $verifyScriptName) -Raw -Encoding UTF8
 foreach ($required in @(
     "Resolve-PulseVersion -Version `$Version",
-    "`$resolvedVersion.AndroidVersionCode"
+    "`$resolvedVersion.AndroidVersionCode",
+    "[string]`$PublicReleaseDirectory",
+    "Test-PublicReleasePackage",
+    "SHA256SUMS"
 )) {
     Assert-Contains -ScriptName $verifyScriptName -Script $verifyScript -Needle $required
 }
