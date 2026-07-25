@@ -9,7 +9,7 @@
     {
       "id": "pocketbase-database",
       "description": "PocketBase and SQLite database files must never be tracked.",
-      "pattern": "(?i)(?:^|/)(?:data\\.db|[^/]+\\.(?:sqlite|sqlite3))$"
+      "pattern": "(?i)(?:^|/)[^/]+\\.(?:db|sqlite|sqlite3)$"
     },
     {
       "id": "backup-artifact",
@@ -24,7 +24,7 @@
     {
       "id": "generated-credential-file",
       "description": "Generated credentials and local environment files must never be tracked.",
-      "pattern": "(?i)(?:^|/)(?:credentials?|secrets?)(?:[._-][^/]*)?(?:/|$)|(?:^|/)\\.env(?:\\.[^/]+)?$"
+      "pattern": "(?i)(?:^|/)(?:credentials?|secrets?)(?:/|$)|(?:^|/)(?:credentials?|secrets?)(?:[._-][^/]*)?\\.(?:json|ya?ml|toml|ini|txt)$|(?:^|/)\\.env(?:\\.[^/]+)?$"
     },
     {
       "id": "private-key-file",
