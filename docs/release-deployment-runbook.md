@@ -11,7 +11,7 @@ npm.cmd --prefix internal/site run check -- --max-diagnostics=200
 npm.cmd --prefix internal/site run build
 npm.cmd --prefix internal/site run android:sync
 go test -tags=testing -count=1 -timeout=240s ./...
-powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\check-version-consistency.ps1 -Version 1.0.6
+powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\check-version-consistency.ps1 -Version 1.0.6-beta.1
 ```
 
 2. 备份当前正式数据。FlyNAS 标准目录：
@@ -34,7 +34,7 @@ docker compose ps
 正式发布只走统一入口，同一版本同步构建 Hub、Agent、Web 前端和 Android App：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\publish-release-v1.ps1 -Version 1.0.6
+powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\publish-release-v1.ps1 -Version 1.0.6-beta.1
 ```
 
 正式发布不要使用 `-SkipPush`、`-SkipAgentBuild`、`-SkipLinuxAgentImageBuild` 或 `-SkipAndroidAppBuild`。这些跳过项只允许和 `-DryRun` 一起用于本地演练。
@@ -44,19 +44,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\publish
 发布完成后先在本机验证产物和远端镜像 tag：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-release-v1.ps1 -Version 1.0.6
+powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-release-v1.ps1 -Version 1.0.6-beta.1
 ```
 
 如果只想在本地演练、还没有推 Harbor，可临时跳过 registry：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-release-v1.ps1 -Version 1.0.6 -SkipRegistry
+powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-release-v1.ps1 -Version 1.0.6-beta.1 -SkipRegistry
 ```
 
 如果要验证某个正在运行的 Hub：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-release-v1.ps1 -Version 1.0.6 -HubUrl http://127.0.0.1:8090
+powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-release-v1.ps1 -Version 1.0.6-beta.1 -HubUrl http://127.0.0.1:8090
 ```
 
 验证点：
@@ -64,15 +64,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-
 - Web / Hub / Agent / Android / Compose / 文档版本一致。
 - Windows Agent 可执行文件存在，`--version` 返回目标版本。
 - Agent manifest 存在，且 Windows Agent SHA256 与实际文件一致。
-- Android APK metadata 的 `versionName` 是 `1.0.6`，`versionCode` 是 `10006`。
-- Harbor 上 `pulse-hub:1.0.6` 和 `pulse-agent:1.0.6` 可被 `docker manifest inspect` 读取。
-- 可选 Hub URL 返回 `/api/health` 正常，`/api/pulse/public-info` 版本为 `1.0.6`。
+- Android APK metadata 的 `versionName` 是 `1.0.6-beta.1`，`versionCode` 是 `10006`。
+- Harbor 上 `pulse-hub:1.0.6-beta.1` 和 `pulse-agent:1.0.6-beta.1` 可被 `docker manifest inspect` 读取。
+- 可选 Hub URL 返回 `/api/health` 正常，`/api/pulse/public-info` 版本为 `1.0.6-beta.1`。
 
 ## 4. Harbor 手动确认
 
 ```powershell
-docker manifest inspect registry.example.com/infra/pulse-hub:1.0.6
-docker manifest inspect registry.example.com/infra/pulse-agent:1.0.6
+docker manifest inspect registry.example.com/infra/pulse-hub:1.0.6-beta.1
+docker manifest inspect registry.example.com/infra/pulse-agent:1.0.6-beta.1
 ```
 
 两条命令都必须成功。任一镜像不存在时，不要部署 FlyNAS。
@@ -102,24 +102,24 @@ docker logs --tail=100 pulse-agent
 预期：
 
 - `/api/health` 返回成功。
-- `/api/pulse/public-info` 的 `v` 是 `1.0.6`。
-- `pulse-hub` 镜像是 `registry.example.com/infra/pulse-hub:1.0.6`。
-- `pulse-agent` 镜像是 `registry.example.com/infra/pulse-agent:1.0.6`。
+- `/api/pulse/public-info` 的 `v` 是 `1.0.6-beta.1`。
+- `pulse-hub` 镜像是 `registry.example.com/infra/pulse-hub:1.0.6-beta.1`。
+- `pulse-agent` 镜像是 `registry.example.com/infra/pulse-agent:1.0.6-beta.1`。
 - 两个容器都是 `host` 网络。
-- 页面 About 显示 Hub / Web / Android / Agent 目标版本为 `1.0.6`。
+- 页面 About 显示 Hub / Web / Android / Agent 目标版本为 `1.0.6-beta.1`。
 - Hub 所在机器在线，显示真实机器名并带 `Hub` 标签。
 
 ## 6. 回滚
 
-如果 `1.0.6` 部署后健康检查、登录、Agent 连接或核心页面异常，先回滚到上一稳定版本 `1.0.4`。
+如果 `1.0.6-beta.1` 部署后健康检查、登录、Agent 连接或核心页面异常，先回滚到上一稳定版本 `1.0.4`。
 
 1. 修改 FlyNAS Compose 镜像 tag：
 
 ```bash
 cd /vol1/1000/docker/pulse
 cp docker-compose.yml "docker-compose.yml.rollback-$(date +%Y%m%d-%H%M%S)"
-sed -i 's#registry.example.com/infra/pulse-hub:1.0.6#registry.example.com/infra/pulse-hub:1.0.4#g' docker-compose.yml
-sed -i 's#registry.example.com/infra/pulse-agent:1.0.6#registry.example.com/infra/pulse-agent:1.0.4#g' docker-compose.yml
+sed -i 's#registry.example.com/infra/pulse-hub:1.0.6-beta.1#registry.example.com/infra/pulse-hub:1.0.4#g' docker-compose.yml
+sed -i 's#registry.example.com/infra/pulse-agent:1.0.6-beta.1#registry.example.com/infra/pulse-agent:1.0.4#g' docker-compose.yml
 ```
 
 2. 拉取并重建：

@@ -11,14 +11,15 @@ export type ReleaseNote = {
 
 export const releaseHistory: ReleaseNote[] = [
 	{
-		version: "1.0.6",
+		version: "1.0.6-beta.1",
 		date: "2026-06-25",
-		title: "Pulse 1.0.6 开发记录",
+		title: "Pulse 1.0.6-beta.1 开发记录",
 		badges: ["Web / Hub", "图片搜索 Agent", "网络拓扑", "智能家居", "代码收口", "工程质量", "项目独立化"],
 		sections: [
 			{
 				title: "Web / Hub",
 				items: [
+					"新增统一版本更新入口：一次更新 Web、Hub、Agent、Android、Docker / Compose、发布脚本与部署文档的显式版本号；每项规则校验预期匹配数，写入后自动执行完整一致性检查，失败会原样恢复全部文件，重复执行不会产生变化。本轮公开测试版本统一为 1.0.6-beta.1。",
 					"新增公开仓库安全门禁：仓库自带审计覆盖运行数据、数据库、备份、日志、凭据、私钥、本地媒体、私有基础设施地址和完整 Git 历史；固定 Gitleaks 8.30.1 的最小权限 GitHub Actions 会在推送和 PR 中执行。源码与安装模板中的私人基础设施地址已替换为保留示例，审计同时识别原文和正则转义形式，历史净化在仓库外安全镜像和提交映射保护下完成；审计只检查待发布分支 HEAD，不会被共享仓库中的其他私有分支误阻塞。正式 GHCR 默认镜像等待公开仓库身份确认后再落地，本阶段不执行外部发布。",
 					"新增 Windows 开发环境一键启动入口：项目根目录 Start-Pulse-Dev.cmd 自动启动或复用 Hub 与 Vite，优先调用 PowerShell 7、未安装时回退到 Windows PowerShell 5.1，并只在健康检查成功后打开 Web；桌面 Pulse 开发环境快捷方式可通过仓库脚本重复生成，启动失败会保留真实错误。",
 					"资产中心新增可恢复迁移包：导出包含资产、位置、接口、关系、维护、附件和设备图片，导入先做 ZIP、哈希、引用和冲突预检，再按仅新增、合并补全或覆盖匹配项执行事务恢复；附件和图片文件同步恢复，重复仅新增不会复制网卡或链路。",
@@ -547,6 +548,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "移动端 / Android App",
 				items: [
+					"Android App 跟随统一版本入口切换到 1.0.6-beta.1；versionName 保留完整预发布版本，versionCode 按基础版本保持 10006，本轮无 Android 原生功能改动。",
 					"本轮公开仓库审计不改变 Android 原生能力；移动端版本继续跟随 Hub、Agent 与 Web 使用同一 1.0.6 开发口径，正式 1.0.6-beta.1 仍需在公开分发阶段统一构建和验证。",
 					"本轮没有新增 Android 原生能力；移动端 WebView 跟随 Web / Hub 1.0.6 使用相同 ONT 严格字段、接口状态和关系规则，并完成 390 × 844 视口验收。",
 					"移动端 WebView 同步使用 LAN CIDR 示例、简洁的位置选择与统一备注输入框。",
@@ -556,6 +558,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "Agent / 部署",
 				items: [
+					"Agent、Hub 镜像默认参数、Compose 模板、安装说明与发布验证命令已统一切换为 1.0.6-beta.1；当前只完成本地版本准备，未推送镜像、Release 或任何外部仓库。",
 					"发布脚本、Compose、Agent 安装命令和版本记录不再硬编码私人 Harbor 主机；公开准备阶段使用 registry.example.com 保留示例，内部 Harbor 仍可通过 HubImage、LinuxAgentImage 或 Image 参数显式传入。绑定公开仓库前禁止把示例地址当成可拉取镜像。",
 					"正式部署迁移可使用 Pulse 完整实例备份保留管理员账号、设置、资产、拓扑、监控历史、PocketBase 文件和外置设备图片；Compose 升级仍必须持续挂载 ./pulse_data:/pulse_data，禁止删除持久化目录或用匿名卷覆盖。",
 					"本轮不改变 Agent 采集协议或部署参数；ONT 参数、接口和关系先由资产中心手工确认，后续统一发布时 Hub、Agent、Web 和 Android App 仍使用同一 1.0.6 版本号。",
@@ -565,6 +568,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "文档 / 规则",
 				items: [
+					"版本更新器新增临时夹具回归测试，覆盖 1.0.6-beta.1 全源一致性、重复执行幂等性，以及后置校验失败时的完整回滚；一致性脚本支持指定 RepositoryRoot，测试不会修改真实仓库。",
 					"公开前审计补齐许可证、安全与隐私边界：保留 henrygd 上游 MIT 版权，单列 Pulse contributors 修改署名并保留 Homelable 第三方声明；漏洞统一使用 GitHub Private Vulnerability Reporting，文档明确 pulse_data 本地数据范围、默认不发送遥测、用户主动外连和公开演示脱敏规则。",
 					"仓库审计采用可回归的红绿契约：当前树只读取 git ls-files，报告只保存规则、路径和提交元数据；完整历史同时使用 Gitleaks 与精确私有端点扫描，失败报告默认脱敏且仅在 CI 失败时短期上传。",
 					"新增 Pulse 公开测试与社区协作设计及五阶段实施计划：确定 GitHub 公开主仓库、GHCR 镜像、GitHub Releases 和 1.0.6-beta.1 首发链路；公开前必须完成全历史敏感信息与许可证审计，再依次完成公开分发、虚拟演示与中英文文档、贡献规范和首发演练。未获最终授权前不执行任何公开发布。",

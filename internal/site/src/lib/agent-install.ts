@@ -1,4 +1,4 @@
-export const AGENT_VERSION = "1.0.6"
+export const AGENT_VERSION = "1.0.6-beta.1"
 export const DEFAULT_LINUX_AGENT_IMAGE = `registry.example.com/infra/pulse-agent:${AGENT_VERSION}`
 export const DEFAULT_LINUX_AGENT_DATA_DIR = "/opt/pulse-agent/data"
 export const FLYNAS_LINUX_AGENT_DATA_DIR = "/vol1/1000/docker/pulse-agent/data"

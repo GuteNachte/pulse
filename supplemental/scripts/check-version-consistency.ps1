@@ -1,10 +1,15 @@
 param(
-    [string]$Version = ""
+    [string]$Version = "",
+    [string]$RepositoryRoot = ""
 )
 
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+$repoRoot = if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
+    Resolve-Path (Join-Path $PSScriptRoot "..\..")
+} else {
+    Resolve-Path -LiteralPath $RepositoryRoot
+}
 . (Join-Path $PSScriptRoot "release-script-helpers.ps1")
 $textFileCache = @{}
 
@@ -226,6 +231,16 @@ Assert-PatternSet $failures @(
         Pattern = 'label="Agent 实际版本"'
         Label = "About displays actual Agent versions"
     },
+    @{
+        Path = "internal\site\src\components\routes\settings\release-history.ts"
+        Pattern = 'version:\s*"' + $escapedVersion + '"'
+        Label = "About release history current version"
+    },
+    @{
+        Path = "internal\site\src\components\routes\settings\release-history.ts"
+        Pattern = 'title:\s*"Pulse ' + $escapedVersion + ' 开发记录"'
+        Label = "About release history current title"
+    },
     @{ Path = "docs\agent-1.0-install.md"; Pattern = "registry\.example\.com/infra/pulse-agent:$escapedVersion"; Label = "Agent install doc pulse-agent image" },
     @{ Path = "docs\agent-1.0-install.md"; Pattern = 'loopback-only.*`Hub`'; Label = "Agent install doc local Hub display rule" },
     @{ Path = "docs\flynas-compose-checklist.md"; Pattern = "registry\.example\.com/infra/pulse-hub:$escapedVersion"; Label = "FlyNAS checklist pulse-hub image" },
@@ -243,7 +258,9 @@ Assert-PatternSet $failures @(
     @{ Path = "docs\release-deployment-runbook.md"; Pattern = "verify-release-v1\.ps1 -Version $escapedVersion"; Label = "Release deployment runbook verification command" },
     @{ Path = "docs\release-deployment-runbook.md"; Pattern = "pulse-hub:$escapedVersion"; Label = "Release deployment runbook Hub image" },
     @{ Path = "docs\release-deployment-runbook.md"; Pattern = "pulse-agent:$escapedVersion"; Label = "Release deployment runbook Agent image" },
-    @{ Path = "docs\release-deployment-runbook.md"; Pattern = "versionName.*$escapedVersion"; Label = "Release deployment runbook Android versionName" }
+    @{ Path = "docs\release-deployment-runbook.md"; Pattern = "versionName.*$escapedVersion"; Label = "Release deployment runbook Android versionName" },
+    @{ Path = "docs\release-notes-next.md"; Pattern = "(?m)^# Pulse $escapedVersion 开发记录\r?$"; Label = "Release notes current title" },
+    @{ Path = "docs\release-notes-next.md"; Pattern = "(?m)^## $escapedVersion 开发记录\r?$"; Label = "Release notes current section" }
 )
 
 $versionedTextFiles = @(
