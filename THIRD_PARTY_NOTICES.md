@@ -1,5 +1,7 @@
 # Third-Party Notices
 
+The Pulse repository is distributed under the MIT terms in [LICENSE](LICENSE). That file retains the upstream copyright notice and separately identifies Pulse-specific modifications. The notices below supplement, and do not replace, those repository-wide terms.
+
 ## Homelable
 
 Pulse's network-topology module contains adapted topology-editor concepts and source derived from Homelable.

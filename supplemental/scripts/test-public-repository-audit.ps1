@@ -2,6 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $auditScript = Join-Path $PSScriptRoot "audit-public-repository.ps1"
 $rulesPath = Join-Path $PSScriptRoot "public-audit-rules.json"
+$repositoryRoot = [string](Resolve-Path (Join-Path $PSScriptRoot "..\.."))
 $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("pulse-public-audit-" + [Guid]::NewGuid().ToString("N"))
 $findingsPath = Join-Path $fixtureRoot ".public-audit\findings.json"
 
@@ -17,6 +18,48 @@ function Invoke-FixtureGit {
 try {
     if (-not (Test-Path -LiteralPath $auditScript)) {
         throw "Missing public repository audit implementation: $auditScript"
+    }
+
+    $policyFailures = [System.Collections.Generic.List[string]]::new()
+    $license = Get-Content -LiteralPath (Join-Path $repositoryRoot "LICENSE") -Raw -Encoding UTF8
+    if (-not $license.Contains("Copyright (c) 2024 henrygd")) {
+        $policyFailures.Add("LICENSE must retain the upstream henrygd copyright.")
+    }
+    if (-not $license.Contains("Copyright (c) 2026 Pulse contributors")) {
+        $policyFailures.Add("LICENSE must identify the Pulse contributors separately.")
+    }
+
+    $thirdPartyNotices = Get-Content -LiteralPath (Join-Path $repositoryRoot "THIRD_PARTY_NOTICES.md") -Raw -Encoding UTF8
+    if (-not $thirdPartyNotices.Contains("## Homelable")) {
+        $policyFailures.Add("THIRD_PARTY_NOTICES.md must list Homelable.")
+    }
+    if (-not $thirdPartyNotices.Contains("[LICENSE](LICENSE)")) {
+        $policyFailures.Add("THIRD_PARTY_NOTICES.md must explain its relationship to LICENSE.")
+    }
+
+    $securityPolicy = Get-Content -LiteralPath (Join-Path $repositoryRoot "SECURITY.md") -Raw -Encoding UTF8
+    if (-not $securityPolicy.Contains("GitHub Private Vulnerability Reporting")) {
+        $policyFailures.Add("SECURITY.md must use GitHub Private Vulnerability Reporting.")
+    }
+    if ($securityPolicy -match "(?i)[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}") {
+        $policyFailures.Add("SECURITY.md must not publish an unapproved personal email address.")
+    }
+
+    $privacyPath = Join-Path $repositoryRoot "docs\public-security-and-privacy.md"
+    if (-not (Test-Path -LiteralPath $privacyPath)) {
+        $policyFailures.Add("docs/public-security-and-privacy.md is missing.")
+    } else {
+        $privacyPolicy = Get-Content -LiteralPath $privacyPath -Raw -Encoding UTF8
+        if (-not $privacyPolicy.Contains("Telemetry is disabled by default")) {
+            $policyFailures.Add("The privacy policy must state that telemetry is disabled by default.")
+        }
+        if (-not $privacyPolicy.Contains('`pulse_data`')) {
+            $policyFailures.Add("The privacy policy must identify the configured pulse_data directory.")
+        }
+    }
+
+    if ($policyFailures.Count -gt 0) {
+        throw "Public policy contract failed: $($policyFailures -join ' ')"
     }
 
     $rules = Get-Content -LiteralPath $rulesPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -42,6 +85,10 @@ try {
     New-Item -ItemType Directory -Force -Path (Join-Path $fixtureRoot "docs") | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $fixtureRoot "config") | Out-Null
     Set-Content -LiteralPath (Join-Path $fixtureRoot "docs\credential-example.md") -Encoding UTF8 -Value 'TOKEN="example-redacted"'
+    Set-Content -LiteralPath (Join-Path $fixtureRoot "docs\environment-example.yml") -Encoding UTF8 -Value @'
+TOKEN: "${PULSE_AGENT_TOKEN}"
+PASSWORD: "YOUR_PASSWORD"
+'@
     Set-Content -LiteralPath (Join-Path $fixtureRoot ".gitleaks.toml") -Encoding UTF8 -Value 'title = "Fixture"'
 
     $fixtureFile = Join-Path $fixtureRoot "config\settings.ps1"
