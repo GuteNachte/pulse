@@ -120,6 +120,8 @@ PASSWORD: "YOUR_PASSWORD"
     Set-Content -LiteralPath $fixtureFile -Encoding UTF8 -Value 'TOKEN="fixture-forbidden-value"'
     $privateSourceFile = Join-Path $fixtureRoot "src\private-endpoint.go"
     Set-Content -LiteralPath $privateSourceFile -Encoding UTF8 -Value $privateEndpointValue
+    $privateRegexSourceFile = Join-Path $fixtureRoot "src\private-endpoint-regex.ps1"
+    Set-Content -LiteralPath $privateRegexSourceFile -Encoding UTF8 -Value ([regex]::Escape($privateEndpointValue))
 
     Invoke-FixtureGit -Arguments @("init", "--quiet")
     Invoke-FixtureGit -Arguments @("add", ".")
@@ -142,9 +144,16 @@ PASSWORD: "YOUR_PASSWORD"
     if (@($blockedReport.findings.ruleId) -notcontains "private-legacy-endpoint") {
         throw "Audit did not identify a private endpoint in source code."
     }
+    $escapedEndpointFinding = @($blockedReport.findings | Where-Object {
+        $_.ruleId -eq "private-legacy-endpoint" -and $_.path -eq "src/private-endpoint-regex.ps1"
+    })
+    if ($escapedEndpointFinding.Count -ne 1) {
+        throw "Audit did not identify a regex-escaped private endpoint in source code."
+    }
 
     Set-Content -LiteralPath $fixtureFile -Encoding UTF8 -Value 'TOKEN="example-redacted"'
     Set-Content -LiteralPath $privateSourceFile -Encoding UTF8 -Value "http://192.0.2.20:3005"
+    Set-Content -LiteralPath $privateRegexSourceFile -Encoding UTF8 -Value ([regex]::Escape("http://192.0.2.20:3005"))
     & $auditScript -RepositoryRoot $fixtureRoot -SkipHistoryScan
     if ($LASTEXITCODE -ne 0) {
         throw "Audit rejected the clean fixture."
@@ -204,6 +213,28 @@ PASSWORD: "YOUR_PASSWORD"
             $unrelatedHistoryReport = Get-Content -LiteralPath $findingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
             $unrelatedHistorySummary = @($unrelatedHistoryReport.findings | ForEach-Object { "$($_.ruleId):$($_.path):$($_.commit)" }) -join ", "
             throw "Audit scanned history outside the publication branch at HEAD: $unrelatedHistorySummary"
+        }
+
+        $escapedHistoryFixturePath = Join-Path $fixtureRoot "docs\historical-endpoint-regex.ps1"
+        Set-Content -LiteralPath $escapedHistoryFixturePath -Encoding UTF8 -Value ([regex]::Escape($privateHistoryValue))
+        Invoke-FixtureGit -Arguments @("add", ".")
+        Invoke-FixtureGit -Arguments @("commit", "--quiet", "-m", "add regex-escaped private endpoint")
+        Set-Content -LiteralPath $escapedHistoryFixturePath -Encoding UTF8 -Value ([regex]::Escape("http://192.0.2.20:3005"))
+        Invoke-FixtureGit -Arguments @("add", ".")
+        Invoke-FixtureGit -Arguments @("commit", "--quiet", "-m", "remove regex-escaped private endpoint")
+
+        $escapedHistoryOutput = & $auditScript -RepositoryRoot $fixtureRoot 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            throw "Audit accepted a regex-escaped private endpoint retained in Git history."
+        }
+        $escapedHistoryReport = Get-Content -LiteralPath $findingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $escapedHistoryFindings = @($escapedHistoryReport.findings | Where-Object {
+            $_.source -eq "history" -and
+            $_.ruleId -eq "private-legacy-endpoint" -and
+            $_.path -eq "docs/historical-endpoint-regex.ps1"
+        })
+        if ($escapedHistoryFindings.Count -lt 1) {
+            throw "Audit did not report the regex-escaped private endpoint history finding."
         }
 
         Set-Content -LiteralPath $historyFixturePath -Encoding UTF8 -Value $privateHistoryValue

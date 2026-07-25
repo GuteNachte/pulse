@@ -99,7 +99,13 @@ foreach ($trackedFile in $trackedFiles) {
         if ($relativePath -notmatch $contentRule.pathPattern) {
             continue
         }
-        if ($content -match $contentRule.pattern -and -not (Test-FindingAllowed -Rules $rules -RuleId $contentRule.id -Path $relativePath)) {
+        $contentMatches = $content -match $contentRule.pattern
+        if (-not $contentMatches -and $null -ne $contentRule.historyLiteralParts -and @($contentRule.historyLiteralParts).Count -gt 0) {
+            $historyLiteral = @($contentRule.historyLiteralParts) -join ""
+            $escapedHistoryLiteral = [regex]::Escape($historyLiteral)
+            $contentMatches = $content.IndexOf($escapedHistoryLiteral, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        }
+        if ($contentMatches -and -not (Test-FindingAllowed -Rules $rules -RuleId $contentRule.id -Path $relativePath)) {
             Add-AuditFinding -Findings $findings -Source "current-tree" -Category "forbidden-content" -RuleId $contentRule.id -Path $relativePath -Description $contentRule.description
         }
     }
@@ -112,28 +118,30 @@ if (-not $SkipHistoryScan) {
 
     foreach ($contentRule in @($rules.forbiddenContent | Where-Object { $null -ne $_.historyLiteralParts -and @($_.historyLiteralParts).Count -gt 0 })) {
         $historyLiteral = @($contentRule.historyLiteralParts) -join ""
-        $historyLog = @(& git -C $repositoryPath log HEAD --format="commit:%H" --name-only ("-S" + $historyLiteral) --)
-        if ($LASTEXITCODE -ne 0) {
-            $historyStatus = "failed"
-            Add-AuditFinding -Findings $findings -Source "history" -Category "scanner-error" -RuleId ("git-history-" + $contentRule.id) -Description "Git failed while scanning history for a private infrastructure rule."
-            continue
-        }
-
-        $historyCommit = ""
-        foreach ($historyLine in $historyLog) {
-            if ($historyLine.StartsWith("commit:")) {
-                $historyCommit = $historyLine.Substring("commit:".Length).Trim()
-                continue
-            }
-            if ([string]::IsNullOrWhiteSpace($historyLine) -or [string]::IsNullOrWhiteSpace($historyCommit)) {
+        foreach ($historySearchLiteral in @($historyLiteral, [regex]::Escape($historyLiteral))) {
+            $historyLog = @(& git -C $repositoryPath log HEAD --format="commit:%H" --name-only ("-S" + $historySearchLiteral) --)
+            if ($LASTEXITCODE -ne 0) {
+                $historyStatus = "failed"
+                Add-AuditFinding -Findings $findings -Source "history" -Category "scanner-error" -RuleId ("git-history-" + $contentRule.id) -Description "Git failed while scanning history for a private infrastructure rule."
                 continue
             }
 
-            $historyPath = $historyLine.Trim().Replace("\", "/")
-            $findingKey = "$($contentRule.id)|$historyCommit|$historyPath"
-            if ($historyFindingKeys.Add($findingKey)) {
-                Add-AuditFinding -Findings $findings -Source "history" -Category "private-infrastructure" -RuleId $contentRule.id -Path $historyPath -Commit $historyCommit -Description "Git history contains a private infrastructure endpoint."
-                $historyStatus = "findings"
+            $historyCommit = ""
+            foreach ($historyLine in $historyLog) {
+                if ($historyLine.StartsWith("commit:")) {
+                    $historyCommit = $historyLine.Substring("commit:".Length).Trim()
+                    continue
+                }
+                if ([string]::IsNullOrWhiteSpace($historyLine) -or [string]::IsNullOrWhiteSpace($historyCommit)) {
+                    continue
+                }
+
+                $historyPath = $historyLine.Trim().Replace("\", "/")
+                $findingKey = "$($contentRule.id)|$historyCommit|$historyPath"
+                if ($historyFindingKeys.Add($findingKey)) {
+                    Add-AuditFinding -Findings $findings -Source "history" -Category "private-infrastructure" -RuleId $contentRule.id -Path $historyPath -Commit $historyCommit -Description "Git history contains a private infrastructure endpoint."
+                    $historyStatus = "findings"
+                }
             }
         }
     }
