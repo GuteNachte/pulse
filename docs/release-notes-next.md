@@ -6,13 +6,14 @@
 
 ### Web / Hub
 
+- 建立公开 GitHub 源码基线：`GuteNachte/pulse` 已创建为公共仓库，净化后的 `codex/public-readiness-sanitized` 与默认分支 `main` 均指向同一份已审计历史；仓库主页、README、许可证、安全策略和 Issues 已可公开访问。当前尚未创建预发布 tag、GitHub Release、GHCR 镜像、Environment、仓库发布变量或 Pages。
 - 新增私有 Git 镜像同步工具：默认只抓取公开源并展示分支 / tag 的精确 ref 与 push 预演；只有工作树干净、安全报告为 ready、显式 `-Apply` 且确认 URL 与目标 remote 完全一致时才使用 `--prune` 同步。工具不使用 `git push --mirror`，不会复制内部 refs，也不处理 GitHub Secrets、Environment、Issues、Discussions、Releases、Pages 或 Packages。
 - 新增受控 GitHub 预发布工作流：预发布 tag 必须与项目版本完全一致，验证阶段以只读权限执行安全报告、完整仓库审计、版本契约、Go / Web 质量检查、Windows Agent、Android APK 和离线发布包；发布阶段同时受 `PUBLIC_RELEASE_ENABLED=true` 与 `public-release` Environment 人工审批保护，才临时获得 GHCR 和 Release 写权限。手动运行默认只验证不发布，所有 GitHub Actions 固定到已核验提交，高权限阶段使用 Docker / GitHub CLI 直接发布。
 - 修复公开预发布 CI 的构建顺序：先生成 `internal/site/dist`，再执行依赖 `go:embed all:dist` 的 Go vet 与全套测试；同时清理 Linux 检出环境下真实存在的 19 个 Biome 格式 / lint 问题。Android `android:sync`、单测任务与 `1.0.6-beta.1` Debug APK 已在本地完整验证。
 - 完成前端依赖漏洞评估：`npm audit` 当前 4 项中，`tar`、`brace-expansion`、`postcss` 仅位于受控构建工具链，`valibot` 公告涉及的 `record()` + `flatten()` 组合未被项目使用；四项均有修复版本，本轮不执行自动升级，外部 beta 发布前必须单独升级复验或显式接受风险。
 - 新增离线公开发布包：`package-public-release.ps1` 只收录 Windows Agent、Android APK、公开 Hub / Agent Compose、许可证、第三方声明、JSON 清单和 SHA256 校验文件；公开镜像必须是带当前显式版本的 GHCR `pulse-hub` / `pulse-agent`，源模板中的内部或示例仓库不会进入输出。固定构建时间与相同输入会生成逐文件哈希一致的结果，现有私有 Harbor 发布仅在显式传入公开参数时才附加生成该包。
 - 新增统一版本更新入口 `supplemental/scripts/set-pulse-version.ps1`：一次更新 Web、Hub、Agent、Android、Docker / Compose、发布脚本与部署文档的显式版本号；每项规则校验预期匹配数，写入后自动执行完整版本一致性检查，失败会按原始字节恢复全部已修改文件，重复执行同一版本不会产生文件变化。本轮已将公开测试版本统一为 `1.0.6-beta.1`。
-- 新增公开仓库安全门禁：仓库自带 PowerShell 审计会检查运行数据、数据库、备份、日志、凭据、私钥、本地媒体、私有基础设施地址和完整 Git 历史，并通过固定 Gitleaks `8.30.1` 的最小权限 GitHub Actions 执行；许可证保留上游版权并补充 Pulse 修改署名，安全报告统一走 GitHub Private Vulnerability Reporting，新增本地数据、默认无遥测和主动外连边界说明。源码、测试、安装模板及历史文档中的私人 Gitea / Harbor 地址已替换为保留示例，审计同时识别原文和正则转义形式，历史净化在仓库外安全镜像和提交映射保护下完成；审计只检查待发布分支 `HEAD`，不会被共享仓库中的其他私有分支误阻塞。内部镜像仍可通过发布脚本参数显式传入；正式 GHCR 默认镜像等待公开仓库身份确认后在分发阶段落地，本阶段不执行外部发布。
+- 新增公开仓库安全门禁：仓库自带 PowerShell 审计会检查运行数据、数据库、备份、日志、凭据、私钥、本地媒体、私有基础设施地址和完整 Git 历史，并通过固定 Gitleaks `8.30.1` 的最小权限 GitHub Actions 执行；许可证保留上游版权并补充 Pulse 修改署名，安全报告统一走 GitHub Private Vulnerability Reporting，新增本地数据、默认无遥测和主动外连边界说明。源码、测试、安装模板及历史文档中的私人 Gitea / Harbor 地址已替换为保留示例，审计同时识别原文和正则转义形式，历史净化在仓库外安全镜像和提交映射保护下完成；审计只检查待发布分支 `HEAD`，不会被共享仓库中的其他私有分支误阻塞。公开仓库身份已确认为 `GuteNachte/pulse`，内部镜像仍可通过发布脚本参数显式传入；GHCR 与 Release 继续等待发布门禁配置和最终授权。
 - 新增 Windows 开发环境一键启动入口：项目根目录 `Start-Pulse-Dev.cmd` 自动启动或复用 Hub 与 Vite，优先调用 PowerShell 7、未安装时回退到 Windows PowerShell 5.1，并只在健康检查成功后打开 Web；桌面“Pulse 开发环境”快捷方式可通过仓库脚本重复生成，启动失败会保留真实错误，不再出现只有页面外壳却没有资产数据的假启动。
 - 资产中心新增可恢复迁移包：导出统一生成带版本清单和 SHA256 的 `.pulse-assets.zip`，包含当前账号的资产、位置、接口、关系、维护、附件、设备图片及图片版本 / 展示关系；导入先执行 ZIP 安全检查、引用完整性和冲突预检，再按“仅新增 / 合并补全 / 覆盖匹配项”执行 ID 重映射与事务写入。PocketBase 附件和本地设备图片同步恢复，失败时回滚本批次；重复“仅新增”不会重复创建已迁移资产、网卡和链路。
 - 修复资产迁移的合并与覆盖幂等性：非资产子记录使用稳定迁移 ID，并按目标资产、接口名称 / 类型和关系两端复用目标实例已有记录；同一迁移包重复使用“合并补全”或“覆盖匹配项”时不再复制位置、网卡、关系、附件和图片记录，目标已手工建立的同名网卡与对应关系也不会重复。

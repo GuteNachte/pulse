@@ -73,11 +73,11 @@ gitleaks version
 | `51ae04e57b26d7d8c8a9bf9ade884066a90f356e` | `06626a844cf9f655ffe21875a23ad4ab8195adf6` |
 | `6dbf59de88be76655672176de95aefa82d6d7aa9` | `459cbabd5791baf742e63757a3f77c40c14894d2` |
 
-- 净化分支是后续公开分发阶段的唯一输入；本次未创建公开仓库，也未推送 GHCR、Release 或 Pages。
+- 净化分支是公开分发阶段的唯一输入。2026-07-26 已创建公共仓库 `https://github.com/GuteNachte/pulse`，将净化分支与 `main` 推送到同一已审计提交，并把 `main` 设置为默认分支；尚未推送 GHCR、Release 或 Pages。
 
 ## 剩余风险
 
-- 公开 GitHub 仓库身份和 GHCR owner 尚未确认，因此 `registry.example.com` 只是不可部署的保留示例，不能作为正式镜像地址。
+- 公开 GitHub 仓库身份已确认为 `GuteNachte/pulse`，后续 GHCR owner 使用小写 `gutenachte`；当前尚未发布任何 GHCR 包，`registry.example.com` 仍只是不可部署的保留示例，不能作为正式镜像地址。
 - `npm audit` 的 4 个依赖漏洞已完成调用路径与暴露面评估；当前均有修复版本，外部 beta 发布前仍应优先升级并复验，不能直接运行破坏性自动修复。
 - 历史重写已改变提交哈希；后续若发布该分支，旧克隆不能直接续接旧历史，应按公开仓库重新克隆。
 - 本报告不是法律意见，也不替代第三方依赖许可证和运行环境安全审查。
