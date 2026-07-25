@@ -27,6 +27,8 @@ function Assert-GuardsFlags {
 $helperScriptName = "release-script-helpers.ps1"
 $helperScript = Get-Content -LiteralPath (Join-Path $PSScriptRoot $helperScriptName) -Raw -Encoding UTF8
 foreach ($required in @(
+    "function Resolve-PulseVersion",
+    "AndroidVersionCode",
     "function Assert-ReleaseVersionConsistency",
     "check-version-consistency.ps1",
     "function Assert-ReleaseSkipFlagsAllowed",
@@ -47,10 +49,21 @@ foreach ($required in @(
     "Assert-ReleaseSkipFlagsAllowed -Context `"release`"",
     "Dry run `$Version ready",
     "Resolve-ReleaseSkipPush",
+    "Resolve-PulseVersion -Version `$Version",
+    "`$resolvedVersion.AndroidVersionCode",
     "`$agentArgs.DryRun = `$true",
     "`$hubArgs.DryRun = `$true"
 )) {
     Assert-Contains -ScriptName $releaseScriptName -Script $releaseScript -Needle $required
+}
+
+$verifyScriptName = "verify-release-v1.ps1"
+$verifyScript = Get-Content -LiteralPath (Join-Path $PSScriptRoot $verifyScriptName) -Raw -Encoding UTF8
+foreach ($required in @(
+    "Resolve-PulseVersion -Version `$Version",
+    "`$resolvedVersion.AndroidVersionCode"
+)) {
+    Assert-Contains -ScriptName $verifyScriptName -Script $verifyScript -Needle $required
 }
 
 foreach ($flag in @(

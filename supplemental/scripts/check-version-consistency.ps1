@@ -5,6 +5,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+. (Join-Path $PSScriptRoot "release-script-helpers.ps1")
 $textFileCache = @{}
 
 function Read-JsonFile {
@@ -112,12 +113,9 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
     $Version = (Read-JsonFile $sitePackagePath).version
 }
 
-if ($Version -notmatch '^\d+\.\d+\.\d+$') {
-    throw "Version '$Version' must be an explicit release version like 1.0.4"
-}
-
-$versionParts = $Version.Split(".")
-$androidVersionCode = ([int]$versionParts[0] * 10000) + ([int]$versionParts[1] * 100) + [int]$versionParts[2]
+$resolvedVersion = Resolve-PulseVersion -Version $Version
+$Version = $resolvedVersion.FullVersion
+$androidVersionCode = $resolvedVersion.AndroidVersionCode
 $escapedVersion = [regex]::Escape($Version)
 $escapedVersionCode = [regex]::Escape([string]$androidVersionCode)
 $failures = [System.Collections.Generic.List[string]]::new()

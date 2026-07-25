@@ -13,6 +13,8 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 . (Join-Path $PSScriptRoot "release-script-helpers.ps1")
+$resolvedVersion = Resolve-PulseVersion -Version $Version
+$Version = $resolvedVersion.FullVersion
 
 Assert-ReleaseSkipFlagsAllowed -Context "release" -DryRun $DryRun -Flags @{
     SkipPush = $SkipPush
@@ -82,11 +84,7 @@ try {
             if ($LASTEXITCODE -ne 0) {
                 throw "Android app sync failed with exit code $LASTEXITCODE"
             }
-            $versionParts = $Version.Split(".")
-            if ($versionParts.Count -lt 3) {
-                throw "Android versionCode requires semantic version like 1.0.3"
-            }
-            $versionCode = ([int]$versionParts[0] * 10000) + ([int]$versionParts[1] * 100) + [int]$versionParts[2]
+            $versionCode = $resolvedVersion.AndroidVersionCode
             $gradlew = Join-Path $siteDir "android\gradlew.bat"
             & $gradlew -p (Join-Path $siteDir "android") assembleDebug "-PpulseVersionName=$Version" "-PpulseVersionCode=$versionCode"
             if ($LASTEXITCODE -ne 0) {

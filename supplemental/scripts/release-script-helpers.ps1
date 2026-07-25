@@ -1,5 +1,29 @@
 $script:PulseReleaseScriptsRoot = Split-Path -Parent $PSCommandPath
 
+function Resolve-PulseVersion {
+    param([Parameter(Mandatory)][string]$Version)
+
+    $match = [regex]::Match(
+        $Version,
+        '^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?<suffix>-(?:alpha|beta|rc)\.[1-9]\d*)?$'
+    )
+    if (-not $match.Success) {
+        throw "Version '$Version' must be an explicit semantic version such as 1.0.6 or 1.0.6-beta.1."
+    }
+
+    $major = [int]$match.Groups["major"].Value
+    $minor = [int]$match.Groups["minor"].Value
+    $patch = [int]$match.Groups["patch"].Value
+    $baseVersion = "$major.$minor.$patch"
+
+    return [pscustomobject][ordered]@{
+        BaseVersion = $baseVersion
+        FullVersion = $Version
+        AndroidVersionCode = ($major * 10000) + ($minor * 100) + $patch
+        IsPrerelease = $match.Groups["suffix"].Success
+    }
+}
+
 function Assert-ReleaseVersionConsistency {
     param([string]$Version)
 

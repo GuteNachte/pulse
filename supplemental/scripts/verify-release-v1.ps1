@@ -14,6 +14,8 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 . (Join-Path $PSScriptRoot "release-script-helpers.ps1")
+$resolvedVersion = Resolve-PulseVersion -Version $Version
+$Version = $resolvedVersion.FullVersion
 
 function Add-VerifyFailure {
     param(
@@ -123,10 +125,8 @@ function Test-AndroidApkVersion {
         Add-VerifyFailure $Failures "Android APK metadata has no elements"
         return
     }
-    $parts = $Version.Split(".")
-    $expectedCode = ([int]$parts[0] * 10000) + ([int]$parts[1] * 100) + [int]$parts[2]
     Assert-EqualValue $Failures "Android APK versionName" $Version $element.versionName
-    Assert-EqualValue $Failures "Android APK versionCode" $expectedCode $element.versionCode
+    Assert-EqualValue $Failures "Android APK versionCode" $resolvedVersion.AndroidVersionCode $element.versionCode
 }
 
 function Test-HubRuntime {
