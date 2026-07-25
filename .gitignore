@@ -23,6 +23,7 @@ internal/site/src/locales/**/*.ts
 *.bak
 __debug_*
 .playwright-mcp/
+.worktrees/
 *.png
 *.log
 *.tmp
