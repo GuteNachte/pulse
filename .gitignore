@@ -24,6 +24,7 @@ internal/site/src/locales/**/*.ts
 __debug_*
 .playwright-mcp/
 .worktrees/
+.public-audit/
 *.png
 *.log
 *.tmp
