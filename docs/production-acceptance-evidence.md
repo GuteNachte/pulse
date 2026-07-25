@@ -405,7 +405,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-
 日期：2026-06-18  
 验收项：Harbor 目标镜像存在性、FlyNAS 正式目录可达性  
 状态：阻塞  
-环境：Windows 本地开发环境，Harbor `registry.example.com/infra`，SSH 别名 `flynas`  
+环境：Windows 本地开发环境，Harbor `registry.example.com/infra`，SSH 别名 `flynas`
 执行人：Codex  
 证据：
 

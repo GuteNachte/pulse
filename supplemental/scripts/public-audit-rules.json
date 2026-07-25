@@ -47,14 +47,16 @@
     {
       "id": "private-legacy-endpoint",
       "description": "The legacy private API endpoint must not appear in public-facing files.",
-      "pathPattern": "(?i)^(?:README(?:\\.[^/]+)?|SECURITY\\.md|CONTRIBUTING\\.md|docs/.+\\.md|supplemental/.+|\\.github/.+)$",
-      "pattern": "192\\.168\\.1\\.20:3005"
+      "pathPattern": "(?s).*",
+      "pattern": "192\\.168\\.1\\.20:3005",
+      "historyLiteralParts": ["192.168.1.", "20:3005"]
     },
     {
       "id": "private-harbor-endpoint",
       "description": "The private Harbor endpoint must not appear in public-facing files.",
-      "pathPattern": "(?i)^(?:README(?:\\.[^/]+)?|SECURITY\\.md|CONTRIBUTING\\.md|docs/.+\\.md|supplemental/.+|\\.github/.+)$",
-      "pattern": "hb\\.gutenacht\\.site:66"
+      "pathPattern": "(?s).*",
+      "pattern": "hb\\.gutenacht\\.site:66",
+      "historyLiteralParts": ["hb.gutenacht.site", ":66"]
     }
   ],
   "allowedFindings": [

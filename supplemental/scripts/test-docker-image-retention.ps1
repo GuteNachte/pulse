@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "docker-image-retention.ps1")
 
