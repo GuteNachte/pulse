@@ -62,6 +62,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\run-hub
 - `docs/agent-1.0-install.md`
 - `docs/flynas-compose-checklist.md`
 - `docs/release-deployment-runbook.md`
+- `docs/public-release-runbook.md`：GitHub prerelease、GHCR、双重授权门禁与撤回流程。
 
 ## 版本
 

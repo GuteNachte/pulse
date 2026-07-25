@@ -19,6 +19,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "Web / Hub",
 				items: [
+					"新增受控 GitHub 预发布工作流：tag 必须与项目版本一致，验证阶段以只读权限完成安全审计、版本、Go / Web、Windows Agent、Android 和离线包检查；发布阶段同时要求 PUBLIC_RELEASE_ENABLED=true 与 public-release Environment 人工审批，手动运行默认只验证不发布。所有 GitHub Actions 固定到已核验提交。",
 					"新增离线公开发布包：只收录 Windows Agent、Android APK、公开 Hub / Agent Compose、许可证、第三方声明、JSON 清单和 SHA256 校验文件；公开镜像必须是带当前显式版本的 GHCR pulse-hub / pulse-agent，内部或示例仓库不会进入输出。相同输入与固定构建时间会生成逐文件哈希一致的结果。",
 					"新增统一版本更新入口：一次更新 Web、Hub、Agent、Android、Docker / Compose、发布脚本与部署文档的显式版本号；每项规则校验预期匹配数，写入后自动执行完整一致性检查，失败会原样恢复全部文件，重复执行不会产生变化。本轮公开测试版本统一为 1.0.6-beta.1。",
 					"新增公开仓库安全门禁：仓库自带审计覆盖运行数据、数据库、备份、日志、凭据、私钥、本地媒体、私有基础设施地址和完整 Git 历史；固定 Gitleaks 8.30.1 的最小权限 GitHub Actions 会在推送和 PR 中执行。源码与安装模板中的私人基础设施地址已替换为保留示例，审计同时识别原文和正则转义形式，历史净化在仓库外安全镜像和提交映射保护下完成；审计只检查待发布分支 HEAD，不会被共享仓库中的其他私有分支误阻塞。正式 GHCR 默认镜像等待公开仓库身份确认后再落地，本阶段不执行外部发布。",
@@ -549,6 +550,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "移动端 / Android App",
 				items: [
+					"公开预发布验证会用统一解析出的 versionName 与 versionCode 构建 Android APK，并在生成公开包前核验 APK metadata；本轮仍无 Android 原生功能改动。",
 					"Android App 跟随统一版本入口切换到 1.0.6-beta.1；versionName 保留完整预发布版本，versionCode 按基础版本保持 10006，本轮无 Android 原生功能改动。",
 					"本轮公开仓库审计不改变 Android 原生能力；移动端版本继续跟随 Hub、Agent 与 Web 使用同一 1.0.6 开发口径，正式 1.0.6-beta.1 仍需在公开分发阶段统一构建和验证。",
 					"本轮没有新增 Android 原生能力；移动端 WebView 跟随 Web / Hub 1.0.6 使用相同 ONT 严格字段、接口状态和关系规则，并完成 390 × 844 视口验收。",
@@ -559,6 +561,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "Agent / 部署",
 				items: [
+					"GHCR 只发布从 GitHub owner 动态派生的 pulse-hub 与 pulse-agent 显式版本镜像，不创建 latest；写权限仅存在于人工审批后的 publish job，现有私有 Harbor 目标与发布脚本参数继续保留。",
 					"统一发布入口可在显式提供公开 GHCR 镜像和输出目录时附加生成公开包，原有私有 Harbor 发布路径保持独立；发布后验证可按需核验公开包白名单、manifest 和每条 SHA256。",
 					"Agent、Hub 镜像默认参数、Compose 模板、安装说明与发布验证命令已统一切换为 1.0.6-beta.1；当前只完成本地版本准备，未推送镜像、Release 或任何外部仓库。",
 					"发布脚本、Compose、Agent 安装命令和版本记录不再硬编码私人 Harbor 主机；公开准备阶段使用 registry.example.com 保留示例，内部 Harbor 仍可通过 HubImage、LinuxAgentImage 或 Image 参数显式传入。绑定公开仓库前禁止把示例地址当成可拉取镜像。",
@@ -570,6 +573,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "文档 / 规则",
 				items: [
+					"新增公开预发布运行手册，写清外部授权边界、双重门禁、首次仓库配置、本地无发布验证、正式审批顺序、费用变化风险和撤回限制；未获明确授权前禁止创建公开仓库、推送、镜像、Release、Secrets、Issue、Discussion 或 Pages。",
 					"公开发布包回归测试使用临时伪产物完成全程离线验证，覆盖文件白名单、GHCR 镜像替换、manifest 字段、SHA256 格式、源仓库占位地址清除和双次构建可复现性。",
 					"版本更新器新增临时夹具回归测试，覆盖 1.0.6-beta.1 全源一致性、重复执行幂等性，以及后置校验失败时的完整回滚；一致性脚本支持指定 RepositoryRoot，测试不会修改真实仓库。",
 					"公开前审计补齐许可证、安全与隐私边界：保留 henrygd 上游 MIT 版权，单列 Pulse contributors 修改署名并保留 Homelable 第三方声明；漏洞统一使用 GitHub Private Vulnerability Reporting，文档明确 pulse_data 本地数据范围、默认不发送遥测、用户主动外连和公开演示脱敏规则。",

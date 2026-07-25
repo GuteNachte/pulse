@@ -1,0 +1,242 @@
+name: Public prerelease
+
+on:
+  push:
+    tags:
+      - "v*.*.*-*.*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish after validation and environment approval
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate and package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      hub_image: ${{ steps.release.outputs.hub_image }}
+      agent_image: ${{ steps.release.outputs.agent_image }}
+      android_version_code: ${{ steps.release.outputs.android_version_code }}
+      publish_requested: ${{ steps.release.outputs.publish_requested }}
+    env:
+      GITLEAKS_VERSION: "8.30.1"
+      GITLEAKS_LINUX_X64_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve and guard release identity
+        id: release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = (Get-Content -Raw internal/site/package.json | ConvertFrom-Json).version
+          . ./supplemental/scripts/release-script-helpers.ps1
+          $resolvedVersion = Resolve-PulseVersion -Version $version
+          $tag = "v$version"
+          $owner = "${{ github.repository_owner }}".ToLowerInvariant()
+          $publishRequested = "${{ github.event_name }}" -eq "push" -or "${{ inputs.publish }}" -eq "true"
+          if ($publishRequested -and ("${{ github.ref_type }}" -ne "tag" -or "${{ github.ref_name }}" -ne $tag)) {
+            throw "Publishing requires the exact tag $tag."
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "hub_image=ghcr.io/$owner/pulse-hub:$version" >> $env:GITHUB_OUTPUT
+          "agent_image=ghcr.io/$owner/pulse-agent:$version" >> $env:GITHUB_OUTPUT
+          "android_version_code=$($resolvedVersion.AndroidVersionCode)" >> $env:GITHUB_OUTPUT
+          "publish_requested=$($publishRequested.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+      - name: Require ready audit report
+        shell: pwsh
+        run: |
+          $report = Get-Content -Raw docs/public-readiness-report.md
+          if ($report -notmatch '(?m)^Status: ready\s*$') {
+            throw "docs/public-readiness-report.md must contain Status: ready."
+          }
+
+      - name: Install verified Gitleaks
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $archive = "gitleaks_$env:GITLEAKS_VERSION`_linux_x64.tar.gz"
+          $url = "https://github.com/gitleaks/gitleaks/releases/download/v$env:GITLEAKS_VERSION/$archive"
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          $actualHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $env:GITLEAKS_LINUX_X64_SHA256) { throw "Gitleaks archive checksum mismatch." }
+          tar -xzf $archive gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: 1.26.x
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: internal/site/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Install web dependencies
+        run: npm ci --prefix internal/site
+
+      - name: Run repository and release contracts
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File supplemental/scripts/audit-public-repository.ps1
+          pwsh -NoProfile -File supplemental/scripts/check-version-consistency.ps1 -Version "${{ steps.release.outputs.version }}"
+          pwsh -NoProfile -File supplemental/scripts/test-prerelease-version.ps1
+          pwsh -NoProfile -File supplemental/scripts/test-set-pulse-version.ps1
+          pwsh -NoProfile -File supplemental/scripts/test-package-public-release.ps1
+          pwsh -NoProfile -File supplemental/scripts/test-public-release-workflow.ps1
+
+      - name: Run Go quality
+        shell: bash
+        run: |
+          unformatted="$(gofmt -l $(git ls-files '*.go'))"
+          test -z "$unformatted" || { echo "$unformatted"; exit 1; }
+          go vet -tags=testing ./...
+          go test -tags=testing -count=1 -timeout=300s ./...
+
+      - name: Run web quality
+        run: |
+          npm --prefix internal/site run check -- --max-diagnostics=200
+          npm --prefix internal/site run typecheck
+          npm --prefix internal/site run test
+          npm --prefix internal/site run build
+
+      - name: Build Windows Agent
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File supplemental/scripts/build-agent-v1.ps1 -Version "${{ steps.release.outputs.version }}" -OS windows -Arch amd64
+          pwsh -NoProfile -File supplemental/scripts/publish-agent-v1.ps1 `
+            -Version "${{ steps.release.outputs.version }}" `
+            -LinuxImage "${{ steps.release.outputs.agent_image }}" `
+            -DryRun `
+            -SkipLinuxImageBuild
+
+      - name: Build Android APK
+        shell: bash
+        run: |
+          npm --prefix internal/site run android:sync
+          chmod +x internal/site/android/gradlew
+          internal/site/android/gradlew -p internal/site/android assembleDebug \
+            -PpulseVersionName="${{ steps.release.outputs.version }}" \
+            -PpulseVersionCode="${{ steps.release.outputs.android_version_code }}"
+
+      - name: Package public release
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File supplemental/scripts/package-public-release.ps1 `
+            -Version "${{ steps.release.outputs.version }}" `
+            -HubImage "${{ steps.release.outputs.hub_image }}" `
+            -AgentImage "${{ steps.release.outputs.agent_image }}" `
+            -OutputDirectory "build/public-release/${{ steps.release.outputs.version }}"
+          pwsh -NoProfile -File supplemental/scripts/verify-release-v1.ps1 `
+            -Version "${{ steps.release.outputs.version }}" `
+            -SkipRegistry `
+            -PublicReleaseDirectory "build/public-release/${{ steps.release.outputs.version }}"
+          Get-Content "build/public-release/${{ steps.release.outputs.version }}/SHA256SUMS"
+
+      - name: Require clean tracked tree
+        shell: bash
+        run: git diff --exit-code && test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: Upload validated release bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pulse-${{ steps.release.outputs.version }}
+          path: build/public-release/${{ steps.release.outputs.version }}/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish GHCR images and prerelease
+    needs: validate
+    if: needs.validate.outputs.publish_requested == 'true' && vars.PUBLIC_RELEASE_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: public-release
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Check out validated tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Download validated release bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: pulse-${{ needs.validate.outputs.version }}
+          path: build/public-release/${{ needs.validate.outputs.version }}
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: 1.26.x
+          cache: true
+
+      - name: Restore Agent files required by the Hub image
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File supplemental/scripts/build-agent-v1.ps1 -Version "${{ needs.validate.outputs.version }}" -OS windows -Arch amd64
+          pwsh -NoProfile -File supplemental/scripts/publish-agent-v1.ps1 `
+            -Version "${{ needs.validate.outputs.version }}" `
+            -LinuxImage "${{ needs.validate.outputs.agent_image }}" `
+            -DryRun `
+            -SkipLinuxImageBuild
+
+      - name: Log in to GHCR
+        shell: bash
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+      - name: Build and push versioned images
+        shell: bash
+        run: |
+          docker buildx build --platform linux/amd64 --push --provenance=false \
+            -f internal/dockerfile_hub \
+            --build-arg "HUB_VERSION=${{ needs.validate.outputs.version }}" \
+            --build-arg "HUB_BUILD_COMMIT=${{ github.sha }}" \
+            -t "${{ needs.validate.outputs.hub_image }}" .
+          docker buildx build --platform linux/amd64 --push --provenance=false \
+            -f internal/dockerfile_agent \
+            --build-arg "AGENT_VERSION=${{ needs.validate.outputs.version }}" \
+            -t "${{ needs.validate.outputs.agent_image }}" .
+
+      - name: Create GitHub prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release create "${{ needs.validate.outputs.tag }}" \
+            build/public-release/${{ needs.validate.outputs.version }}/* \
+            --verify-tag \
+            --title "Pulse ${{ needs.validate.outputs.version }}" \
+            --generate-notes \
+            --prerelease

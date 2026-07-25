@@ -1,5 +1,7 @@
 # Pulse 发布、部署与回滚手册
 
+> 公开 GitHub prerelease、GHCR 与外部授权门禁另见 `docs/public-release-runbook.md`；本手册继续负责私有镜像发布和 FlyNAS 部署。
+
 > 目标：确认发布产物、Harbor 镜像、FlyNAS 运行态和回滚路径都能被验证。不要只看构建成功，也不要用 `latest` 判断版本。
 
 ## 1. 发布前准备
