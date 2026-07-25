@@ -157,8 +157,10 @@ PASSWORD: "YOUR_PASSWORD"
 
     $fakeBin = Join-Path $fixtureRoot ".test-bin"
     New-Item -ItemType Directory -Force -Path $fakeBin | Out-Null
+    $gitleaksArgumentsPath = Join-Path $fakeBin "gitleaks-arguments.txt"
     Set-Content -LiteralPath (Join-Path $fakeBin "gitleaks.cmd") -Encoding ASCII -Value @(
         "@echo PRIVATE-SCANNER-OUTPUT",
+        "@echo %* > `"$gitleaksArgumentsPath`"",
         "@exit /b 0"
     )
 
@@ -179,6 +181,10 @@ PASSWORD: "YOUR_PASSWORD"
         if (($historyOutput -join [Environment]::NewLine) -match "PRIVATE-SCANNER-OUTPUT") {
             throw "Audit exposed scanner process output."
         }
+        $gitleaksArguments = Get-Content -LiteralPath $gitleaksArgumentsPath -Raw -Encoding UTF8
+        if ($gitleaksArguments -notmatch '(?:^|\s)--log-opts\s+HEAD(?:\s|$)') {
+            throw "Gitleaks history scanning must be limited to the publication branch at HEAD."
+        }
 
         $privateHistoryValue = @($privateEndpointRule.historyLiteralParts) -join ""
         if ([string]::IsNullOrWhiteSpace($privateHistoryValue)) {
@@ -186,6 +192,20 @@ PASSWORD: "YOUR_PASSWORD"
         }
 
         $historyFixturePath = Join-Path $fixtureRoot "docs\historical-endpoint.md"
+        $publicationBranch = (& git -C $fixtureRoot branch --show-current).Trim()
+        Invoke-FixtureGit -Arguments @("switch", "--quiet", "-c", "unrelated-private-history")
+        Set-Content -LiteralPath $historyFixturePath -Encoding UTF8 -Value $privateHistoryValue
+        Invoke-FixtureGit -Arguments @("add", ".")
+        Invoke-FixtureGit -Arguments @("commit", "--quiet", "-m", "private endpoint on unrelated branch")
+        Invoke-FixtureGit -Arguments @("switch", "--quiet", $publicationBranch)
+
+        $unrelatedHistoryOutput = & $auditScript -RepositoryRoot $fixtureRoot 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            $unrelatedHistoryReport = Get-Content -LiteralPath $findingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            $unrelatedHistorySummary = @($unrelatedHistoryReport.findings | ForEach-Object { "$($_.ruleId):$($_.path):$($_.commit)" }) -join ", "
+            throw "Audit scanned history outside the publication branch at HEAD: $unrelatedHistorySummary"
+        }
+
         Set-Content -LiteralPath $historyFixturePath -Encoding UTF8 -Value $privateHistoryValue
         Invoke-FixtureGit -Arguments @("add", ".")
         Invoke-FixtureGit -Arguments @("commit", "--quiet", "-m", "add private endpoint")

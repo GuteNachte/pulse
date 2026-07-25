@@ -112,7 +112,7 @@ if (-not $SkipHistoryScan) {
 
     foreach ($contentRule in @($rules.forbiddenContent | Where-Object { $null -ne $_.historyLiteralParts -and @($_.historyLiteralParts).Count -gt 0 })) {
         $historyLiteral = @($contentRule.historyLiteralParts) -join ""
-        $historyLog = @(& git -C $repositoryPath log --all --format="commit:%H" --name-only ("-S" + $historyLiteral) --)
+        $historyLog = @(& git -C $repositoryPath log HEAD --format="commit:%H" --name-only ("-S" + $historyLiteral) --)
         if ($LASTEXITCODE -ne 0) {
             $historyStatus = "failed"
             Add-AuditFinding -Findings $findings -Source "history" -Category "scanner-error" -RuleId ("git-history-" + $contentRule.id) -Description "Git failed while scanning history for a private infrastructure rule."
@@ -147,7 +147,7 @@ if (-not $SkipHistoryScan) {
         Add-AuditFinding -Findings $findings -Source "history" -Category "scanner-configuration" -RuleId "gitleaks-config-required" -Path ".gitleaks.toml" -Description "The repository must provide a Gitleaks configuration."
     } else {
         Remove-Item -LiteralPath $historyReportPath -Force -ErrorAction SilentlyContinue
-        $null = & $gitleaksCommand.Source git $repositoryPath --config $gitleaksConfigPath --redact --report-format json --report-path $historyReportPath --no-banner --no-color --log-level error 2>&1
+        $null = & $gitleaksCommand.Source git $repositoryPath --config $gitleaksConfigPath --redact --report-format json --report-path $historyReportPath --no-banner --no-color --log-level error --log-opts HEAD 2>&1
         $gitleaksExitCode = $LASTEXITCODE
 
         if ($gitleaksExitCode -eq 1) {
