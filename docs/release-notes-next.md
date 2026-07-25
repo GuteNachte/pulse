@@ -6,6 +6,7 @@
 
 ### Web / Hub
 
+- 新增私有 Git 镜像同步工具：默认只抓取公开源并展示分支 / tag 的精确 ref 与 push 预演；只有工作树干净、安全报告为 ready、显式 `-Apply` 且确认 URL 与目标 remote 完全一致时才使用 `--prune` 同步。工具不使用 `git push --mirror`，不会复制内部 refs，也不处理 GitHub Secrets、Environment、Issues、Discussions、Releases、Pages 或 Packages。
 - 新增受控 GitHub 预发布工作流：预发布 tag 必须与项目版本完全一致，验证阶段以只读权限执行安全报告、完整仓库审计、版本契约、Go / Web 质量检查、Windows Agent、Android APK 和离线发布包；发布阶段同时受 `PUBLIC_RELEASE_ENABLED=true` 与 `public-release` Environment 人工审批保护，才临时获得 GHCR 和 Release 写权限。手动运行默认只验证不发布，所有 GitHub Actions 固定到已核验提交，高权限阶段使用 Docker / GitHub CLI 直接发布。
 - 新增离线公开发布包：`package-public-release.ps1` 只收录 Windows Agent、Android APK、公开 Hub / Agent Compose、许可证、第三方声明、JSON 清单和 SHA256 校验文件；公开镜像必须是带当前显式版本的 GHCR `pulse-hub` / `pulse-agent`，源模板中的内部或示例仓库不会进入输出。固定构建时间与相同输入会生成逐文件哈希一致的结果，现有私有 Harbor 发布仅在显式传入公开参数时才附加生成该包。
 - 新增统一版本更新入口 `supplemental/scripts/set-pulse-version.ps1`：一次更新 Web、Hub、Agent、Android、Docker / Compose、发布脚本与部署文档的显式版本号；每项规则校验预期匹配数，写入后自动执行完整版本一致性检查，失败会按原始字节恢复全部已修改文件，重复执行同一版本不会产生文件变化。本轮已将公开测试版本统一为 `1.0.6-beta.1`。

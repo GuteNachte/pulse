@@ -75,6 +75,35 @@ git push PUBLIC_REMOTE :refs/tags/v1.0.6-beta.1
 
 随后在 GitHub Packages 页面删除或改为私有对应 GHCR 版本，立刻把 `PUBLIC_RELEASE_ENABLED` 改为 `false`，并保留事故记录。已经被第三方拉取或复制的公开代码和镜像无法真正收回，因此“改回私有”不是完整回滚，发布前审计和人工审批不能省略。
 
+## 私有 Git 镜像
+
+私有 Gitea 只同步公开 Git 仓库的分支和 tag，不复制 GitHub Secrets、Actions Environment、Issues、Discussions、Releases、Pages 或 Packages。先在净化仓库配置两个 remote：
+
+```powershell
+git remote add public https://github.com/OWNER/REPOSITORY.git
+git remote add private-mirror https://GITEA_HOST/OWNER/REPOSITORY.git
+```
+
+默认命令只 fetch 公开源并显示精确 ref 与 `git push --dry-run --porcelain` 结果：
+
+```powershell
+pwsh -NoProfile -File supplemental/scripts/sync-private-mirror.ps1 `
+  -SourceRemote public `
+  -MirrorRemote private-mirror
+```
+
+检查清单后才允许应用，并且确认值必须与 `git remote get-url private-mirror` 完全一致：
+
+```powershell
+pwsh -NoProfile -File supplemental/scripts/sync-private-mirror.ps1 `
+  -SourceRemote public `
+  -MirrorRemote private-mirror `
+  -Apply `
+  -ConfirmMirrorUrl https://GITEA_HOST/OWNER/REPOSITORY.git
+```
+
+工具要求工作树干净且 `docs/public-readiness-report.md` 为 `Status: ready`。同步使用 `--prune`，因此私有镜像里独有、但公开源已经删除的分支或 tag 也会被删除；私有开发分支应放在另一个仓库或使用不参与镜像的独立命名空间。
+
 ## 费用与风险
 
 GitHub 公共仓库、公开 Releases 和公开 GHCR 包通常不直接收费，公共仓库的 GitHub Actions 也通常有较宽松政策；实际额度、保留期和计费规则可能调整，正式创建仓库时必须以目标账号当日显示的 GitHub 计划为准。风险主要是公开内容不可逆传播、Actions 或存储额度变化、Actions 供应链，以及错误 tag 触发候选发布。双重门禁、最小权限、所有 `uses:` 固定到已核验提交、固定 Gitleaks 校验和本地安全镜像用于降低这些风险。
