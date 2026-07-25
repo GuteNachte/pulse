@@ -1,5 +1,12 @@
 import { strict as assert } from "node:assert"
-import { getAssetMediaCoverActionLabel, getAssetMediaCoverButtonLabel, getAssetMediaCoverIconClassName, getNextAssetMediaCoverVisibility, isAssetMediaCoverVersion, isAssetMediaGalleryVersion } from "./asset-media-placement.ts"
+import {
+	getAssetMediaCoverActionLabel,
+	getAssetMediaCoverButtonLabel,
+	getAssetMediaCoverIconClassName,
+	getNextAssetMediaCoverVisibility,
+	isAssetMediaCoverVersion,
+	isAssetMediaGalleryVersion,
+} from "./asset-media-placement.ts"
 
 assert.equal(isAssetMediaCoverVersion([{ role: "cover", version: "v1", visible: true }], "v1"), true)
 assert.equal(isAssetMediaCoverVersion([{ role: "cover", version: "v1", visible: false }], "v1"), false)

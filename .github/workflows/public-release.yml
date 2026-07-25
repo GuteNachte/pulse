@@ -104,6 +104,9 @@ jobs:
       - name: Install web dependencies
         run: npm ci --prefix internal/site
 
+      - name: Build web app for Hub embed
+        run: npm --prefix internal/site run build
+
       - name: Run repository and release contracts
         shell: pwsh
         run: |
@@ -127,7 +130,6 @@ jobs:
           npm --prefix internal/site run check -- --max-diagnostics=200
           npm --prefix internal/site run typecheck
           npm --prefix internal/site run test
-          npm --prefix internal/site run build
 
       - name: Build Windows Agent
         shell: pwsh

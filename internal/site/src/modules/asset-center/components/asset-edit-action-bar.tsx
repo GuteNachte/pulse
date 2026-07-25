@@ -21,7 +21,9 @@ export function AssetEditActionBar({
 				<span className="shrink-0 text-xs font-medium text-muted-foreground">资产编号</span>
 				<div className="min-w-0 flex-1">{assetTagControl}</div>
 			</div>
-			{archiveCounts && <div className="hidden items-center gap-1 text-[11px] text-muted-foreground xl:flex">{archiveCounts}</div>}
+			{archiveCounts && (
+				<div className="hidden items-center gap-1 text-[11px] text-muted-foreground xl:flex">{archiveCounts}</div>
+			)}
 			<div className="ms-auto flex shrink-0 items-center gap-2">
 				{assetActionScope.edit.includes("save") && (
 					<Button type="submit" size="sm" disabled={readOnly || saving} className="gap-2">

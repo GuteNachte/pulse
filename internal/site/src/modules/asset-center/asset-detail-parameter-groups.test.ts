@@ -418,9 +418,7 @@ assertDeepEqual(
 	["网络功能", "网口状态", "电源", "外观与尺寸"]
 )
 assertDeepEqual(
-	switchGroups
-		.find((group) => group.title === "网络功能")
-		?.rows.map((row) => row.label),
+	switchGroups.find((group) => group.title === "网络功能")?.rows.map((row) => row.label),
 	["VLAN", "交换容量 Gbps", "MAC 地址表容量", "转发方式"]
 )
 assertDeepEqual(

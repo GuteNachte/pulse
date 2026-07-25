@@ -20,7 +20,7 @@ export const releaseHistory: ReleaseNote[] = [
 				title: "Web / Hub",
 				items: [
 					"新增私有 Git 镜像同步工具：默认只抓取公开源并显示精确分支 / tag 与 push 预演；只有工作树干净、安全报告 ready、显式 Apply 且确认 URL 完全一致时才使用 prune 同步。工具不使用 git push --mirror，也不复制 GitHub 平台数据。",
-					"新增受控 GitHub 预发布工作流：tag 必须与项目版本一致，验证阶段以只读权限完成安全审计、版本、Go / Web、Windows Agent、Android 和离线包检查；发布阶段同时要求 PUBLIC_RELEASE_ENABLED=true 与 public-release Environment 人工审批，手动运行默认只验证不发布。所有 GitHub Actions 固定到已核验提交。",
+					"新增受控 GitHub 预发布工作流：tag 必须与项目版本一致，验证阶段以只读权限完成安全审计、版本、Go / Web、Windows Agent、Android 和离线包检查；Web 产物会先构建再供 Hub 的 go:embed 校验使用，Linux 环境的 Biome 格式与 lint 门禁已完成清理。发布阶段同时要求 PUBLIC_RELEASE_ENABLED=true 与 public-release Environment 人工审批，手动运行默认只验证不发布。所有 GitHub Actions 固定到已核验提交。",
 					"新增离线公开发布包：只收录 Windows Agent、Android APK、公开 Hub / Agent Compose、许可证、第三方声明、JSON 清单和 SHA256 校验文件；公开镜像必须是带当前显式版本的 GHCR pulse-hub / pulse-agent，内部或示例仓库不会进入输出。相同输入与固定构建时间会生成逐文件哈希一致的结果。",
 					"新增统一版本更新入口：一次更新 Web、Hub、Agent、Android、Docker / Compose、发布脚本与部署文档的显式版本号；每项规则校验预期匹配数，写入后自动执行完整一致性检查，失败会原样恢复全部文件，重复执行不会产生变化。本轮公开测试版本统一为 1.0.6-beta.1。",
 					"新增公开仓库安全门禁：仓库自带审计覆盖运行数据、数据库、备份、日志、凭据、私钥、本地媒体、私有基础设施地址和完整 Git 历史；固定 Gitleaks 8.30.1 的最小权限 GitHub Actions 会在推送和 PR 中执行。源码与安装模板中的私人基础设施地址已替换为保留示例，审计同时识别原文和正则转义形式，历史净化在仓库外安全镜像和提交映射保护下完成；审计只检查待发布分支 HEAD，不会被共享仓库中的其他私有分支误阻塞。正式 GHCR 默认镜像等待公开仓库身份确认后再落地，本阶段不执行外部发布。",

@@ -27,13 +27,10 @@ assert.deepEqual(
 	]
 )
 
-assert.deepEqual(
-	summarize("gateway", ["port_count", "default_port_speed_mbps", "wan_port_count", "vlan_note"]),
-	[
-		{ title: "接口与转发", rows: ["port_count", "default_port_speed_mbps", "wan_port_count"] },
-		{ title: "网络规划", rows: ["vlan_note"] },
-	]
-)
+assert.deepEqual(summarize("gateway", ["port_count", "default_port_speed_mbps", "wan_port_count", "vlan_note"]), [
+	{ title: "接口与转发", rows: ["port_count", "default_port_speed_mbps", "wan_port_count"] },
+	{ title: "网络规划", rows: ["vlan_note"] },
+])
 
 assert.deepEqual(
 	summarize("ap", [

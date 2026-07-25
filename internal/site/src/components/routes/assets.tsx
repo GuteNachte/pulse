@@ -79,11 +79,7 @@ import {
 	getLooseLocationGroups,
 } from "@/modules/asset-center/asset-location"
 import type { AssetLocationPresetSelection } from "@/modules/asset-center/asset-location-dialog"
-import {
-	buildAssetExportCsv,
-	downloadTextFile,
-	formatAssetExportTimestamp,
-} from "@/modules/asset-center/asset-export"
+import { buildAssetExportCsv, downloadTextFile, formatAssetExportTimestamp } from "@/modules/asset-center/asset-export"
 import { downloadAssetMigrationPackage } from "@/modules/asset-center/asset-migration-client"
 import type { AssetMigrationResult } from "@/modules/asset-center/asset-migration"
 import { buildAssetImportCsvTemplate, buildAssetImportJsonExample } from "@/modules/asset-center/asset-import-templates"
@@ -210,34 +206,41 @@ export default memo(function AssetsPage() {
 					console.warn("load asset interfaces", error)
 					return { records: [] as AssetInterfaceRecord[], failed: true }
 				})
-			const [records, interfaceResult, relationRecords, locationRecords, maintenanceRecords, systemRecords, websiteRecords] =
-				await Promise.all([
-					pb.collection<AssetRecord>("assets").getFullList({
-						sort: "type,name",
-						requestKey: null,
-					}),
-					interfaceRequest,
-					pb.collection<AssetRelationRecord>("asset_relations").getFullList({
-						fields: "id,source_asset,target_asset,kind,metadata",
-						requestKey: null,
-					}),
-					pb.collection<AssetLocationRecord>("asset_locations").getFullList({
-						sort: "sort_order,kind,name",
-						requestKey: null,
-					}),
-					pb.collection<AssetMaintenanceRecord>("asset_maintenance").getFullList({
-						fields: "id,asset,kind,title,event_date,created",
-						requestKey: null,
-					}),
-					pb.collection<SystemRecord>("systems").getFullList({
-						fields: "id,asset,name,display_name",
-						requestKey: null,
-					}),
-					pb.collection<WebsiteMonitorRecord>("website_monitors").getFullList({
-						fields: "id,asset,name,last_status,enabled",
-						requestKey: null,
-					}),
-				])
+			const [
+				records,
+				interfaceResult,
+				relationRecords,
+				locationRecords,
+				maintenanceRecords,
+				systemRecords,
+				websiteRecords,
+			] = await Promise.all([
+				pb.collection<AssetRecord>("assets").getFullList({
+					sort: "type,name",
+					requestKey: null,
+				}),
+				interfaceRequest,
+				pb.collection<AssetRelationRecord>("asset_relations").getFullList({
+					fields: "id,source_asset,target_asset,kind,metadata",
+					requestKey: null,
+				}),
+				pb.collection<AssetLocationRecord>("asset_locations").getFullList({
+					sort: "sort_order,kind,name",
+					requestKey: null,
+				}),
+				pb.collection<AssetMaintenanceRecord>("asset_maintenance").getFullList({
+					fields: "id,asset,kind,title,event_date,created",
+					requestKey: null,
+				}),
+				pb.collection<SystemRecord>("systems").getFullList({
+					fields: "id,asset,name,display_name",
+					requestKey: null,
+				}),
+				pb.collection<WebsiteMonitorRecord>("website_monitors").getFullList({
+					fields: "id,asset,name,last_status,enabled",
+					requestKey: null,
+				}),
+			])
 			if (!loadGuardRef.current.isCurrent(loadToken)) return
 			setAssets(records)
 			setInterfaces(interfaceResult.records)
@@ -306,7 +309,17 @@ export default memo(function AssetsPage() {
 			monitoredAssetIds,
 			internetUplinkAssetIds,
 		})
-	}, [assets, internetUplinkAssetIds, locationFilter, monitorFilter, monitoredAssetIds, profileFilter, search, statusFilter, typeFilter])
+	}, [
+		assets,
+		internetUplinkAssetIds,
+		locationFilter,
+		monitorFilter,
+		monitoredAssetIds,
+		profileFilter,
+		search,
+		statusFilter,
+		typeFilter,
+	])
 
 	const counts = useMemo(() => {
 		return getAssetListCounts({
@@ -346,7 +359,14 @@ export default memo(function AssetsPage() {
 			monitored,
 			profileAttention,
 		}
-	}, [filteredAssets, interfaceLoadFailed, interfacesByAsset, internetUplinkAssetIds, monitoredAssetIds, relationsByAsset])
+	}, [
+		filteredAssets,
+		interfaceLoadFailed,
+		interfacesByAsset,
+		internetUplinkAssetIds,
+		monitoredAssetIds,
+		relationsByAsset,
+	])
 	const activeAssetParent = activeAsset?.parent_asset ? assetsById.get(activeAsset.parent_asset) : undefined
 	const numberingSettings = useMemo(() => normalizeAssetNumberingSettings(numberingForm), [numberingForm])
 	const nextAssetTagPreview = useMemo(() => buildNextAssetTag(assets, numberingSettings), [assets, numberingSettings])
@@ -372,7 +392,10 @@ export default memo(function AssetsPage() {
 	})
 	const formSections = useMemo(() => getAssetFormSections(form.type), [form.type])
 	const editingCompleteness = useMemo(
-		() => (editing ? getAssetCompleteness(editing, { hasInternetUplink: internetUplinkAssetIds.has(editing.id) }) : undefined),
+		() =>
+			editing
+				? getAssetCompleteness(editing, { hasInternetUplink: internetUplinkAssetIds.has(editing.id) })
+				: undefined,
 		[editing, internetUplinkAssetIds]
 	)
 	const focusedFormSections = useMemo(() => {
@@ -1184,19 +1207,19 @@ export default memo(function AssetsPage() {
 				onValueChange={setImportText}
 				onLoadFile={loadImportFile}
 				onDownloadCsvTemplate={downloadImportCsvTemplate}
-					onDownloadJsonExample={downloadImportJsonExample}
-					onPreview={previewImportAssets}
-					onImport={importAssets}
-					onMigrationApplied={handleAssetMigrationApplied}
+				onDownloadJsonExample={downloadImportJsonExample}
+				onPreview={previewImportAssets}
+				onImport={importAssets}
+				onMigrationApplied={handleAssetMigrationApplied}
 			/>
 
 			<AssetExportDialog
 				open={exportDialogOpen}
 				assetCount={filteredAssets.length}
-					saving={saving}
-					onOpenChange={setExportDialogOpen}
-					onExportCsv={exportFilteredCsv}
-					onExportPackage={exportFullAssetMigrationPackage}
+				saving={saving}
+				onOpenChange={setExportDialogOpen}
+				onExportCsv={exportFilteredCsv}
+				onExportPackage={exportFullAssetMigrationPackage}
 			/>
 		</div>
 	)

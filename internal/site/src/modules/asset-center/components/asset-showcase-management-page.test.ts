@@ -8,6 +8,10 @@ assert.equal(
 	true,
 	"device archives with an explicit management URL must show a clickable management page row"
 )
-assert.equal(source.includes('linkRow("管理 URL"'), false, "the device archive should use the user-facing label 管理页面")
+assert.equal(
+	source.includes('linkRow("管理 URL"'),
+	false,
+	"the device archive should use the user-facing label 管理页面"
+)
 
 console.log("asset showcase management page contract passed")

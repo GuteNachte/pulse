@@ -29,10 +29,7 @@ import {
 	NETWORK_ASSET_TYPES,
 	type AssetFieldDefinition,
 } from "./asset-schema.ts"
-import {
-	groupNetworkDeviceDetailRows,
-	type NetworkDetailRow,
-} from "./asset-network-detail-groups.ts"
+import { groupNetworkDeviceDetailRows, type NetworkDetailRow } from "./asset-network-detail-groups.ts"
 import { normalizeMemorySpecification } from "./asset-memory-spec.ts"
 import { normalizeNetworkInterfaceSummary } from "./asset-runtime-hardware.ts"
 import { buildSwitchPortStatusRows } from "./asset-switch-port-status.ts"

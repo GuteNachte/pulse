@@ -20,20 +20,11 @@ type NetworkDetailGroupDefinition = {
 const groupDefinitions: Partial<Record<AssetType, readonly NetworkDetailGroupDefinition[]>> = {
 	router: [
 		definition("router-wired", "有线网络", ["port_count", "default_port_speed_mbps", "wan_port_count"]),
-		definition("router-wireless", "无线网络", [
-			"wifi_standard",
-			"wifi_band",
-			"wifi_streams",
-			"antenna_type",
-		]),
+		definition("router-wireless", "无线网络", ["wifi_standard", "wifi_band", "wifi_streams", "antenna_type"]),
 		definition("router-planning", "网络规划", ["ssid_note", "vlan_note"]),
 	],
 	gateway: [
-		definition("gateway-forwarding", "接口与转发", [
-			"port_count",
-			"default_port_speed_mbps",
-			"wan_port_count",
-		]),
+		definition("gateway-forwarding", "接口与转发", ["port_count", "default_port_speed_mbps", "wan_port_count"]),
 		definition("gateway-planning", "网络规划", ["vlan_note"]),
 	],
 	ont: [
@@ -63,21 +54,11 @@ const groupDefinitions: Partial<Record<AssetType, readonly NetworkDetailGroupDef
 			"wireless_control",
 		]),
 		definition("ont-wired", "有线网络", ["lan_port_count", "lan_2500_count", "lan_1000_count"]),
-		definition("ont-device-controls", "设备控制", [
-			"indicator_control",
-			"reset_supported",
-			"power_switch_supported",
-		]),
+		definition("ont-device-controls", "设备控制", ["indicator_control", "reset_supported", "power_switch_supported"]),
 	],
 	ap: [
 		definition("ap-wired", "有线接入", ["port_count", "default_port_speed_mbps", "poe_standard"]),
-		definition("ap-wireless", "无线网络", [
-			"wifi_standard",
-			"wifi_band",
-			"wifi_streams",
-			"antenna_type",
-			"ssid_note",
-		]),
+		definition("ap-wireless", "无线网络", ["wifi_standard", "wifi_band", "wifi_streams", "antenna_type", "ssid_note"]),
 		definition("ap-planning", "网络规划", ["vlan_note"]),
 	],
 	firewall: [

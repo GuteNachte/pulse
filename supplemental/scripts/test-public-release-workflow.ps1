@@ -54,6 +54,11 @@ if ($workflow -match '(?m)^\s*uses:\s*\S+@v\d+(?:\.\d+)*\s*$') {
 if ($workflow -match '(?m)ghcr\.io/[^$\r\n]+/pulse-(?:hub|agent)') {
     throw "Public release workflow hardcodes a GHCR owner instead of deriving github.repository_owner."
 }
+$webBuildIndex = $workflow.IndexOf("npm --prefix internal/site run build", [System.StringComparison]::Ordinal)
+$goVetIndex = $workflow.IndexOf("go vet -tags=testing ./...", [System.StringComparison]::Ordinal)
+if ($webBuildIndex -lt 0 -or $goVetIndex -lt 0 -or $webBuildIndex -gt $goVetIndex) {
+    throw "Public release workflow must build internal/site/dist before Go vet and tests consume the embedded site."
+}
 
 $runbook = Get-Content -Raw -LiteralPath $runbookPath
 foreach ($required in @(

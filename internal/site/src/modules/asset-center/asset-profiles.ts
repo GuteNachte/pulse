@@ -25,7 +25,9 @@ export type AssetProfileDefinition = {
 const phoneRequiredFieldKeys = ["memory_gb", "storage_gb"] as const
 const internetRequiredFieldKeys = internetAssetTypeSpec.sections
 	.flatMap((section) => section.fields)
-	.filter((field) => field.inputMode === "manual_required" || ["vendor", "access_technology", "auth_mode"].includes(field.key))
+	.filter(
+		(field) => field.inputMode === "manual_required" || ["vendor", "access_technology", "auth_mode"].includes(field.key)
+	)
 	.map((field) => field.key)
 const ontRequiredFieldKeys = ontAssetTypeSpec.sections
 	.flatMap((section) => section.fields)

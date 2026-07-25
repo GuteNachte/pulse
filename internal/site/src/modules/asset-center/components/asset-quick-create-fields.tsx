@@ -29,7 +29,11 @@ export function QuickAssetCreateFields({
 		return (
 			<AssetFormSection title="基础资料与线路参数">
 				<AssetFormField label="资源名称" required>
-					<Input value={form.name} onChange={(event) => onFormValue("name", event.target.value)} placeholder="例如 宽带" />
+					<Input
+						value={form.name}
+						onChange={(event) => onFormValue("name", event.target.value)}
+						placeholder="例如 宽带"
+					/>
 				</AssetFormField>
 				<AssetFormField label="运营商" required>
 					<select
@@ -39,25 +43,57 @@ export function QuickAssetCreateFields({
 					>
 						<option value="">请选择运营商</option>
 						{internetAssetTypeSpec.providerOptions.map((option) => (
-							<option key={option.value} value={option.value}>{option.label}</option>
+							<option key={option.value} value={option.value}>
+								{option.label}
+							</option>
 						))}
 					</select>
 				</AssetFormField>
 				<AssetFormField label="使用状态" required>
-					<select value={form.status} onChange={(event) => onFormValue("status", event.target.value as AssetFormState["status"])} className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm">
-						{internetAssetTypeSpec.statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+					<select
+						value={form.status}
+						onChange={(event) => onFormValue("status", event.target.value as AssetFormState["status"])}
+						className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
+					>
+						{internetAssetTypeSpec.statusOptions.map((option) => (
+							<option key={option.value} value={option.value}>
+								{option.label}
+							</option>
+						))}
 					</select>
 				</AssetFormField>
 				<AssetFormField label="线路接入技术" required>
-					<select value={form.metadata.access_technology ?? ""} onChange={(event) => onMetadataValue("access_technology", event.target.value)} className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm">
+					<select
+						value={form.metadata.access_technology ?? ""}
+						onChange={(event) => onMetadataValue("access_technology", event.target.value)}
+						className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
+					>
 						<option value="">请选择线路技术</option>
-						{internetAssetTypeSpec.sections.flatMap((section) => section.fields).find((field) => field.key === "access_technology")?.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+						{internetAssetTypeSpec.sections
+							.flatMap((section) => section.fields)
+							.find((field) => field.key === "access_technology")
+							?.options?.map((option) => (
+								<option key={option.value} value={option.value}>
+									{option.label}
+								</option>
+							))}
 					</select>
 				</AssetFormField>
 				<AssetFormField label="联网认证方式" required>
-					<select value={form.metadata.auth_mode ?? ""} onChange={(event) => onMetadataValue("auth_mode", event.target.value)} className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm">
+					<select
+						value={form.metadata.auth_mode ?? ""}
+						onChange={(event) => onMetadataValue("auth_mode", event.target.value)}
+						className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
+					>
 						<option value="">请选择认证方式</option>
-						{internetAssetTypeSpec.sections.flatMap((section) => section.fields).find((field) => field.key === "auth_mode")?.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+						{internetAssetTypeSpec.sections
+							.flatMap((section) => section.fields)
+							.find((field) => field.key === "auth_mode")
+							?.options?.map((option) => (
+								<option key={option.value} value={option.value}>
+									{option.label}
+								</option>
+							))}
 					</select>
 				</AssetFormField>
 				<AssetFormField label="下行带宽 Mbps" required>

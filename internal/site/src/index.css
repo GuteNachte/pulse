@@ -454,11 +454,6 @@
 	opacity: 0;
 }
 
-.pulse-free-line-node.is-readonly .pulse-free-line-handle,
-.pulse-free-line-node.is-hidden .pulse-free-line-handle {
-	pointer-events: none;
-}
-
 .pulse-free-line-handle {
 	width: 10px;
 	height: 10px;
@@ -468,6 +463,11 @@
 	opacity: 1;
 	pointer-events: all;
 	box-shadow: 0 0 0 1px var(--border);
+}
+
+.pulse-free-line-node.is-readonly .pulse-free-line-handle,
+.pulse-free-line-node.is-hidden .pulse-free-line-handle {
+	pointer-events: none;
 }
 
 .pulse-free-line-node.is-wifi .pulse-free-line-handle {

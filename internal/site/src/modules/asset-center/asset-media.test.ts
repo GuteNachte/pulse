@@ -7,6 +7,9 @@ const placements = [
 	{ id: "gallery-1", media: "m1", version: "v2", role: "gallery" as const, sort_order: 1 },
 ]
 assert.equal(selectAssetMediaCover(placements)?.version, "v1")
-assert.deepEqual(selectVisibleAssetMediaGallery(placements).map((item) => item.version), ["v2", "v3"])
+assert.deepEqual(
+	selectVisibleAssetMediaGallery(placements).map((item) => item.version),
+	["v2", "v3"]
+)
 assert.equal(canDeleteAssetMediaVersion("v1", placements), false)
 assert.equal(canDeleteAssetMediaVersion("v4", placements), true)
