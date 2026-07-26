@@ -1,6 +1,6 @@
 module gutenacht.site/pulse
 
-go 1.26.1
+go 1.26.5
 
 require (
 	github.com/Microsoft/go-winio v0.6.2
@@ -8,6 +8,7 @@ require (
 	github.com/disintegration/imaging v1.6.2
 	github.com/ebitengine/purego v0.10.1
 	github.com/fxamacker/cbor/v2 v2.9.2
+	github.com/go-ozzo/ozzo-validation/v4 v4.3.0
 	github.com/google/uuid v1.6.0
 	github.com/lxzan/gws v1.9.1
 	github.com/nicholas-fedor/shoutrrr v0.16.1
@@ -36,7 +37,6 @@ require (
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
 	github.com/ganigeorgiev/fexpr v0.5.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/go-ozzo/ozzo-validation/v4 v4.3.0 // indirect
 	github.com/go-sql-driver/mysql v1.10.0 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
@@ -59,9 +59,9 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.21.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/term v0.44.0 // indirect
-	golang.org/x/text v0.38.0 // indirect
+	golang.org/x/text v0.40.0 // indirect
 	modernc.org/cc/v4 v4.29.0 // indirect
 	modernc.org/ccgo/v4 v4.34.5 // indirect
 	modernc.org/gc/v3 v3.1.5 // indirect

@@ -2,6 +2,9 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $workflowPath = Join-Path $repoRoot ".github\workflows\public-release.yml"
+$qualityWorkflowPath = Join-Path $repoRoot ".github\workflows\quality.yml"
+$vulncheckWorkflowPath = Join-Path $repoRoot ".github\workflows\vulncheck.yml"
+$sitePackagePath = Join-Path $repoRoot "internal\site\package.json"
 $runbookPath = Join-Path $repoRoot "docs\public-release-runbook.md"
 
 function Assert-Contains {
@@ -16,6 +19,11 @@ if (-not (Test-Path -LiteralPath $workflowPath)) {
 }
 if (-not (Test-Path -LiteralPath $runbookPath)) {
     throw "Public release runbook does not exist: $runbookPath"
+}
+foreach ($requiredPath in @($qualityWorkflowPath, $vulncheckWorkflowPath, $sitePackagePath)) {
+    if (-not (Test-Path -LiteralPath $requiredPath)) {
+        throw "Public CI contract input does not exist: $requiredPath"
+    }
 }
 
 $workflow = Get-Content -Raw -LiteralPath $workflowPath
@@ -58,6 +66,25 @@ $webBuildIndex = $workflow.IndexOf("npm --prefix internal/site run build", [Syst
 $goVetIndex = $workflow.IndexOf("go vet -tags=testing ./...", [System.StringComparison]::Ordinal)
 if ($webBuildIndex -lt 0 -or $goVetIndex -lt 0 -or $webBuildIndex -gt $goVetIndex) {
     throw "Public release workflow must build internal/site/dist before Go vet and tests consume the embedded site."
+}
+if (($workflow | Select-String -Pattern 'go-version: 1\.26\.5' -AllMatches).Matches.Count -ne 2) {
+    throw "Public release workflow must use the patched Go 1.26.5 toolchain in validation and publishing jobs."
+}
+
+$qualityWorkflow = Get-Content -Raw -LiteralPath $qualityWorkflowPath
+$qualityWebBuildIndex = $qualityWorkflow.IndexOf("npm --prefix internal/site run build", [System.StringComparison]::Ordinal)
+$qualityGoVetIndex = $qualityWorkflow.IndexOf("go vet -tags=testing ./...", [System.StringComparison]::Ordinal)
+if ($qualityWebBuildIndex -lt 0 -or $qualityGoVetIndex -lt 0 -or $qualityWebBuildIndex -gt $qualityGoVetIndex) {
+    throw "Quality workflow must build internal/site/dist before Go vet and tests consume the embedded site."
+}
+Assert-Contains "Quality workflow" $qualityWorkflow "go-version: 1.26.5"
+
+$vulncheckWorkflow = Get-Content -Raw -LiteralPath $vulncheckWorkflowPath
+Assert-Contains "Vulnerability workflow" $vulncheckWorkflow "go-version: 1.26.5"
+
+$sitePackage = Get-Content -Raw -LiteralPath $sitePackagePath | ConvertFrom-Json
+if (-not $sitePackage.scripts.typecheck.StartsWith("lingui compile && tsc ", [System.StringComparison]::Ordinal)) {
+    throw "The Web typecheck command must compile generated Lingui catalogs before TypeScript runs."
 }
 
 $runbook = Get-Content -Raw -LiteralPath $runbookPath

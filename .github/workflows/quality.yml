@@ -19,8 +19,13 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: 1.26.x
+          go-version: 1.26.5
           cache: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: internal/site/package-lock.json
       - name: Verify gofmt
         shell: bash
         run: |
@@ -30,6 +35,10 @@ jobs:
             echo "$unformatted"
             exit 1
           fi
+      - name: Install web dependencies
+        run: npm ci --prefix internal/site
+      - name: Build web app for Hub embed
+        run: npm --prefix internal/site run build
       - name: Run go vet
         run: go vet -tags=testing ./...
       - name: Run Go tests

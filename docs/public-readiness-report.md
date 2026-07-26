@@ -44,6 +44,12 @@ gitleaks version
 
 升级后重新执行 `npm audit --json`，结果为 0 项漏洞；该项外部 beta 发布门禁已收口。后续仍需在每次公开发布前重新执行依赖审计，不能把本次结果视为永久豁免。
 
+## Go 依赖与工具链漏洞评估
+
+2026-07-26 首次公开仓库 Actions 暴露两类 `govulncheck` 调用链风险：`golang.org/x/text v0.38.0` 命中 `GO-2026-5970`，本地与 CI 使用的 Go `1.26.4` 命中标准库 `GO-2026-5856`。本轮将模块最低 Go 版本和公开 CI 统一固定为 `1.26.5`，并将 `golang.org/x/text` 升级到 `v0.40.0`；`golang.org/x/sync` 按模块约束同步升级到 `v0.22.0`。
+
+Quality 工作流同时修复干净检出的构建前置：Go vet / test 前先生成 `internal/site/dist`，Web typecheck 前先编译 Lingui 语言包。公开发布工作流契约会检查这两个生成顺序及三个工作流的 Go 安全补丁版本，避免本地已有生成物再次掩盖远端失败。
+
 ## 许可证与隐私检查
 
 - `LICENSE` 保留 `Copyright (c) 2024 henrygd`，并单独声明 `Copyright (c) 2026 Pulse contributors`。
@@ -78,6 +84,6 @@ gitleaks version
 ## 剩余风险
 
 - 公开 GitHub 仓库身份已确认为 `GuteNachte/pulse`，后续 GHCR owner 使用小写 `gutenachte`；当前尚未发布任何 GHCR 包，`registry.example.com` 仍只是不可部署的保留示例，不能作为正式镜像地址。
-- 前端依赖已完成安全补丁升级，本次 `npm audit --json` 为 0 项漏洞；后续公开发布仍需重新执行依赖审计并复验构建链路。
+- 前端依赖已完成安全补丁升级，本次 `npm audit --json` 为 0 项漏洞；Go 工具链与调用链依赖已升级到已修复版本。后续公开发布仍需重新执行 `npm audit`、`govulncheck` 并复验干净检出构建链路。
 - 历史重写已改变提交哈希；后续若发布该分支，旧克隆不能直接续接旧历史，应按公开仓库重新克隆。
 - 本报告不是法律意见，也不替代第三方依赖许可证和运行环境安全审查。

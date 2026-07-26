@@ -16,7 +16,7 @@
 		"format": "biome format --write .",
 		"lint": "biome lint .",
 		"check": "biome check .",
-		"typecheck": "tsc -p tsconfig.app.json --noEmit",
+		"typecheck": "lingui compile && tsc -p tsconfig.app.json --noEmit",
 		"check:fix": "biome check --fix .",
 		"test": "npm run test:asset-parameter-registry && npm run test:asset-completeness && npm run test:asset-type-spec && npm run test:asset-center && npm run test:modules && npm run test:network-topology && npm run test:websites",
 		"test:asset-parameter-registry": "node --experimental-strip-types src/modules/asset-center/asset-parameter-registry.test.ts",
