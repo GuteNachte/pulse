@@ -79,11 +79,18 @@ Quality 工作流同时修复干净检出的构建前置：Go vet / test 前先�
 | `51ae04e57b26d7d8c8a9bf9ade884066a90f356e` | `06626a844cf9f655ffe21875a23ad4ab8195adf6` |
 | `6dbf59de88be76655672176de95aefa82d6d7aa9` | `459cbabd5791baf742e63757a3f77c40c14894d2` |
 
-- 净化分支是公开分发阶段的唯一输入。2026-07-26 已创建公共仓库 `https://github.com/GuteNachte/pulse`，将净化分支与 `main` 推送到同一已审计提交，并把 `main` 设置为默认分支；尚未推送 GHCR、Release 或 Pages。
+- 净化分支是公开分发阶段的唯一输入。2026-07-26 已创建公共仓库 `https://github.com/GuteNachte/pulse`，将净化分支与 `main` 推送到同一已审计提交，并把 `main` 设置为默认分支。2026-07-27 已从提交 `277dc15015cd430f22e3b672a4488f19ba13f3bc` 发布 `v1.0.6-beta.1` tag、GitHub prerelease 与两份公开 GHCR 镜像；Pages 按当前边界未启用。
+
+## 首次公开发布验收
+
+- `publish=false` 演练 Run `30270799478` 与正式发布 Run `30271683147` 均成功，正式 Publish job 已通过 `public-release` Environment 人工审批。
+- [GitHub prerelease](https://github.com/GuteNachte/pulse/releases/tag/v1.0.6-beta.1) 为非 Draft 的 prerelease，共 8 个附件；重新下载后 `SHA256SUMS` 中 7 项全部匹配。
+- `ghcr.io/gutenachte/pulse-hub:1.0.6-beta.1` 已匿名验证可读取，digest 为 `sha256:0311e01b1c64f96eeaa2ba9b31b036095dcef0911ffef71f8e624dfb0d390fe3`。
+- `ghcr.io/gutenachte/pulse-agent:1.0.6-beta.1` 已匿名验证可读取，digest 为 `sha256:b45773f36fd5fc8db85973056848dfe3fb841729fdae91fb9505b44a9e70cc3a`。
 
 ## 剩余风险
 
-- 公开 GitHub 仓库身份已确认为 `GuteNachte/pulse`，后续 GHCR owner 使用小写 `gutenachte`；当前尚未发布任何 GHCR 包，`registry.example.com` 仍只是不可部署的保留示例，不能作为正式镜像地址。
+- 公开 GitHub 仓库身份为 `GuteNachte/pulse`，GHCR owner 使用小写 `gutenachte`；`1.0.6-beta.1` 的 Hub 与 Agent 镜像已经公开发布并可匿名拉取。源码中的 `registry.example.com` 仍只是不可部署的保留示例，实际公开部署必须使用上述 `ghcr.io/gutenachte` 显式版本镜像。
 - 前端依赖已完成安全补丁升级，本次 `npm audit --json` 为 0 项漏洞；Go 工具链与调用链依赖已升级到已修复版本。后续公开发布仍需重新执行 `npm audit`、`govulncheck` 并复验干净检出构建链路。
 - 历史重写已改变提交哈希；后续若发布该分支，旧克隆不能直接续接旧历史，应按公开仓库重新克隆。
 - 本报告不是法律意见，也不替代第三方依赖许可证和运行环境安全审查。

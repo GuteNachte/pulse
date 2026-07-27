@@ -12,14 +12,14 @@ export type ReleaseNote = {
 export const releaseHistory: ReleaseNote[] = [
 	{
 		version: "1.0.6-beta.1",
-		date: "2026-06-25",
+		date: "2026-07-27",
 		title: "Pulse 1.0.6-beta.1 开发记录",
-		badges: ["Web / Hub", "图片搜索 Agent", "网络拓扑", "智能家居", "代码收口", "工程质量", "项目独立化"],
+		badges: ["公开测试版", "Web / Hub", "图片搜索 Agent", "网络拓扑", "智能家居", "工程质量", "项目独立化"],
 		sections: [
 			{
 				title: "Web / Hub",
 				items: [
-					"建立公开 GitHub 源码基线：GuteNachte/pulse 已创建为公共仓库，净化后的准备分支与默认分支 main 指向同一份已审计历史；仓库主页、README、许可证、安全策略和 Issues 已可公开访问。当前尚未创建预发布 tag、GitHub Release、GHCR 镜像、Environment、发布变量或 Pages。",
+					"完成 Pulse 首个公开测试版发布：GuteNachte/pulse 的准备分支、main 与 v1.0.6-beta.1 tag 在发布时指向同一已审计提交；public-release Environment、发布变量、只验证演练和人工审批门禁均已实际通过。GitHub prerelease 提供 8 个附件，Hub / Agent GHCR 显式版本镜像已验证可匿名拉取；Pages 按当前边界未启用。",
 					"修复公开预发布演练的审计状态契约：公开就绪报告使用发布门禁要求的精确 Status: ready 状态行，本地工作流契约同步读取并验证真实报告，避免 Markdown 格式差异只在 GitHub Actions 远端暴露。",
 					"根治 Linux 发布 runner 校验 Windows Agent 时的跨平台执行失败：同主机产物继续实际运行 --version，异平台产物改用 Go 二进制元数据验证目标 OS、架构和注入版本，不再尝试在 Ubuntu 直接启动 exe；构建、dry-run、打包和验证子进程逐项检查退出码，后续命令不能覆盖前一步失败，并由交叉编译回归测试持续锁定。",
 					"修复公开预发布打包后的源码树完整性门禁：Android Gradle Wrapper 在 Git 中按标准可执行模式跟踪，Linux runner 的 chmod 不再产生构建期文件模式差异；发布工作流契约同步锁定该模式，避免全部构建结束后才发现源码树不干净。",
@@ -31,7 +31,7 @@ export const releaseHistory: ReleaseNote[] = [
 					"新增受控 GitHub 预发布工作流：tag 必须与项目版本一致，验证阶段以只读权限完成安全审计、版本、Go / Web、Windows Agent、Android 和离线包检查；Web 产物会先构建再供 Hub 的 go:embed 校验使用，Linux 环境的 Biome 格式与 lint 门禁已完成清理。发布阶段同时要求 PUBLIC_RELEASE_ENABLED=true 与 public-release Environment 人工审批，手动运行默认只验证不发布。所有 GitHub Actions 固定到已核验提交。",
 					"新增离线公开发布包：只收录 Windows Agent、Android APK、公开 Hub / Agent Compose、许可证、第三方声明、JSON 清单和 SHA256 校验文件；公开镜像必须是带当前显式版本的 GHCR pulse-hub / pulse-agent，内部或示例仓库不会进入输出。相同输入与固定构建时间会生成逐文件哈希一致的结果。",
 					"新增统一版本更新入口：一次更新 Web、Hub、Agent、Android、Docker / Compose、发布脚本与部署文档的显式版本号；每项规则校验预期匹配数，写入后自动执行完整一致性检查，失败会原样恢复全部文件，重复执行不会产生变化。本轮公开测试版本统一为 1.0.6-beta.1。",
-					"新增公开仓库安全门禁：仓库自带审计覆盖运行数据、数据库、备份、日志、凭据、私钥、本地媒体、私有基础设施地址和完整 Git 历史；固定 Gitleaks 8.30.1 的最小权限 GitHub Actions 会在推送和 PR 中执行。源码与安装模板中的私人基础设施地址已替换为保留示例，审计同时识别原文和正则转义形式，历史净化在仓库外安全镜像和提交映射保护下完成；审计只检查待发布分支 HEAD，不会被共享仓库中的其他私有分支误阻塞。公开仓库身份已确认为 GuteNachte/pulse，GHCR 与 Release 继续等待发布门禁配置和最终授权。",
+					"新增并实际通过公开仓库安全门禁：仓库审计覆盖运行数据、数据库、备份、日志、凭据、私钥、本地媒体、私有基础设施地址和完整 Git 历史；固定 Gitleaks 8.30.1 的最小权限 GitHub Actions 会在推送和 PR 中执行。源码与安装模板中的私人基础设施地址已替换为保留示例，历史净化在仓库外安全镜像和提交映射保护下完成；正式发布 Run 30271683147 已通过完整验证与人工审批，GHCR 和 Release 发布成功。",
 					"新增 Windows 开发环境一键启动入口：项目根目录 Start-Pulse-Dev.cmd 自动启动或复用 Hub 与 Vite，优先调用 PowerShell 7、未安装时回退到 Windows PowerShell 5.1，并只在健康检查成功后打开 Web；桌面 Pulse 开发环境快捷方式可通过仓库脚本重复生成，启动失败会保留真实错误。",
 					"资产中心新增可恢复迁移包：导出包含资产、位置、接口、关系、维护、附件和设备图片，导入先做 ZIP、哈希、引用和冲突预检，再按仅新增、合并补全或覆盖匹配项执行事务恢复；附件和图片文件同步恢复，重复仅新增不会复制网卡或链路。",
 					"修复资产迁移合并与覆盖的幂等性：重复导入不会复制位置、网卡、关系、附件或图片记录，并会复用目标实例已手工建立的同名网卡与对应关系。",
@@ -561,7 +561,7 @@ export const releaseHistory: ReleaseNote[] = [
 				items: [
 					"公开预发布验证会用统一解析出的 versionName 与 versionCode 构建 Android APK，并在生成公开包前核验 APK metadata；本轮仍无 Android 原生功能改动。",
 					"Android App 跟随统一版本入口切换到 1.0.6-beta.1；versionName 保留完整预发布版本，versionCode 按基础版本保持 10006，本轮无 Android 原生功能改动。",
-					"本轮公开仓库审计不改变 Android 原生能力；移动端版本继续跟随 Hub、Agent 与 Web 使用同一 1.0.6 开发口径，正式 1.0.6-beta.1 仍需在公开分发阶段统一构建和验证。",
+					"本轮公开仓库审计不改变 Android 原生能力；Android App 已随 Hub、Agent 与 Web 使用同一 1.0.6-beta.1 版本统一构建和验证，公开 prerelease 已提供对应 APK。",
 					"本轮没有新增 Android 原生能力；移动端 WebView 跟随 Web / Hub 1.0.6 使用相同 ONT 严格字段、接口状态和关系规则，并完成 390 × 844 视口验收。",
 					"移动端 WebView 同步使用 LAN CIDR 示例、简洁的位置选择与统一备注输入框。",
 					"本次宽带严格类型模板没有新增 Android 原生能力；移动端 WebView 跟随 Web / Hub 1.0.6 使用相同字段、列表、详情和编辑规则，并同步使用公网地址自动更新开关、固定间隔和刷新操作。",
@@ -573,8 +573,8 @@ export const releaseHistory: ReleaseNote[] = [
 					"私有 Gitea 镜像只接收公开 Git 分支和 tag；GitHub Secrets、Environment、Issues、Discussions、Releases、Pages 与 GHCR Packages 不会被复制，仍需在各平台独立管理。",
 					"GHCR 只发布从 GitHub owner 动态派生的 pulse-hub 与 pulse-agent 显式版本镜像，不创建 latest；写权限仅存在于人工审批后的 publish job，现有私有 Harbor 目标与发布脚本参数继续保留。",
 					"统一发布入口可在显式提供公开 GHCR 镜像和输出目录时附加生成公开包，原有私有 Harbor 发布路径保持独立；发布后验证可按需核验公开包白名单、manifest 和每条 SHA256。",
-					"Agent、Hub 镜像默认参数、Compose 模板、安装说明与发布验证命令已统一切换为 1.0.6-beta.1；公开 GitHub 源码基线已建立，当前仍未推送镜像或创建 Release。",
-					"发布脚本、Compose、Agent 安装命令和版本记录不再硬编码私人 Harbor 主机；公开准备阶段使用 registry.example.com 保留示例，内部 Harbor 仍可通过 HubImage、LinuxAgentImage 或 Image 参数显式传入。公开仓库已经绑定，但在 GHCR 首次发布前仍禁止把示例地址当成可拉取镜像。",
+					"Agent、Hub 镜像默认参数、Compose 模板、安装说明与发布验证命令已统一切换为 1.0.6-beta.1；Hub 与 Agent 的 GHCR 显式版本镜像已公开发布并完成匿名拉取验证，GitHub prerelease 同步提供 Windows Agent。",
+					"发布脚本、Compose、Agent 安装命令和版本记录不再硬编码私人 Harbor 主机；registry.example.com 仅是不可部署的保留示例，公开部署使用 ghcr.io/gutenachte 下的显式版本镜像，内部 Harbor 仍可通过 HubImage、LinuxAgentImage 或 Image 参数显式传入。",
 					"正式部署迁移可使用 Pulse 完整实例备份保留管理员账号、设置、资产、拓扑、监控历史、PocketBase 文件和外置设备图片；Compose 升级仍必须持续挂载 ./pulse_data:/pulse_data，禁止删除持久化目录或用匿名卷覆盖。",
 					"本轮不改变 Agent 采集协议或部署参数；ONT 参数、接口和关系先由资产中心手工确认，后续统一发布时 Hub、Agent、Web 和 Android App 仍使用同一 1.0.6 版本号。",
 					"本次不改变 Agent 采集协议或部署参数；公网地址定时检测和默认 30 分钟调度由 Hub 执行，IPv4 / IPv6 独立失败时保留旧值。后续统一发布时 Hub、Agent、Web 和 Android App 仍使用同一 1.0.6 版本号。",
@@ -584,12 +584,12 @@ export const releaseHistory: ReleaseNote[] = [
 				title: "文档 / 规则",
 				items: [
 					"镜像同步回归测试使用临时公开源与私有目标裸仓库，覆盖默认 DryRun、精确 ref 输出、错误 URL 拒绝、Apply 后分支 / tag 同步、脏工作树拒绝和审计非 ready 阻断。",
-					"新增公开预发布运行手册，写清外部授权边界、双重门禁、首次仓库配置、本地无发布验证、正式审批顺序、费用变化风险和撤回限制；未获明确授权前禁止创建公开仓库、推送、镜像、Release、Secrets、Issue、Discussion 或 Pages。",
+					"公开预发布运行手册已补齐首次执行记录：保留外部授权边界、双重门禁、审批顺序、费用与撤回限制，并记录演练 / 正式 Run、发布提交、Release 附件、镜像 digest、匿名拉取和 SHA256 验收。后续新版本仍需逐次授权。",
 					"公开发布包回归测试使用临时伪产物完成全程离线验证，覆盖文件白名单、GHCR 镜像替换、manifest 字段、SHA256 格式、源仓库占位地址清除和双次构建可复现性。",
 					"版本更新器新增临时夹具回归测试，覆盖 1.0.6-beta.1 全源一致性、重复执行幂等性，以及后置校验失败时的完整回滚；一致性脚本支持指定 RepositoryRoot，测试不会修改真实仓库。",
 					"公开前审计补齐许可证、安全与隐私边界：保留 henrygd 上游 MIT 版权，单列 Pulse contributors 修改署名并保留 Homelable 第三方声明；漏洞统一使用 GitHub Private Vulnerability Reporting，文档明确 pulse_data 本地数据范围、默认不发送遥测、用户主动外连和公开演示脱敏规则。",
 					"仓库审计采用可回归的红绿契约：当前树只读取 git ls-files，报告只保存规则、路径和提交元数据；完整历史同时使用 Gitleaks 与精确私有端点扫描，失败报告默认脱敏且仅在 CI 失败时短期上传。",
-					"新增 Pulse 公开测试与社区协作设计及五阶段实施计划：确定 GitHub 公开主仓库、GHCR 镜像、GitHub Releases 和 1.0.6-beta.1 首发链路；公开前必须完成全历史敏感信息与许可证审计，再依次完成公开分发、虚拟演示与中英文文档、贡献规范和首发演练。未获最终授权前不执行任何公开发布。",
+					"Pulse 公开测试与社区协作首发链路已落地：GitHub 公开主仓库、GHCR 镜像、GitHub Releases、全历史敏感信息与许可证审计、首发演练和 1.0.6-beta.1 正式预发布均已完成；虚拟演示、更多中英文材料和社区运营继续按后续阶段推进。",
 					"补充资产迁移包与完整实例备份的职责边界、上传预检、自动安全备份、恢复续跑、敏感数据保护和 FlyNAS 持久化检查；恢复演练必须使用临时空实例，禁止指向当前 pulse_data。",
 					"新增光猫 / ONT 与 iFTTR 主网关严格模板设计和实施计划，固化真实接口、工作角色、敏感信息丢弃、未建档目标不造假以及典型设备复用规则。",
 					"新增资产严格类型模板、互联网接入资源与公网地址 DDNS 简化设计和实施计划；后续每种资产按典型设备完成规格确认、识别规则、实施、浏览器验收和锁定。",

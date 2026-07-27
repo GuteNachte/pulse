@@ -2,7 +2,7 @@
 
 ## 当前边界
 
-公开首发版本固定为 `1.0.6-beta.1`。本手册只准备和验证发布链路；在白老板明确授权前，不得执行 `gh repo create`、修改仓库公开可见性、向公开 remote 执行 `git push`、执行 `docker push`、运行 `gh release create`，也不得创建 GitHub Secrets、Environment、Issue、Discussion 或 Pages。
+公开首发版本 `1.0.6-beta.1` 已于 2026-07-27 完成发布。本手册继续作为后续公开预发布的执行基线；每次产生新 tag、镜像或 Release 前仍需获得白老板明确授权。后续涉及 `gh repo create`、向公开 remote 执行 `git push`、执行 `docker push` 或 `gh release create` 时同样不得复用本次授权。Pages 暂不启用，本次发布也不包含 FlyNAS 部署。
 
 仓库外的安全镜像、历史改写映射和两份净化克隆必须继续保留。公开发布失败、撤回或重做时，不删除这些本地保护材料。
 
@@ -21,9 +21,9 @@
 
 未同时满足这些条件时，工作流不会获得 `contents: write` 或 `packages: write` 权限。
 
-## 首次公开前配置
+## 首次公开配置（1.0.6-beta.1 已完成）
 
-这些操作都属于外部状态变更，必须在单独的最终授权后执行：
+以下配置已在单独授权后完成；后续若更换仓库、owner 或发布环境，必须重新逐项核对：
 
 1. 安装并登录 GitHub CLI，确认目标账号与组织。
 2. 创建 GitHub 仓库并确认最终 slug、默认分支和可见性。
@@ -61,6 +61,23 @@ pwsh -NoProfile -File supplemental/scripts/package-public-release.ps1 `
 4. 获得明确授权后创建精确 tag `v1.0.6-beta.1` 并推送。
 5. 在 `public-release` Environment 审批页核对版本、commit、GHCR 镜像名和附件，再批准发布 job。
 6. 发布后核对两个 GHCR 镜像、GitHub prerelease、附件 SHA256、公开 Compose 和全新环境部署。
+
+## 首次发布执行记录
+
+- 发布提交与 tag：`277dc15015cd430f22e3b672a4488f19ba13f3bc` / `v1.0.6-beta.1`；发布时准备分支、`main` 和 tag 指向同一提交。
+- 只验证演练：[Run 30270799478](https://github.com/GuteNachte/pulse/actions/runs/30270799478)，以 `workflow_dispatch`、`publish=false` 执行并成功。
+- 正式发布：[Run 30271683147](https://github.com/GuteNachte/pulse/actions/runs/30271683147)，Validate 与经过 `public-release` Environment 人工审批的 Publish job 均成功。
+- GitHub prerelease：[v1.0.6-beta.1](https://github.com/GuteNachte/pulse/releases/tag/v1.0.6-beta.1)，包含 8 个附件；重新下载后 `SHA256SUMS` 中 7 个受校验文件全部匹配。
+- 公开 Hub 镜像：`ghcr.io/gutenachte/pulse-hub:1.0.6-beta.1`，digest `sha256:0311e01b1c64f96eeaa2ba9b31b036095dcef0911ffef71f8e624dfb0d390fe3`。
+- 公开 Agent 镜像：`ghcr.io/gutenachte/pulse-agent:1.0.6-beta.1`，digest `sha256:b45773f36fd5fc8db85973056848dfe3fb841729fdae91fb9505b44a9e70cc3a`。
+- 两个 GHCR manifest 均已使用匿名 token 验证可读取，普通用户不需要登录即可拉取；本次未启用 Pages，也未部署 FlyNAS。
+
+## 首次发布故障复盘
+
+1. 就绪报告状态是精确契约：必须保留独立纯文本行 `Status: ready`，不能添加 Markdown 加粗等装饰；本地工作流契约必须读取真实报告文件验证。
+2. Linux runner 不能直接运行 Windows `.exe`：同平台产物运行 `--version`，跨平台 Go 产物使用 `go version -m` 核对 `GOOS`、`GOARCH` 和版本 ldflags；PowerShell 调用每个原生子进程后都要立即检查 `$LASTEXITCODE`。
+3. 构建脚本不得临时改变 Git 跟踪模式：Linux 需要执行的 Gradle Wrapper 应在索引中固定为 `100755`，发布工作流契约同步锁定该模式，构建后继续检查工作树干净。
+4. 测试命令桩不能边写边执行：先在临时文件完整写入、关闭并授权，再原子重命名到最终路径，避免 Linux 临时文件系统出现 `text file busy`。
 
 ## 回滚与撤回
 
