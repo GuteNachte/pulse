@@ -36,3 +36,8 @@ agent/lhm/bin
 !agent/lhm/bin/Release/net48/
 !agent/lhm/bin/Release/net48/.keep
 dockerfile_agent_dev
+
+*.p12
+*.jks
+*signing*.properties
+*android-recovery*

@@ -112,3 +112,22 @@ jobs:
         run: npm run test
       - name: Build web app
         run: npm run build
+
+  android-signing:
+    name: Android signing contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: Run secret-free Android signing contracts
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File supplemental/scripts/test-android-signing-helpers.ps1
+          pwsh -NoProfile -File supplemental/scripts/test-initialize-android-release-signing.ps1
+          pwsh -NoProfile -File supplemental/scripts/test-build-android-release.ps1
+      - name: Run Android Debug unit build
+        run: internal/site/android/gradlew -p internal/site/android testDebugUnitTest --console=plain

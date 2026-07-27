@@ -15,6 +15,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 . (Join-Path $PSScriptRoot "release-script-helpers.ps1")
+. (Join-Path $PSScriptRoot "android-signing-helpers.ps1")
 $resolvedVersion = Resolve-PulseVersion -Version $Version
 $Version = $resolvedVersion.FullVersion
 
@@ -110,23 +111,16 @@ function Test-AgentArtifactManifest {
     Assert-EqualValue $Failures "$Label Windows Agent sha256" $manifest.files."pulse-agent_windows_amd64.exe".sha256 $hash
 }
 
-function Test-AndroidApkVersion {
+function Test-AndroidReleaseArtifact {
     param([System.Collections.Generic.List[string]]$Failures)
 
-    $metadataPath = Join-Path $repoRoot "internal\site\android\app\build\outputs\apk\debug\output-metadata.json"
-    $apkPath = Join-Path $repoRoot "internal\site\android\app\build\outputs\apk\debug\app-debug.apk"
-    if (-not (Assert-FileExists $Failures $metadataPath "Android APK metadata")) {
-        return
+    $apkPath = Join-Path $repoRoot "internal\site\android\app\build\outputs\apk\release\app-release.apk"
+    try {
+        $result = Test-AndroidReleaseApk -Version $Version -ApkPath $apkPath -RepositoryRoot $repoRoot
+        Write-Host "[OK] Android Release APK verified: $($result.CertificateSha256)"
+    } catch {
+        Add-VerifyFailure $Failures $_.Exception.Message
     }
-    Assert-FileExists $Failures $apkPath "Android debug APK" | Out-Null
-    $metadata = Get-Content -Raw -LiteralPath $metadataPath | ConvertFrom-Json
-    $element = @($metadata.elements)[0]
-    if ($null -eq $element) {
-        Add-VerifyFailure $Failures "Android APK metadata has no elements"
-        return
-    }
-    Assert-EqualValue $Failures "Android APK versionName" $Version $element.versionName
-    Assert-EqualValue $Failures "Android APK versionCode" $resolvedVersion.AndroidVersionCode $element.versionCode
 }
 
 function Test-HubRuntime {
@@ -254,7 +248,7 @@ try {
     }
 
     if (-not $SkipAndroidApk) {
-        Test-AndroidApkVersion $failures
+        Test-AndroidReleaseArtifact $failures
     }
 
     if (-not [string]::IsNullOrWhiteSpace($PublicReleaseDirectory)) {

@@ -1,5 +1,23 @@
 apply plugin: 'com.android.application'
 
+def pulseSigningPropertiesPath = providers.gradleProperty('pulseSigningPropertiesFile').orNull
+def pulseSigningProperties = new Properties()
+if (pulseSigningPropertiesPath != null) {
+    def pulseSigningPropertiesFile = file(pulseSigningPropertiesPath)
+    if (!pulseSigningPropertiesFile.isFile()) {
+        throw new GradleException("Android Release signing properties do not exist: ${pulseSigningPropertiesFile}")
+    }
+    pulseSigningPropertiesFile.withInputStream { pulseSigningProperties.load(it) }
+    ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].each { key ->
+        if (!pulseSigningProperties[key]) {
+            throw new GradleException("Android Release signing properties are missing: ${key}")
+        }
+    }
+    if (!file(pulseSigningProperties['storeFile']).isFile()) {
+        throw new GradleException('Android Release keystore does not exist.')
+    }
+}
+
 android {
     namespace = "site.gutenacht.pulse"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,11 +34,31 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (pulseSigningPropertiesPath != null) {
+                storeFile file(pulseSigningProperties['storeFile'])
+                storePassword pulseSigningProperties['storePassword']
+                keyAlias pulseSigningProperties['keyAlias']
+                keyPassword pulseSigningProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (pulseSigningPropertiesPath != null) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    def requestsRelease = graph.allTasks.any { task -> task.name.toLowerCase().contains('release') }
+    if (requestsRelease && pulseSigningPropertiesPath == null) {
+        throw new GradleException('Release builds require -PpulseSigningPropertiesFile outside the repository.')
     }
 }
 

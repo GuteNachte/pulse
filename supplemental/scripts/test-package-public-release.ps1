@@ -31,7 +31,7 @@ function New-PackageFixture {
     $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("pulse-package-test-" + [guid]::NewGuid().ToString("N"))
     foreach ($relativePath in @(
         "build\releases\agent\$version\pulse-agent_windows_amd64.exe",
-        "internal\site\android\app\build\outputs\apk\debug\app-debug.apk",
+        "internal\site\android\app\build\outputs\apk\release\app-release.apk",
         "supplemental\docker\hub\docker-compose.yml",
         "supplemental\docker\agent\docker-compose.yml",
         "LICENSE",

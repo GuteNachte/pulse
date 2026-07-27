@@ -39,7 +39,7 @@ if ([string]::IsNullOrWhiteSpace($WindowsAgentPath)) {
     $WindowsAgentPath = Join-Path $repoRoot $WindowsAgentPath
 }
 if ([string]::IsNullOrWhiteSpace($AndroidApkPath)) {
-    $AndroidApkPath = Join-Path $repoRoot "internal\site\android\app\build\outputs\apk\debug\app-debug.apk"
+    $AndroidApkPath = Join-Path $repoRoot "internal\site\android\app\build\outputs\apk\release\app-release.apk"
 } elseif (-not [System.IO.Path]::IsPathRooted($AndroidApkPath)) {
     $AndroidApkPath = Join-Path $repoRoot $AndroidApkPath
 }

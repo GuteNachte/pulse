@@ -57,7 +57,6 @@ foreach ($required in @(
     "run-go-test-shard.ps1",
     "package-public-release.ps1",
     "github.repository_owner",
-    "android_version_code",
     "PUBLIC_RELEASE_ENABLED",
     "environment: public-release",
     "packages: write",
@@ -66,6 +65,37 @@ foreach ($required in @(
     "SHA256SUMS"
 )) {
     Assert-Contains "Public release workflow" $workflow $required
+}
+foreach ($required in @(
+    "ANDROID_RELEASE_KEYSTORE_BASE64",
+    "ANDROID_RELEASE_STORE_PASSWORD",
+    "ANDROID_RELEASE_KEY_ALIAS",
+    "ANDROID_RELEASE_KEY_PASSWORD",
+    "build-android-release.ps1",
+    "if: always()"
+)) {
+    Assert-Contains "Signed Android release workflow" $workflow $required
+}
+if ($workflow.Contains("assembleDebug")) {
+    throw "Public release workflow must not build a Debug APK."
+}
+$publishJobIndex = $workflow.IndexOf("  publish:", [System.StringComparison]::Ordinal)
+$androidBuildIndex = $workflow.IndexOf("-File supplemental/scripts/build-android-release.ps1", [System.StringComparison]::Ordinal)
+$packageIndex = $workflow.IndexOf("-File supplemental/scripts/package-public-release.ps1", [System.StringComparison]::Ordinal)
+$verifyIndex = $workflow.IndexOf("-File supplemental/scripts/verify-release-v1.ps1", [System.StringComparison]::Ordinal)
+if ($publishJobIndex -lt 0 -or $androidBuildIndex -lt $publishJobIndex -or $packageIndex -lt $androidBuildIndex -or $verifyIndex -lt $packageIndex) {
+    throw "Signed Android build, public packaging and final verification must run in order after the protected publish job begins."
+}
+foreach ($secretName in @(
+    "ANDROID_RELEASE_KEYSTORE_BASE64",
+    "ANDROID_RELEASE_STORE_PASSWORD",
+    "ANDROID_RELEASE_KEY_ALIAS",
+    "ANDROID_RELEASE_KEY_PASSWORD"
+)) {
+    $secretOffset = $workflow.IndexOf("secrets.$secretName", [System.StringComparison]::Ordinal)
+    if ($secretOffset -lt $publishJobIndex) {
+        throw "Android signing secret $secretName is referenced before the protected publish job."
+    }
 }
 Assert-Contains "Public release workflow" $workflow "Run non-Hub Go tests"
 Assert-Contains "Public release workflow" $workflow "-ShardCount 4"
@@ -109,6 +139,16 @@ Assert-Contains "Quality workflow" $qualityWorkflow 'shard: [0, 1, 2, 3]'
 Assert-Contains "Quality workflow" $qualityWorkflow "run-go-test-shard.ps1"
 Assert-Contains "Quality workflow" $qualityWorkflow "-ShardCount 4"
 Assert-Contains "Quality workflow" $qualityWorkflow "-Timeout 600s"
+foreach ($required in @(
+    "test-android-signing-helpers.ps1",
+    "test-initialize-android-release-signing.ps1",
+    "test-build-android-release.ps1"
+)) {
+    Assert-Contains "Quality workflow" $qualityWorkflow $required
+}
+if ($qualityWorkflow.Contains("secrets.ANDROID_RELEASE_")) {
+    throw "Quality workflow must remain independent of Android signing secrets."
+}
 
 $goTestShard = Get-Content -Raw -LiteralPath $goTestShardPath
 Assert-Contains "Go test shard runner" $goTestShard "go test -tags=testing -c"
