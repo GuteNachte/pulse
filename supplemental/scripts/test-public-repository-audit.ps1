@@ -122,6 +122,13 @@ PASSWORD: "YOUR_PASSWORD"
     Set-Content -LiteralPath $privateSourceFile -Encoding UTF8 -Value $privateEndpointValue
     $privateRegexSourceFile = Join-Path $fixtureRoot "src\private-endpoint-regex.ps1"
     Set-Content -LiteralPath $privateRegexSourceFile -Encoding UTF8 -Value ([regex]::Escape($privateEndpointValue))
+    $credentialMappingFile = Join-Path $fixtureRoot "src\credential-mapping.ps1"
+    Set-Content -LiteralPath $credentialMappingFile -Encoding UTF8 -Value @'
+$password = Get-SecretFromProtectedStore
+$credential = [pscustomobject]@{
+    Password = $password
+}
+'@
 
     Invoke-FixtureGit -Arguments @("init", "--quiet")
     Invoke-FixtureGit -Arguments @("add", ".")

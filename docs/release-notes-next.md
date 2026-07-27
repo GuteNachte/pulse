@@ -1,15 +1,18 @@
-# Pulse 1.0.6-beta.1 开发记录
+# Pulse 1.0.6-beta.2 开发记录
 
-> `1.0.5` 已于 2026-06-23 固定发布。固定点之后的新改动统一进入 `1.0.6-beta.1` 开发记录，不再回填到 `1.0.5` 正式记录。
+> `1.0.5` 已于 2026-06-23 固定发布。固定点之后的新改动统一进入 `1.0.6-beta.2` 开发记录，不再回填到 `1.0.5` 正式记录。
 
-## 1.0.6-beta.1 开发记录
+## 1.0.6-beta.2 开发记录
 
 ### Web / Hub
 
+- `1.0.6-beta.2` 公开候选版建立 Android 长期升级身份：最终 APK 必须由受保护的 `public-release` Environment 使用固定 RSA-4096 Release 密钥构建，并核验 `debuggable=false`、v2 签名、包名、版本和证书 SHA-256 `BF114B3A8EA33125893B5B1E6865B43BFE8DAC89E1BE154F7E48A91D93D51374`；普通 Quality 与验证 job 不接触密钥。`1.0.6-beta.1` 使用 Debug 证书，切换到 `beta.2` 时需要卸载一次，此后禁止更换签名身份。
+- 修正部署手册的回滚目标：当前固定稳定版是 `1.0.5`，`1.0.6-beta.2` 部署异常时 Hub 与 Agent 必须一起回滚到 `1.0.5`，不再沿用过期的 `1.0.4` 示例。
+- 修复公开仓库审计对 PowerShell 凭据对象的误报：`Password = $password` 这类只引用受保护变量的代码不再被当成硬编码密码，真实长字符串凭据仍会阻断；审计回归同时覆盖允许与拒绝路径。
 - 完成 `1.0.6-beta.1` 普通用户视角的公开安装验收：从 GitHub Release 重新下载 8 个附件，7 条 SHA256 全部匹配；Windows Agent、Android APK、两份 Compose、两个 GHCR 镜像和隔离 Hub 运行态均使用公开产物验证。临时 Hub 持续健康，首页与健康接口返回 200，公开信息版本为 `1.0.6-beta.1`。
 - 修复 Windows Docker CLI 直连 GHCR token 端点 EOF 时的镜像误判：发布验证器保留 `docker manifest inspect`，失败后回退到 `docker buildx imagetools inspect`，两者都失败仍严格阻断；回归测试覆盖直接成功、回退成功和全部失败，并接入 Quality 与公开发布工作流。
 - README 新增公开测试版快速开始：直接指向 GitHub Release Compose，写清 Hub 首次启动、数据目录、Windows / Linux Agent 接入、Android 安装、SHA256 校验和当前平台边界，不再让普通用户从本地开发说明推断部署步骤。
-- 公开验收明确记录签名限制：Windows Agent 暂无 Authenticode；Android APK 使用有效的 v2 签名，但证书为通用 Android Debug 测试证书且应用可调试。后续正式签名可能无法覆盖升级 `beta.1`，因此必须在下一公开版本前建立受保护的 Android release keystore 与 release 构建门禁。
+- `1.0.6-beta.1` 公开验收曾确认两项签名限制：Windows Agent 暂无 Authenticode；Android APK 虽有有效 v2 签名，但使用通用 Android Debug 证书且应用可调试。Android 限制已由 `beta.2` 的受保护 Release 密钥、不可调试构建与指纹门禁收口；Windows SmartScreen 风险继续明确保留。
 - 完成 Pulse 首个公开测试版发布：公共仓库 `GuteNachte/pulse` 的净化准备分支、默认分支 `main` 与 `v1.0.6-beta.1` tag 在发布时指向同一已审计提交 `277dc15015cd430f22e3b672a4488f19ba13f3bc`；`public-release` Environment、`PUBLIC_RELEASE_ENABLED=true` 双重门禁、只验证演练和人工审批发布均已实际通过。GitHub prerelease 提供 Windows Agent、Android APK、公开 Compose、许可证、第三方声明、manifest 与 SHA256 共 8 个附件，Hub / Agent GHCR 显式版本镜像已验证可匿名拉取；Pages 按当前边界未启用。
 - 新增私有 Git 镜像同步工具：默认只抓取公开源并展示分支 / tag 的精确 ref 与 push 预演；只有工作树干净、安全报告为 ready、显式 `-Apply` 且确认 URL 与目标 remote 完全一致时才使用 `--prune` 同步。工具不使用 `git push --mirror`，不会复制内部 refs，也不处理 GitHub Secrets、Environment、Issues、Discussions、Releases、Pages 或 Packages。
 - 新增受控 GitHub 预发布工作流：预发布 tag 必须与项目版本完全一致，验证阶段以只读权限执行安全报告、完整仓库审计、版本契约、Go / Web 质量检查、Windows Agent、Android APK 和离线发布包；发布阶段同时受 `PUBLIC_RELEASE_ENABLED=true` 与 `public-release` Environment 人工审批保护，才临时获得 GHCR 和 Release 写权限。手动运行默认只验证不发布，所有 GitHub Actions 固定到已核验提交，高权限阶段使用 Docker / GitHub CLI 直接发布。

@@ -2,7 +2,7 @@ param(
     [string]$DataDir = "pulse_data",
     [int]$HubPort = 8090,
     [int]$VitePort = 5173,
-    [string]$HubVersion = "1.0.6-beta.1",
+    [string]$HubVersion = "1.0.6-beta.2",
     [string]$GoProxy = "https://goproxy.cn,direct",
     [switch]$Restart,
     [switch]$Stop
