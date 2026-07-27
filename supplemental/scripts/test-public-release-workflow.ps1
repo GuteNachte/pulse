@@ -7,6 +7,7 @@ $vulncheckWorkflowPath = Join-Path $repoRoot ".github\workflows\vulncheck.yml"
 $sitePackagePath = Join-Path $repoRoot "internal\site\package.json"
 $runbookPath = Join-Path $repoRoot "docs\public-release-runbook.md"
 $goTestShardPath = Join-Path $repoRoot "supplemental\scripts\run-go-test-shard.ps1"
+$goTestShardContractPath = Join-Path $repoRoot "supplemental\scripts\test-run-go-test-shard.ps1"
 
 function Assert-Contains {
     param([string]$Label, [string]$Content, [string]$Needle)
@@ -21,7 +22,7 @@ if (-not (Test-Path -LiteralPath $workflowPath)) {
 if (-not (Test-Path -LiteralPath $runbookPath)) {
     throw "Public release runbook does not exist: $runbookPath"
 }
-foreach ($requiredPath in @($qualityWorkflowPath, $vulncheckWorkflowPath, $sitePackagePath, $goTestShardPath)) {
+foreach ($requiredPath in @($qualityWorkflowPath, $vulncheckWorkflowPath, $sitePackagePath, $goTestShardPath, $goTestShardContractPath)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
         throw "Public CI contract input does not exist: $requiredPath"
     }
@@ -84,15 +85,19 @@ if ($qualityWebBuildIndex -lt 0 -or $qualityGoVetIndex -lt 0 -or $qualityWebBuil
 }
 Assert-Contains "Quality workflow" $qualityWorkflow "go-version: 1.26.5"
 Assert-Contains "Quality workflow" $qualityWorkflow "Run non-Hub Go tests"
+Assert-Contains "Quality workflow" $qualityWorkflow "test-run-go-test-shard.ps1"
 Assert-Contains "Quality workflow" $qualityWorkflow 'shard: [0, 1, 2, 3]'
 Assert-Contains "Quality workflow" $qualityWorkflow "run-go-test-shard.ps1"
 Assert-Contains "Quality workflow" $qualityWorkflow "-ShardCount 4"
 Assert-Contains "Quality workflow" $qualityWorkflow "-Timeout 600s"
 
 $goTestShard = Get-Content -Raw -LiteralPath $goTestShardPath
-Assert-Contains "Go test shard runner" $goTestShard "go test -tags=testing -list '^Test'"
+Assert-Contains "Go test shard runner" $goTestShard "go test -tags=testing -c"
+Assert-Contains "Go test shard runner" $goTestShard "'-test.list=^Test'"
+Assert-Contains "Go test shard runner" $goTestShard 'foreach ($testName in $selectedTests)'
+Assert-Contains "Go test shard runner" $goTestShard "'-test.count=1'"
 Assert-Contains "Go test shard runner" $goTestShard '$ShardIndex -ge $ShardCount'
-Assert-Contains "Go test shard runner" $goTestShard '"-timeout=$Timeout"'
+Assert-Contains "Go test shard runner" $goTestShard '"-test.timeout=$Timeout"'
 
 $vulncheckWorkflow = Get-Content -Raw -LiteralPath $vulncheckWorkflowPath
 Assert-Contains "Vulnerability workflow" $vulncheckWorkflow "go-version: 1.26.5"
@@ -118,6 +123,11 @@ foreach ($required in @(
     "费用"
 )) {
     Assert-Contains "Public release runbook" $runbook $required
+}
+
+& $goTestShardContractPath
+if ($LASTEXITCODE -ne 0) {
+    throw "Go shard process-isolation contract failed."
 }
 
 Write-Host "Guarded public release workflow contract passed."
