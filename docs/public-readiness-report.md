@@ -48,7 +48,7 @@ gitleaks version
 
 2026-07-26 首次公开仓库 Actions 暴露两类 `govulncheck` 调用链风险：`golang.org/x/text v0.38.0` 命中 `GO-2026-5970`，本地与 CI 使用的 Go `1.26.4` 命中标准库 `GO-2026-5856`。本轮将模块最低 Go 版本和公开 CI 统一固定为 `1.26.5`，并将 `golang.org/x/text` 升级到 `v0.40.0`；`golang.org/x/sync` 按模块约束同步升级到 `v0.22.0`。
 
-Quality 工作流同时修复干净检出的构建前置：Go vet / test 前先生成 `internal/site/dist`，Web typecheck 前先编译 Lingui 语言包。Linux runner 进一步暴露的时区相关前端断言、GPU 收集器旧预期和 AlertManager 测试定时器泄漏也已按根因收口；全仓 Go 测试保留 10 分钟硬上限。公开发布工作流契约会检查生成顺序、测试上限及三个工作流的 Go 安全补丁版本，避免本地已有生成物或不同运行环境再次掩盖远端失败。
+Quality 工作流同时修复干净检出的构建前置：Go vet / test 前先生成 `internal/site/dist`，Web typecheck 前先编译 Lingui 语言包。Linux runner 进一步暴露的时区相关前端断言、GPU 收集器旧预期、AlertManager 测试定时器泄漏和 Agent 接入测试连接循环泄漏也已按根因收口；全仓 Go 测试保留 10 分钟硬上限。公开发布工作流契约会检查生成顺序、测试上限及三个工作流的 Go 安全补丁版本，避免本地已有生成物或不同运行环境再次掩盖远端失败。
 
 ## 许可证与隐私检查
 

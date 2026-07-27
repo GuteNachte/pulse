@@ -1122,6 +1122,14 @@ func TestMultipleSystemsWithSameUniversalToken(t *testing.T) {
 			go func() {
 				done <- testAgent.Start()
 			}()
+			defer func() {
+				require.NoError(t, testAgent.Stop())
+				select {
+				case <-done:
+				case <-time.After(2 * time.Second):
+					t.Fatal("Timed out waiting for test agent shutdown")
+				}
+			}()
 
 			// Wait for connection result
 			maxWait := 15 * time.Second
