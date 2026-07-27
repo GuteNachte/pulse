@@ -5,6 +5,7 @@ $workflowPath = Join-Path $repoRoot ".github\workflows\public-release.yml"
 $qualityWorkflowPath = Join-Path $repoRoot ".github\workflows\quality.yml"
 $vulncheckWorkflowPath = Join-Path $repoRoot ".github\workflows\vulncheck.yml"
 $sitePackagePath = Join-Path $repoRoot "internal\site\package.json"
+$androidGradleWrapperPath = Join-Path $repoRoot "internal\site\android\gradlew"
 $runbookPath = Join-Path $repoRoot "docs\public-release-runbook.md"
 $readinessReportPath = Join-Path $repoRoot "docs\public-readiness-report.md"
 $goTestShardPath = Join-Path $repoRoot "supplemental\scripts\run-go-test-shard.ps1"
@@ -24,10 +25,15 @@ if (-not (Test-Path -LiteralPath $workflowPath)) {
 if (-not (Test-Path -LiteralPath $runbookPath)) {
     throw "Public release runbook does not exist: $runbookPath"
 }
-foreach ($requiredPath in @($qualityWorkflowPath, $vulncheckWorkflowPath, $sitePackagePath, $readinessReportPath, $goTestShardPath, $goTestShardContractPath, $goExecutableMetadataContractPath)) {
+foreach ($requiredPath in @($qualityWorkflowPath, $vulncheckWorkflowPath, $sitePackagePath, $androidGradleWrapperPath, $readinessReportPath, $goTestShardPath, $goTestShardContractPath, $goExecutableMetadataContractPath)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
         throw "Public CI contract input does not exist: $requiredPath"
     }
+}
+
+$gradleWrapperIndex = git -C $repoRoot ls-files --stage -- internal/site/android/gradlew
+if ($LASTEXITCODE -ne 0 -or $gradleWrapperIndex -notmatch '^100755\s') {
+    throw "Android Gradle wrapper must be tracked as executable so CI chmod keeps the release tree clean."
 }
 
 $readinessReport = Get-Content -Raw -LiteralPath $readinessReportPath
