@@ -1101,6 +1101,7 @@ func TestGPUCapabilitiesAndLegacyPriority(t *testing.T) {
 	tests := []struct {
 		name          string
 		setupCommands func(string) error
+		wantNvidia    bool
 		wantIntel     bool
 		wantAmdSysfs  bool
 		wantErr       bool
@@ -1113,7 +1114,7 @@ func TestGPUCapabilitiesAndLegacyPriority(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "nvidia-smi ignored",
+			name: "nvidia-smi available",
 			setupCommands: func(tempDir string) error {
 				path := filepath.Join(tempDir, "nvidia-smi")
 				script := `#!/bin/sh
@@ -1123,7 +1124,8 @@ echo "test"`
 				}
 				return nil
 			},
-			wantErr: true,
+			wantNvidia: true,
+			wantErr:    false,
 		},
 		{
 			name: "rocm-smi ignored",
@@ -1213,8 +1215,9 @@ echo "test"`
 			}
 			gotIntel := hasPriority(collectorSourceIntelGpuTop)
 			gotAmdSysfs := hasPriority(collectorSourceAmdSysfs)
+			gotNvidia := hasPriority(collectorSourceNvidiaSMI)
 
-			t.Logf("intelGpuTop: %v, amdSysfs: %v", gotIntel, gotAmdSysfs)
+			t.Logf("nvidiaSmi: %v, intelGpuTop: %v, amdSysfs: %v", gotNvidia, gotIntel, gotAmdSysfs)
 
 			wantErr := tt.wantErr
 			if hasAmdSysfs && (tt.name == "nvidia-smi not available" || tt.name == "no gpu tools available") {
@@ -1226,6 +1229,7 @@ echo "test"`
 			}
 
 			assert.NoError(t, err)
+			assert.Equal(t, tt.wantNvidia, gotNvidia)
 			assert.Equal(t, tt.wantIntel, gotIntel)
 			assert.Equal(t, tt.wantAmdSysfs, gotAmdSysfs)
 		})
@@ -1377,14 +1381,24 @@ echo 'not-json'`
 	require.NoError(t, os.WriteFile(nvtopPath, []byte(nvtopScript), 0755))
 
 	nvidiaPath := filepath.Join(dir, "nvidia-smi")
-	nvidiaScript := `#!/bin/sh
-echo "0, NVIDIA Priority GPU, 45, 512, 2048, 12, 25"`
+	nvidiaScript := fmt.Sprintf(`#!/bin/sh
+if [ -f %q ]; then
+  echo invalid
+else
+  touch %q
+  echo "0, NVIDIA Priority GPU, 45, 512, 2048, 12, 25"
+fi`, filepath.Join(dir, "nvidia-ran"), filepath.Join(dir, "nvidia-ran"))
 	require.NoError(t, os.WriteFile(nvidiaPath, []byte(nvidiaScript), 0755))
 
 	gm, err := NewGPUManager()
-	require.Nil(t, gm)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no configured integrated GPU collectors are available")
+	require.NoError(t, err)
+	require.NotNil(t, gm)
+	require.Eventually(t, func() bool {
+		gm.Lock()
+		defer gm.Unlock()
+		gpu, ok := gm.GpuDataMap["0"]
+		return ok && gpu.Name == "Priority GPU" && gpu.Temperature == 45
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestNewGPUManagerPriorityMixedCollectors(t *testing.T) {
@@ -1420,14 +1434,24 @@ func TestNewGPUManagerPriorityNvmlFallbackToNvidiaSmi(t *testing.T) {
 	t.Setenv("PULSE_AGENT_GPU_COLLECTOR", "nvml,nvidia-smi")
 
 	nvidiaPath := filepath.Join(dir, "nvidia-smi")
-	nvidiaScript := `#!/bin/sh
-echo "0, NVIDIA Fallback GPU, 41, 256, 1024, 8, 14"`
+	nvidiaScript := fmt.Sprintf(`#!/bin/sh
+if [ -f %q ]; then
+  echo invalid
+else
+  touch %q
+  echo "0, NVIDIA Fallback GPU, 41, 256, 1024, 8, 14"
+fi`, filepath.Join(dir, "nvidia-ran"), filepath.Join(dir, "nvidia-ran"))
 	require.NoError(t, os.WriteFile(nvidiaPath, []byte(nvidiaScript), 0755))
 
 	gm, err := NewGPUManager()
-	require.Nil(t, gm)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no configured integrated GPU collectors are available")
+	require.NoError(t, err)
+	require.NotNil(t, gm)
+	require.Eventually(t, func() bool {
+		gm.Lock()
+		defer gm.Unlock()
+		gpu, ok := gm.GpuDataMap["0"]
+		return ok && gpu.Name == "Fallback GPU"
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestNewGPUManagerConfiguredCollectorsMustStart(t *testing.T) {

@@ -1,4 +1,5 @@
 import { buildAssetParameterGroups } from "./asset-detail-parameter-groups.ts"
+import { formatInternetAddressTimestamp } from "./asset-internet-address-status.ts"
 import { getAssetFormSections } from "./asset-schema.ts"
 import type { AssetInterfaceRecord, AssetRecord, AssetRelationRecord } from "@/types"
 
@@ -294,8 +295,8 @@ assertDeepEqual(
 			rows: [
 				["当前公网 IPv4", "203.0.113.10"],
 				["当前公网 IPv6", "2001:db8::10"],
-				["上次更新时间", "2026-07-19 08:00"],
-				["下次更新时间", "2026-07-19 08:30"],
+				["上次更新时间", formatInternetAddressTimestamp("2026-07-19T00:00:00Z")],
+				["下次更新时间", formatInternetAddressTimestamp("2026-07-19T00:30:00Z")],
 			],
 		},
 		{
@@ -331,8 +332,8 @@ assertDeepEqual(
 	[
 		["当前公网 IPv4", "尚未获取"],
 		["当前公网 IPv6", "尚未获取"],
-		["上次更新时间", "2026-07-19 08:00"],
-		["下次更新时间", "2026-07-19 08:30"],
+		["上次更新时间", formatInternetAddressTimestamp("2026-07-19T00:00:00Z")],
+		["下次更新时间", formatInternetAddressTimestamp("2026-07-19T00:30:00Z")],
 	]
 )
 

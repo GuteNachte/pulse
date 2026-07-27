@@ -78,6 +78,7 @@ if ($qualityWebBuildIndex -lt 0 -or $qualityGoVetIndex -lt 0 -or $qualityWebBuil
     throw "Quality workflow must build internal/site/dist before Go vet and tests consume the embedded site."
 }
 Assert-Contains "Quality workflow" $qualityWorkflow "go-version: 1.26.5"
+Assert-Contains "Quality workflow" $qualityWorkflow "go test -tags=testing -count=1 -timeout=600s ./..."
 
 $vulncheckWorkflow = Get-Content -Raw -LiteralPath $vulncheckWorkflowPath
 Assert-Contains "Vulnerability workflow" $vulncheckWorkflow "go-version: 1.26.5"

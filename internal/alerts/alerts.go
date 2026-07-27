@@ -112,8 +112,16 @@ func NewAlertManager(app hubLike) *AlertManager {
 		hub:         app,
 		alertsCache: NewAlertsCache(app),
 	}
+	am.bindLifecycle()
 	am.bindEvents()
 	return am
+}
+
+func (am *AlertManager) bindLifecycle() {
+	am.hub.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
+		am.Stop()
+		return e.Next()
+	})
 }
 
 // Bind events to the alerts collection lifecycle

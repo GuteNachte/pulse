@@ -4,6 +4,7 @@ import {
 	getInternetAddressAutoRefreshSettings,
 	getInternetAddressDisplayState,
 	getInternetAddressRefreshFeedback,
+	formatInternetAddressTimestamp,
 	internetAddressRefreshIntervalOptions,
 } from "./asset-internet-address-status.ts"
 
@@ -40,6 +41,21 @@ assert.deepEqual(getInternetAddressRefreshFeedback({ ipv4_error: "检测服务�
 })
 
 assert.deepEqual(getInternetAddressAutoRefreshSettings({}), { enabled: true, intervalMinutes: 30 })
+const timestamp = new Date("2026-07-19T00:00:00Z")
+const timestampParts = new Intl.DateTimeFormat("zh-CN", {
+	year: "numeric",
+	month: "2-digit",
+	day: "2-digit",
+	hour: "2-digit",
+	minute: "2-digit",
+	hour12: false,
+}).formatToParts(timestamp)
+const timestampPart = (type: Intl.DateTimeFormatPartTypes) =>
+	timestampParts.find((part) => part.type === type)?.value ?? ""
+const expectedTimestamp =
+	[timestampPart("year"), timestampPart("month"), timestampPart("day")].join("-") +
+	` ${timestampPart("hour")}:${timestampPart("minute")}`
+assert.equal(formatInternetAddressTimestamp(timestamp.toISOString()), expectedTimestamp)
 assert.deepEqual(
 	getInternetAddressAutoRefreshSettings({ public_ip_auto_refresh: "no", public_ip_refresh_interval_minutes: 360 }),
 	{ enabled: false, intervalMinutes: 360 }
