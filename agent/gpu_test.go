@@ -25,6 +25,28 @@ func skipPosixCommandStubTestOnWindows(t *testing.T) {
 	}
 }
 
+func writeExecutableCommand(path string, script string) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".pulse-command-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := tmp.WriteString(script); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(0755); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
+}
+
 func TestParseNvidiaData(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -1119,7 +1141,7 @@ func TestGPUCapabilitiesAndLegacyPriority(t *testing.T) {
 				path := filepath.Join(tempDir, "nvidia-smi")
 				script := `#!/bin/sh
 echo "test"`
-				if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+				if err := writeExecutableCommand(path, script); err != nil {
 					return err
 				}
 				return nil
@@ -1133,7 +1155,7 @@ echo "test"`
 				path := filepath.Join(tempDir, "rocm-smi")
 				script := `#!/bin/sh
 echo "test"`
-				if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+				if err := writeExecutableCommand(path, script); err != nil {
 					return err
 				}
 				return nil
@@ -1146,7 +1168,7 @@ echo "test"`
 				path := filepath.Join(tempDir, "tegrastats")
 				script := `#!/bin/sh
 echo "test"`
-				if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+				if err := writeExecutableCommand(path, script); err != nil {
 					return err
 				}
 				return nil
@@ -1159,7 +1181,7 @@ echo "test"`
 				path := filepath.Join(tempDir, "nvtop")
 				script := `#!/bin/sh
 echo "[]"`
-				if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+				if err := writeExecutableCommand(path, script); err != nil {
 					return err
 				}
 				return nil

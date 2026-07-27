@@ -23,6 +23,7 @@ export const releaseHistory: ReleaseNote[] = [
 					"修复公开预发布演练的审计状态契约：公开就绪报告使用发布门禁要求的精确 Status: ready 状态行，本地工作流契约同步读取并验证真实报告，避免 Markdown 格式差异只在 GitHub Actions 远端暴露。",
 					"根治 Linux 发布 runner 校验 Windows Agent 时的跨平台执行失败：同主机产物继续实际运行 --version，异平台产物改用 Go 二进制元数据验证目标 OS、架构和注入版本，不再尝试在 Ubuntu 直接启动 exe；构建、dry-run、打包和验证子进程逐项检查退出码，后续命令不能覆盖前一步失败，并由交叉编译回归测试持续锁定。",
 					"修复公开预发布打包后的源码树完整性门禁：Android Gradle Wrapper 在 Git 中按标准可执行模式跟踪，Linux runner 的 chmod 不再产生构建期文件模式差异；发布工作流契约同步锁定该模式，避免全部构建结束后才发现源码树不干净。",
+					"稳定 Agent GPU 采集器的 Linux 测试桩：测试命令完整写入、关闭并设置权限后，再原子发布到最终命令路径，避免 GitHub runner 临时文件系统偶发 text file busy；生产 GPU 采集、失败重试和回退行为不变。",
 					"修复公开 CI 在干净检出环境下的生成顺序与 Go 安全门禁：Web 类型检查会先生成 Lingui 语言包，Go 质量检查会先构建内嵌 Web 产物；Go 统一固定到 1.26.5，x/text 升级到 0.40.0，并由工作流契约持续防止同类回归。",
 					"继续根治公开 Quality 的 Linux 环境差异与后台任务泄漏：公网地址时间测试不再写死东八区，GPU 测试恢复可用收集器与失败回退的真实契约，AlertManager 会在应用终止时统一停止待发送定时器，Agent 多设备接入测试也会逐个停止连接循环；Quality 与受控预发布验证会把 Hub 顶层测试稳定分成 4 片并行运行，每片只编译一次测试二进制，每个顶层测试在独立进程中精确运行一次。最终超时根因已定位为完整恢复测试在 Unix 上触发 PocketBase execve 后反复重启测试二进制；测试现在验证恢复任务已提交但不再真的替换测试进程，生产恢复路径保持不变。",
 					"收口公开测试前端依赖风险：不跨主版本、不修改业务代码，仅将锁文件中的 tar、brace-expansion、postcss、nanoid 与 valibot 更新到安全补丁版本；npm audit 从 4 项降为 0 项，并继续通过前端、Android 与版本一致性验证。",
