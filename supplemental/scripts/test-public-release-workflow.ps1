@@ -9,6 +9,7 @@ $runbookPath = Join-Path $repoRoot "docs\public-release-runbook.md"
 $readinessReportPath = Join-Path $repoRoot "docs\public-readiness-report.md"
 $goTestShardPath = Join-Path $repoRoot "supplemental\scripts\run-go-test-shard.ps1"
 $goTestShardContractPath = Join-Path $repoRoot "supplemental\scripts\test-run-go-test-shard.ps1"
+$goExecutableMetadataContractPath = Join-Path $repoRoot "supplemental\scripts\test-go-executable-metadata.ps1"
 
 function Assert-Contains {
     param([string]$Label, [string]$Content, [string]$Needle)
@@ -23,7 +24,7 @@ if (-not (Test-Path -LiteralPath $workflowPath)) {
 if (-not (Test-Path -LiteralPath $runbookPath)) {
     throw "Public release runbook does not exist: $runbookPath"
 }
-foreach ($requiredPath in @($qualityWorkflowPath, $vulncheckWorkflowPath, $sitePackagePath, $readinessReportPath, $goTestShardPath, $goTestShardContractPath)) {
+foreach ($requiredPath in @($qualityWorkflowPath, $vulncheckWorkflowPath, $sitePackagePath, $readinessReportPath, $goTestShardPath, $goTestShardContractPath, $goExecutableMetadataContractPath)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
         throw "Public CI contract input does not exist: $requiredPath"
     }
@@ -62,6 +63,10 @@ foreach ($required in @(
 Assert-Contains "Public release workflow" $workflow "Run non-Hub Go tests"
 Assert-Contains "Public release workflow" $workflow "-ShardCount 4"
 Assert-Contains "Public release workflow" $workflow "-Timeout 600s"
+$exitGuard = 'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }'
+if ([regex]::Matches($workflow, [regex]::Escape($exitGuard)).Count -lt 4) {
+    throw "Public release workflow must stop after every release packaging subprocess failure."
+}
 if ($workflow.Contains("registry.example.com")) {
     throw "Public release workflow contains the source registry placeholder."
 }
@@ -134,6 +139,11 @@ foreach ($required in @(
 & $goTestShardContractPath
 if ($LASTEXITCODE -ne 0) {
     throw "Go shard process-isolation contract failed."
+}
+
+& $goExecutableMetadataContractPath
+if ($LASTEXITCODE -ne 0) {
+    throw "Cross-platform Go executable metadata contract failed."
 }
 
 Write-Host "Guarded public release workflow contract passed."

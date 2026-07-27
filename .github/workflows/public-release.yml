@@ -164,11 +164,13 @@ jobs:
         shell: pwsh
         run: |
           pwsh -NoProfile -File supplemental/scripts/build-agent-v1.ps1 -Version "${{ steps.release.outputs.version }}" -OS windows -Arch amd64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pwsh -NoProfile -File supplemental/scripts/publish-agent-v1.ps1 `
             -Version "${{ steps.release.outputs.version }}" `
             -LinuxImage "${{ steps.release.outputs.agent_image }}" `
             -DryRun `
             -SkipLinuxImageBuild
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build Android APK
         shell: bash
@@ -187,10 +189,12 @@ jobs:
             -HubImage "${{ steps.release.outputs.hub_image }}" `
             -AgentImage "${{ steps.release.outputs.agent_image }}" `
             -OutputDirectory "build/public-release/${{ steps.release.outputs.version }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pwsh -NoProfile -File supplemental/scripts/verify-release-v1.ps1 `
             -Version "${{ steps.release.outputs.version }}" `
             -SkipRegistry `
             -PublicReleaseDirectory "build/public-release/${{ steps.release.outputs.version }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-Content "build/public-release/${{ steps.release.outputs.version }}/SHA256SUMS"
 
       - name: Require clean tracked tree

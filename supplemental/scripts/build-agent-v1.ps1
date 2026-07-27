@@ -54,16 +54,19 @@ try {
 			throw "dockerized go build failed with exit code $LASTEXITCODE"
 		}
 	}
-	if ($OS -eq "windows") {
+	$hostIsWindows = $IsWindows -or $env:OS -eq "Windows_NT"
+	$targetRunsOnHost = ($OS -eq "windows" -and $hostIsWindows) -or ($OS -eq "linux" -and -not $hostIsWindows)
+	if ($targetRunsOnHost) {
 		& $outputPath --version
 		if ($LASTEXITCODE -ne 0) {
 			throw "version check failed with exit code $LASTEXITCODE"
 		}
-	} elseif ($OS -eq "linux") {
-		docker run --rm -v "${repoRoot}:/app" -w /app golang:alpine sh -c "chmod +x '$containerOutputPath' && '$containerOutputPath' --version"
-		if ($LASTEXITCODE -ne 0) {
-			throw "version check failed with exit code $LASTEXITCODE"
-		}
+	} else {
+		Assert-GoExecutableBuildMetadata `
+			-Path $outputPath `
+			-Version $Version `
+			-TargetOS $OS `
+			-TargetArch $Arch
 	}
 	. (Join-Path $PSScriptRoot "agent-release-retention.ps1")
 	Prune-AgentReleaseDirectory -Root $releaseRoot -Limit 2

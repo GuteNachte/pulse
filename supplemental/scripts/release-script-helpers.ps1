@@ -85,3 +85,42 @@ function Get-ReleaseBuildCommit {
 function Get-ReleaseBuildTime {
     return (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 }
+
+function Assert-GoExecutableBuildMetadata {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Version,
+        [Parameter(Mandatory)][string]$TargetOS,
+        [Parameter(Mandatory)][string]$TargetArch,
+        [string]$VersionSymbol = "gutenacht.site/pulse.Version"
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Go executable does not exist: $Path"
+    }
+
+    $goCommand = Get-Command go -ErrorAction SilentlyContinue
+    if (-not $goCommand) {
+        throw "Go is required to inspect a cross-platform executable: $Path"
+    }
+
+    $global:LASTEXITCODE = 0
+    $metadata = & $goCommand.Source version -m $Path 2>&1
+    $exitCode = $global:LASTEXITCODE
+    if (-not $? -or $exitCode -ne 0) {
+        throw "Unable to inspect Go executable metadata for '$Path' (exit code $exitCode)."
+    }
+
+    $metadataText = $metadata -join "`n"
+    foreach ($expected in @(
+        "-X $VersionSymbol=$Version",
+        "GOOS=$TargetOS",
+        "GOARCH=$TargetArch"
+    )) {
+        if (-not $metadataText.Contains($expected, [System.StringComparison]::Ordinal)) {
+            throw "Go executable metadata for '$Path' is missing '$expected'."
+        }
+    }
+
+    Write-Host "[OK] Go executable metadata contains $Version for $TargetOS/$TargetArch"
+}

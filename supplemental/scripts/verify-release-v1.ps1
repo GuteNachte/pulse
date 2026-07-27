@@ -230,11 +230,24 @@ try {
         $agentDir = Join-Path $repoRoot (Join-Path $BuildDir $Version)
         $agentPath = Join-Path $agentDir "pulse-agent_windows_amd64.exe"
         if (Assert-FileExists $failures $agentPath "Windows Agent artifact") {
-            $agentVersion = & $agentPath --version
-            if ($LASTEXITCODE -ne 0) {
-                Add-VerifyFailure $failures "Windows Agent --version failed with exit code $LASTEXITCODE"
+            $hostIsWindows = $IsWindows -or $env:OS -eq "Windows_NT"
+            if ($hostIsWindows) {
+                $agentVersion = & $agentPath --version
+                if ($LASTEXITCODE -ne 0) {
+                    Add-VerifyFailure $failures "Windows Agent --version failed with exit code $LASTEXITCODE"
+                } else {
+                    Assert-TextContains $failures "Windows Agent --version" ($agentVersion -join " ") $Version
+                }
             } else {
-                Assert-TextContains $failures "Windows Agent --version" ($agentVersion -join " ") $Version
+                try {
+                    Assert-GoExecutableBuildMetadata `
+                        -Path $agentPath `
+                        -Version $Version `
+                        -TargetOS "windows" `
+                        -TargetArch "amd64"
+                } catch {
+                    Add-VerifyFailure $failures $_.Exception.Message
+                }
             }
         }
         Test-AgentArtifactManifest $failures (Join-Path $agentDir "manifest.json") $agentPath "build release"
