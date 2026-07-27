@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/pocketbase/pocketbase/core"
 	"github.com/stretchr/testify/require"
 	pulseTests "gutenacht.site/pulse/internal/tests"
 )
@@ -107,6 +109,11 @@ func TestPortableBackupUploadAndPreflight(t *testing.T) {
 func TestPortableRestoreCreatesSafetyBackupAndTask(t *testing.T) {
 	hub, _ := pulseTests.GetHubWithUser(t)
 	defer hub.Cleanup()
+	restoreStarted := make(chan string, 1)
+	hub.OnBackupRestore().BindFunc(func(e *core.BackupEvent) error {
+		restoreStarted <- e.Name
+		return nil
+	})
 	admin, err := pulseTests.CreateUserWithRole(hub, "portable-restore@example.com", "password123", "admin")
 	require.NoError(t, err)
 	token, err := admin.NewAuthToken()
@@ -128,6 +135,12 @@ func TestPortableRestoreCreatesSafetyBackupAndTask(t *testing.T) {
 	require.NotEmpty(t, task.SafetyBackupKey)
 	require.NotEmpty(t, task.SafetyNativeBackupKey)
 	require.Equal(t, "restore_database", task.Stage)
+	select {
+	case restoreKey := <-restoreStarted:
+		require.Equal(t, "pulse_restore_"+task.ID+".zip", restoreKey)
+	case <-time.After(2 * time.Second):
+		t.Fatal("portable restore was not submitted")
+	}
 	nativeBackup := pulseTests.PerformTestAPIRequest(t, hub.TestApp, http.MethodGet, "/api/pulse/backups/"+task.SafetyNativeBackupKey, nil,
 		map[string]string{"Authorization": token})
 	require.Equal(t, http.StatusOK, nativeBackup.Status, nativeBackup.Body)
