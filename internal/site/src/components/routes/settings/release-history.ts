@@ -595,6 +595,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "文档 / 规则",
 				items: [
+					"公开 CI 的 Android 无密钥编译改为先安装前端依赖并同步 Capacitor 工程，再执行 Gradle；Quality 与 Public Release 共用顺序契约，避免本机已有生成文件掩盖全新 Linux runner 的缺失文件问题。",
 					"公开发布与安装验收文档补齐固定证书指纹、四个 Secret 名称、beta.1 一次性卸载、禁止换密钥和 beta.2 尚未发布的真实边界；文档不记录任何密码、私钥或恢复内容。",
 					"部署回滚目标按当前固定稳定版修正为 1.0.5，Hub 与 Agent 必须同步回滚，不再沿用过期的 1.0.4 示例。",
 					"公开仓库审计不再把 Password = $password 这类受保护变量引用误判为硬编码密码，真实长字符串凭据仍会阻断，并由允许与拒绝回归共同锁定。",

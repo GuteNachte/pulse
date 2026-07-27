@@ -176,7 +176,9 @@ jobs:
 
       - name: Run Android secret-free compile checks
         shell: bash
-        run: internal/site/android/gradlew -p internal/site/android testDebugUnitTest --console=plain
+        run: |
+          npm --prefix internal/site run android:sync
+          internal/site/android/gradlew -p internal/site/android testDebugUnitTest --console=plain
 
       - name: Require clean tracked tree
         shell: bash

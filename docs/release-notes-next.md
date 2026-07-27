@@ -6,6 +6,7 @@
 
 ### Web / Hub
 
+- 修复公开 CI 在全新 Linux runner 上直接执行 Gradle 时缺少 Capacitor 生成工程的问题：Quality 与 Public Release 的无密钥 Android Debug 编译都会先安装前端依赖并运行 `android:sync`，再执行 Gradle；工作流契约同时锁定同步必须早于编译，避免本机已有生成文件掩盖干净环境失败。
 - `1.0.6-beta.2` 公开候选版建立 Android 长期升级身份：最终 APK 必须由受保护的 `public-release` Environment 使用固定 RSA-4096 Release 密钥构建，并核验 `debuggable=false`、v2 签名、包名、版本和证书 SHA-256 `BF114B3A8EA33125893B5B1E6865B43BFE8DAC89E1BE154F7E48A91D93D51374`；普通 Quality 与验证 job 不接触密钥。`1.0.6-beta.1` 使用 Debug 证书，切换到 `beta.2` 时需要卸载一次，此后禁止更换签名身份。
 - 修正部署手册的回滚目标：当前固定稳定版是 `1.0.5`，`1.0.6-beta.2` 部署异常时 Hub 与 Agent 必须一起回滚到 `1.0.5`，不再沿用过期的 `1.0.4` 示例。
 - 修复公开仓库审计对 PowerShell 凭据对象的误报：`Password = $password` 这类只引用受保护变量的代码不再被当成硬编码密码，真实长字符串凭据仍会阻断；审计回归同时覆盖允许与拒绝路径。

@@ -123,6 +123,13 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: gradle
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: internal/site/package-lock.json
+      - name: Install Android web dependencies
+        run: npm ci --prefix internal/site
       - name: Run secret-free Android signing contracts
         shell: pwsh
         run: |
@@ -130,4 +137,6 @@ jobs:
           pwsh -NoProfile -File supplemental/scripts/test-initialize-android-release-signing.ps1
           pwsh -NoProfile -File supplemental/scripts/test-build-android-release.ps1
       - name: Run Android Debug unit build
-        run: internal/site/android/gradlew -p internal/site/android testDebugUnitTest --console=plain
+        run: |
+          npm --prefix internal/site run android:sync
+          internal/site/android/gradlew -p internal/site/android testDebugUnitTest --console=plain

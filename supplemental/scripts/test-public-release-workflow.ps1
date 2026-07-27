@@ -121,6 +121,15 @@ $goVetIndex = $workflow.IndexOf("go vet -tags=testing ./...", [System.StringComp
 if ($webBuildIndex -lt 0 -or $goVetIndex -lt 0 -or $webBuildIndex -gt $goVetIndex) {
     throw "Public release workflow must build internal/site/dist before Go vet and tests consume the embedded site."
 }
+$androidSyncCommand = "npm --prefix internal/site run android:sync"
+$androidDebugCommand = "internal/site/android/gradlew -p internal/site/android testDebugUnitTest --console=plain"
+$webDependencyInstallCommand = "npm ci --prefix internal/site"
+$releaseDependencyInstallIndex = $workflow.IndexOf($webDependencyInstallCommand, [System.StringComparison]::Ordinal)
+$releaseAndroidSyncIndex = $workflow.IndexOf($androidSyncCommand, [System.StringComparison]::Ordinal)
+$releaseAndroidDebugIndex = $workflow.IndexOf($androidDebugCommand, [System.StringComparison]::Ordinal)
+if ($releaseDependencyInstallIndex -lt 0 -or $releaseAndroidSyncIndex -lt $releaseDependencyInstallIndex -or $releaseAndroidDebugIndex -lt $releaseAndroidSyncIndex) {
+    throw "Public release workflow must install dependencies and synchronize Capacitor before the secret-free Android Debug build."
+}
 if (($workflow | Select-String -Pattern 'go-version: 1\.26\.5' -AllMatches).Matches.Count -ne 2) {
     throw "Public release workflow must use the patched Go 1.26.5 toolchain in validation and publishing jobs."
 }
@@ -130,6 +139,12 @@ $qualityWebBuildIndex = $qualityWorkflow.IndexOf("npm --prefix internal/site run
 $qualityGoVetIndex = $qualityWorkflow.IndexOf("go vet -tags=testing ./...", [System.StringComparison]::Ordinal)
 if ($qualityWebBuildIndex -lt 0 -or $qualityGoVetIndex -lt 0 -or $qualityWebBuildIndex -gt $qualityGoVetIndex) {
     throw "Quality workflow must build internal/site/dist before Go vet and tests consume the embedded site."
+}
+$qualityAndroidSyncIndex = $qualityWorkflow.IndexOf($androidSyncCommand, [System.StringComparison]::Ordinal)
+$qualityAndroidDebugIndex = $qualityWorkflow.IndexOf($androidDebugCommand, [System.StringComparison]::Ordinal)
+$qualityDependencyInstallIndex = $qualityWorkflow.IndexOf($webDependencyInstallCommand, [System.StringComparison]::Ordinal)
+if ($qualityDependencyInstallIndex -lt 0 -or $qualityAndroidSyncIndex -lt $qualityDependencyInstallIndex -or $qualityAndroidDebugIndex -lt $qualityAndroidSyncIndex) {
+    throw "Quality workflow must install dependencies and synchronize Capacitor before the secret-free Android Debug build."
 }
 Assert-Contains "Quality workflow" $qualityWorkflow "go-version: 1.26.5"
 Assert-Contains "Quality workflow" $qualityWorkflow "Run non-Hub Go tests"
