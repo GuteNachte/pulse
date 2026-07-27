@@ -79,8 +79,7 @@ function Test-DockerImageTag {
         return
     }
 
-    docker manifest inspect $Image *> $null
-    if ($LASTEXITCODE -ne 0) {
+    if (-not (Test-ContainerImageReference -Image $Image)) {
         Add-VerifyFailure $Failures "$Label image tag is not inspectable: $Image"
         return
     }

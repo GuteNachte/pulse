@@ -86,6 +86,35 @@ function Get-ReleaseBuildTime {
     return (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 }
 
+function Test-ContainerImageReference {
+    param(
+        [Parameter(Mandatory)][string]$Image,
+        [string]$DockerCommand = "docker"
+    )
+
+    if ($DockerCommand -eq "docker") {
+        $docker = Get-Command docker -ErrorAction SilentlyContinue
+        if (-not $docker) {
+            return $false
+        }
+        $DockerCommand = $docker.Source
+    }
+
+    $global:LASTEXITCODE = 0
+    & $DockerCommand manifest inspect $Image *> $null
+    $manifestSucceeded = $?
+    $manifestExitCode = $global:LASTEXITCODE
+    if ($manifestSucceeded -and $manifestExitCode -eq 0) {
+        return $true
+    }
+
+    $global:LASTEXITCODE = 0
+    & $DockerCommand buildx imagetools inspect $Image *> $null
+    $imageToolsSucceeded = $?
+    $imageToolsExitCode = $global:LASTEXITCODE
+    return ($imageToolsSucceeded -and $imageToolsExitCode -eq 0)
+}
+
 function Assert-GoExecutableBuildMetadata {
     param(
         [Parameter(Mandatory)][string]$Path,

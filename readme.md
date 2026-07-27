@@ -27,6 +27,36 @@ Pulse 由两个主要组件组成：
 
 常见部署方式是 Hub 和一台 Hub 同机 Agent 一起运行，其他机器再通过安装向导接入。
 
+## 快速开始（公开测试版）
+
+当前公开测试版是 [`v1.0.6-beta.1`](https://github.com/GuteNachte/pulse/releases/tag/v1.0.6-beta.1)。推荐在 Linux / NAS / 飞牛上使用 Docker Compose 部署 Hub 与同机 Agent；当前公开镜像和 Windows Agent 以 `amd64` 为主。
+
+```bash
+mkdir -p pulse && cd pulse
+curl -LO https://github.com/GuteNachte/pulse/releases/download/v1.0.6-beta.1/docker-compose.yml
+docker compose pull
+docker compose up -d
+curl http://127.0.0.1:8090/api/health
+```
+
+健康检查返回成功后，在浏览器打开 `http://你的服务器IP:8090` 创建首个管理员。`docker-compose.yml` 会把数据保存在当前目录的 `pulse_data`，升级和重建容器时不要删除该目录，也不要执行 `docker compose down -v`。
+
+其他设备接入：
+
+- Windows：先在 Hub 的“设置 -> Agent 管理”创建配对，再使用页面生成的管理员 PowerShell 命令安装 Windows Service。Release 中的 `.exe` 是 Agent 程序，不是双击安装向导。
+- Linux / NAS / 飞牛：使用 Hub 页面生成的 Compose，或下载 Release 中的 `pulse-agent.yml`，填写 `TOKEN` 和该设备可访问的 `HUB_URL`。
+- Android：下载 Release 中的 APK，允许当前浏览器或文件管理器安装未知来源应用，然后在 App 中填写 Hub 地址。
+
+下载全部附件后，可以校验文件完整性：
+
+```bash
+sha256sum -c SHA256SUMS
+```
+
+测试版已知限制：Windows Agent 暂无 Authenticode 数字签名，可能触发 SmartScreen；`1.0.6-beta.1` Android APK 使用 Android Debug 测试证书且应用可调试，后续切换正式签名时可能需要卸载测试版后重新安装。当前不提供 macOS Agent。
+
+完整验收结果见 [`docs/public-installation-acceptance.md`](docs/public-installation-acceptance.md)。
+
 ## 本地开发
 
 Windows 日常开发直接双击项目根目录的 `Start-Pulse-Dev.cmd`。它会启动或复用 Hub 与 Vite，健康检查通过后自动打开 Web 页面；优先使用 PowerShell 7，未安装时兼容回退到 Windows PowerShell 5.1。
@@ -66,7 +96,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\run-hub
 
 ## 版本
 
-当前固定版本为 `1.0.5`。
+当前稳定基线为 `1.0.5`，当前公开测试版为 `1.0.6-beta.1`。
 
 版本发布要求：
 

@@ -39,6 +39,9 @@ jobs:
       - name: Verify Hub test process isolation
         shell: pwsh
         run: pwsh -NoProfile -File supplemental/scripts/test-run-go-test-shard.ps1
+      - name: Verify release image lookup fallback
+        shell: pwsh
+        run: pwsh -NoProfile -File supplemental/scripts/test-release-image-reference.ps1
       - name: Install web dependencies
         run: npm ci --prefix internal/site
       - name: Build web app for Hub embed

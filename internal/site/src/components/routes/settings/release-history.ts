@@ -19,6 +19,9 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "Web / Hub",
 				items: [
+					"完成 1.0.6-beta.1 普通用户视角的公开安装验收：从 GitHub Release 重新下载全部附件并核对 SHA256，Windows Agent、Android APK、Compose、GHCR 镜像和隔离 Hub 运行态均使用公开产物验证；临时 Hub 持续健康且公开版本正确。",
+					"修复 Windows Docker CLI 直连 GHCR token 端点 EOF 时的镜像误判：发布验证器保留 manifest inspect，失败后回退到 buildx imagetools inspect，两者都失败仍严格阻断；三条路径的回归测试已接入 Quality 与公开发布工作流。",
+					"README 新增普通用户快速开始，直接提供公开 Compose 部署、首次启动、数据持久化、Agent 接入、Android 安装和 SHA256 校验步骤，并链接完整公开安装验收记录。",
 					"完成 Pulse 首个公开测试版发布：GuteNachte/pulse 的准备分支、main 与 v1.0.6-beta.1 tag 在发布时指向同一已审计提交；public-release Environment、发布变量、只验证演练和人工审批门禁均已实际通过。GitHub prerelease 提供 8 个附件，Hub / Agent GHCR 显式版本镜像已验证可匿名拉取；Pages 按当前边界未启用。",
 					"修复公开预发布演练的审计状态契约：公开就绪报告使用发布门禁要求的精确 Status: ready 状态行，本地工作流契约同步读取并验证真实报告，避免 Markdown 格式差异只在 GitHub Actions 远端暴露。",
 					"根治 Linux 发布 runner 校验 Windows Agent 时的跨平台执行失败：同主机产物继续实际运行 --version，异平台产物改用 Go 二进制元数据验证目标 OS、架构和注入版本，不再尝试在 Ubuntu 直接启动 exe；构建、dry-run、打包和验证子进程逐项检查退出码，后续命令不能覆盖前一步失败，并由交叉编译回归测试持续锁定。",
@@ -559,6 +562,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "移动端 / Android App",
 				items: [
+					"公开 APK 专项验收确认 versionName 1.0.6-beta.1、versionCode 10006 和 v2 签名有效；当前证书仍是通用 Android Debug 测试证书且应用可调试，切换正式 release 证书时可能需要卸载测试版。下一公开版本前必须建立受保护的 release keystore、release 构建和签名指纹门禁。",
 					"公开预发布验证会用统一解析出的 versionName 与 versionCode 构建 Android APK，并在生成公开包前核验 APK metadata；本轮仍无 Android 原生功能改动。",
 					"Android App 跟随统一版本入口切换到 1.0.6-beta.1；versionName 保留完整预发布版本，versionCode 按基础版本保持 10006，本轮无 Android 原生功能改动。",
 					"本轮公开仓库审计不改变 Android 原生能力；Android App 已随 Hub、Agent 与 Web 使用同一 1.0.6-beta.1 版本统一构建和验证，公开 prerelease 已提供对应 APK。",
@@ -570,6 +574,9 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "Agent / 部署",
 				items: [
+					"下载版 Windows Agent 已验证版本与 SHA256，但当前没有 Authenticode 数字签名，普通用户仍可能看到 SmartScreen；公开文档已明确该边界，后续签名评估不能用哈希校验代替。",
+					"两个公开 GHCR 镜像已实际拉取，Agent 容器返回正确版本，隔离 Hub 容器持续 running / healthy；Windows Docker CLI 的 manifest 子命令异常由 buildx 回退根治，不再要求用 SkipRegistry 绕过。",
+					"本轮没有在 FlyNAS、独立 Linux 主机、Windows Service 或 Android 真机上执行安装，相关项目继续保留为下一轮环境验收，不把产物级验证写成全平台安装完成。",
 					"私有 Gitea 镜像只接收公开 Git 分支和 tag；GitHub Secrets、Environment、Issues、Discussions、Releases、Pages 与 GHCR Packages 不会被复制，仍需在各平台独立管理。",
 					"GHCR 只发布从 GitHub owner 动态派生的 pulse-hub 与 pulse-agent 显式版本镜像，不创建 latest；写权限仅存在于人工审批后的 publish job，现有私有 Harbor 目标与发布脚本参数继续保留。",
 					"统一发布入口可在显式提供公开 GHCR 镜像和输出目录时附加生成公开包，原有私有 Harbor 发布路径保持独立；发布后验证可按需核验公开包白名单、manifest 和每条 SHA256。",
@@ -583,6 +590,8 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "文档 / 规则",
 				items: [
+					"新增公开安装验收记录，逐项保存下载、SHA256、manifest、Windows Agent、Android 签名、Compose、GHCR 和 Hub 运行态证据，并单列签名与未执行环境限制；后续公开版本复用同一清单，不以 CI 成功替代真实安装验收。",
+					"公开快速开始与验收文档明确区分源码 Compose 的保留示例和 Release 附件中的可部署 GHCR 镜像，普通用户只需从 Release 获取版本化 Compose。",
 					"镜像同步回归测试使用临时公开源与私有目标裸仓库，覆盖默认 DryRun、精确 ref 输出、错误 URL 拒绝、Apply 后分支 / tag 同步、脏工作树拒绝和审计非 ready 阻断。",
 					"公开预发布运行手册已补齐首次执行记录：保留外部授权边界、双重门禁、审批顺序、费用与撤回限制，并记录演练 / 正式 Run、发布提交、Release 附件、镜像 digest、匿名拉取和 SHA256 验收。后续新版本仍需逐次授权。",
 					"公开发布包回归测试使用临时伪产物完成全程离线验证，覆盖文件白名单、GHCR 镜像替换、manifest 字段、SHA256 格式、源仓库占位地址清除和双次构建可复现性。",

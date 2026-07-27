@@ -71,6 +71,7 @@ pwsh -NoProfile -File supplemental/scripts/package-public-release.ps1 `
 - 公开 Hub 镜像：`ghcr.io/gutenachte/pulse-hub:1.0.6-beta.1`，digest `sha256:0311e01b1c64f96eeaa2ba9b31b036095dcef0911ffef71f8e624dfb0d390fe3`。
 - 公开 Agent 镜像：`ghcr.io/gutenachte/pulse-agent:1.0.6-beta.1`，digest `sha256:b45773f36fd5fc8db85973056848dfe3fb841729fdae91fb9505b44a9e70cc3a`。
 - 两个 GHCR manifest 均已使用匿名 token 验证可读取，普通用户不需要登录即可拉取；本次未启用 Pages，也未部署 FlyNAS。
+- 普通用户视角的公开附件、Windows Agent、Android APK、Compose、GHCR 拉取和隔离 Hub 运行态验收见 `docs/public-installation-acceptance.md`；Android / Windows 签名与未执行的真机、服务安装和独立 Linux 主机项均在该文档中明确保留为限制。
 
 ## 首次发布故障复盘
 
@@ -78,6 +79,7 @@ pwsh -NoProfile -File supplemental/scripts/package-public-release.ps1 `
 2. Linux runner 不能直接运行 Windows `.exe`：同平台产物运行 `--version`，跨平台 Go 产物使用 `go version -m` 核对 `GOOS`、`GOARCH` 和版本 ldflags；PowerShell 调用每个原生子进程后都要立即检查 `$LASTEXITCODE`。
 3. 构建脚本不得临时改变 Git 跟踪模式：Linux 需要执行的 Gradle Wrapper 应在索引中固定为 `100755`，发布工作流契约同步锁定该模式，构建后继续检查工作树干净。
 4. 测试命令桩不能边写边执行：先在临时文件完整写入、关闭并授权，再原子重命名到最终路径，避免 Linux 临时文件系统出现 `text file busy`。
+5. Windows Docker CLI 的 `docker manifest inspect` 可能因 GHCR token 端点 EOF 误报镜像不存在；验证器先保留该检查，失败后回退到 `docker buildx imagetools inspect`，两者都失败才判定镜像不可用。
 
 ## 回滚与撤回
 

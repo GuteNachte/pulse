@@ -53,6 +53,7 @@ foreach ($required in @(
     "audit-public-repository.ps1",
     "check-version-consistency.ps1",
     "test-package-public-release.ps1",
+    "test-release-image-reference.ps1",
     "run-go-test-shard.ps1",
     "package-public-release.ps1",
     "github.repository_owner",
@@ -103,6 +104,7 @@ if ($qualityWebBuildIndex -lt 0 -or $qualityGoVetIndex -lt 0 -or $qualityWebBuil
 Assert-Contains "Quality workflow" $qualityWorkflow "go-version: 1.26.5"
 Assert-Contains "Quality workflow" $qualityWorkflow "Run non-Hub Go tests"
 Assert-Contains "Quality workflow" $qualityWorkflow "test-run-go-test-shard.ps1"
+Assert-Contains "Quality workflow" $qualityWorkflow "test-release-image-reference.ps1"
 Assert-Contains "Quality workflow" $qualityWorkflow 'shard: [0, 1, 2, 3]'
 Assert-Contains "Quality workflow" $qualityWorkflow "run-go-test-shard.ps1"
 Assert-Contains "Quality workflow" $qualityWorkflow "-ShardCount 4"

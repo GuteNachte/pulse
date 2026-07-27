@@ -34,7 +34,9 @@ foreach ($required in @(
     "function Assert-ReleaseSkipFlagsAllowed",
     "Skip flags are only allowed with -DryRun",
     "function Resolve-ReleaseSkipPush",
-    "`$SkipPush -or `$DryRun"
+    "`$SkipPush -or `$DryRun",
+    "function Test-ContainerImageReference",
+    "buildx imagetools inspect"
 )) {
     Assert-Contains -ScriptName $helperScriptName -Script $helperScript -Needle $required
 }
@@ -68,6 +70,7 @@ foreach ($required in @(
     "`$resolvedVersion.AndroidVersionCode",
     "[string]`$PublicReleaseDirectory",
     "Test-PublicReleasePackage",
+    "Test-ContainerImageReference",
     "SHA256SUMS"
 )) {
     Assert-Contains -ScriptName $verifyScriptName -Script $verifyScript -Needle $required

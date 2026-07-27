@@ -115,6 +115,7 @@ jobs:
           pwsh -NoProfile -File supplemental/scripts/test-prerelease-version.ps1
           pwsh -NoProfile -File supplemental/scripts/test-set-pulse-version.ps1
           pwsh -NoProfile -File supplemental/scripts/test-package-public-release.ps1
+          pwsh -NoProfile -File supplemental/scripts/test-release-image-reference.ps1
           pwsh -NoProfile -File supplemental/scripts/test-public-release-workflow.ps1
 
       - name: Run Go format and vet checks
