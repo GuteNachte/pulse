@@ -30,7 +30,8 @@ $androidRoot = Join-Path $siteRoot "android"
 $apkPath = Join-Path $androidRoot "app\build\outputs\apk\release\app-release.apk"
 
 if ([string]::IsNullOrWhiteSpace($GradleCommand)) {
-    $GradleCommand = Join-Path $androidRoot (if ($IsWindows) { "gradlew.bat" } else { "gradlew" })
+    $gradleFileName = if ($IsWindows) { "gradlew.bat" } else { "gradlew" }
+    $GradleCommand = Join-Path $androidRoot $gradleFileName
 }
 if ([string]::IsNullOrWhiteSpace($ApkSignerCommand)) {
     $ApkSignerCommand = Get-AndroidSdkBuildTool -Name "apksigner"

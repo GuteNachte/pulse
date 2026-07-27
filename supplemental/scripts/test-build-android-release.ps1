@@ -136,6 +136,42 @@ exit 0
         }
     }
 
+    $defaultGradleRelativePath = if ($IsWindows) {
+        "internal\site\android\gradlew.bat"
+    } else {
+        "internal/site/android/gradlew"
+    }
+    $defaultGradlePath = Join-Path $fixtureRoot $defaultGradleRelativePath
+    if ($IsWindows) {
+        @'
+@echo off
+echo %*>>"%PULSE_TEST_GRADLE_TRACE%"
+if not exist "%PULSE_TEST_REPOSITORY%\internal\site\android\app\build\outputs\apk\release" mkdir "%PULSE_TEST_REPOSITORY%\internal\site\android\app\build\outputs\apk\release"
+>"%PULSE_TEST_REPOSITORY%\internal\site\android\app\build\outputs\apk\release\app-release.apk" echo fake-apk
+exit /b 0
+'@ | Set-Content -LiteralPath $defaultGradlePath -Encoding ascii
+    } else {
+        @'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$PULSE_TEST_GRADLE_TRACE"
+apk_dir="$PULSE_TEST_REPOSITORY/internal/site/android/app/build/outputs/apk/release"
+mkdir -p "$apk_dir"
+printf 'fake-apk' > "$apk_dir/app-release.apk"
+'@ | Set-Content -LiteralPath $defaultGradlePath -Encoding utf8NoBOM
+        chmod +x $defaultGradlePath
+    }
+    $defaultGradleResult = & $builderPath `
+        -Version "1.0.6" `
+        -SigningPropertiesPath $signingPropertiesPath `
+        -RepositoryRoot $fixtureRoot `
+        -ApkSignerCommand $fakeApkSigner `
+        -Aapt2Command $fakeAapt2 `
+        -SkipWebSync
+    if ($defaultGradleResult.ApkPath -ne $apkPath -or -not (Test-Path -LiteralPath $apkPath -PathType Leaf)) {
+        throw "Android Release builder did not use the repository default Gradle wrapper."
+    }
+
     $env:PULSE_TEST_CERTIFICATE_SHA256 = $wrongFingerprint
     Assert-Throws `
         -Label "Wrong signing certificate" `
