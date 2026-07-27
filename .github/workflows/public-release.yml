@@ -117,13 +117,42 @@ jobs:
           pwsh -NoProfile -File supplemental/scripts/test-package-public-release.ps1
           pwsh -NoProfile -File supplemental/scripts/test-public-release-workflow.ps1
 
-      - name: Run Go quality
+      - name: Run Go format and vet checks
         shell: bash
         run: |
           unformatted="$(gofmt -l $(git ls-files '*.go'))"
           test -z "$unformatted" || { echo "$unformatted"; exit 1; }
           go vet -tags=testing ./...
-          go test -tags=testing -count=1 -timeout=300s ./...
+
+      - name: Run non-Hub Go tests
+        shell: pwsh
+        run: |
+          $packages = @(go list ./... | Where-Object { $_ -ne "gutenacht.site/pulse/internal/hub" })
+          if ($LASTEXITCODE -ne 0 -or $packages.Count -eq 0) {
+            throw "Unable to resolve non-Hub Go packages."
+          }
+          & go test -tags=testing -count=1 -timeout=600s @packages
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Run Hub Go test shards
+        shell: bash
+        run: |
+          pids=()
+          for shard in 0 1 2 3; do
+            pwsh -NoProfile -File supplemental/scripts/run-go-test-shard.ps1 \
+              -ShardIndex "$shard" -ShardCount 4 -Timeout 600s &
+            pids+=("$!")
+          done
+
+          status=0
+          for pid in "${pids[@]}"; do
+            if ! wait "$pid"; then
+              status=1
+            fi
+          done
+          exit "$status"
 
       - name: Run web quality
         run: |

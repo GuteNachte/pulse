@@ -15,6 +15,7 @@ jobs:
   go:
     name: Go quality
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -41,8 +42,46 @@ jobs:
         run: npm --prefix internal/site run build
       - name: Run go vet
         run: go vet -tags=testing ./...
-      - name: Run Go tests
-        run: go test -tags=testing -count=1 -timeout=600s ./...
+      - name: Run non-Hub Go tests
+        shell: pwsh
+        run: |
+          $packages = @(go list ./... | Where-Object { $_ -ne "gutenacht.site/pulse/internal/hub" })
+          if ($LASTEXITCODE -ne 0 -or $packages.Count -eq 0) {
+            throw "Unable to resolve non-Hub Go packages."
+          }
+          & go test -tags=testing -count=1 -timeout=600s @packages
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+  hub-tests:
+    name: Hub tests (shard ${{ matrix.shard }} of 4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: 1.26.5
+          cache: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: internal/site/package-lock.json
+      - name: Install web dependencies
+        run: npm ci --prefix internal/site
+      - name: Build web app for Hub embed
+        run: npm --prefix internal/site run build
+      - name: Run Hub Go test shard
+        shell: pwsh
+        run: >-
+          pwsh -NoProfile -File supplemental/scripts/run-go-test-shard.ps1
+          -ShardIndex ${{ matrix.shard }} -ShardCount 4 -Timeout 600s
 
   web:
     name: Web quality
