@@ -2,7 +2,7 @@
 
 审计日期：2026-07-25
 
-**Status: ready**
+Status: ready
 
 ## 审计范围
 

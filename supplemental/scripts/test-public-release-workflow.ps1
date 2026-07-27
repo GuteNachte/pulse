@@ -6,6 +6,7 @@ $qualityWorkflowPath = Join-Path $repoRoot ".github\workflows\quality.yml"
 $vulncheckWorkflowPath = Join-Path $repoRoot ".github\workflows\vulncheck.yml"
 $sitePackagePath = Join-Path $repoRoot "internal\site\package.json"
 $runbookPath = Join-Path $repoRoot "docs\public-release-runbook.md"
+$readinessReportPath = Join-Path $repoRoot "docs\public-readiness-report.md"
 $goTestShardPath = Join-Path $repoRoot "supplemental\scripts\run-go-test-shard.ps1"
 $goTestShardContractPath = Join-Path $repoRoot "supplemental\scripts\test-run-go-test-shard.ps1"
 
@@ -22,10 +23,15 @@ if (-not (Test-Path -LiteralPath $workflowPath)) {
 if (-not (Test-Path -LiteralPath $runbookPath)) {
     throw "Public release runbook does not exist: $runbookPath"
 }
-foreach ($requiredPath in @($qualityWorkflowPath, $vulncheckWorkflowPath, $sitePackagePath, $goTestShardPath, $goTestShardContractPath)) {
+foreach ($requiredPath in @($qualityWorkflowPath, $vulncheckWorkflowPath, $sitePackagePath, $readinessReportPath, $goTestShardPath, $goTestShardContractPath)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
         throw "Public CI contract input does not exist: $requiredPath"
     }
+}
+
+$readinessReport = Get-Content -Raw -LiteralPath $readinessReportPath
+if ($readinessReport -notmatch '(?m)^Status: ready\s*$') {
+    throw "Public readiness report must satisfy the release gate with an exact Status: ready line."
 }
 
 $workflow = Get-Content -Raw -LiteralPath $workflowPath
