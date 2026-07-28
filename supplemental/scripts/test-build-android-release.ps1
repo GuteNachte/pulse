@@ -79,7 +79,12 @@ param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)
 Write-Output "Verifies"
 Write-Output "Verified using v2 scheme (APK Signature Scheme v2): $($env:PULSE_TEST_V2_VERIFIED)"
 Write-Output "Verified using v3 scheme (APK Signature Scheme v3): true"
-Write-Output "Signer #1 certificate SHA-256 digest: $env:PULSE_TEST_CERTIFICATE_SHA256"
+if ($env:PULSE_TEST_WRAP_CERTIFICATE_OUTPUT -eq "true") {
+    Write-Output "Signer #1 certificate SHA-256 digest: $($env:PULSE_TEST_CERTIFICATE_SHA256.Substring(0, 32))"
+    Write-Output "  $($env:PULSE_TEST_CERTIFICATE_SHA256.Substring(32))"
+} else {
+    Write-Output "Signer #1 certificate SHA-256 digest: $env:PULSE_TEST_CERTIFICATE_SHA256"
+}
 if ($env:PULSE_TEST_SECOND_SIGNER -eq "true") {
     Write-Output "Signer #2 certificate SHA-256 digest: $env:PULSE_TEST_CERTIFICATE_SHA256"
 }
@@ -116,6 +121,7 @@ exit 0
     $env:PULSE_TEST_DEBUGGABLE = "false"
     $env:PULSE_TEST_V2_VERIFIED = "true"
     $env:PULSE_TEST_SECOND_SIGNER = "false"
+    $env:PULSE_TEST_WRAP_CERTIFICATE_OUTPUT = "false"
 
     $result = & $builderPath `
         -Version "1.0.6" `
@@ -145,6 +151,20 @@ exit 0
             throw "Gradle trace contains Android signing password."
         }
     }
+
+    $env:PULSE_TEST_WRAP_CERTIFICATE_OUTPUT = "true"
+    $wrappedCertificateResult = & $builderPath `
+        -Version "1.0.6" `
+        -SigningPropertiesPath $signingPropertiesPath `
+        -RepositoryRoot $fixtureRoot `
+        -GradleCommand $fakeGradle `
+        -ApkSignerCommand $fakeApkSigner `
+        -Aapt2Command $fakeAapt2 `
+        -SkipWebSync
+    if ($wrappedCertificateResult.CertificateSha256 -ne $fingerprint) {
+        throw "Android Release builder did not parse a wrapped certificate fingerprint."
+    }
+    $env:PULSE_TEST_WRAP_CERTIFICATE_OUTPUT = "false"
 
     $defaultGradleRelativePath = if ($IsWindows) {
         "internal\site\android\gradlew.bat"
@@ -271,6 +291,7 @@ printf 'fake-apk' > "$apk_dir/app-release.apk"
     Remove-Item Env:PULSE_TEST_DEBUGGABLE -ErrorAction SilentlyContinue
     Remove-Item Env:PULSE_TEST_V2_VERIFIED -ErrorAction SilentlyContinue
     Remove-Item Env:PULSE_TEST_SECOND_SIGNER -ErrorAction SilentlyContinue
+    Remove-Item Env:PULSE_TEST_WRAP_CERTIFICATE_OUTPUT -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $tempRoot) {
         Remove-Item -LiteralPath $tempRoot -Recurse -Force
     }

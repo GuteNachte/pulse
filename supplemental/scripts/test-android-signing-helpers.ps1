@@ -60,11 +60,11 @@ if ($passwordOne -match '[+/=]' -or $passwordTwo -match '[+/=]') {
 
 $stableVersion = Resolve-AndroidReleaseVersion -Version "1.0.6"
 Assert-EqualValue "Stable Android version" "1.0.6" $stableVersion.FullVersion
-$betaVersion = Resolve-AndroidReleaseVersion -Version "1.0.6-beta.2"
-Assert-EqualValue "Beta Android version" "1.0.6-beta.2" $betaVersion.FullVersion
+$betaVersion = Resolve-AndroidReleaseVersion -Version "1.0.6-beta.3"
+Assert-EqualValue "Beta Android version" "1.0.6-beta.3" $betaVersion.FullVersion
 Assert-EqualValue `
     "Explicit Android versionCode" `
-    1000602 `
+    1000603 `
     (Read-AndroidVersionCode -RepositoryRoot (Resolve-Path (Join-Path $PSScriptRoot "..\..")))
 Assert-Throws `
     -Label "Invalid Android release version" `

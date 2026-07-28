@@ -1,11 +1,13 @@
-# Pulse 1.0.6-beta.2 开发记录
+# Pulse 1.0.6-beta.3 开发记录
 
-> `1.0.5` 已于 2026-06-23 固定发布。固定点之后的新改动统一进入 `1.0.6-beta.2` 开发记录，不再回填到 `1.0.5` 正式记录。
+> `1.0.5` 已于 2026-06-23 固定发布。固定点之后的新改动统一进入 `1.0.6-beta.3` 开发记录，不再回填到 `1.0.5` 正式记录。
 
-## 1.0.6-beta.2 开发记录
+## 1.0.6-beta.3 开发记录
 
 ### Web / Hub
 
+- 修复 GitHub Linux runner 对 Android Release APK 的签名者误判：`apksigner` 输出改为逐行原样捕获，签名者编号与证书 SHA-256 分开校验，允许长指纹在同一字段内折行，同时继续严格要求唯一 `Signer #1`、64 位指纹、v2 签名和固定发布证书；`aapt2` 元数据输出同步取消 `Out-String` 格式化，避免终端宽度改变发布结果。
+- `1.0.6-beta.2` 的受保护 tag 已固定到提交 `a4886f620d20bc863037eb80dd7a1fa3ff53792b`，只验证流程成功，但三次正式 publish 尝试均在 Android APK 签名复核阶段被上述跨平台解析问题阻断；GitHub Release、GHCR Hub / Agent 镜像和 FlyNAS 部署均未产生。修复候选统一升为 `1.0.6-beta.3`，Android `versionCode=1000603`，不移动或复用失败版本标签。
 - 合并前发布完整性审查继续加固公开候选链路：validate 输出不可变提交 SHA，受保护 publish job 必须检出同一 SHA，并在审批后、镜像推送前和 GitHub Release 创建前分别确认远端 tag 仍指向同一提交；所有嵌套 PowerShell 子进程逐项 fail-fast，签名文件权限失败会立即停止，避免后续成功命令掩盖前一步失败。
 - 公开包在上传前会直接复验包内 Android APK，而不只相信构建目录源文件；APK 必须包含 v2 签名且只能有一个固定签名者。端到端负向测试会篡改 APK 并重算 manifest / SHA256SUMS，仍要求验证器因签名失效而拒绝；签名初始化失败会清理全部预计算输出和已写入凭据，避免留下部分密钥材料。
 - Android 安装序号改为显式单一来源 `internal/site/android/version-code.txt`，`1.0.6-beta.2` 固定为 `1000602`；Gradle、Release 构建、APK 元数据验证和版本一致性检查共同读取该值，统一升版必须显式提供更大的 `-AndroidVersionCode`，发布门禁还会读取历史 tag 并要求高于已发布最大值，不再允许绕过升版脚本或因预发布后缀产生重复序号。

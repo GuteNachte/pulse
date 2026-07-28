@@ -11,15 +11,16 @@ export type ReleaseNote = {
 
 export const releaseHistory: ReleaseNote[] = [
 	{
-		version: "1.0.6-beta.2",
+		version: "1.0.6-beta.3",
 		date: "2026-07-28",
-		title: "Pulse 1.0.6-beta.2 开发记录",
+		title: "Pulse 1.0.6-beta.3 开发记录",
 		badges: ["公开测试版", "Web / Hub", "图片搜索 Agent", "网络拓扑", "智能家居", "工程质量", "项目独立化"],
 		sections: [
 			{
 				title: "Web / Hub",
 				items: [
-					"1.0.6-beta.2 候选版继续让 Web、Hub、Agent 与 Android 使用同一显式版本；当前只完成发布准备，尚未创建 tag、Release、公开镜像或正式部署。",
+					"1.0.6-beta.3 候选版继续让 Web、Hub、Agent 与 Android 使用同一显式版本；1.0.6-beta.2 的受保护 tag 已保留，但发布被 Android 签名输出解析问题阻断，没有产生 GitHub Release、公开镜像或 FlyNAS 部署。",
+					"修复 GitHub Linux runner 对 Android Release APK 的签名者误判：apksigner 输出改为逐行原样捕获，签名者编号与证书指纹分开校验；长指纹允许在字段内折行，但仍严格要求唯一 Signer #1、64 位 SHA-256、v2 签名和固定发布证书。",
 					"完成 1.0.6-beta.1 普通用户视角的公开安装验收：从 GitHub Release 重新下载全部附件并核对 SHA256，Windows Agent、Android APK、Compose、GHCR 镜像和隔离 Hub 运行态均使用公开产物验证；临时 Hub 持续健康且公开版本正确。",
 					"修复 Windows Docker CLI 直连 GHCR token 端点 EOF 时的镜像误判：发布验证器保留 manifest inspect，失败后回退到 buildx imagetools inspect，两者都失败仍严格阻断；三条路径的回归测试已接入 Quality 与公开发布工作流。",
 					"README 新增普通用户快速开始，直接提供公开 Compose 部署、首次启动、数据持久化、Agent 接入、Android 安装和 SHA256 校验步骤，并链接完整公开安装验收记录。",
@@ -563,6 +564,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "移动端 / Android App",
 				items: [
+					"Android App 随候选版本升到 1.0.6-beta.3，versionCode=1000603；本次不新增原生功能，只修复 Linux 发布 runner 的 APK 签名复核兼容性，长期 Release 证书和覆盖升级身份保持不变。",
 					"Android 安装序号改为显式单一来源，1.0.6-beta.2 使用 1000602；Gradle、Release 构建、APK 校验和版本一致性检查共同读取该值，发布门禁还会比较历史 tag 并要求高于已发布最大值，避免绕过升版脚本或让预发布版本被 Android 视为同一次安装。",
 					"1.0.6-beta.2 候选 APK 改为不可调试的 Release 构建，并固定使用唯一 RSA-4096 发布证书；包名、版本、v2 签名和证书 SHA-256 BF114B3A8EA33125893B5B1E6865B43BFE8DAC89E1BE154F7E48A91D93D51374 由发布脚本自动校验。",
 					"1.0.6-beta.1 使用 Debug 证书，升级到首个正式签名版本时需要卸载一次；完成这次切换后，后续版本固定复用同一证书并支持覆盖升级。",
@@ -577,6 +579,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "Agent / 部署",
 				items: [
+					"1.0.6-beta.2 三次 publish 均在上传附件和推送镜像前停止，因此没有 beta.2 Hub / Agent GHCR 镜像、GitHub Release 或 FlyNAS 部署；1.0.6-beta.3 仍需通过 PR、完整 CI 和新的明确发布授权。",
 					"受保护的公开 publish job 在人工审批后才读取四个 Android Environment Secret，构建并复核最终 Release APK，随后清理 runner 临时签名材料；普通验证和贡献者构建保持无密钥。",
 					"公开包默认收录 app-release.apk，统一发布入口会先完成 Android 签名构建再推送 Hub / Agent，避免单端发布成功后才发现 APK 缺失或签名错误。",
 					"下载版 Windows Agent 已验证版本与 SHA256，但当前没有 Authenticode 数字签名，普通用户仍可能看到 SmartScreen；公开文档已明确该边界，后续签名评估不能用哈希校验代替。",
@@ -595,6 +598,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "文档 / 规则",
 				items: [
+					"公开发布手册记录 1.0.6-beta.2 的不可变 tag、失败运行、真实根因和零公开产物边界，并将后续命令切换到 1.0.6-beta.3；失败标签不移动、不删除、不复用。",
 					"公开发布完整性门禁新增不可变提交 SHA：受保护 publish job 只检出 validate 已验证的提交，并在人工审批后、镜像推送前和 GitHub Release 创建前三次确认远端 tag 仍指向同一提交；仓库 Ruleset 同时禁止 v* tag 更新和删除，嵌套 PowerShell、签名文件权限、包内 APK 和初始化失败清理均改为 fail-closed。",
 					"公开 CI 的 Android 无密钥编译改为先安装前端依赖并同步 Capacitor 工程，再执行 Gradle；Quality 与 Public Release 共用顺序契约，避免本机已有生成文件掩盖全新 Linux runner 的缺失文件问题。",
 					"公开发布与安装验收文档补齐固定证书指纹、四个 Secret 名称、beta.1 一次性卸载、禁止换密钥和 beta.2 尚未发布的真实边界；文档不记录任何密码、私钥或恢复内容。",

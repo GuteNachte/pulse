@@ -2,7 +2,7 @@
 
 ## 当前边界
 
-公开首发版本 `1.0.6-beta.1` 已于 2026-07-27 完成发布；`1.0.6-beta.2` 当前仅完成源码、固定 Android Release 身份和本地候选产物准备，尚未创建 tag、Release、公开镜像或 FlyNAS 部署。本手册继续作为后续公开预发布的执行基线；每次产生新 tag、镜像或 Release 前仍需获得白老板明确授权。后续涉及 `gh repo create`、向公开 remote 执行 `git push`、执行 `docker push` 或 `gh release create` 时同样不得复用本次授权。Pages 暂不启用。
+公开首发版本 `1.0.6-beta.1` 已于 2026-07-27 完成发布。`1.0.6-beta.2` 的受保护 tag 已固定到提交 `a4886f620d20bc863037eb80dd7a1fa3ff53792b`，但 publish 在 Android APK 签名复核阶段失败，没有创建 GitHub Release、公开镜像或 FlyNAS 部署；该 tag 不移动、不删除、不复用。后续修复统一进入 `1.0.6-beta.3` 候选。本手册继续作为后续公开预发布的执行基线；每次产生新 tag、镜像或 Release 前仍需获得白老板明确授权。后续涉及 `gh repo create`、向公开 remote 执行 `git push`、执行 `docker push` 或 `gh release create` 时同样不得复用旧授权。Pages 暂不启用。
 
 仓库外的安全镜像、历史改写映射和两份净化克隆必须继续保留。公开发布失败、撤回或重做时，不删除这些本地保护材料。
 
@@ -52,7 +52,7 @@ ANDROID_RELEASE_KEY_PASSWORD
 ## 本地无发布验证
 
 ```powershell
-pwsh -NoProfile -File supplemental/scripts/check-version-consistency.ps1 -Version 1.0.6-beta.2
+pwsh -NoProfile -File supplemental/scripts/check-version-consistency.ps1 -Version 1.0.6-beta.3
 pwsh -NoProfile -File supplemental/scripts/test-android-signing-helpers.ps1
 pwsh -NoProfile -File supplemental/scripts/test-build-android-release.ps1
 pwsh -NoProfile -File supplemental/scripts/test-package-public-release.ps1
@@ -64,10 +64,10 @@ pwsh -NoProfile -File supplemental/scripts/audit-public-repository.ps1
 
 ```powershell
 pwsh -NoProfile -File supplemental/scripts/package-public-release.ps1 `
-  -Version 1.0.6-beta.2 `
-  -HubImage ghcr.io/OWNER/pulse-hub:1.0.6-beta.2 `
-  -AgentImage ghcr.io/OWNER/pulse-agent:1.0.6-beta.2 `
-  -OutputDirectory build/public-release/1.0.6-beta.2
+  -Version 1.0.6-beta.3 `
+  -HubImage ghcr.io/OWNER/pulse-hub:1.0.6-beta.3 `
+  -AgentImage ghcr.io/OWNER/pulse-agent:1.0.6-beta.3 `
+  -OutputDirectory build/public-release/1.0.6-beta.3
 ```
 
 `OWNER` 必须在绑定仓库身份后替换为小写 GitHub owner。离线包包含 Windows Agent、Android APK、两份公开 Compose、许可证、第三方声明、`release-manifest.json` 和 `SHA256SUMS`。
@@ -77,7 +77,7 @@ pwsh -NoProfile -File supplemental/scripts/package-public-release.ps1 `
 1. 再次确认安全审计、许可证、版本和发布包全部通过。
 2. 确认工作树干净，待发布提交就是授权摘要中的 commit。
 3. 在 GitHub 上先以 `workflow_dispatch` 且 `publish=false` 跑一遍默认只验证流程。
-4. 获得明确授权后创建精确 tag `v1.0.6-beta.2` 并推送。
+4. 获得明确授权后创建精确 tag `v1.0.6-beta.3` 并推送。
 5. 在 `public-release` Environment 审批页核对版本、commit、GHCR 镜像名和附件，再批准发布 job。
 6. 发布后核对两个 GHCR 镜像、GitHub prerelease、附件 SHA256、公开 Compose 和全新环境部署。
 
@@ -92,6 +92,14 @@ pwsh -NoProfile -File supplemental/scripts/package-public-release.ps1 `
 - 两个 GHCR manifest 均已使用匿名 token 验证可读取，普通用户不需要登录即可拉取；本次未启用 Pages，也未部署 FlyNAS。
 - 普通用户视角的公开附件、Windows Agent、Android APK、Compose、GHCR 拉取和隔离 Hub 运行态验收见 `docs/public-installation-acceptance.md`；Android / Windows 签名与未执行的真机、服务安装和独立 Linux 主机项均在该文档中明确保留为限制。
 
+## 1.0.6-beta.2 发布尝试记录
+
+- 发布提交与受保护 tag：`a4886f620d20bc863037eb80dd7a1fa3ff53792b` / `v1.0.6-beta.2`；annotated tag object 为 `5fab58bf6e73700dd1ced4c74f033cc3c0d06b4a`。
+- 只验证演练 [Run 30361156396](https://github.com/GuteNachte/pulse/actions/runs/30361156396) 成功，Publish 按预期跳过。
+- tag 触发的 [Run 30361881819](https://github.com/GuteNachte/pulse/actions/runs/30361881819) 两次尝试和重新同步 Android Secret 后的 [Run 30363491367](https://github.com/GuteNachte/pulse/actions/runs/30363491367) 均通过 Validate，但在 `Build and verify signed Android Release APK` 失败。
+- 最终密钥在本机以同一 APK 校验通过，证书 SHA-256 与仓库固定值一致；根因是 Linux runner 上长 `apksigner` 输出经过 `Out-String` 后发生格式变化，旧正则把合法单签名 APK 误判为签名者数量异常。
+- 失败发生在附件上传、GHCR 推送和 GitHub Release 创建之前，因此不存在 `1.0.6-beta.2` Release、Hub / Agent 镜像或 FlyNAS 部署，也没有需要撤回的公开半成品。
+
 ## 首次发布故障复盘
 
 1. 就绪报告状态是精确契约：必须保留独立纯文本行 `Status: ready`，不能添加 Markdown 加粗等装饰；本地工作流契约必须读取真实报告文件验证。
@@ -99,6 +107,7 @@ pwsh -NoProfile -File supplemental/scripts/package-public-release.ps1 `
 3. 构建脚本不得临时改变 Git 跟踪模式：Linux 需要执行的 Gradle Wrapper 应在索引中固定为 `100755`，发布工作流契约同步锁定该模式，构建后继续检查工作树干净。
 4. 测试命令桩不能边写边执行：先在临时文件完整写入、关闭并授权，再原子重命名到最终路径，避免 Linux 临时文件系统出现 `text file busy`。
 5. Windows Docker CLI 的 `docker manifest inspect` 可能因 GHCR token 端点 EOF 误报镜像不存在；验证器先保留该检查，失败后回退到 `docker buildx imagetools inspect`，两者都失败才判定镜像不可用。
+6. Android 工具输出不能经过依赖终端宽度的格式化再解析：`apksigner` 和 `aapt2` 必须逐行原样捕获；签名者编号与 SHA-256 字段分开验证，允许长摘要折行，但最终仍严格要求唯一签名者、64 位指纹、v2 签名和固定证书一致。
 
 ## 回滚与撤回
 
