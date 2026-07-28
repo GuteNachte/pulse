@@ -15,6 +15,9 @@
 
 即使 tag 正确，发布 job 仍要求：
 
+- 仓库 Ruleset 对 `v*` tag 禁止更新和删除；工作流还会在审批后、镜像推送前和 GitHub Release 创建前三次核对远端 tag 与已验证提交 SHA。
+- 当前 Android `versionCode` 必须大于所有历史发布 tag 的最大值；`1.0.6-beta.1` 的迁移基线按 `10006` 处理。
+
 1. 仓库变量 `PUBLIC_RELEASE_ENABLED` 明确设置为 `true`。
 2. GitHub Environment `public-release` 已创建，并配置白老板认可的 Required reviewers。
 3. `public-release` 已配置四个 Android 签名 Secret，名称和固定证书指纹通过发布前核对。

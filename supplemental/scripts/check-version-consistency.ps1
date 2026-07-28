@@ -1,6 +1,7 @@
 param(
     [string]$Version = "",
-    [string]$RepositoryRoot = ""
+    [string]$RepositoryRoot = "",
+    [switch]$RequireAndroidVersionCodeIncrease
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,6 +12,7 @@ $repoRoot = if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
     Resolve-Path -LiteralPath $RepositoryRoot
 }
 . (Join-Path $PSScriptRoot "release-script-helpers.ps1")
+. (Join-Path $PSScriptRoot "android-signing-helpers.ps1")
 $textFileCache = @{}
 
 function Read-JsonFile {
@@ -129,6 +131,12 @@ $androidVersionCodeText = if (Test-Path -LiteralPath $androidVersionCodePath -Pa
 $androidVersionCode = 0
 if (-not [int]::TryParse($androidVersionCodeText, [ref]$androidVersionCode) -or $androidVersionCode -le 0) {
     throw "internal/site/android/version-code.txt must contain a positive 32-bit integer."
+}
+if ($RequireAndroidVersionCodeIncrease) {
+    Assert-AndroidVersionCodeMonotonic `
+        -Version $Version `
+        -VersionCode $androidVersionCode `
+        -RepositoryRoot $repoRoot | Out-Null
 }
 $escapedVersion = [regex]::Escape($Version)
 $escapedVersionCode = [regex]::Escape([string]$androidVersionCode)

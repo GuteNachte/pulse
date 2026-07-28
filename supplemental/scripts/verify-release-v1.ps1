@@ -6,6 +6,8 @@ param(
     [string]$DataDir = "pulse_data",
     [string]$HubUrl = "",
     [string]$PublicReleaseDirectory = "",
+    [string]$ApkSignerCommand = "",
+    [string]$Aapt2Command = "",
     [switch]$SkipRegistry,
     [switch]$SkipAgentArtifacts,
     [switch]$SkipAndroidApk
@@ -119,7 +121,12 @@ function Test-AndroidReleaseArtifact {
     )
 
     try {
-        $result = Test-AndroidReleaseApk -Version $Version -ApkPath $ApkPath -RepositoryRoot $repoRoot
+        $result = Test-AndroidReleaseApk `
+            -Version $Version `
+            -ApkPath $ApkPath `
+            -RepositoryRoot $repoRoot `
+            -ApkSignerCommand $ApkSignerCommand `
+            -Aapt2Command $Aapt2Command
         Write-Host "[OK] $Label verified: $($result.CertificateSha256)"
     } catch {
         Add-VerifyFailure $Failures $_.Exception.Message

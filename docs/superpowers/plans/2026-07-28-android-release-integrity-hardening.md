@@ -103,3 +103,19 @@
 - [x] Record all integrity hardening in release notes and About history.
 - [x] Run workflow, signing, initialization, package, audit, Biome, build, version, and `git diff --check` gates.
 - [ ] Commit and push only after all gates pass, then wait for PR checks before merging.
+
+### Task 9: Close review follow-up integrity gaps
+
+**Files:**
+- Modify: `.github/workflows/public-release.yml`
+- Modify: `supplemental/scripts/android-signing-helpers.ps1`
+- Modify: `supplemental/scripts/check-version-consistency.ps1`
+- Modify: `supplemental/scripts/verify-release-v1.ps1`
+- Modify: related workflow, version, package, runbook, release-note and About tests / documentation
+
+- [x] Add failing contracts for repeated tag-to-SHA checks, historical `versionCode` monotonicity, and a rehashed but unsigned packaged APK.
+- [x] Recheck the remote tag before the first image push and immediately before GitHub Release creation.
+- [x] Require the explicit Android `versionCode` to exceed all published tag values, with `1.0.6-beta.1 = 10006` as the migration baseline.
+- [x] Execute the public package verifier against a tampered APK after regenerating manifest and checksum metadata, and require signature rejection.
+- [x] Protect `v*` tags from update and deletion with an active GitHub repository Ruleset.
+- [x] Re-run the complete local gate; remote checks run again after the follow-up commit is pushed.

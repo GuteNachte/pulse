@@ -42,6 +42,59 @@ function Read-AndroidVersionCode {
     return $versionCode
 }
 
+function Assert-AndroidVersionCodeMonotonic {
+    param(
+        [Parameter(Mandatory)][string]$Version,
+        [Parameter(Mandatory)][ValidateRange(1, 2147483647)][int]$VersionCode,
+        [Parameter(Mandatory)][string]$RepositoryRoot,
+        [string]$GitCommand = "git"
+    )
+
+    $RepositoryRoot = (Resolve-Path -LiteralPath $RepositoryRoot).Path
+    $tags = @(& $GitCommand -C $RepositoryRoot tag --list "v*" 2>$null)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to read published tags for Android versionCode validation."
+    }
+
+    $currentTag = "v$Version"
+    $publishedCodes = [System.Collections.Generic.List[int]]::new()
+    # beta.1 predates version-code.txt and shipped with the legacy derived code.
+    $publishedCodes.Add(10006)
+    foreach ($tag in $tags) {
+        $tag = ([string]$tag).Trim()
+        if ($tag -eq $currentTag -or $tag -notmatch '^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$') {
+            continue
+        }
+
+        $legacyMajor = [int]$Matches.major
+        $legacyMinor = [int]$Matches.minor
+        $legacyPatch = [int]$Matches.patch
+        $tagCodeText = (& $GitCommand -C $RepositoryRoot show "$tag`:internal/site/android/version-code.txt" 2>$null | Out-String).Trim()
+        $tagCode = 0
+        if ($LASTEXITCODE -eq 0) {
+            if (-not [int]::TryParse($tagCodeText, [ref]$tagCode) -or $tagCode -le 0) {
+                throw "Published tag $tag contains an invalid Android versionCode."
+            }
+        } else {
+            if ($legacyMinor -gt 99 -or $legacyPatch -gt 99) {
+                throw "Unable to derive the legacy Android versionCode for $tag."
+            }
+            $tagCode = ($legacyMajor * 10000) + ($legacyMinor * 100) + $legacyPatch
+        }
+        $publishedCodes.Add($tagCode)
+    }
+
+    $previousMaximum = ($publishedCodes | Measure-Object -Maximum).Maximum
+    if ($VersionCode -le $previousMaximum) {
+        throw "Android versionCode $VersionCode must be greater than published maximum $previousMaximum."
+    }
+    Write-Host "[OK] Android versionCode $VersionCode is greater than published maximum $previousMaximum"
+    return [pscustomobject]@{
+        VersionCode = $VersionCode
+        PreviousMaximum = $previousMaximum
+    }
+}
+
 function ConvertTo-CanonicalCertificateFingerprint {
     param([Parameter(Mandatory)][string]$Fingerprint)
 

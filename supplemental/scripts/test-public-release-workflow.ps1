@@ -121,6 +121,7 @@ foreach ($required in @(
     'git fetch --force origin "refs/tags/$tag`:refs/tags/$tag"',
     '$tagSha = (git rev-parse "$tag^{commit}").Trim()',
     'if ($tagSha -ne $validatedSha)',
+    '-RequireAndroidVersionCodeIncrease',
     'HUB_BUILD_COMMIT=${{ needs.validate.outputs.validated_sha }}'
 )) {
     Assert-Contains "Immutable public release workflow" $workflow $required
@@ -136,6 +137,21 @@ if ($chmodIndex -lt 0 -or $chmodGuardIndex -lt $chmodIndex -or ($chmodGuardIndex
 }
 if ($workflow.Contains('ref: ${{ needs.validate.outputs.tag }}')) {
     throw "Publish must check out the immutable validated commit instead of resolving the tag again."
+}
+$tagGuardPattern = '(?ms)^\s+- name: (?<name>Require tag to match validated commit|Reconfirm release tag before publishing artifacts|Reconfirm release tag before creating GitHub Release)\s+shell: pwsh\s+run: \|\s+.*?git fetch --force origin "refs/tags/\$tag`:refs/tags/\$tag".*?if \(\$tagSha -ne \$validatedSha\)'
+$tagGuards = [regex]::Matches($workflow, $tagGuardPattern)
+if ($tagGuards.Count -ne 3) {
+    throw "Publish must verify the remote release tag after approval, before artifact publication, and immediately before creating the GitHub Release."
+}
+$imagePushIndex = $workflow.IndexOf('docker buildx build --platform linux/amd64 --push', [System.StringComparison]::Ordinal)
+$releaseCreateIndex = $workflow.IndexOf('gh release create', [System.StringComparison]::Ordinal)
+$prePublishGuardIndex = $workflow.IndexOf('- name: Reconfirm release tag before publishing artifacts', [System.StringComparison]::Ordinal)
+$preReleaseGuardIndex = $workflow.IndexOf('- name: Reconfirm release tag before creating GitHub Release', [System.StringComparison]::Ordinal)
+if ($prePublishGuardIndex -lt 0 -or $imagePushIndex -lt $prePublishGuardIndex) {
+    throw "The release tag must be rechecked immediately before the first image push."
+}
+if ($preReleaseGuardIndex -lt $imagePushIndex -or $releaseCreateIndex -lt $preReleaseGuardIndex) {
+    throw "The release tag must be rechecked after image publication and immediately before GitHub Release creation."
 }
 foreach ($required in @(
     "ANDROID_RELEASE_KEYSTORE_BASE64",
@@ -229,6 +245,7 @@ Assert-Contains "Quality workflow" $qualityWorkflow "-ShardCount 4"
 Assert-Contains "Quality workflow" $qualityWorkflow "-Timeout 600s"
 foreach ($required in @(
     "test-android-signing-helpers.ps1",
+    "test-android-version-code-monotonic.ps1",
     "test-initialize-android-release-signing.ps1",
     "test-build-android-release.ps1"
 )) {

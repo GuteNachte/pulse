@@ -2,7 +2,8 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $packagerPath = Join-Path $PSScriptRoot "package-public-release.ps1"
-$version = "1.0.6-beta.1"
+$verifierPath = Join-Path $PSScriptRoot "verify-release-v1.ps1"
+$version = "1.0.6-beta.2"
 $hubImage = "ghcr.io/local-validation/pulse-hub:$version"
 $agentImage = "ghcr.io/local-validation/pulse-agent:$version"
 $buildTimestamp = "2026-07-25T00:00:00Z"
@@ -57,6 +58,24 @@ function Get-DirectoryHashes {
         $result[$file.Name] = (Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName).Hash
     }
     return $result
+}
+
+function Update-PackageIntegrityMetadata {
+    param([string]$PackageRoot)
+
+    $manifestPath = Join-Path $PackageRoot "release-manifest.json"
+    $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+    foreach ($artifact in @($manifest.artifacts)) {
+        $artifactPath = Join-Path $PackageRoot $artifact.name
+        $artifact.size = (Get-Item -LiteralPath $artifactPath).Length
+        $artifact.sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $artifactPath).Hash.ToLowerInvariant()
+    }
+    $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding utf8NoBOM
+
+    $checksumLines = foreach ($file in Get-ChildItem -LiteralPath $PackageRoot -File | Where-Object Name -ne "SHA256SUMS" | Sort-Object Name) {
+        "{0}  {1}" -f (Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName).Hash.ToLowerInvariant(), $file.Name
+    }
+    $checksumLines | Set-Content -LiteralPath (Join-Path $PackageRoot "SHA256SUMS") -Encoding ascii
 }
 
 $fixtureRoot = New-PackageFixture
@@ -124,6 +143,55 @@ try {
     Assert-EqualValue "Reproducible file set" ($hashesOne.Keys -join "|") ($hashesTwo.Keys -join "|")
     foreach ($name in $hashesOne.Keys) {
         Assert-EqualValue "Reproducible hash $name" $hashesOne[$name] $hashesTwo[$name]
+    }
+
+    $toolRoot = Join-Path $fixtureRoot "tools"
+    New-Item -ItemType Directory -Path $toolRoot -Force | Out-Null
+    $fakeApkSigner = Join-Path $toolRoot "fake-apksigner.ps1"
+    @'
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)
+$apkPath = $Remaining[-1]
+$content = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($apkPath))
+Write-Output "Verifies"
+Write-Output "Verified using v2 scheme (APK Signature Scheme v2): $($content -ne 'tampered-apk')"
+Write-Output "Signer #1 certificate SHA-256 digest: BF114B3A8EA33125893B5B1E6865B43BFE8DAC89E1BE154F7E48A91D93D51374"
+exit 0
+'@ | Set-Content -LiteralPath $fakeApkSigner -Encoding utf8NoBOM
+    $fakeAapt2 = Join-Path $toolRoot "fake-aapt2.ps1"
+    @'
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)
+Write-Output "package: name='site.gutenacht.pulse' versionCode='1000602' versionName='1.0.6-beta.2'"
+exit 0
+'@ | Set-Content -LiteralPath $fakeAapt2 -Encoding utf8NoBOM
+
+    $validVerify = Invoke-PwshFile $verifierPath @(
+        "-Version", $version,
+        "-PublicReleaseDirectory", $outputOne,
+        "-SkipRegistry",
+        "-SkipAgentArtifacts",
+        "-SkipAndroidApk",
+        "-ApkSignerCommand", $fakeApkSigner,
+        "-Aapt2Command", $fakeAapt2
+    )
+    Assert-Success "Packaged APK verification" $validVerify
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $outputOne "pulse-android-$version.apk"),
+        "tampered-apk",
+        [System.Text.Encoding]::ASCII
+    )
+    Update-PackageIntegrityMetadata -PackageRoot $outputOne
+    $tamperedVerify = Invoke-PwshFile $verifierPath @(
+        "-Version", $version,
+        "-PublicReleaseDirectory", $outputOne,
+        "-SkipRegistry",
+        "-SkipAgentArtifacts",
+        "-SkipAndroidApk",
+        "-ApkSignerCommand", $fakeApkSigner,
+        "-Aapt2Command", $fakeAapt2
+    )
+    if ($tamperedVerify.ExitCode -eq 0 -or $tamperedVerify.Output -notlike "*verified v2 signature*") {
+        throw "Public release verifier did not reject a rehashed but unsigned packaged APK: $($tamperedVerify.Output)"
     }
 
     Write-Host "Public release package contract passed."

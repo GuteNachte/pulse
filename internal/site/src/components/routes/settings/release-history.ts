@@ -563,11 +563,11 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "移动端 / Android App",
 				items: [
-					"Android 安装序号改为显式单一来源，1.0.6-beta.2 使用 1000602；Gradle、Release 构建、APK 校验和版本一致性检查共同读取该值，后续统一升版必须主动提供更大的序号，避免预发布版本被 Android 视为同一次安装。",
+					"Android 安装序号改为显式单一来源，1.0.6-beta.2 使用 1000602；Gradle、Release 构建、APK 校验和版本一致性检查共同读取该值，发布门禁还会比较历史 tag 并要求高于已发布最大值，避免绕过升版脚本或让预发布版本被 Android 视为同一次安装。",
 					"1.0.6-beta.2 候选 APK 改为不可调试的 Release 构建，并固定使用唯一 RSA-4096 发布证书；包名、版本、v2 签名和证书 SHA-256 BF114B3A8EA33125893B5B1E6865B43BFE8DAC89E1BE154F7E48A91D93D51374 由发布脚本自动校验。",
 					"1.0.6-beta.1 使用 Debug 证书，升级到首个正式签名版本时需要卸载一次；完成这次切换后，后续版本固定复用同一证书并支持覆盖升级。",
 					"1.0.6-beta.1 专项验收确认其使用通用 Android Debug 证书且应用可调试；这一历史限制已由 beta.2 候选版的受保护 Release 密钥、不可调试构建和固定指纹门禁收口，但从 beta.1 切换时仍需卸载一次。",
-					"公开预发布会用完整 versionName 与显式 versionCode 构建 Android APK，并在生成公开包后直接复验包内 APK metadata、v2 签名、唯一签名者和固定证书；本轮仍无 Android 原生功能改动。",
+					"公开预发布会用完整 versionName 与显式 versionCode 构建 Android APK，并在生成公开包后直接复验包内 APK metadata、v2 签名、唯一签名者和固定证书；端到端负向测试会篡改 APK 并重算校验元数据，仍要求签名门禁拒绝，本轮无 Android 原生功能改动。",
 					"本轮公开仓库审计不改变 Android 原生能力；Android App 已随 Hub、Agent 与 Web 使用同一 1.0.6-beta.1 版本统一构建和验证，公开 prerelease 已提供对应 APK。",
 					"本轮没有新增 Android 原生能力；移动端 WebView 跟随 Web / Hub 1.0.6 使用相同 ONT 严格字段、接口状态和关系规则，并完成 390 × 844 视口验收。",
 					"移动端 WebView 同步使用 LAN CIDR 示例、简洁的位置选择与统一备注输入框。",
@@ -595,7 +595,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "文档 / 规则",
 				items: [
-					"公开发布完整性门禁新增不可变提交 SHA：受保护 publish job 只检出 validate 已验证的提交，并在人工审批结束后重新确认 tag 仍指向同一提交；嵌套 PowerShell、签名文件权限、包内 APK 和初始化失败清理均改为 fail-closed。",
+					"公开发布完整性门禁新增不可变提交 SHA：受保护 publish job 只检出 validate 已验证的提交，并在人工审批后、镜像推送前和 GitHub Release 创建前三次确认远端 tag 仍指向同一提交；仓库 Ruleset 同时禁止 v* tag 更新和删除，嵌套 PowerShell、签名文件权限、包内 APK 和初始化失败清理均改为 fail-closed。",
 					"公开 CI 的 Android 无密钥编译改为先安装前端依赖并同步 Capacitor 工程，再执行 Gradle；Quality 与 Public Release 共用顺序契约，避免本机已有生成文件掩盖全新 Linux runner 的缺失文件问题。",
 					"公开发布与安装验收文档补齐固定证书指纹、四个 Secret 名称、beta.1 一次性卸载、禁止换密钥和 beta.2 尚未发布的真实边界；文档不记录任何密码、私钥或恢复内容。",
 					"部署回滚目标按当前固定稳定版修正为 1.0.5，Hub 与 Agent 必须同步回滚，不再沿用过期的 1.0.4 示例。",

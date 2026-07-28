@@ -135,6 +135,8 @@ jobs:
         run: |
           pwsh -NoProfile -File supplemental/scripts/test-android-signing-helpers.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File supplemental/scripts/test-android-version-code-monotonic.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pwsh -NoProfile -File supplemental/scripts/test-initialize-android-release-signing.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pwsh -NoProfile -File supplemental/scripts/test-build-android-release.ps1
