@@ -19,7 +19,6 @@ function Resolve-PulseVersion {
     return [pscustomobject][ordered]@{
         BaseVersion = $baseVersion
         FullVersion = $Version
-        AndroidVersionCode = ($major * 10000) + ($minor * 100) + $patch
         IsPrerelease = $match.Groups["suffix"].Success
     }
 }

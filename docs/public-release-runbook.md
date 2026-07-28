@@ -2,7 +2,7 @@
 
 ## 当前边界
 
-公开首发版本 `1.0.6-beta.1` 已于 2026-07-27 完成发布。本手册继续作为后续公开预发布的执行基线；每次产生新 tag、镜像或 Release 前仍需获得白老板明确授权。后续涉及 `gh repo create`、向公开 remote 执行 `git push`、执行 `docker push` 或 `gh release create` 时同样不得复用本次授权。Pages 暂不启用，本次发布也不包含 FlyNAS 部署。
+公开首发版本 `1.0.6-beta.1` 已于 2026-07-27 完成发布；`1.0.6-beta.2` 当前仅完成源码、固定 Android Release 身份和本地候选产物准备，尚未创建 tag、Release、公开镜像或 FlyNAS 部署。本手册继续作为后续公开预发布的执行基线；每次产生新 tag、镜像或 Release 前仍需获得白老板明确授权。后续涉及 `gh repo create`、向公开 remote 执行 `git push`、执行 `docker push` 或 `gh release create` 时同样不得复用本次授权。Pages 暂不启用。
 
 仓库外的安全镜像、历史改写映射和两份净化克隆必须继续保留。公开发布失败、撤回或重做时，不删除这些本地保护材料。
 
@@ -10,14 +10,18 @@
 
 `.github/workflows/public-release.yml` 支持两种入口：
 
-- `workflow_dispatch`：`publish` 默认是 `false`，默认只验证、构建并生成离线发布包，不执行外部发布。
+- `workflow_dispatch`：`publish` 默认是 `false`，默认执行无密钥仓库审计、版本 / Go / Web / Windows Agent 契约和 Android Debug 编译检查；不会读取 Release 密钥、不会生成已签名公开包，也不会执行外部发布。
 - `v*.*.*-*.*` 预发布 tag：只有 tag 与 `internal/site/package.json` 完全一致时才可进入发布候选。
 
 即使 tag 正确，发布 job 仍要求：
 
+- 仓库 Ruleset 对 `v*` tag 禁止更新和删除；工作流还会在审批后、镜像推送前和 GitHub Release 创建前三次核对远端 tag 与已验证提交 SHA。
+- 当前 Android `versionCode` 必须大于所有历史发布 tag 的最大值；`1.0.6-beta.1` 的迁移基线按 `10006` 处理。
+
 1. 仓库变量 `PUBLIC_RELEASE_ENABLED` 明确设置为 `true`。
 2. GitHub Environment `public-release` 已创建，并配置白老板认可的 Required reviewers。
-3. 验证 job 已通过仓库审计、`Status: ready` 报告、版本一致性、Go / Web 测试、Windows Agent、Android APK 和公开包校验。
+3. `public-release` 已配置四个 Android 签名 Secret，名称和固定证书指纹通过发布前核对。
+4. 验证 job 已通过仓库审计、`Status: ready` 报告、版本一致性、Go / Web 测试、Windows Agent、Android 无密钥契约和公开包校验。
 
 未同时满足这些条件时，工作流不会获得 `contents: write` 或 `packages: write` 权限。
 
@@ -32,10 +36,25 @@
 5. 创建仓库变量 `PUBLIC_RELEASE_ENABLED=true`。这不是 Secret；工作流使用 GitHub 自动提供的 `GITHUB_TOKEN`，首发不需要额外 PAT。
 6. 确认 GHCR 包名为当前仓库 owner 下的 `pulse-hub` 和 `pulse-agent`，并在首次推送后检查包可见性。
 
+### Android Release 身份
+
+公开仓库只保存证书 SHA-256 `BF114B3A8EA33125893B5B1E6865B43BFE8DAC89E1BE154F7E48A91D93D51374`，不保存 PKCS12 或口令。`public-release` Environment 必须配置：
+
+```text
+ANDROID_RELEASE_KEYSTORE_BASE64
+ANDROID_RELEASE_STORE_PASSWORD
+ANDROID_RELEASE_KEY_ALIAS
+ANDROID_RELEASE_KEY_PASSWORD
+```
+
+验证 job 不读取这些 Secret；只有通过人工审批的 publish job 才把签名材料写入 runner 临时目录，构建并复核 Release APK，最后在 `if: always()` 清理。Secret 配置后只核对名称和更新时间，不读取或输出值。任何指纹不一致都必须停止发布，不能更换密钥或修改固定指纹绕过。
+
 ## 本地无发布验证
 
 ```powershell
-pwsh -NoProfile -File supplemental/scripts/check-version-consistency.ps1 -Version 1.0.6-beta.1
+pwsh -NoProfile -File supplemental/scripts/check-version-consistency.ps1 -Version 1.0.6-beta.2
+pwsh -NoProfile -File supplemental/scripts/test-android-signing-helpers.ps1
+pwsh -NoProfile -File supplemental/scripts/test-build-android-release.ps1
 pwsh -NoProfile -File supplemental/scripts/test-package-public-release.ps1
 pwsh -NoProfile -File supplemental/scripts/test-public-release-workflow.ps1
 pwsh -NoProfile -File supplemental/scripts/audit-public-repository.ps1
@@ -45,10 +64,10 @@ pwsh -NoProfile -File supplemental/scripts/audit-public-repository.ps1
 
 ```powershell
 pwsh -NoProfile -File supplemental/scripts/package-public-release.ps1 `
-  -Version 1.0.6-beta.1 `
-  -HubImage ghcr.io/OWNER/pulse-hub:1.0.6-beta.1 `
-  -AgentImage ghcr.io/OWNER/pulse-agent:1.0.6-beta.1 `
-  -OutputDirectory build/public-release/1.0.6-beta.1
+  -Version 1.0.6-beta.2 `
+  -HubImage ghcr.io/OWNER/pulse-hub:1.0.6-beta.2 `
+  -AgentImage ghcr.io/OWNER/pulse-agent:1.0.6-beta.2 `
+  -OutputDirectory build/public-release/1.0.6-beta.2
 ```
 
 `OWNER` 必须在绑定仓库身份后替换为小写 GitHub owner。离线包包含 Windows Agent、Android APK、两份公开 Compose、许可证、第三方声明、`release-manifest.json` 和 `SHA256SUMS`。
@@ -58,7 +77,7 @@ pwsh -NoProfile -File supplemental/scripts/package-public-release.ps1 `
 1. 再次确认安全审计、许可证、版本和发布包全部通过。
 2. 确认工作树干净，待发布提交就是授权摘要中的 commit。
 3. 在 GitHub 上先以 `workflow_dispatch` 且 `publish=false` 跑一遍默认只验证流程。
-4. 获得明确授权后创建精确 tag `v1.0.6-beta.1` 并推送。
+4. 获得明确授权后创建精确 tag `v1.0.6-beta.2` 并推送。
 5. 在 `public-release` Environment 审批页核对版本、commit、GHCR 镜像名和附件，再批准发布 job。
 6. 发布后核对两个 GHCR 镜像、GitHub prerelease、附件 SHA256、公开 Compose 和全新环境部署。
 

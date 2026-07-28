@@ -13,7 +13,7 @@ npm.cmd --prefix internal/site run check -- --max-diagnostics=200
 npm.cmd --prefix internal/site run build
 npm.cmd --prefix internal/site run android:sync
 go test -tags=testing -count=1 -timeout=240s ./...
-powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\check-version-consistency.ps1 -Version 1.0.6-beta.1
+powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\check-version-consistency.ps1 -Version 1.0.6-beta.2
 ```
 
 2. 备份当前正式数据。FlyNAS 标准目录：
@@ -31,12 +31,28 @@ docker compose images
 docker compose ps
 ```
 
+### Android Release 签名门禁
+
+- 固定证书 SHA-256 为 `BF114B3A8EA33125893B5B1E6865B43BFE8DAC89E1BE154F7E48A91D93D51374`，仓库以 `internal/site/android/release-certificate.sha256` 为唯一公开校验值。
+- 签名属性和 PKCS12 必须位于仓库外；密钥、密码、恢复清单和 Base64 内容不得进入 Git、日志、Issue 或聊天记录。
+- `1.0.6-beta.1` 使用 Debug 证书，切换到正式签名版本时需要卸载一次；之后所有版本固定复用同一证书，禁止重新生成或更换密钥。
+
+内部发布者先用受控的仓库外属性构建并验证：
+
+```powershell
+pwsh -NoProfile -File supplemental\scripts\build-android-release.ps1 `
+  -Version 1.0.6-beta.2 `
+  -SigningPropertiesPath '<仓库外 signing.properties 的绝对路径>'
+```
+
+脚本必须确认包名 `site.gutenacht.pulse`、`versionName=1.0.6-beta.2`、`versionCode=10006`、`debuggable=false`、v2 签名有效且证书指纹完全匹配。普通贡献者和验证 job 不需要也不应接触密钥。
+
 ## 2. 统一发布
 
 正式发布只走统一入口，同一版本同步构建 Hub、Agent、Web 前端和 Android App：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\publish-release-v1.ps1 -Version 1.0.6-beta.1
+pwsh -NoProfile -File supplemental\scripts\publish-release-v1.ps1 -Version 1.0.6-beta.2 -AndroidSigningPropertiesPath '<仓库外 signing.properties 的绝对路径>'
 ```
 
 正式发布不要使用 `-SkipPush`、`-SkipAgentBuild`、`-SkipLinuxAgentImageBuild` 或 `-SkipAndroidAppBuild`。这些跳过项只允许和 `-DryRun` 一起用于本地演练。
@@ -46,19 +62,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\publish
 发布完成后先在本机验证产物和远端镜像 tag：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-release-v1.ps1 -Version 1.0.6-beta.1
+powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-release-v1.ps1 -Version 1.0.6-beta.2
 ```
 
 如果只想在本地演练、还没有推 Harbor，可临时跳过 registry：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-release-v1.ps1 -Version 1.0.6-beta.1 -SkipRegistry
+powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-release-v1.ps1 -Version 1.0.6-beta.2 -SkipRegistry
 ```
 
 如果要验证某个正在运行的 Hub：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-release-v1.ps1 -Version 1.0.6-beta.1 -HubUrl http://127.0.0.1:8090
+powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-release-v1.ps1 -Version 1.0.6-beta.2 -HubUrl http://127.0.0.1:8090
 ```
 
 验证点：
@@ -66,15 +82,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-
 - Web / Hub / Agent / Android / Compose / 文档版本一致。
 - Windows Agent 可执行文件存在，`--version` 返回目标版本。
 - Agent manifest 存在，且 Windows Agent SHA256 与实际文件一致。
-- Android APK metadata 的 `versionName` 是 `1.0.6-beta.1`，`versionCode` 是 `10006`。
-- Harbor 上 `pulse-hub:1.0.6-beta.1` 和 `pulse-agent:1.0.6-beta.1` 可被 `docker manifest inspect` 读取。
-- 可选 Hub URL 返回 `/api/health` 正常，`/api/pulse/public-info` 版本为 `1.0.6-beta.1`。
+- Android APK metadata 的 `versionName` 是 `1.0.6-beta.2`，`versionCode` 是 `10006`，应用不可调试，v2 签名有效，证书 SHA-256 与仓库固定值一致。
+- Harbor 上 `pulse-hub:1.0.6-beta.2` 和 `pulse-agent:1.0.6-beta.2` 可被 `docker manifest inspect` 读取。
+- 可选 Hub URL 返回 `/api/health` 正常，`/api/pulse/public-info` 版本为 `1.0.6-beta.2`。
 
 ## 4. Harbor 手动确认
 
 ```powershell
-docker manifest inspect registry.example.com/infra/pulse-hub:1.0.6-beta.1
-docker manifest inspect registry.example.com/infra/pulse-agent:1.0.6-beta.1
+docker manifest inspect registry.example.com/infra/pulse-hub:1.0.6-beta.2
+docker manifest inspect registry.example.com/infra/pulse-agent:1.0.6-beta.2
 ```
 
 两条命令都必须成功。任一镜像不存在时，不要部署 FlyNAS。
@@ -104,24 +120,24 @@ docker logs --tail=100 pulse-agent
 预期：
 
 - `/api/health` 返回成功。
-- `/api/pulse/public-info` 的 `v` 是 `1.0.6-beta.1`。
-- `pulse-hub` 镜像是 `registry.example.com/infra/pulse-hub:1.0.6-beta.1`。
-- `pulse-agent` 镜像是 `registry.example.com/infra/pulse-agent:1.0.6-beta.1`。
+- `/api/pulse/public-info` 的 `v` 是 `1.0.6-beta.2`。
+- `pulse-hub` 镜像是 `registry.example.com/infra/pulse-hub:1.0.6-beta.2`。
+- `pulse-agent` 镜像是 `registry.example.com/infra/pulse-agent:1.0.6-beta.2`。
 - 两个容器都是 `host` 网络。
-- 页面 About 显示 Hub / Web / Android / Agent 目标版本为 `1.0.6-beta.1`。
+- 页面 About 显示 Hub / Web / Android / Agent 目标版本为 `1.0.6-beta.2`。
 - Hub 所在机器在线，显示真实机器名并带 `Hub` 标签。
 
 ## 6. 回滚
 
-如果 `1.0.6-beta.1` 部署后健康检查、登录、Agent 连接或核心页面异常，先回滚到上一稳定版本 `1.0.4`。
+如果 `1.0.6-beta.2` 部署后健康检查、登录、Agent 连接或核心页面异常，先回滚到上一稳定版本 `1.0.5`。
 
 1. 修改 FlyNAS Compose 镜像 tag：
 
 ```bash
 cd /vol1/1000/docker/pulse
 cp docker-compose.yml "docker-compose.yml.rollback-$(date +%Y%m%d-%H%M%S)"
-sed -i 's#registry.example.com/infra/pulse-hub:1.0.6-beta.1#registry.example.com/infra/pulse-hub:1.0.4#g' docker-compose.yml
-sed -i 's#registry.example.com/infra/pulse-agent:1.0.6-beta.1#registry.example.com/infra/pulse-agent:1.0.4#g' docker-compose.yml
+sed -i 's#registry.example.com/infra/pulse-hub:1.0.6-beta.2#registry.example.com/infra/pulse-hub:1.0.5#g' docker-compose.yml
+sed -i 's#registry.example.com/infra/pulse-agent:1.0.6-beta.2#registry.example.com/infra/pulse-agent:1.0.5#g' docker-compose.yml
 ```
 
 2. 拉取并重建：
@@ -145,8 +161,8 @@ docker logs --tail=100 pulse-agent
 预期：
 
 - Hub 健康检查恢复。
-- `/api/pulse/public-info` 的 `v` 回到 `1.0.4`。
-- Hub 和 Agent 镜像 tag 都回到 `1.0.4`。
+- `/api/pulse/public-info` 的 `v` 回到 `1.0.5`。
+- Hub 和 Agent 镜像 tag 都回到 `1.0.5`。
 
 ## 7. 发布失败时不要做什么
 

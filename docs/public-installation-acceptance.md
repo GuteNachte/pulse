@@ -49,7 +49,8 @@ Docker Desktop 首次启动过程中会切换引擎，切换时创建的临时�
 
 ## 下一版本门禁
 
-1. 在 `1.0.6-beta.2` 或后续公开版本前建立专用 Android release keystore，并通过受保护的 GitHub Environment Secrets 注入；私钥和口令不得提交仓库。
-2. 将 APK 构建从 debug 产物切换为 release 产物，自动验证 `debuggable=false`、签名证书指纹、版本号和可升级性。
-3. 评估 Windows Authenticode 代码签名；未签名前继续明确 SmartScreen 风险，不把“哈希正确”描述成“系统信任”。
-4. 使用干净 Windows 虚拟机、Android 真机或模拟器、独立 Linux 主机各完成一次安装、首次登录、Agent 配对和升级演练。
+1. `1.0.6-beta.2` 已建立专用 Android Release 密钥并完成本地恢复验证；公开固定证书 SHA-256 为 `BF114B3A8EA33125893B5B1E6865B43BFE8DAC89E1BE154F7E48A91D93D51374`，私钥和口令不进入仓库。
+2. 构建和发布脚本已切换到 `app-release.apk`，本地真实产物已验证 `debuggable=false`、包名、版本、v2 签名和固定指纹；这不等于 `beta.2` 已公开发布或完成普通用户安装验收。
+3. 发布前仍需在 `public-release` Environment 配置四个 Android Secret，运行不发布演练并等待全部 GitHub 检查通过；没有新的明确授权不得创建 `v1.0.6-beta.2` tag 或 Release。
+4. `beta.1` 测试用户必须先卸载旧 Debug 证书 APK，再安装首个正式签名版本；之后所有版本固定复用同一证书，禁止换密钥。
+5. 继续评估 Windows Authenticode 代码签名；未签名前明确 SmartScreen 风险，并使用干净 Windows 虚拟机、Android 真机或模拟器、独立 Linux 主机完成正式安装验收。

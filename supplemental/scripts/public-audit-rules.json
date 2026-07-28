@@ -42,7 +42,7 @@
       "id": "credential-assignment",
       "description": "Credential-shaped assignments must use an explicit redacted placeholder.",
       "pathPattern": "(?i)\\.(?:env|ini|json|ya?ml|toml|ps1|sh|cmd|md|txt)$",
-      "pattern": "(?im)^\\s*(?:token|password|secret|api[_-]?key|access[_-]?key)\\s*[:=]\\s*[\"']?(?!(?:example-redacted|redacted|changeme|replace-me|<[^>\\r\\n]+>|\\$\\{[^}\\r\\n]+\\}|\\$env:[a-z0-9_]+|%[a-z0-9_]+%|your_[a-z0-9_]+)[\"']?\\s*$)[^\\s\"'#]{8,}"
+      "pattern": "(?im)^\\s*(?:token|password|secret|api[_-]?key|access[_-]?key)\\s*[:=]\\s*[\"']?(?!(?:example-redacted|redacted|changeme|replace-me|<[^>\\r\\n]+>|\\$\\{[^}\\r\\n]+\\}|\\$env:[a-z0-9_]+|\\$[a-z_][a-z0-9_.]*|%[a-z0-9_]+%|your_[a-z0-9_]+)[\"']?\\s*$)[^\\s\"'#]{8,}"
     },
     {
       "id": "private-legacy-endpoint",

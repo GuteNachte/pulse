@@ -29,7 +29,7 @@ jobs:
       tag: ${{ steps.release.outputs.tag }}
       hub_image: ${{ steps.release.outputs.hub_image }}
       agent_image: ${{ steps.release.outputs.agent_image }}
-      android_version_code: ${{ steps.release.outputs.android_version_code }}
+      validated_sha: ${{ steps.release.outputs.validated_sha }}
       publish_requested: ${{ steps.release.outputs.publish_requested }}
     env:
       GITLEAKS_VERSION: "8.30.1"
@@ -50,6 +50,10 @@ jobs:
           $resolvedVersion = Resolve-PulseVersion -Version $version
           $tag = "v$version"
           $owner = "${{ github.repository_owner }}".ToLowerInvariant()
+          $validatedSha = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $validatedSha -notmatch '^[0-9a-f]{40}$') {
+            throw "Unable to resolve the validated commit SHA."
+          }
           $publishRequested = "${{ github.event_name }}" -eq "push" -or "${{ inputs.publish }}" -eq "true"
           if ($publishRequested -and ("${{ github.ref_type }}" -ne "tag" -or "${{ github.ref_name }}" -ne $tag)) {
             throw "Publishing requires the exact tag $tag."
@@ -58,7 +62,7 @@ jobs:
           "tag=$tag" >> $env:GITHUB_OUTPUT
           "hub_image=ghcr.io/$owner/pulse-hub:$version" >> $env:GITHUB_OUTPUT
           "agent_image=ghcr.io/$owner/pulse-agent:$version" >> $env:GITHUB_OUTPUT
-          "android_version_code=$($resolvedVersion.AndroidVersionCode)" >> $env:GITHUB_OUTPUT
+          "validated_sha=$validatedSha" >> $env:GITHUB_OUTPUT
           "publish_requested=$($publishRequested.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
       - name: Require ready audit report
@@ -111,12 +115,27 @@ jobs:
         shell: pwsh
         run: |
           pwsh -NoProfile -File supplemental/scripts/audit-public-repository.ps1
-          pwsh -NoProfile -File supplemental/scripts/check-version-consistency.ps1 -Version "${{ steps.release.outputs.version }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File supplemental/scripts/check-version-consistency.ps1 `
+            -Version "${{ steps.release.outputs.version }}" `
+            -RequireAndroidVersionCodeIncrease
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pwsh -NoProfile -File supplemental/scripts/test-prerelease-version.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pwsh -NoProfile -File supplemental/scripts/test-set-pulse-version.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File supplemental/scripts/test-android-signing-helpers.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File supplemental/scripts/test-initialize-android-release-signing.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File supplemental/scripts/test-build-android-release.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pwsh -NoProfile -File supplemental/scripts/test-package-public-release.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pwsh -NoProfile -File supplemental/scripts/test-release-image-reference.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pwsh -NoProfile -File supplemental/scripts/test-public-release-workflow.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run Go format and vet checks
         shell: bash
@@ -173,42 +192,15 @@ jobs:
             -SkipLinuxImageBuild
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Build Android APK
+      - name: Run Android secret-free compile checks
         shell: bash
         run: |
           npm --prefix internal/site run android:sync
-          chmod +x internal/site/android/gradlew
-          internal/site/android/gradlew -p internal/site/android assembleDebug \
-            -PpulseVersionName="${{ steps.release.outputs.version }}" \
-            -PpulseVersionCode="${{ steps.release.outputs.android_version_code }}"
-
-      - name: Package public release
-        shell: pwsh
-        run: |
-          pwsh -NoProfile -File supplemental/scripts/package-public-release.ps1 `
-            -Version "${{ steps.release.outputs.version }}" `
-            -HubImage "${{ steps.release.outputs.hub_image }}" `
-            -AgentImage "${{ steps.release.outputs.agent_image }}" `
-            -OutputDirectory "build/public-release/${{ steps.release.outputs.version }}"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pwsh -NoProfile -File supplemental/scripts/verify-release-v1.ps1 `
-            -Version "${{ steps.release.outputs.version }}" `
-            -SkipRegistry `
-            -PublicReleaseDirectory "build/public-release/${{ steps.release.outputs.version }}"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Get-Content "build/public-release/${{ steps.release.outputs.version }}/SHA256SUMS"
+          internal/site/android/gradlew -p internal/site/android testDebugUnitTest --console=plain
 
       - name: Require clean tracked tree
         shell: bash
         run: git diff --exit-code && test -z "$(git status --porcelain --untracked-files=no)"
-
-      - name: Upload validated release bundle
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: pulse-${{ steps.release.outputs.version }}
-          path: build/public-release/${{ steps.release.outputs.version }}/
-          if-no-files-found: error
-          retention-days: 14
 
   publish:
     name: Publish GHCR images and prerelease
@@ -221,16 +213,25 @@ jobs:
       contents: write
       packages: write
     steps:
-      - name: Check out validated tag
+      - name: Check out validated commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ needs.validate.outputs.tag }}
+          ref: ${{ needs.validate.outputs.validated_sha }}
+          fetch-depth: 0
 
-      - name: Download validated release bundle
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: pulse-${{ needs.validate.outputs.version }}
-          path: build/public-release/${{ needs.validate.outputs.version }}
+      - name: Require tag to match validated commit
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tag = "${{ needs.validate.outputs.tag }}"
+          $validatedSha = "${{ needs.validate.outputs.validated_sha }}"
+          git fetch --force origin "refs/tags/$tag`:refs/tags/$tag"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tagSha = (git rev-parse "$tag^{commit}").Trim()
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($tagSha -ne $validatedSha) {
+            throw "Release tag $tag moved after validation. Expected $validatedSha, found $tagSha."
+          }
 
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
@@ -238,15 +239,112 @@ jobs:
           go-version: 1.26.5
           cache: true
 
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: internal/site/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Install web dependencies
+        run: npm ci --prefix internal/site
+
       - name: Restore Agent files required by the Hub image
         shell: pwsh
         run: |
           pwsh -NoProfile -File supplemental/scripts/build-agent-v1.ps1 -Version "${{ needs.validate.outputs.version }}" -OS windows -Arch amd64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pwsh -NoProfile -File supplemental/scripts/publish-agent-v1.ps1 `
             -Version "${{ needs.validate.outputs.version }}" `
             -LinuxImage "${{ needs.validate.outputs.agent_image }}" `
             -DryRun `
             -SkipLinuxImageBuild
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Materialize protected Android signing inputs
+        shell: pwsh
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          foreach ($name in @(
+            "ANDROID_RELEASE_KEYSTORE_BASE64",
+            "ANDROID_RELEASE_STORE_PASSWORD",
+            "ANDROID_RELEASE_KEY_ALIAS",
+            "ANDROID_RELEASE_KEY_PASSWORD"
+          )) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              throw "Required Android signing secret is missing: $name"
+            }
+          }
+          $signingRoot = Join-Path $env:RUNNER_TEMP "pulse-android-signing"
+          New-Item -ItemType Directory -Path $signingRoot -Force | Out-Null
+          $keyStorePath = Join-Path $signingRoot "pulse-android-release.p12"
+          $propertiesPath = Join-Path $signingRoot "signing.properties"
+          try {
+            $keyBytes = [Convert]::FromBase64String($env:ANDROID_RELEASE_KEYSTORE_BASE64)
+          } catch {
+            throw "ANDROID_RELEASE_KEYSTORE_BASE64 is not valid Base64."
+          }
+          [System.IO.File]::WriteAllBytes($keyStorePath, $keyBytes)
+          $propertyLines = @(
+            "storeFile=$($keyStorePath.Replace('\', '/'))",
+            "storePassword=$env:ANDROID_RELEASE_STORE_PASSWORD",
+            "keyAlias=$env:ANDROID_RELEASE_KEY_ALIAS",
+            "keyPassword=$env:ANDROID_RELEASE_KEY_PASSWORD"
+          )
+          [System.IO.File]::WriteAllLines($propertiesPath, $propertyLines, [System.Text.UTF8Encoding]::new($false))
+          chmod 600 $keyStorePath $propertiesPath
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "PULSE_ANDROID_SIGNING_PROPERTIES=$propertiesPath" >> $env:GITHUB_ENV
+
+      - name: Build and verify signed Android Release APK
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File supplemental/scripts/build-android-release.ps1 `
+            -Version "${{ needs.validate.outputs.version }}" `
+            -SigningPropertiesPath "$env:PULSE_ANDROID_SIGNING_PROPERTIES"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package and verify public release
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File supplemental/scripts/package-public-release.ps1 `
+            -Version "${{ needs.validate.outputs.version }}" `
+            -HubImage "${{ needs.validate.outputs.hub_image }}" `
+            -AgentImage "${{ needs.validate.outputs.agent_image }}" `
+            -OutputDirectory "build/public-release/${{ needs.validate.outputs.version }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File supplemental/scripts/verify-release-v1.ps1 `
+            -Version "${{ needs.validate.outputs.version }}" `
+            -SkipRegistry `
+            -PublicReleaseDirectory "build/public-release/${{ needs.validate.outputs.version }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Content "build/public-release/${{ needs.validate.outputs.version }}/SHA256SUMS"
+
+      - name: Reconfirm release tag before publishing artifacts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tag = "${{ needs.validate.outputs.tag }}"
+          $validatedSha = "${{ needs.validate.outputs.validated_sha }}"
+          git fetch --force origin "refs/tags/$tag`:refs/tags/$tag"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tagSha = (git rev-parse "$tag^{commit}").Trim()
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($tagSha -ne $validatedSha) {
+            throw "Release tag $tag moved before artifact publication. Expected $validatedSha, found $tagSha."
+          }
 
       - name: Log in to GHCR
         shell: bash
@@ -258,12 +356,26 @@ jobs:
           docker buildx build --platform linux/amd64 --push --provenance=false \
             -f internal/dockerfile_hub \
             --build-arg "HUB_VERSION=${{ needs.validate.outputs.version }}" \
-            --build-arg "HUB_BUILD_COMMIT=${{ github.sha }}" \
+            --build-arg "HUB_BUILD_COMMIT=${{ needs.validate.outputs.validated_sha }}" \
             -t "${{ needs.validate.outputs.hub_image }}" .
           docker buildx build --platform linux/amd64 --push --provenance=false \
             -f internal/dockerfile_agent \
             --build-arg "AGENT_VERSION=${{ needs.validate.outputs.version }}" \
             -t "${{ needs.validate.outputs.agent_image }}" .
+
+      - name: Reconfirm release tag before creating GitHub Release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tag = "${{ needs.validate.outputs.tag }}"
+          $validatedSha = "${{ needs.validate.outputs.validated_sha }}"
+          git fetch --force origin "refs/tags/$tag`:refs/tags/$tag"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tagSha = (git rev-parse "$tag^{commit}").Trim()
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($tagSha -ne $validatedSha) {
+            throw "Release tag $tag moved before GitHub Release creation. Expected $validatedSha, found $tagSha."
+          }
 
       - name: Create GitHub prerelease
         env:
@@ -276,3 +388,12 @@ jobs:
             --title "Pulse ${{ needs.validate.outputs.version }}" \
             --generate-notes \
             --prerelease
+
+      - name: Remove temporary Android signing inputs
+        if: always()
+        shell: pwsh
+        run: |
+          $signingRoot = Join-Path $env:RUNNER_TEMP "pulse-android-signing"
+          if (Test-Path -LiteralPath $signingRoot) {
+            Remove-Item -LiteralPath $signingRoot -Recurse -Force
+          }

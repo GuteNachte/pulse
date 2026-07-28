@@ -1,6 +1,9 @@
 param(
     [Parameter(Mandatory)]
     [string]$Version,
+    [Parameter(Mandatory)]
+    [ValidateRange(1, 2147483647)]
+    [int]$AndroidVersionCode,
     [string]$RepositoryRoot = ""
 )
 
@@ -23,6 +26,23 @@ if (-not (Test-Path -LiteralPath $packagePath)) {
 
 $currentVersion = (Get-Content -Raw -LiteralPath $packagePath | ConvertFrom-Json).version
 $resolvedCurrent = Resolve-PulseVersion -Version $currentVersion
+$androidVersionCodePath = Join-Path $repoRoot "internal\site\android\version-code.txt"
+if (-not (Test-Path -LiteralPath $androidVersionCodePath -PathType Leaf)) {
+    throw "Android versionCode source is missing: $androidVersionCodePath"
+}
+$currentAndroidVersionCode = 0
+if (-not [int]::TryParse(
+        (Get-Content -Raw -LiteralPath $androidVersionCodePath).Trim(),
+        [ref]$currentAndroidVersionCode
+    ) -or $currentAndroidVersionCode -le 0) {
+    throw "Current Android versionCode must be a positive 32-bit integer."
+}
+if ($currentVersion -eq $targetVersion -and $AndroidVersionCode -ne $currentAndroidVersionCode) {
+    throw "Android versionCode cannot change without changing the Pulse version."
+}
+if ($currentVersion -ne $targetVersion -and $AndroidVersionCode -le $currentAndroidVersionCode) {
+    throw "Android versionCode must increase from $currentAndroidVersionCode for a new Pulse version."
+}
 
 function New-VersionRule {
     param(
@@ -65,12 +85,11 @@ $rules.Add((New-VersionRule "pulse.go" ('(?m)^(?<prefix>var\s+Version\s*=\s*")' 
 $rules.Add((New-VersionRule "Makefile" ('(?m)^(?<prefix>AGENT_VERSION\s*\?=\s*)' + $old + '(?<suffix>\s*)$') ('${prefix}' + $target + '${suffix}'))) | Out-Null
 $rules.Add((New-VersionRule "Makefile" ('(?m)^(?<prefix>HUB_VERSION\s*\?=\s*)' + $old + '(?<suffix>\s*)$') ('${prefix}' + $target + '${suffix}'))) | Out-Null
 $rules.Add((New-VersionRule "internal\site\android\app\build.gradle" ('(?<prefix>versionName\s+project\.hasProperty\(''pulseVersionName''\)\s*\?\s*project\.property\(''pulseVersionName''\)\s*:\s*")' + $old + '(?<suffix>")') ('${prefix}' + $target + '${suffix}'))) | Out-Null
-
-if ($resolvedCurrent.AndroidVersionCode -ne $resolvedTarget.AndroidVersionCode) {
-    $oldCode = [regex]::Escape([string]$resolvedCurrent.AndroidVersionCode)
-    $newCode = [string]$resolvedTarget.AndroidVersionCode
-    $rules.Add((New-VersionRule "internal\site\android\app\build.gradle" ('(?<prefix>versionCode\s+project\.hasProperty\(''pulseVersionCode''\)\s*\?\s*project\.property\(''pulseVersionCode''\)\.toInteger\(\)\s*:\s*)' + $oldCode + '(?<suffix>\b)') ('${prefix}' + $newCode + '${suffix}'))) | Out-Null
-}
+$rules.Add((New-VersionRule `
+    "internal\site\android\version-code.txt" `
+    ('(?m)^' + [regex]::Escape([string]$currentAndroidVersionCode) + '\s*$') `
+    ([string]$AndroidVersionCode)
+)) | Out-Null
 
 foreach ($entry in @(
     @{ Path = "internal\dockerfile_agent"; Name = "AGENT_VERSION" },
@@ -105,7 +124,7 @@ foreach ($entry in @(
     @{ Path = "docs\agent-1.0-install.md"; Count = 2 },
     @{ Path = "docs\flynas-compose-checklist.md"; Count = 4 },
     @{ Path = "docs\local-dev-runbook.md"; Count = 6 },
-    @{ Path = "docs\release-deployment-runbook.md"; Count = 18 }
+    @{ Path = "docs\release-deployment-runbook.md"; Count = 20 }
 )) {
     $rules.Add((New-VersionRule $entry.Path $old $target $entry.Count)) | Out-Null
 }

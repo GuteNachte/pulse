@@ -3,7 +3,8 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $updaterPath = Join-Path $PSScriptRoot "set-pulse-version.ps1"
 $checkerPath = Join-Path $PSScriptRoot "check-version-consistency.ps1"
-$targetVersion = "1.0.6-beta.1"
+$targetVersion = "1.0.6-beta.3"
+$targetAndroidVersionCode = 1000603
 
 $fixtureFiles = @(
     "internal\site\package.json",
@@ -11,6 +12,7 @@ $fixtureFiles = @(
     "pulse.go",
     "Makefile",
     "internal\site\android\app\build.gradle",
+    "internal\site\android\version-code.txt",
     "internal\dockerfile_agent",
     "internal\dockerfile_agent_intel",
     "internal\dockerfile_hub",
@@ -108,7 +110,7 @@ try {
         throw "Centralized version updater does not exist: $updaterPath"
     }
 
-    $updateResult = Invoke-PwshFile -Path $updaterPath -Arguments @("-Version", $targetVersion, "-RepositoryRoot", $fixtureRoot)
+    $updateResult = Invoke-PwshFile -Path $updaterPath -Arguments @("-Version", $targetVersion, "-AndroidVersionCode", $targetAndroidVersionCode, "-RepositoryRoot", $fixtureRoot)
     Assert-Success "Version update" $updateResult
 
     $package = Get-Content -Raw -LiteralPath (Join-Path $fixtureRoot "internal\site\package.json") | ConvertFrom-Json
@@ -118,14 +120,18 @@ try {
     Assert-EqualValue "package-lock package version" $targetVersion $packageLock["packages"][""]["version"]
 
     $gradle = Get-Content -Raw -LiteralPath (Join-Path $fixtureRoot "internal\site\android\app\build.gradle")
-    if ($gradle -notmatch 'versionCode\s+project.*:\s*10006') { throw "Android versionCode was not kept at 10006." }
-    if ($gradle -notmatch 'versionName\s+project.*:\s*"1\.0\.6-beta\.1"') { throw "Android versionName was not updated." }
+    if ($gradle -notmatch "version-code\.txt") { throw "Android Gradle does not read the explicit versionCode source." }
+    Assert-EqualValue `
+        "Android versionCode source" `
+        $targetAndroidVersionCode `
+        ((Get-Content -Raw -LiteralPath (Join-Path $fixtureRoot "internal\site\android\version-code.txt")).Trim())
+    if ($gradle -notmatch 'versionName\s+project.*:\s*"1\.0\.6-beta\.3"') { throw "Android versionName was not updated." }
 
     $checkResult = Invoke-PwshFile -Path $checkerPath -Arguments @("-Version", $targetVersion, "-RepositoryRoot", $fixtureRoot)
     Assert-Success "Fixture consistency check" $checkResult
 
     $hashesAfterFirstRun = Get-FixtureHashes -FixtureRoot $fixtureRoot
-    $idempotentResult = Invoke-PwshFile -Path $updaterPath -Arguments @("-Version", $targetVersion, "-RepositoryRoot", $fixtureRoot)
+    $idempotentResult = Invoke-PwshFile -Path $updaterPath -Arguments @("-Version", $targetVersion, "-AndroidVersionCode", $targetAndroidVersionCode, "-RepositoryRoot", $fixtureRoot)
     Assert-Success "Idempotent version update" $idempotentResult
     Assert-HashesEqual "Idempotent hash" $hashesAfterFirstRun (Get-FixtureHashes -FixtureRoot $fixtureRoot)
 
@@ -135,7 +141,7 @@ try {
     [System.IO.File]::WriteAllText($aboutPath, $aboutContent.Replace('../../../../package.json', '../../../../package.invalid.json'), [System.Text.UTF8Encoding]::new($false))
     $hashesBeforeFailure = Get-FixtureHashes -FixtureRoot $rollbackFixtureRoot
 
-    $failureResult = Invoke-PwshFile -Path $updaterPath -Arguments @("-Version", $targetVersion, "-RepositoryRoot", $rollbackFixtureRoot)
+    $failureResult = Invoke-PwshFile -Path $updaterPath -Arguments @("-Version", $targetVersion, "-AndroidVersionCode", $targetAndroidVersionCode, "-RepositoryRoot", $rollbackFixtureRoot)
     if ($failureResult.ExitCode -eq 0) {
         throw "Updater succeeded even though the post-write consistency check was invalid."
     }

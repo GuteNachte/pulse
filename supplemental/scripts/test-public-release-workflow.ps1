@@ -57,7 +57,6 @@ foreach ($required in @(
     "run-go-test-shard.ps1",
     "package-public-release.ps1",
     "github.repository_owner",
-    "android_version_code",
     "PUBLIC_RELEASE_ENABLED",
     "environment: public-release",
     "packages: write",
@@ -66,6 +65,124 @@ foreach ($required in @(
     "SHA256SUMS"
 )) {
     Assert-Contains "Public release workflow" $workflow $required
+}
+
+function Assert-NestedPwshCallsAreGuarded {
+    param([string]$Label, [string]$Content)
+
+    $lines = @($Content -split "`r?`n")
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        if ($lines[$index] -notmatch '^\s+pwsh -NoProfile -File ') {
+            continue
+        }
+        if ($lines[$index].TrimEnd().EndsWith('\')) {
+            continue
+        }
+        $runStyle = ""
+        for ($parent = $index - 1; $parent -ge 0; $parent--) {
+            if ($lines[$parent] -match '^\s+run:\s*(?<style>.*)$') {
+                $runStyle = $Matches.style.Trim()
+                break
+            }
+            if ($lines[$parent] -match '^\s+- name:') {
+                break
+            }
+        }
+        if ($runStyle -ne '|') {
+            continue
+        }
+        $cursor = $index
+        while ($lines[$cursor].TrimEnd().EndsWith('`')) {
+            $cursor++
+        }
+        do {
+            $cursor++
+        } while ($cursor -lt $lines.Count -and [string]::IsNullOrWhiteSpace($lines[$cursor]))
+        $guarded = $false
+        while ($cursor -lt $lines.Count -and $lines[$cursor] -notmatch '^\s+- name:') {
+            if ($lines[$cursor].Trim() -eq 'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }') {
+                $guarded = $true
+                break
+            }
+            if ($lines[$cursor] -match '^\s+pwsh -NoProfile -File ') {
+                break
+            }
+            $cursor++
+        }
+        if (-not $guarded) {
+            throw "$Label nested PowerShell command is not fail-fast: $($lines[$index].Trim())"
+        }
+    }
+}
+foreach ($required in @(
+    'validated_sha: ${{ steps.release.outputs.validated_sha }}',
+    '"validated_sha=$validatedSha" >> $env:GITHUB_OUTPUT',
+    'ref: ${{ needs.validate.outputs.validated_sha }}',
+    'git fetch --force origin "refs/tags/$tag`:refs/tags/$tag"',
+    '$tagSha = (git rev-parse "$tag^{commit}").Trim()',
+    'if ($tagSha -ne $validatedSha)',
+    '-RequireAndroidVersionCodeIncrease',
+    'HUB_BUILD_COMMIT=${{ needs.validate.outputs.validated_sha }}'
+)) {
+    Assert-Contains "Immutable public release workflow" $workflow $required
+}
+$chmodIndex = $workflow.IndexOf('chmod 600 $keyStorePath $propertiesPath', [System.StringComparison]::Ordinal)
+$chmodGuardIndex = $workflow.IndexOf(
+    'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
+    $chmodIndex,
+    [System.StringComparison]::Ordinal
+)
+if ($chmodIndex -lt 0 -or $chmodGuardIndex -lt $chmodIndex -or ($chmodGuardIndex - $chmodIndex) -gt 120) {
+    throw "Protected signing input chmod must fail closed before exporting the properties path."
+}
+if ($workflow.Contains('ref: ${{ needs.validate.outputs.tag }}')) {
+    throw "Publish must check out the immutable validated commit instead of resolving the tag again."
+}
+$tagGuardPattern = '(?ms)^\s+- name: (?<name>Require tag to match validated commit|Reconfirm release tag before publishing artifacts|Reconfirm release tag before creating GitHub Release)\s+shell: pwsh\s+run: \|\s+.*?git fetch --force origin "refs/tags/\$tag`:refs/tags/\$tag".*?if \(\$tagSha -ne \$validatedSha\)'
+$tagGuards = [regex]::Matches($workflow, $tagGuardPattern)
+if ($tagGuards.Count -ne 3) {
+    throw "Publish must verify the remote release tag after approval, before artifact publication, and immediately before creating the GitHub Release."
+}
+$imagePushIndex = $workflow.IndexOf('docker buildx build --platform linux/amd64 --push', [System.StringComparison]::Ordinal)
+$releaseCreateIndex = $workflow.IndexOf('gh release create', [System.StringComparison]::Ordinal)
+$prePublishGuardIndex = $workflow.IndexOf('- name: Reconfirm release tag before publishing artifacts', [System.StringComparison]::Ordinal)
+$preReleaseGuardIndex = $workflow.IndexOf('- name: Reconfirm release tag before creating GitHub Release', [System.StringComparison]::Ordinal)
+if ($prePublishGuardIndex -lt 0 -or $imagePushIndex -lt $prePublishGuardIndex) {
+    throw "The release tag must be rechecked immediately before the first image push."
+}
+if ($preReleaseGuardIndex -lt $imagePushIndex -or $releaseCreateIndex -lt $preReleaseGuardIndex) {
+    throw "The release tag must be rechecked after image publication and immediately before GitHub Release creation."
+}
+foreach ($required in @(
+    "ANDROID_RELEASE_KEYSTORE_BASE64",
+    "ANDROID_RELEASE_STORE_PASSWORD",
+    "ANDROID_RELEASE_KEY_ALIAS",
+    "ANDROID_RELEASE_KEY_PASSWORD",
+    "build-android-release.ps1",
+    "if: always()"
+)) {
+    Assert-Contains "Signed Android release workflow" $workflow $required
+}
+if ($workflow.Contains("assembleDebug")) {
+    throw "Public release workflow must not build a Debug APK."
+}
+$publishJobIndex = $workflow.IndexOf("  publish:", [System.StringComparison]::Ordinal)
+$androidBuildIndex = $workflow.IndexOf("-File supplemental/scripts/build-android-release.ps1", [System.StringComparison]::Ordinal)
+$packageIndex = $workflow.IndexOf("-File supplemental/scripts/package-public-release.ps1", [System.StringComparison]::Ordinal)
+$verifyIndex = $workflow.IndexOf("-File supplemental/scripts/verify-release-v1.ps1", [System.StringComparison]::Ordinal)
+if ($publishJobIndex -lt 0 -or $androidBuildIndex -lt $publishJobIndex -or $packageIndex -lt $androidBuildIndex -or $verifyIndex -lt $packageIndex) {
+    throw "Signed Android build, public packaging and final verification must run in order after the protected publish job begins."
+}
+foreach ($secretName in @(
+    "ANDROID_RELEASE_KEYSTORE_BASE64",
+    "ANDROID_RELEASE_STORE_PASSWORD",
+    "ANDROID_RELEASE_KEY_ALIAS",
+    "ANDROID_RELEASE_KEY_PASSWORD"
+)) {
+    $secretOffset = $workflow.IndexOf("secrets.$secretName", [System.StringComparison]::Ordinal)
+    if ($secretOffset -lt $publishJobIndex) {
+        throw "Android signing secret $secretName is referenced before the protected publish job."
+    }
 }
 Assert-Contains "Public release workflow" $workflow "Run non-Hub Go tests"
 Assert-Contains "Public release workflow" $workflow "-ShardCount 4"
@@ -91,15 +208,32 @@ $goVetIndex = $workflow.IndexOf("go vet -tags=testing ./...", [System.StringComp
 if ($webBuildIndex -lt 0 -or $goVetIndex -lt 0 -or $webBuildIndex -gt $goVetIndex) {
     throw "Public release workflow must build internal/site/dist before Go vet and tests consume the embedded site."
 }
+$androidSyncCommand = "npm --prefix internal/site run android:sync"
+$androidDebugCommand = "internal/site/android/gradlew -p internal/site/android testDebugUnitTest --console=plain"
+$webDependencyInstallCommand = "npm ci --prefix internal/site"
+$releaseDependencyInstallIndex = $workflow.IndexOf($webDependencyInstallCommand, [System.StringComparison]::Ordinal)
+$releaseAndroidSyncIndex = $workflow.IndexOf($androidSyncCommand, [System.StringComparison]::Ordinal)
+$releaseAndroidDebugIndex = $workflow.IndexOf($androidDebugCommand, [System.StringComparison]::Ordinal)
+if ($releaseDependencyInstallIndex -lt 0 -or $releaseAndroidSyncIndex -lt $releaseDependencyInstallIndex -or $releaseAndroidDebugIndex -lt $releaseAndroidSyncIndex) {
+    throw "Public release workflow must install dependencies and synchronize Capacitor before the secret-free Android Debug build."
+}
 if (($workflow | Select-String -Pattern 'go-version: 1\.26\.5' -AllMatches).Matches.Count -ne 2) {
     throw "Public release workflow must use the patched Go 1.26.5 toolchain in validation and publishing jobs."
 }
 
 $qualityWorkflow = Get-Content -Raw -LiteralPath $qualityWorkflowPath
+Assert-NestedPwshCallsAreGuarded "Public release workflow" $workflow
+Assert-NestedPwshCallsAreGuarded "Quality workflow" $qualityWorkflow
 $qualityWebBuildIndex = $qualityWorkflow.IndexOf("npm --prefix internal/site run build", [System.StringComparison]::Ordinal)
 $qualityGoVetIndex = $qualityWorkflow.IndexOf("go vet -tags=testing ./...", [System.StringComparison]::Ordinal)
 if ($qualityWebBuildIndex -lt 0 -or $qualityGoVetIndex -lt 0 -or $qualityWebBuildIndex -gt $qualityGoVetIndex) {
     throw "Quality workflow must build internal/site/dist before Go vet and tests consume the embedded site."
+}
+$qualityAndroidSyncIndex = $qualityWorkflow.IndexOf($androidSyncCommand, [System.StringComparison]::Ordinal)
+$qualityAndroidDebugIndex = $qualityWorkflow.IndexOf($androidDebugCommand, [System.StringComparison]::Ordinal)
+$qualityDependencyInstallIndex = $qualityWorkflow.IndexOf($webDependencyInstallCommand, [System.StringComparison]::Ordinal)
+if ($qualityDependencyInstallIndex -lt 0 -or $qualityAndroidSyncIndex -lt $qualityDependencyInstallIndex -or $qualityAndroidDebugIndex -lt $qualityAndroidSyncIndex) {
+    throw "Quality workflow must install dependencies and synchronize Capacitor before the secret-free Android Debug build."
 }
 Assert-Contains "Quality workflow" $qualityWorkflow "go-version: 1.26.5"
 Assert-Contains "Quality workflow" $qualityWorkflow "Run non-Hub Go tests"
@@ -109,6 +243,17 @@ Assert-Contains "Quality workflow" $qualityWorkflow 'shard: [0, 1, 2, 3]'
 Assert-Contains "Quality workflow" $qualityWorkflow "run-go-test-shard.ps1"
 Assert-Contains "Quality workflow" $qualityWorkflow "-ShardCount 4"
 Assert-Contains "Quality workflow" $qualityWorkflow "-Timeout 600s"
+foreach ($required in @(
+    "test-android-signing-helpers.ps1",
+    "test-android-version-code-monotonic.ps1",
+    "test-initialize-android-release-signing.ps1",
+    "test-build-android-release.ps1"
+)) {
+    Assert-Contains "Quality workflow" $qualityWorkflow $required
+}
+if ($qualityWorkflow.Contains("secrets.ANDROID_RELEASE_")) {
+    throw "Quality workflow must remain independent of Android signing secrets."
+}
 
 $goTestShard = Get-Content -Raw -LiteralPath $goTestShardPath
 Assert-Contains "Go test shard runner" $goTestShard "go test -tags=testing -c"

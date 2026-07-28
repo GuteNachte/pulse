@@ -1,6 +1,6 @@
 services:
   pulse-agent:
-    image: registry.example.com/infra/pulse-agent:1.0.6-beta.1
+    image: registry.example.com/infra/pulse-agent:1.0.6-beta.2
     container_name: pulse-agent
     restart: unless-stopped
     network_mode: host

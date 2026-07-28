@@ -1,11 +1,13 @@
 param(
-    [string]$Version = "1.0.6-beta.1",
+    [string]$Version = "1.0.6-beta.2",
     [string]$HubImage = "",
     [string]$LinuxAgentImage = "",
     [string]$BuildDir = "build/releases/agent",
     [string]$DataDir = "pulse_data",
     [string]$HubUrl = "",
     [string]$PublicReleaseDirectory = "",
+    [string]$ApkSignerCommand = "",
+    [string]$Aapt2Command = "",
     [switch]$SkipRegistry,
     [switch]$SkipAgentArtifacts,
     [switch]$SkipAndroidApk
@@ -15,6 +17,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 . (Join-Path $PSScriptRoot "release-script-helpers.ps1")
+. (Join-Path $PSScriptRoot "android-signing-helpers.ps1")
 $resolvedVersion = Resolve-PulseVersion -Version $Version
 $Version = $resolvedVersion.FullVersion
 
@@ -110,23 +113,24 @@ function Test-AgentArtifactManifest {
     Assert-EqualValue $Failures "$Label Windows Agent sha256" $manifest.files."pulse-agent_windows_amd64.exe".sha256 $hash
 }
 
-function Test-AndroidApkVersion {
-    param([System.Collections.Generic.List[string]]$Failures)
+function Test-AndroidReleaseArtifact {
+    param(
+        [System.Collections.Generic.List[string]]$Failures,
+        [Parameter(Mandatory)][string]$ApkPath,
+        [string]$Label = "Android Release APK"
+    )
 
-    $metadataPath = Join-Path $repoRoot "internal\site\android\app\build\outputs\apk\debug\output-metadata.json"
-    $apkPath = Join-Path $repoRoot "internal\site\android\app\build\outputs\apk\debug\app-debug.apk"
-    if (-not (Assert-FileExists $Failures $metadataPath "Android APK metadata")) {
-        return
+    try {
+        $result = Test-AndroidReleaseApk `
+            -Version $Version `
+            -ApkPath $ApkPath `
+            -RepositoryRoot $repoRoot `
+            -ApkSignerCommand $ApkSignerCommand `
+            -Aapt2Command $Aapt2Command
+        Write-Host "[OK] $Label verified: $($result.CertificateSha256)"
+    } catch {
+        Add-VerifyFailure $Failures $_.Exception.Message
     }
-    Assert-FileExists $Failures $apkPath "Android debug APK" | Out-Null
-    $metadata = Get-Content -Raw -LiteralPath $metadataPath | ConvertFrom-Json
-    $element = @($metadata.elements)[0]
-    if ($null -eq $element) {
-        Add-VerifyFailure $Failures "Android APK metadata has no elements"
-        return
-    }
-    Assert-EqualValue $Failures "Android APK versionName" $Version $element.versionName
-    Assert-EqualValue $Failures "Android APK versionCode" $resolvedVersion.AndroidVersionCode $element.versionCode
 }
 
 function Test-HubRuntime {
@@ -181,6 +185,10 @@ function Test-PublicReleasePackage {
     ) | Sort-Object
     $actualNames = @(Get-ChildItem -LiteralPath $packageRoot -File | Select-Object -ExpandProperty Name | Sort-Object)
     Assert-EqualValue $Failures "Public package file allowlist" ($expectedNames -join "|") ($actualNames -join "|")
+    Test-AndroidReleaseArtifact `
+        -Failures $Failures `
+        -ApkPath (Join-Path $packageRoot "pulse-android-$Version.apk") `
+        -Label "Packaged Android Release APK"
 
     $manifestPath = Join-Path $packageRoot "release-manifest.json"
     if (Assert-FileExists $Failures $manifestPath "Public release manifest") {
@@ -254,7 +262,9 @@ try {
     }
 
     if (-not $SkipAndroidApk) {
-        Test-AndroidApkVersion $failures
+        Test-AndroidReleaseArtifact `
+            -Failures $failures `
+            -ApkPath (Join-Path $repoRoot "internal\site\android\app\build\outputs\apk\release\app-release.apk")
     }
 
     if (-not [string]::IsNullOrWhiteSpace($PublicReleaseDirectory)) {

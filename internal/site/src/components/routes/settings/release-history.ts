@@ -11,14 +11,15 @@ export type ReleaseNote = {
 
 export const releaseHistory: ReleaseNote[] = [
 	{
-		version: "1.0.6-beta.1",
-		date: "2026-07-27",
-		title: "Pulse 1.0.6-beta.1 开发记录",
+		version: "1.0.6-beta.2",
+		date: "2026-07-28",
+		title: "Pulse 1.0.6-beta.2 开发记录",
 		badges: ["公开测试版", "Web / Hub", "图片搜索 Agent", "网络拓扑", "智能家居", "工程质量", "项目独立化"],
 		sections: [
 			{
 				title: "Web / Hub",
 				items: [
+					"1.0.6-beta.2 候选版继续让 Web、Hub、Agent 与 Android 使用同一显式版本；当前只完成发布准备，尚未创建 tag、Release、公开镜像或正式部署。",
 					"完成 1.0.6-beta.1 普通用户视角的公开安装验收：从 GitHub Release 重新下载全部附件并核对 SHA256，Windows Agent、Android APK、Compose、GHCR 镜像和隔离 Hub 运行态均使用公开产物验证；临时 Hub 持续健康且公开版本正确。",
 					"修复 Windows Docker CLI 直连 GHCR token 端点 EOF 时的镜像误判：发布验证器保留 manifest inspect，失败后回退到 buildx imagetools inspect，两者都失败仍严格阻断；三条路径的回归测试已接入 Quality 与公开发布工作流。",
 					"README 新增普通用户快速开始，直接提供公开 Compose 部署、首次启动、数据持久化、Agent 接入、Android 安装和 SHA256 校验步骤，并链接完整公开安装验收记录。",
@@ -562,9 +563,11 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "移动端 / Android App",
 				items: [
-					"公开 APK 专项验收确认 versionName 1.0.6-beta.1、versionCode 10006 和 v2 签名有效；当前证书仍是通用 Android Debug 测试证书且应用可调试，切换正式 release 证书时可能需要卸载测试版。下一公开版本前必须建立受保护的 release keystore、release 构建和签名指纹门禁。",
-					"公开预发布验证会用统一解析出的 versionName 与 versionCode 构建 Android APK，并在生成公开包前核验 APK metadata；本轮仍无 Android 原生功能改动。",
-					"Android App 跟随统一版本入口切换到 1.0.6-beta.1；versionName 保留完整预发布版本，versionCode 按基础版本保持 10006，本轮无 Android 原生功能改动。",
+					"Android 安装序号改为显式单一来源，1.0.6-beta.2 使用 1000602；Gradle、Release 构建、APK 校验和版本一致性检查共同读取该值，发布门禁还会比较历史 tag 并要求高于已发布最大值，避免绕过升版脚本或让预发布版本被 Android 视为同一次安装。",
+					"1.0.6-beta.2 候选 APK 改为不可调试的 Release 构建，并固定使用唯一 RSA-4096 发布证书；包名、版本、v2 签名和证书 SHA-256 BF114B3A8EA33125893B5B1E6865B43BFE8DAC89E1BE154F7E48A91D93D51374 由发布脚本自动校验。",
+					"1.0.6-beta.1 使用 Debug 证书，升级到首个正式签名版本时需要卸载一次；完成这次切换后，后续版本固定复用同一证书并支持覆盖升级。",
+					"1.0.6-beta.1 专项验收确认其使用通用 Android Debug 证书且应用可调试；这一历史限制已由 beta.2 候选版的受保护 Release 密钥、不可调试构建和固定指纹门禁收口，但从 beta.1 切换时仍需卸载一次。",
+					"公开预发布会用完整 versionName 与显式 versionCode 构建 Android APK，并在生成公开包后直接复验包内 APK metadata、v2 签名、唯一签名者和固定证书；端到端负向测试会篡改 APK 并重算校验元数据，仍要求签名门禁拒绝，本轮无 Android 原生功能改动。",
 					"本轮公开仓库审计不改变 Android 原生能力；Android App 已随 Hub、Agent 与 Web 使用同一 1.0.6-beta.1 版本统一构建和验证，公开 prerelease 已提供对应 APK。",
 					"本轮没有新增 Android 原生能力；移动端 WebView 跟随 Web / Hub 1.0.6 使用相同 ONT 严格字段、接口状态和关系规则，并完成 390 × 844 视口验收。",
 					"移动端 WebView 同步使用 LAN CIDR 示例、简洁的位置选择与统一备注输入框。",
@@ -574,6 +577,8 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "Agent / 部署",
 				items: [
+					"受保护的公开 publish job 在人工审批后才读取四个 Android Environment Secret，构建并复核最终 Release APK，随后清理 runner 临时签名材料；普通验证和贡献者构建保持无密钥。",
+					"公开包默认收录 app-release.apk，统一发布入口会先完成 Android 签名构建再推送 Hub / Agent，避免单端发布成功后才发现 APK 缺失或签名错误。",
 					"下载版 Windows Agent 已验证版本与 SHA256，但当前没有 Authenticode 数字签名，普通用户仍可能看到 SmartScreen；公开文档已明确该边界，后续签名评估不能用哈希校验代替。",
 					"两个公开 GHCR 镜像已实际拉取，Agent 容器返回正确版本，隔离 Hub 容器持续 running / healthy；Windows Docker CLI 的 manifest 子命令异常由 buildx 回退根治，不再要求用 SkipRegistry 绕过。",
 					"本轮没有在 FlyNAS、独立 Linux 主机、Windows Service 或 Android 真机上执行安装，相关项目继续保留为下一轮环境验收，不把产物级验证写成全平台安装完成。",
@@ -590,6 +595,12 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "文档 / 规则",
 				items: [
+					"公开发布完整性门禁新增不可变提交 SHA：受保护 publish job 只检出 validate 已验证的提交，并在人工审批后、镜像推送前和 GitHub Release 创建前三次确认远端 tag 仍指向同一提交；仓库 Ruleset 同时禁止 v* tag 更新和删除，嵌套 PowerShell、签名文件权限、包内 APK 和初始化失败清理均改为 fail-closed。",
+					"公开 CI 的 Android 无密钥编译改为先安装前端依赖并同步 Capacitor 工程，再执行 Gradle；Quality 与 Public Release 共用顺序契约，避免本机已有生成文件掩盖全新 Linux runner 的缺失文件问题。",
+					"公开发布与安装验收文档补齐固定证书指纹、四个 Secret 名称、beta.1 一次性卸载、禁止换密钥和 beta.2 尚未发布的真实边界；文档不记录任何密码、私钥或恢复内容。",
+					"部署回滚目标按当前固定稳定版修正为 1.0.5，Hub 与 Agent 必须同步回滚，不再沿用过期的 1.0.4 示例。",
+					"公开仓库审计不再把 Password = $password 这类受保护变量引用误判为硬编码密码，真实长字符串凭据仍会阻断，并由允许与拒绝回归共同锁定。",
+					"Android 签名 helper、初始化恢复、Release 构建、公开打包和 GitHub workflow 均有无真实密钥回归测试，Quality 不接触发布密钥也能验证完整发布契约。",
 					"新增公开安装验收记录，逐项保存下载、SHA256、manifest、Windows Agent、Android 签名、Compose、GHCR 和 Hub 运行态证据，并单列签名与未执行环境限制；后续公开版本复用同一清单，不以 CI 成功替代真实安装验收。",
 					"公开快速开始与验收文档明确区分源码 Compose 的保留示例和 Release 附件中的可部署 GHCR 镜像，普通用户只需从 Release 获取版本化 Compose。",
 					"镜像同步回归测试使用临时公开源与私有目标裸仓库，覆盖默认 DryRun、精确 ref 输出、错误 URL 拒绝、Apply 后分支 / tag 同步、脏工作树拒绝和审计非 ready 阻断。",
