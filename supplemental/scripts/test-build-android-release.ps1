@@ -59,6 +59,10 @@ New-Item -ItemType Directory -Path $toolRoot -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $fixtureRoot "internal\site\android") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $fixtureRoot "private") -Force | Out-Null
 try {
+    "1000602" | Set-Content `
+        -LiteralPath (Join-Path $fixtureRoot "internal\site\android\version-code.txt") `
+        -Encoding ascii `
+        -NoNewline
     $fakeGradle = Join-Path $toolRoot "fake-gradle.ps1"
     @'
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)
@@ -73,15 +77,19 @@ exit 0
     @'
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)
 Write-Output "Verifies"
-Write-Output "Verified using v2 scheme (APK Signature Scheme v2): true"
+Write-Output "Verified using v2 scheme (APK Signature Scheme v2): $($env:PULSE_TEST_V2_VERIFIED)"
+Write-Output "Verified using v3 scheme (APK Signature Scheme v3): true"
 Write-Output "Signer #1 certificate SHA-256 digest: $env:PULSE_TEST_CERTIFICATE_SHA256"
+if ($env:PULSE_TEST_SECOND_SIGNER -eq "true") {
+    Write-Output "Signer #2 certificate SHA-256 digest: $env:PULSE_TEST_CERTIFICATE_SHA256"
+}
 exit 0
 '@ | Set-Content -LiteralPath $fakeApkSigner -Encoding utf8NoBOM
 
     $fakeAapt2 = Join-Path $toolRoot "fake-aapt2.ps1"
     @'
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)
-Write-Output "package: name='site.gutenacht.pulse' versionCode='10006' versionName='1.0.6'"
+Write-Output "package: name='site.gutenacht.pulse' versionCode='1000602' versionName='1.0.6'"
 if ($env:PULSE_TEST_DEBUGGABLE -eq "true") {
     Write-Output "application-debuggable"
 }
@@ -106,6 +114,8 @@ exit 0
     $env:PULSE_TEST_GRADLE_TRACE = $tracePath
     $env:PULSE_TEST_CERTIFICATE_SHA256 = $fingerprint.ToLowerInvariant()
     $env:PULSE_TEST_DEBUGGABLE = "false"
+    $env:PULSE_TEST_V2_VERIFIED = "true"
+    $env:PULSE_TEST_SECOND_SIGNER = "false"
 
     $result = & $builderPath `
         -Version "1.0.6" `
@@ -125,7 +135,7 @@ exit 0
     foreach ($required in @(
         "assembleRelease",
         "-PpulseVersionName=1.0.6",
-        "-PpulseVersionCode=10006",
+        "-PpulseVersionCode=1000602",
         "-PpulseSigningPropertiesFile=$signingPropertiesPath"
     )) {
         Assert-Contains "Gradle invocation" $trace $required
@@ -209,6 +219,38 @@ printf 'fake-apk' > "$apk_dir/app-release.apk"
         throw "Debuggable Release APK was not removed."
     }
 
+    $env:PULSE_TEST_DEBUGGABLE = "false"
+    $env:PULSE_TEST_V2_VERIFIED = "false"
+    Assert-Throws `
+        -Label "Release APK without v2 signature" `
+        -MessagePart "v2 signature" `
+        -Action {
+            & $builderPath `
+                -Version "1.0.6" `
+                -SigningPropertiesPath $signingPropertiesPath `
+                -RepositoryRoot $fixtureRoot `
+                -GradleCommand $fakeGradle `
+                -ApkSignerCommand $fakeApkSigner `
+                -Aapt2Command $fakeAapt2 `
+                -SkipWebSync | Out-Null
+        }
+
+    $env:PULSE_TEST_V2_VERIFIED = "true"
+    $env:PULSE_TEST_SECOND_SIGNER = "true"
+    Assert-Throws `
+        -Label "Release APK with multiple signers" `
+        -MessagePart "exactly one signer" `
+        -Action {
+            & $builderPath `
+                -Version "1.0.6" `
+                -SigningPropertiesPath $signingPropertiesPath `
+                -RepositoryRoot $fixtureRoot `
+                -GradleCommand $fakeGradle `
+                -ApkSignerCommand $fakeApkSigner `
+                -Aapt2Command $fakeAapt2 `
+                -SkipWebSync | Out-Null
+        }
+
     Assert-Throws `
         -Label "Missing signing properties" `
         -MessagePart "does not exist" `
@@ -227,6 +269,8 @@ printf 'fake-apk' > "$apk_dir/app-release.apk"
     Remove-Item Env:PULSE_TEST_GRADLE_TRACE -ErrorAction SilentlyContinue
     Remove-Item Env:PULSE_TEST_CERTIFICATE_SHA256 -ErrorAction SilentlyContinue
     Remove-Item Env:PULSE_TEST_DEBUGGABLE -ErrorAction SilentlyContinue
+    Remove-Item Env:PULSE_TEST_V2_VERIFIED -ErrorAction SilentlyContinue
+    Remove-Item Env:PULSE_TEST_SECOND_SIGNER -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $tempRoot) {
         Remove-Item -LiteralPath $tempRoot -Recurse -Force
     }

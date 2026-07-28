@@ -121,6 +121,51 @@ try {
             throw
         }
     }
+
+    $failureRoot = Join-Path $tempRoot "failure"
+    $failureLocalRoot = Join-Path $failureRoot "local"
+    $failureNasRoot = Join-Path $failureRoot "nas"
+    $failureSheetPath = Join-Path $failureRoot "offline-recovery.txt"
+    $fakeKeytool = Join-Path $failureRoot "fake-keytool.ps1"
+    New-Item -ItemType Directory -Path $failureRoot -Force | Out-Null
+    @'
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)
+$keyStoreIndex = [Array]::IndexOf($Remaining, '-keystore')
+if ($keyStoreIndex -ge 0) {
+    $keyStorePath = $Remaining[$keyStoreIndex + 1]
+    New-Item -ItemType Directory -Path (Split-Path -Parent $keyStorePath) -Force | Out-Null
+    [System.IO.File]::WriteAllBytes($keyStorePath, [byte[]](1, 2, 3, 4))
+}
+exit 1
+'@ | Set-Content -LiteralPath $fakeKeytool -Encoding utf8NoBOM
+    try {
+        & $initializerPath `
+            -LocalDirectory $failureLocalRoot `
+            -NasDirectory $failureNasRoot `
+            -RecoverySheetPath $failureSheetPath `
+            -KeytoolCommand $fakeKeytool `
+            -OpenSslCommand $openSsl `
+            -SkipCredentialManager | Out-Null
+        throw "Initializer unexpectedly accepted a failing keytool."
+    } catch {
+        if ($_.Exception.Message -notlike "*Unable to generate*") {
+            throw
+        }
+    }
+    foreach ($partialPath in @(
+        (Join-Path $failureLocalRoot "pulse-android-release.p12"),
+        (Join-Path $failureLocalRoot "pulse-android-release.cer"),
+        (Join-Path $failureLocalRoot "signing.properties"),
+        (Join-Path $failureNasRoot "pulse-android-release.p12"),
+        (Join-Path $failureNasRoot "pulse-android-release.cer"),
+        (Join-Path $failureNasRoot "pulse-android-recovery.json.enc"),
+        (Join-Path $failureNasRoot "README.md"),
+        $failureSheetPath
+    )) {
+        if (Test-Path -LiteralPath $partialPath) {
+            throw "Initializer left a partial signing output after failure: $partialPath"
+        }
+    }
 } finally {
     if (Test-Path -LiteralPath $tempRoot) {
         Remove-Item -LiteralPath $tempRoot -Recurse -Force

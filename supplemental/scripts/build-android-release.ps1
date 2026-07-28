@@ -17,6 +17,7 @@ if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
 }
 $RepositoryRoot = (Resolve-Path -LiteralPath $RepositoryRoot).Path
 $resolvedVersion = Resolve-AndroidReleaseVersion -Version $Version
+$androidVersionCode = Read-AndroidVersionCode -RepositoryRoot $RepositoryRoot
 $signingProperties = Read-AndroidSigningProperties -Path $SigningPropertiesPath
 if ($signingProperties.keyAlias -ne "pulse-release") {
     throw "Android Release signing alias must be pulse-release."
@@ -64,7 +65,7 @@ try {
             "-p", $androidRoot,
             "assembleRelease",
             "-PpulseVersionName=$($resolvedVersion.FullVersion)",
-            "-PpulseVersionCode=$($resolvedVersion.AndroidVersionCode)",
+            "-PpulseVersionCode=$androidVersionCode",
             "-PpulseSigningPropertiesFile=$SigningPropertiesPath",
             "--console=plain"
         ) 2>&1 | Out-String

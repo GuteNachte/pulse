@@ -112,12 +112,15 @@ function Test-AgentArtifactManifest {
 }
 
 function Test-AndroidReleaseArtifact {
-    param([System.Collections.Generic.List[string]]$Failures)
+    param(
+        [System.Collections.Generic.List[string]]$Failures,
+        [Parameter(Mandatory)][string]$ApkPath,
+        [string]$Label = "Android Release APK"
+    )
 
-    $apkPath = Join-Path $repoRoot "internal\site\android\app\build\outputs\apk\release\app-release.apk"
     try {
-        $result = Test-AndroidReleaseApk -Version $Version -ApkPath $apkPath -RepositoryRoot $repoRoot
-        Write-Host "[OK] Android Release APK verified: $($result.CertificateSha256)"
+        $result = Test-AndroidReleaseApk -Version $Version -ApkPath $ApkPath -RepositoryRoot $repoRoot
+        Write-Host "[OK] $Label verified: $($result.CertificateSha256)"
     } catch {
         Add-VerifyFailure $Failures $_.Exception.Message
     }
@@ -175,6 +178,10 @@ function Test-PublicReleasePackage {
     ) | Sort-Object
     $actualNames = @(Get-ChildItem -LiteralPath $packageRoot -File | Select-Object -ExpandProperty Name | Sort-Object)
     Assert-EqualValue $Failures "Public package file allowlist" ($expectedNames -join "|") ($actualNames -join "|")
+    Test-AndroidReleaseArtifact `
+        -Failures $Failures `
+        -ApkPath (Join-Path $packageRoot "pulse-android-$Version.apk") `
+        -Label "Packaged Android Release APK"
 
     $manifestPath = Join-Path $packageRoot "release-manifest.json"
     if (Assert-FileExists $Failures $manifestPath "Public release manifest") {
@@ -248,7 +255,9 @@ try {
     }
 
     if (-not $SkipAndroidApk) {
-        Test-AndroidReleaseArtifact $failures
+        Test-AndroidReleaseArtifact `
+            -Failures $failures `
+            -ApkPath (Join-Path $repoRoot "internal\site\android\app\build\outputs\apk\release\app-release.apk")
     }
 
     if (-not [string]::IsNullOrWhiteSpace($PublicReleaseDirectory)) {

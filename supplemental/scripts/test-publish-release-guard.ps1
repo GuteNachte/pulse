@@ -30,7 +30,6 @@ $helperScriptName = "release-script-helpers.ps1"
 $helperScript = Get-Content -LiteralPath (Join-Path $PSScriptRoot $helperScriptName) -Raw -Encoding UTF8
 foreach ($required in @(
     "function Resolve-PulseVersion",
-    "AndroidVersionCode",
     "function Assert-ReleaseVersionConsistency",
     "check-version-consistency.ps1",
     "function Assert-ReleaseSkipFlagsAllowed",
@@ -97,6 +96,7 @@ foreach ($required in @(
     "SHA256SUMS",
     "android-signing-helpers.ps1",
     "Test-AndroidReleaseApk",
+    '-ApkPath (Join-Path $packageRoot "pulse-android-$Version.apk")',
     "app\build\outputs\apk\release\app-release.apk"
 )) {
     Assert-Contains -ScriptName $verifyScriptName -Script $verifyScript -Needle $required

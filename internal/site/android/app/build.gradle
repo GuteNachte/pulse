@@ -25,7 +25,7 @@ android {
         applicationId "site.gutenacht.pulse"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode project.hasProperty('pulseVersionCode') ? project.property('pulseVersionCode').toInteger() : 10006
+        versionCode project.hasProperty('pulseVersionCode') ? project.property('pulseVersionCode').toInteger() : file('../version-code.txt').text.trim().toInteger()
         versionName project.hasProperty('pulseVersionName') ? project.property('pulseVersionName') : "1.0.6-beta.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

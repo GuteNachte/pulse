@@ -59,6 +59,7 @@ $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("pulse-android-signing-
 $storePassword = New-CryptographicPassword -ByteCount 32
 $recoveryPassword = New-CryptographicPassword -ByteCount 32
 $completed = $false
+$credentialWritten = $false
 
 try {
     foreach ($directory in @(
@@ -209,6 +210,7 @@ Print or transcribe this sheet and keep it offline. Delete this plaintext file o
             -Target $CredentialTarget `
             -UserName "Pulse Android Release Recovery" `
             -Password $recoveryPassword
+        $credentialWritten = $true
         $storedCredential = Get-WindowsGenericCredential -Target $CredentialTarget
         if ($storedCredential.Password -ne $recoveryPassword) {
             throw "Windows Credential Manager did not return the Android recovery password."
@@ -230,9 +232,16 @@ Print or transcribe this sheet and keep it offline. Delete this plaintext file o
     }
 } finally {
     if (-not $completed) {
-        foreach ($path in $createdFiles) {
+        foreach ($path in $targets) {
             if (Test-Path -LiteralPath $path) {
                 Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+            }
+        }
+        if ($credentialWritten) {
+            try {
+                Remove-WindowsGenericCredential -Target $CredentialTarget
+            } catch {
+                # Best-effort rollback after a failed signing initialization.
             }
         }
     }

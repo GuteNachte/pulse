@@ -120,7 +120,16 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
 
 $resolvedVersion = Resolve-PulseVersion -Version $Version
 $Version = $resolvedVersion.FullVersion
-$androidVersionCode = $resolvedVersion.AndroidVersionCode
+$androidVersionCodePath = Join-Path $repoRoot "internal\site\android\version-code.txt"
+$androidVersionCodeText = if (Test-Path -LiteralPath $androidVersionCodePath -PathType Leaf) {
+    (Get-Content -Raw -LiteralPath $androidVersionCodePath).Trim()
+} else {
+    ""
+}
+$androidVersionCode = 0
+if (-not [int]::TryParse($androidVersionCodeText, [ref]$androidVersionCode) -or $androidVersionCode -le 0) {
+    throw "internal/site/android/version-code.txt must contain a positive 32-bit integer."
+}
 $escapedVersion = [regex]::Escape($Version)
 $escapedVersionCode = [regex]::Escape([string]$androidVersionCode)
 $failures = [System.Collections.Generic.List[string]]::new()
@@ -144,7 +153,7 @@ Assert-PatternSet $failures @(
     @{ Path = "Makefile"; Pattern = "(?m)^HUB_VERSION\s*\?=\s*$escapedVersion\s*$"; Label = "Makefile HUB_VERSION" },
     @{
         Path = "internal\site\android\app\build.gradle"
-        Pattern = "versionCode\s+project\.hasProperty\('pulseVersionCode'\)\s*\?\s*project\.property\('pulseVersionCode'\)\.toInteger\(\)\s*:\s*$escapedVersionCode"
+        Pattern = "versionCode\s+project\.hasProperty\('pulseVersionCode'\)\s*\?\s*project\.property\('pulseVersionCode'\)\.toInteger\(\)\s*:\s*file\('../version-code\.txt'\)\.text\.trim\(\)\.toInteger\(\)"
         Label = "Android versionCode"
     },
     @{

@@ -10,7 +10,7 @@
 
 `.github/workflows/public-release.yml` 支持两种入口：
 
-- `workflow_dispatch`：`publish` 默认是 `false`，默认只验证、构建并生成离线发布包，不执行外部发布。
+- `workflow_dispatch`：`publish` 默认是 `false`，默认执行无密钥仓库审计、版本 / Go / Web / Windows Agent 契约和 Android Debug 编译检查；不会读取 Release 密钥、不会生成已签名公开包，也不会执行外部发布。
 - `v*.*.*-*.*` 预发布 tag：只有 tag 与 `internal/site/package.json` 完全一致时才可进入发布候选。
 
 即使 tag 正确，发布 job 仍要求：

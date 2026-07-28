@@ -66,6 +66,77 @@ foreach ($required in @(
 )) {
     Assert-Contains "Public release workflow" $workflow $required
 }
+
+function Assert-NestedPwshCallsAreGuarded {
+    param([string]$Label, [string]$Content)
+
+    $lines = @($Content -split "`r?`n")
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        if ($lines[$index] -notmatch '^\s+pwsh -NoProfile -File ') {
+            continue
+        }
+        if ($lines[$index].TrimEnd().EndsWith('\')) {
+            continue
+        }
+        $runStyle = ""
+        for ($parent = $index - 1; $parent -ge 0; $parent--) {
+            if ($lines[$parent] -match '^\s+run:\s*(?<style>.*)$') {
+                $runStyle = $Matches.style.Trim()
+                break
+            }
+            if ($lines[$parent] -match '^\s+- name:') {
+                break
+            }
+        }
+        if ($runStyle -ne '|') {
+            continue
+        }
+        $cursor = $index
+        while ($lines[$cursor].TrimEnd().EndsWith('`')) {
+            $cursor++
+        }
+        do {
+            $cursor++
+        } while ($cursor -lt $lines.Count -and [string]::IsNullOrWhiteSpace($lines[$cursor]))
+        $guarded = $false
+        while ($cursor -lt $lines.Count -and $lines[$cursor] -notmatch '^\s+- name:') {
+            if ($lines[$cursor].Trim() -eq 'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }') {
+                $guarded = $true
+                break
+            }
+            if ($lines[$cursor] -match '^\s+pwsh -NoProfile -File ') {
+                break
+            }
+            $cursor++
+        }
+        if (-not $guarded) {
+            throw "$Label nested PowerShell command is not fail-fast: $($lines[$index].Trim())"
+        }
+    }
+}
+foreach ($required in @(
+    'validated_sha: ${{ steps.release.outputs.validated_sha }}',
+    '"validated_sha=$validatedSha" >> $env:GITHUB_OUTPUT',
+    'ref: ${{ needs.validate.outputs.validated_sha }}',
+    'git fetch --force origin "refs/tags/$tag`:refs/tags/$tag"',
+    '$tagSha = (git rev-parse "$tag^{commit}").Trim()',
+    'if ($tagSha -ne $validatedSha)',
+    'HUB_BUILD_COMMIT=${{ needs.validate.outputs.validated_sha }}'
+)) {
+    Assert-Contains "Immutable public release workflow" $workflow $required
+}
+$chmodIndex = $workflow.IndexOf('chmod 600 $keyStorePath $propertiesPath', [System.StringComparison]::Ordinal)
+$chmodGuardIndex = $workflow.IndexOf(
+    'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
+    $chmodIndex,
+    [System.StringComparison]::Ordinal
+)
+if ($chmodIndex -lt 0 -or $chmodGuardIndex -lt $chmodIndex -or ($chmodGuardIndex - $chmodIndex) -gt 120) {
+    throw "Protected signing input chmod must fail closed before exporting the properties path."
+}
+if ($workflow.Contains('ref: ${{ needs.validate.outputs.tag }}')) {
+    throw "Publish must check out the immutable validated commit instead of resolving the tag again."
+}
 foreach ($required in @(
     "ANDROID_RELEASE_KEYSTORE_BASE64",
     "ANDROID_RELEASE_STORE_PASSWORD",
@@ -135,6 +206,8 @@ if (($workflow | Select-String -Pattern 'go-version: 1\.26\.5' -AllMatches).Matc
 }
 
 $qualityWorkflow = Get-Content -Raw -LiteralPath $qualityWorkflowPath
+Assert-NestedPwshCallsAreGuarded "Public release workflow" $workflow
+Assert-NestedPwshCallsAreGuarded "Quality workflow" $qualityWorkflow
 $qualityWebBuildIndex = $qualityWorkflow.IndexOf("npm --prefix internal/site run build", [System.StringComparison]::Ordinal)
 $qualityGoVetIndex = $qualityWorkflow.IndexOf("go vet -tags=testing ./...", [System.StringComparison]::Ordinal)
 if ($qualityWebBuildIndex -lt 0 -or $qualityGoVetIndex -lt 0 -or $qualityWebBuildIndex -gt $qualityGoVetIndex) {

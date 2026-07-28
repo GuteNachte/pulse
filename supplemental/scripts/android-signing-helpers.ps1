@@ -21,15 +21,25 @@ function Resolve-AndroidReleaseVersion {
     if ($minor -gt 99 -or $patch -gt 99) {
         throw "Android release version minor and patch components must not exceed 99."
     }
-    $versionCode = ($major * 10000) + ($minor * 100) + $patch
-    if ($versionCode -le 0 -or $versionCode -gt [int]::MaxValue) {
-        throw "Android release versionCode is outside the supported range."
-    }
     return [pscustomobject]@{
         FullVersion = $Version
-        AndroidVersionCode = $versionCode
         IsPrerelease = -not [string]::IsNullOrWhiteSpace($Matches.suffix)
     }
+}
+
+function Read-AndroidVersionCode {
+    param([Parameter(Mandatory)][string]$RepositoryRoot)
+
+    $path = Join-Path $RepositoryRoot "internal\site\android\version-code.txt"
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "Android versionCode source does not exist: $path"
+    }
+    $value = (Get-Content -Raw -LiteralPath $path).Trim()
+    $versionCode = 0
+    if (-not [int]::TryParse($value, [ref]$versionCode) -or $versionCode -le 0) {
+        throw "Android versionCode must be a positive 32-bit integer."
+    }
+    return $versionCode
 }
 
 function ConvertTo-CanonicalCertificateFingerprint {
@@ -129,6 +139,7 @@ function Test-AndroidReleaseApk {
     }
 
     $resolvedVersion = Resolve-AndroidReleaseVersion -Version $Version
+    $expectedVersionCode = Read-AndroidVersionCode -RepositoryRoot $RepositoryRoot
     $fingerprintPath = Join-Path $RepositoryRoot "internal\site\android\release-certificate.sha256"
     if (-not (Test-Path -LiteralPath $fingerprintPath -PathType Leaf)) {
         throw "Android Release certificate fingerprint does not exist: $fingerprintPath"
@@ -151,13 +162,17 @@ function Test-AndroidReleaseApk {
     if ($LASTEXITCODE -ne 0) {
         throw "Android Release APK signature verification failed."
     }
-    if ($apkSignerOutput -notmatch '(?im)^Verified using v(?:2|3) scheme .*:\s*true\s*$') {
-        throw "Android Release APK does not contain a verified v2 or v3 signature."
+    if ($apkSignerOutput -notmatch '(?im)^Verified using v2 scheme .*:\s*true\s*$') {
+        throw "Android Release APK does not contain a verified v2 signature."
     }
-    if ($apkSignerOutput -notmatch '(?im)^Signer #1 certificate SHA-256 digest:\s*(?<fingerprint>[0-9a-f: -]+)\s*$') {
-        throw "Android Release APK certificate fingerprint was not reported."
+    $reportedSigners = [regex]::Matches(
+        $apkSignerOutput,
+        '(?im)^Signer #(?<number>\d+) certificate SHA-256 digest:\s*(?<fingerprint>[0-9a-f: -]+)\s*$'
+    )
+    if ($reportedSigners.Count -ne 1 -or $reportedSigners[0].Groups['number'].Value -ne '1') {
+        throw "Android Release APK must contain exactly one signer."
     }
-    $actualFingerprint = ConvertTo-CanonicalCertificateFingerprint $Matches.fingerprint
+    $actualFingerprint = ConvertTo-CanonicalCertificateFingerprint $reportedSigners[0].Groups['fingerprint'].Value
     if ($actualFingerprint -ne $expectedFingerprint) {
         throw "Android Release APK certificate fingerprint does not match the fixed release identity."
     }
@@ -172,7 +187,7 @@ function Test-AndroidReleaseApk {
     if ($Matches.package -ne "site.gutenacht.pulse") {
         throw "Android Release APK applicationId is not site.gutenacht.pulse."
     }
-    if ([int]$Matches.code -ne $resolvedVersion.AndroidVersionCode) {
+    if ([int]$Matches.code -ne $expectedVersionCode) {
         throw "Android Release APK versionCode does not match the release version."
     }
     if ($Matches.version -ne $resolvedVersion.FullVersion) {
@@ -185,7 +200,7 @@ function Test-AndroidReleaseApk {
     return [pscustomobject]@{
         ApkPath = $ApkPath
         VersionName = $resolvedVersion.FullVersion
-        VersionCode = $resolvedVersion.AndroidVersionCode
+        VersionCode = $expectedVersionCode
         CertificateSha256 = $actualFingerprint
     }
 }
