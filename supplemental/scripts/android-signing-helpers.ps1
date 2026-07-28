@@ -211,27 +211,38 @@ function Test-AndroidReleaseApk {
         }
     }
 
-    $apkSignerOutput = & $ApkSignerCommand verify --verbose --print-certs $ApkPath 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0) {
+    $apkSignerLines = @(& $ApkSignerCommand verify --verbose --print-certs $ApkPath 2>&1 | ForEach-Object { [string]$_ })
+    $apkSignerExitCode = $LASTEXITCODE
+    $apkSignerOutput = $apkSignerLines -join "`n"
+    if ($apkSignerExitCode -ne 0) {
         throw "Android Release APK signature verification failed."
     }
     if ($apkSignerOutput -notmatch '(?im)^Verified using v2 scheme .*:\s*true\s*$') {
         throw "Android Release APK does not contain a verified v2 signature."
     }
-    $reportedSigners = [regex]::Matches(
+    $reportedSignerNumbers = @([regex]::Matches(
         $apkSignerOutput,
-        '(?im)^Signer #(?<number>\d+) certificate SHA-256 digest:\s*(?<fingerprint>[0-9a-f: -]+)\s*$'
-    )
-    if ($reportedSigners.Count -ne 1 -or $reportedSigners[0].Groups['number'].Value -ne '1') {
+        '(?im)^Signer #(?<number>\d+)\b'
+    ) | ForEach-Object { $_.Groups['number'].Value } | Sort-Object -Unique)
+    if ($reportedSignerNumbers.Count -ne 1 -or $reportedSignerNumbers[0] -ne '1') {
         throw "Android Release APK must contain exactly one signer."
     }
-    $actualFingerprint = ConvertTo-CanonicalCertificateFingerprint $reportedSigners[0].Groups['fingerprint'].Value
+    $reportedFingerprint = [regex]::Match(
+        $apkSignerOutput,
+        '(?im)^Signer #1 certificate SHA-256 digest:\s*(?<fingerprint>[0-9a-f: -]+(?:\r?\n[ \t]*[0-9a-f: -]+)*)'
+    )
+    if (-not $reportedFingerprint.Success) {
+        throw "Android Release APK certificate SHA-256 fingerprint was not reported."
+    }
+    $actualFingerprint = ConvertTo-CanonicalCertificateFingerprint $reportedFingerprint.Groups['fingerprint'].Value
     if ($actualFingerprint -ne $expectedFingerprint) {
         throw "Android Release APK certificate fingerprint does not match the fixed release identity."
     }
 
-    $aaptOutput = & $Aapt2Command dump badging $ApkPath 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0) {
+    $aaptLines = @(& $Aapt2Command dump badging $ApkPath 2>&1 | ForEach-Object { [string]$_ })
+    $aaptExitCode = $LASTEXITCODE
+    $aaptOutput = $aaptLines -join "`n"
+    if ($aaptExitCode -ne 0) {
         throw "Android Release APK metadata verification failed."
     }
     if ($aaptOutput -notmatch "(?m)^package:\s+name='(?<package>[^']+)'\s+versionCode='(?<code>\d+)'\s+versionName='(?<version>[^']+)'") {

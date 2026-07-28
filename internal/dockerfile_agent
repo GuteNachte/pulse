@@ -10,7 +10,7 @@ COPY . ./
 
 # Build
 ARG TARGETOS TARGETARCH
-ARG AGENT_VERSION=1.0.6-beta.2
+ARG AGENT_VERSION=1.0.6-beta.3
 RUN CGO_ENABLED=0 GOGC=75 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags "-w -s -X gutenacht.site/pulse.Version=$AGENT_VERSION" -o /agent ./internal/cmd/agent
 
 RUN rm -rf /tmp/*
