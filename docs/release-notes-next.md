@@ -6,7 +6,7 @@
 
 ### Web / Hub
 
-- 兼容 Android Build Tools 37 的 `apksigner` 新输出：发布校验同时识别旧版 `Signer #1` 与新版 `Number of signers: 1` / `V2 Signer`，继续严格要求唯一签名者、v2 签名、64 位 SHA-256 和固定发布证书；回归测试覆盖新格式单签名通过和多签名拒绝，并使用真实 Build Tools 37 对已签名 APK 完成复验。
+- 兼容 Android Build Tools 35 / 36 / 37 的 `apksigner` 输出差异：发布校验独立识别签名者数量与 `Signer #1` / `V2 Signer` 指纹字段，继续严格要求唯一签名者、唯一有效的 64 位 SHA-256、v2 签名和固定发布证书；回归测试覆盖旧格式、带 `Number of signers` 的混合格式、新格式及多签名拒绝，并使用真实 Build Tools 37 对已签名 APK 完成复验。Android `versionCode` 单调性契约改用隔离 Git 历史构造 beta.2 / beta.3 标签，不再随公开仓库新增标签而过期。
 - `1.0.6-beta.2` 与 `1.0.6-beta.3` 的受保护 tag 均保留且不移动、不删除、不复用；两次发布尝试都在附件上传、GHCR 推送和 FlyNAS 部署前被 Android 签名复核拦截，因此没有公开半成品。修复候选统一升为 `1.0.6-beta.4`，Android `versionCode=1000604`。
 - 合并前发布完整性审查继续加固公开候选链路：validate 输出不可变提交 SHA，受保护 publish job 必须检出同一 SHA，并在审批后、镜像推送前和 GitHub Release 创建前分别确认远端 tag 仍指向同一提交；所有嵌套 PowerShell 子进程逐项 fail-fast，签名文件权限失败会立即停止，避免后续成功命令掩盖前一步失败。
 - 公开包在上传前会直接复验包内 Android APK，而不只相信构建目录源文件；APK 必须包含 v2 签名且只能有一个固定签名者。端到端负向测试会篡改 APK 并重算 manifest / SHA256SUMS，仍要求验证器因签名失效而拒绝；签名初始化失败会清理全部预计算输出和已写入凭据，避免留下部分密钥材料。

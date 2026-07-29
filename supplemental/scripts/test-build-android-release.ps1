@@ -79,7 +79,14 @@ param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)
 Write-Output "Verifies"
 Write-Output "Verified using v2 scheme (APK Signature Scheme v2): $($env:PULSE_TEST_V2_VERIFIED)"
 Write-Output "Verified using v3 scheme (APK Signature Scheme v3): true"
-if ($env:PULSE_TEST_MODERN_SIGNER_OUTPUT -eq "true") {
+if ($env:PULSE_TEST_SIGNER_COUNT_WITH_LEGACY_FINGERPRINT -eq "true") {
+    $signerCount = if ($env:PULSE_TEST_SECOND_SIGNER -eq "true") { 2 } else { 1 }
+    Write-Output "Number of signers: $signerCount"
+    Write-Output "Signer #1 certificate SHA-256 digest: $env:PULSE_TEST_CERTIFICATE_SHA256"
+    if ($env:PULSE_TEST_SECOND_SIGNER -eq "true") {
+        Write-Output "Signer #2 certificate SHA-256 digest: $env:PULSE_TEST_CERTIFICATE_SHA256"
+    }
+} elseif ($env:PULSE_TEST_MODERN_SIGNER_OUTPUT -eq "true") {
     $signerCount = if ($env:PULSE_TEST_SECOND_SIGNER -eq "true") { 2 } else { 1 }
     Write-Output "Number of signers: $signerCount"
     Write-Output "V2 Signer: certificate SHA-256 digest: $env:PULSE_TEST_CERTIFICATE_SHA256"
@@ -93,6 +100,9 @@ if ($env:PULSE_TEST_MODERN_SIGNER_OUTPUT -eq "true") {
     if ($env:PULSE_TEST_SECOND_SIGNER -eq "true") {
         Write-Output "Signer #2 certificate SHA-256 digest: $env:PULSE_TEST_CERTIFICATE_SHA256"
     }
+}
+if (-not [string]::IsNullOrWhiteSpace($env:PULSE_TEST_EXTRA_CERTIFICATE_SHA256)) {
+    Write-Output "V2 Signer: certificate SHA-256 digest: $env:PULSE_TEST_EXTRA_CERTIFICATE_SHA256"
 }
 exit 0
 '@ | Set-Content -LiteralPath $fakeApkSigner -Encoding utf8NoBOM
@@ -129,6 +139,8 @@ exit 0
     $env:PULSE_TEST_SECOND_SIGNER = "false"
     $env:PULSE_TEST_WRAP_CERTIFICATE_OUTPUT = "false"
     $env:PULSE_TEST_MODERN_SIGNER_OUTPUT = "false"
+    $env:PULSE_TEST_SIGNER_COUNT_WITH_LEGACY_FINGERPRINT = "false"
+    $env:PULSE_TEST_EXTRA_CERTIFICATE_SHA256 = ""
 
     $result = & $builderPath `
         -Version "1.0.6" `
@@ -186,6 +198,20 @@ exit 0
         throw "Android Release builder did not parse the Build Tools 37 signer output."
     }
     $env:PULSE_TEST_MODERN_SIGNER_OUTPUT = "false"
+
+    $env:PULSE_TEST_SIGNER_COUNT_WITH_LEGACY_FINGERPRINT = "true"
+    $legacySignerWithCountResult = & $builderPath `
+        -Version "1.0.6" `
+        -SigningPropertiesPath $signingPropertiesPath `
+        -RepositoryRoot $fixtureRoot `
+        -GradleCommand $fakeGradle `
+        -ApkSignerCommand $fakeApkSigner `
+        -Aapt2Command $fakeAapt2 `
+        -SkipWebSync
+    if ($legacySignerWithCountResult.CertificateSha256 -ne $fingerprint) {
+        throw "Android Release builder did not parse the Build Tools 35/36 signer output."
+    }
+    $env:PULSE_TEST_SIGNER_COUNT_WITH_LEGACY_FINGERPRINT = "false"
 
     $defaultGradleRelativePath = if ($IsWindows) {
         "internal\site\android\gradlew.bat"
@@ -294,6 +320,44 @@ printf 'fake-apk' > "$apk_dir/app-release.apk"
         }
     $env:PULSE_TEST_MODERN_SIGNER_OUTPUT = "false"
 
+    $env:PULSE_TEST_SECOND_SIGNER = "false"
+    foreach ($invalidFingerprint in @(
+        @{ Label = "Duplicate certificate fingerprint"; Value = $fingerprint.ToLowerInvariant() },
+        @{ Label = "Conflicting certificate fingerprint"; Value = $wrongFingerprint }
+    )) {
+        $env:PULSE_TEST_EXTRA_CERTIFICATE_SHA256 = $invalidFingerprint.Value
+        Assert-Throws `
+            -Label $invalidFingerprint.Label `
+            -MessagePart "exactly one valid certificate" `
+            -Action {
+                & $builderPath `
+                    -Version "1.0.6" `
+                    -SigningPropertiesPath $signingPropertiesPath `
+                    -RepositoryRoot $fixtureRoot `
+                    -GradleCommand $fakeGradle `
+                    -ApkSignerCommand $fakeApkSigner `
+                    -Aapt2Command $fakeAapt2 `
+                    -SkipWebSync | Out-Null
+            }
+    }
+    $env:PULSE_TEST_EXTRA_CERTIFICATE_SHA256 = ""
+
+    $env:PULSE_TEST_CERTIFICATE_SHA256 = "not-a-fingerprint"
+    Assert-Throws `
+        -Label "Malformed certificate fingerprint" `
+        -MessagePart "exactly one valid certificate" `
+        -Action {
+            & $builderPath `
+                -Version "1.0.6" `
+                -SigningPropertiesPath $signingPropertiesPath `
+                -RepositoryRoot $fixtureRoot `
+                -GradleCommand $fakeGradle `
+                -ApkSignerCommand $fakeApkSigner `
+                -Aapt2Command $fakeAapt2 `
+                -SkipWebSync | Out-Null
+        }
+    $env:PULSE_TEST_CERTIFICATE_SHA256 = $fingerprint.ToLowerInvariant()
+
     Assert-Throws `
         -Label "Missing signing properties" `
         -MessagePart "does not exist" `
@@ -316,6 +380,8 @@ printf 'fake-apk' > "$apk_dir/app-release.apk"
     Remove-Item Env:PULSE_TEST_SECOND_SIGNER -ErrorAction SilentlyContinue
     Remove-Item Env:PULSE_TEST_WRAP_CERTIFICATE_OUTPUT -ErrorAction SilentlyContinue
     Remove-Item Env:PULSE_TEST_MODERN_SIGNER_OUTPUT -ErrorAction SilentlyContinue
+    Remove-Item Env:PULSE_TEST_SIGNER_COUNT_WITH_LEGACY_FINGERPRINT -ErrorAction SilentlyContinue
+    Remove-Item Env:PULSE_TEST_EXTRA_CERTIFICATE_SHA256 -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $tempRoot) {
         Remove-Item -LiteralPath $tempRoot -Recurse -Force
     }

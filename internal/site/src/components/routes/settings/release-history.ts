@@ -20,7 +20,7 @@ export const releaseHistory: ReleaseNote[] = [
 				title: "Web / Hub",
 				items: [
 					"1.0.6-beta.4 继续让 Web、Hub、Agent 与 Android 使用同一显式版本；1.0.6-beta.2 与 beta.3 的受保护 tag 均保留且不复用，两次失败都发生在附件、镜像和部署前，没有产生公开半成品。",
-					"兼容 Android Build Tools 37 的 apksigner 新输出：同时识别旧版 Signer #1 与新版 Number of signers / V2 Signer，仍严格要求唯一签名者、64 位 SHA-256、v2 签名和固定发布证书；真实工具输出与多签名负向样本均纳入回归。",
+					"兼容 Android Build Tools 35 / 36 / 37 的 apksigner 输出差异：独立识别签名者数量与 Signer #1 / V2 Signer 指纹字段，仍严格要求唯一签名者、唯一有效的 64 位 SHA-256、v2 签名和固定发布证书；versionCode 单调性测试改用隔离 Git 标签历史，不会再随公开标签增加而过期。",
 					"完成 1.0.6-beta.1 普通用户视角的公开安装验收：从 GitHub Release 重新下载全部附件并核对 SHA256，Windows Agent、Android APK、Compose、GHCR 镜像和隔离 Hub 运行态均使用公开产物验证；临时 Hub 持续健康且公开版本正确。",
 					"修复 Windows Docker CLI 直连 GHCR token 端点 EOF 时的镜像误判：发布验证器保留 manifest inspect，失败后回退到 buildx imagetools inspect，两者都失败仍严格阻断；三条路径的回归测试已接入 Quality 与公开发布工作流。",
 					"README 新增普通用户快速开始，直接提供公开 Compose 部署、首次启动、数据持久化、Agent 接入、Android 安装和 SHA256 校验步骤，并链接完整公开安装验收记录。",
