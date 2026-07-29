@@ -220,21 +220,42 @@ function Test-AndroidReleaseApk {
     if ($apkSignerOutput -notmatch '(?im)^Verified using v2 scheme .*:\s*true\s*$') {
         throw "Android Release APK does not contain a verified v2 signature."
     }
+    $reportedSignerCounts = @([regex]::Matches(
+        $apkSignerOutput,
+        '(?im)^Number of signers:[ \t]*(?<count>\d+)[ \t]*$'
+    ) | ForEach-Object { $_.Groups['count'].Value })
     $reportedSignerNumbers = @([regex]::Matches(
         $apkSignerOutput,
         '(?im)^Signer #(?<number>\d+)\b'
     ) | ForEach-Object { $_.Groups['number'].Value } | Sort-Object -Unique)
-    if ($reportedSignerNumbers.Count -ne 1 -or $reportedSignerNumbers[0] -ne '1') {
+    if ($reportedSignerCounts.Count -gt 0) {
+        if ($reportedSignerCounts.Count -ne 1 -or $reportedSignerCounts[0] -ne '1') {
+            throw "Android Release APK must contain exactly one signer."
+        }
+        if ($reportedSignerNumbers.Count -gt 0 -and (
+            $reportedSignerNumbers.Count -ne 1 -or $reportedSignerNumbers[0] -ne '1'
+        )) {
+            throw "Android Release APK must contain exactly one signer."
+        }
+    } elseif ($reportedSignerNumbers.Count -eq 1 -and $reportedSignerNumbers[0] -eq '1') {
+    } else {
         throw "Android Release APK must contain exactly one signer."
     }
-    $reportedFingerprint = [regex]::Match(
+    $reportedFingerprintLabels = @([regex]::Matches(
         $apkSignerOutput,
-        '(?im)^Signer #1 certificate SHA-256 digest:\s*(?<fingerprint>[0-9a-f: -]+(?:\r?\n[ \t]*[0-9a-f: -]+)*)'
-    )
-    if (-not $reportedFingerprint.Success) {
+        '(?im)^(?:Signer #1|V2 Signer:)[ \t]*certificate SHA-256 digest:'
+    ))
+    $reportedFingerprints = @([regex]::Matches(
+        $apkSignerOutput,
+        '(?im)^(?:Signer #1|V2 Signer:)[ \t]*certificate SHA-256 digest:[ \t]*(?<fingerprint>[0-9a-f: -]+(?:\r?\n[ \t]+[0-9a-f: -]+)*)[ \t]*$'
+    ))
+    if ($reportedFingerprintLabels.Count -eq 0) {
         throw "Android Release APK certificate SHA-256 fingerprint was not reported."
     }
-    $actualFingerprint = ConvertTo-CanonicalCertificateFingerprint $reportedFingerprint.Groups['fingerprint'].Value
+    if ($reportedFingerprintLabels.Count -ne 1 -or $reportedFingerprints.Count -ne 1) {
+        throw "Android Release APK must report exactly one valid certificate SHA-256 fingerprint."
+    }
+    $actualFingerprint = ConvertTo-CanonicalCertificateFingerprint $reportedFingerprints[0].Groups['fingerprint'].Value
     if ($actualFingerprint -ne $expectedFingerprint) {
         throw "Android Release APK certificate fingerprint does not match the fixed release identity."
     }
