@@ -1,11 +1,12 @@
-# Pulse 1.0.6-beta.5 开发记录
+# Pulse 1.0.6-beta.6 开发记录
 
-> `1.0.5` 已于 2026-06-23 固定发布。固定点之后的新改动统一进入 `1.0.6-beta.5` 开发记录，不再回填到 `1.0.5` 正式记录。
+> `1.0.5` 已于 2026-06-23 固定发布。固定点之后的新改动统一进入 `1.0.6-beta.6` 开发记录，不再回填到 `1.0.5` 正式记录。
 
-## 1.0.6-beta.5 开发记录
+## 1.0.6-beta.6 开发记录
 
 ### Web / Hub
 
+- `1.0.6-beta.6` 统一 Web、Hub、Agent 和 Android 版本；Android `versionCode=1000606`，发布契约补齐 beta.4 / beta.5 历史并验证单调递增，已发布的 `v1.0.6-beta.5` 标签保持不可变。
 - 修复完整系统采集超过 5 秒时机器短暂误报离线：`GetData` 默认等待时间单独放宽到 30 秒，其他 WebSocket 动作继续保持 5 秒；Agent 连接未断开时不再仅因首轮硬件或容器采集较慢就将整机标记离线。
 - 修复 Hub 同机 Agent 页面身份地址显示为 `127.0.0.1`：Hub 的本机 Token、`is_local` 与 `Hub` 标签仍按真实 loopback 连接判定，页面身份地址则改用 Agent 上报的物理网卡 LAN IPv4；静态网卡详情未在后续每轮重复上报时会保留已确认地址。
 - 兼容 Android Build Tools 35 / 36 / 37 的 `apksigner` 输出差异：发布校验独立识别签名者数量与 `Signer #1` / `V2 Signer` 指纹字段，继续严格要求唯一签名者、唯一有效的 64 位 SHA-256、v2 签名和固定发布证书；回归测试覆盖旧格式、带 `Number of signers` 的混合格式、新格式及多签名拒绝，并使用真实 Build Tools 37 对已签名 APK 完成复验。Android `versionCode` 单调性契约改用隔离 Git 历史构造 beta.2 / beta.3 标签，不再随公开仓库新增标签而过期。
@@ -971,6 +972,7 @@
 
 ## 移动端 / Android
 
+- `1.0.6-beta.6` Android App 使用 `versionName=1.0.6-beta.6`、`versionCode=1000606`，继续复用固定 Release 证书和不可调试构建；本轮无新增原生功能。
 - 本轮没有新增 Android 原生能力；移动端 WebView 跟随 Web / Hub `1.0.6` 使用相同 ONT 严格字段、接口状态和关系规则，并完成 `390 × 844` 视口验收。
 - 移动端 WebView 同步使用 LAN CIDR 示例、简洁的位置选择与统一备注输入框。
 
@@ -1055,6 +1057,7 @@
 
 ## Agent / 部署
 
+- `1.0.6-beta.6` 重新统一构建 Hub、Linux / NAS Agent 镜像和 Windows Agent 安装包；Compose、安装说明与发布验证命令全部使用显式 beta.6，不使用 `latest`。
 - Linux Agent 补齐真实物理网卡 IPv4 / IPv6 采集；Hub 同机 Agent 仍通过 `127.0.0.1` 安全通道连接，但设备页面显示宿主机 LAN 地址，并排除 `docker0`、`veth`、容器网桥和隧道接口。外部 Agent 继续使用目标 Hub 的可达局域网地址，连接语义不变。
 
 - 本轮不改变 Agent 采集协议或部署参数；ONT 参数、接口和关系先由资产中心手工确认，后续统一发布时 Hub、Agent、Web 和 Android App 仍使用同一 `1.0.6` 版本号。

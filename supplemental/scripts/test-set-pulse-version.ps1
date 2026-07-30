@@ -3,8 +3,8 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $updaterPath = Join-Path $PSScriptRoot "set-pulse-version.ps1"
 $checkerPath = Join-Path $PSScriptRoot "check-version-consistency.ps1"
-$targetVersion = "1.0.6-beta.5"
-$targetAndroidVersionCode = 1000605
+$targetVersion = "1.0.6-beta.6"
+$targetAndroidVersionCode = 1000606
 
 $fixtureFiles = @(
     "internal\site\package.json",
@@ -49,7 +49,7 @@ function New-VersionFixture {
         Copy-Item -LiteralPath $source -Destination $destination
 
         $content = Get-Content -Raw -LiteralPath $destination
-        $content = $content.Replace($targetVersion, "1.0.6-beta.4").Replace("1000605", "1000604")
+        $content = $content.Replace($targetVersion, "1.0.6-beta.5").Replace("1000606", "1000605")
         [System.IO.File]::WriteAllText(
             $destination,
             $content,
@@ -124,7 +124,7 @@ try {
         "Android versionCode source" `
         $targetAndroidVersionCode `
         ((Get-Content -Raw -LiteralPath (Join-Path $fixtureRoot "internal\site\android\version-code.txt")).Trim())
-    if ($gradle -notmatch 'versionName\s+project.*:\s*"1\.0\.6-beta\.5"') { throw "Android versionName was not updated." }
+    if ($gradle -notmatch ('versionName\s+project.*:\s*"' + [regex]::Escape($targetVersion) + '"')) { throw "Android versionName was not updated." }
 
     $checkResult = Invoke-PwshFile -Path $checkerPath -Arguments @("-Version", $targetVersion, "-RepositoryRoot", $fixtureRoot)
     Assert-Success "Fixture consistency check" $checkResult

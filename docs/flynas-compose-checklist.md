@@ -2,8 +2,8 @@
 
 ## 当前部署约定
 
-- Hub 镜像：`registry.example.com/infra/pulse-hub:1.0.6-beta.5`
-- Agent 镜像：`registry.example.com/infra/pulse-agent:1.0.6-beta.5`
+- Hub 镜像：`registry.example.com/infra/pulse-hub:1.0.6-beta.6`
+- Agent 镜像：`registry.example.com/infra/pulse-agent:1.0.6-beta.6`
 - 每次发布新版本时，Hub 和 Agent 必须同步更新为同一个版本号。不要只更新 Hub 镜像，也不要复用旧 Agent 镜像，避免 Agent 采集、更新、容器控制等改动没有部署上。
 - Linux / 飞牛 / NAS 只使用 Docker 容器版 Agent。
 - 通用 Linux / 飞牛 / NAS 使用 Docker Compose 作为标准部署方式；Unraid 使用 root 直连下载命令把 XML 写入 Unraid 的模板目录，不走 Compose。
@@ -34,8 +34,8 @@ curl -I https://registry.example.com/v2/
 3. 确认镜像可以拉取：
 
 ```bash
-docker pull registry.example.com/infra/pulse-hub:1.0.6-beta.5
-docker pull registry.example.com/infra/pulse-agent:1.0.6-beta.5
+docker pull registry.example.com/infra/pulse-hub:1.0.6-beta.6
+docker pull registry.example.com/infra/pulse-agent:1.0.6-beta.6
 ```
 
 两个 `docker pull` 必须使用同一个目标版本号；如果任一镜像不存在，停止部署并回到本机发布流程重新执行统一发布脚本。

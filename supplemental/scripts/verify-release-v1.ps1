@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "1.0.6-beta.5",
+    [string]$Version = "1.0.6-beta.6",
     [string]$HubImage = "",
     [string]$LinuxAgentImage = "",
     [string]$BuildDir = "build/releases/agent",

@@ -11,15 +11,16 @@ export type ReleaseNote = {
 
 export const releaseHistory: ReleaseNote[] = [
 	{
-		version: "1.0.6-beta.5",
-		date: "2026-07-29",
-		title: "Pulse 1.0.6-beta.5 开发记录",
+		version: "1.0.6-beta.6",
+		date: "2026-07-30",
+		title: "Pulse 1.0.6-beta.6 开发记录",
 		badges: ["公开测试版", "Web / Hub", "图片搜索 Agent", "网络拓扑", "智能家居", "工程质量", "项目独立化"],
 		sections: [
 			{
 				title: "Web / Hub",
 				items: [
-					"1.0.6-beta.5 修复慢速完整采集导致机器短暂误报离线：GetData 默认等待时间单独放宽到 30 秒，其他 WebSocket 动作继续保持 5 秒；连接未断开时不再仅因首轮硬件或容器采集较慢将整机标记离线。",
+					"1.0.6-beta.6 延续并收口慢速完整采集修复：GetData 默认等待时间单独放宽到 30 秒，其他 WebSocket 动作继续保持 5 秒；连接未断开时不再仅因首轮硬件或容器采集较慢将整机标记离线。",
+					"1.0.6-beta.6 统一 Web、Hub、Agent 和 Android 版本；Android versionCode 升到 1000606，发布契约补齐 beta.4 / beta.5 历史并验证单调递增，旧 beta.5 tag 保持不可变。",
 					"修复 Hub 同机 Agent 页面身份地址显示为 127.0.0.1：本机 Token、Hub 标签和 is_local 仍按真实 loopback 连接判定，页面身份地址改用 Agent 上报的物理网卡 LAN IPv4，并在后续采集保留已确认地址。",
 					"1.0.6-beta.4 继续让 Web、Hub、Agent 与 Android 使用同一显式版本；1.0.6-beta.2 与 beta.3 的受保护 tag 均保留且不复用，两次失败都发生在附件、镜像和部署前，没有产生公开半成品。",
 					"兼容 Android Build Tools 35 / 36 / 37 的 apksigner 输出差异：独立识别签名者数量与 Signer #1 / V2 Signer 指纹字段，仍严格要求唯一签名者、唯一有效的 64 位 SHA-256、v2 签名和固定发布证书；versionCode 单调性测试改用隔离 Git 标签历史，不会再随公开标签增加而过期。",
@@ -566,7 +567,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "移动端 / Android App",
 				items: [
-					"Android App 随统一版本升到 1.0.6-beta.5，versionCode=1000605；本次不新增原生功能，继续使用固定 Release 证书和不可调试构建，保持 beta.2 之后的覆盖升级身份。",
+					"Android App 随统一版本升到 1.0.6-beta.6，versionCode=1000606；本次不新增原生功能，继续使用固定 Release 证书和不可调试构建，保持 beta.2 之后的覆盖升级身份。",
 					"Android App 随候选版本升到 1.0.6-beta.4，versionCode=1000604；本次不新增原生功能，只兼容 Build Tools 37 的 APK 签名复核输出，长期 Release 证书和覆盖升级身份保持不变。",
 					"Android 安装序号改为显式单一来源，1.0.6-beta.2 使用 1000602；Gradle、Release 构建、APK 校验和版本一致性检查共同读取该值，发布门禁还会比较历史 tag 并要求高于已发布最大值，避免绕过升版脚本或让预发布版本被 Android 视为同一次安装。",
 					"1.0.6-beta.2 候选 APK 改为不可调试的 Release 构建，并固定使用唯一 RSA-4096 发布证书；包名、版本、v2 签名和证书 SHA-256 BF114B3A8EA33125893B5B1E6865B43BFE8DAC89E1BE154F7E48A91D93D51374 由发布脚本自动校验。",
@@ -583,6 +584,7 @@ export const releaseHistory: ReleaseNote[] = [
 				title: "Agent / 部署",
 				items: [
 					"Linux Agent 补齐真实物理网卡 IPv4 / IPv6 采集；Hub 同机 Agent 仍通过 127.0.0.1 安全通道连接，但页面显示宿主机 LAN 地址，并排除 Docker、容器网桥和隧道接口。外部 Agent 继续使用目标 Hub 的可达局域网地址。",
+					"1.0.6-beta.6 重新统一构建 Hub、Linux / NAS Agent 镜像和 Windows Agent 安装包；Compose、安装说明和发布验证命令全部使用显式 beta.6，不使用 latest。",
 					"1.0.6-beta.2 与 beta.3 的 publish 均在上传附件和推送镜像前停止，因此没有对应 Hub / Agent GHCR 镜像、GitHub Release 或 FlyNAS 部署；beta.4 将重新通过 PR、完整 CI、发布门禁和部署验收。",
 					"受保护的公开 publish job 在人工审批后才读取四个 Android Environment Secret，构建并复核最终 Release APK，随后清理 runner 临时签名材料；普通验证和贡献者构建保持无密钥。",
 					"公开包默认收录 app-release.apk，统一发布入口会先完成 Android 签名构建再推送 Hub / Agent，避免单端发布成功后才发现 APK 缺失或签名错误。",
@@ -602,6 +604,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "文档 / 规则",
 				items: [
+					"公开发布文档切换到 1.0.6-beta.6：保留 beta.5 不可变 tag，发布前要求 Android versionCode 1000606、完整版本一致性和旧标签不回移。",
 					"公开发布手册记录 beta.2 与 beta.3 的不可变 tag、失败运行、真实根因和零公开产物边界，并将后续命令切换到 1.0.6-beta.4；失败标签不移动、不删除、不复用。",
 					"公开发布完整性门禁新增不可变提交 SHA：受保护 publish job 只检出 validate 已验证的提交，并在人工审批后、镜像推送前和 GitHub Release 创建前三次确认远端 tag 仍指向同一提交；仓库 Ruleset 同时禁止 v* tag 更新和删除，嵌套 PowerShell、签名文件权限、包内 APK 和初始化失败清理均改为 fail-closed。",
 					"公开 CI 的 Android 无密钥编译改为先安装前端依赖并同步 Capacitor 工程，再执行 Gradle；Quality 与 Public Release 共用顺序契约，避免本机已有生成文件掩盖全新 Linux runner 的缺失文件问题。",
