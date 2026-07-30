@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $packagerPath = Join-Path $PSScriptRoot "package-public-release.ps1"
 $verifierPath = Join-Path $PSScriptRoot "verify-release-v1.ps1"
-$version = "1.0.6-beta.4"
+$version = "1.0.6-beta.5"
 $hubImage = "ghcr.io/local-validation/pulse-hub:$version"
 $agentImage = "ghcr.io/local-validation/pulse-agent:$version"
 $buildTimestamp = "2026-07-25T00:00:00Z"
@@ -160,7 +160,7 @@ exit 0
     $fakeAapt2 = Join-Path $toolRoot "fake-aapt2.ps1"
     @'
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)
-Write-Output "package: name='site.gutenacht.pulse' versionCode='1000604' versionName='1.0.6-beta.4'"
+Write-Output "package: name='site.gutenacht.pulse' versionCode='1000605' versionName='1.0.6-beta.5'"
 exit 0
 '@ | Set-Content -LiteralPath $fakeAapt2 -Encoding utf8NoBOM
 

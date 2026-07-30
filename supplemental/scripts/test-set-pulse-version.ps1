@@ -49,13 +49,12 @@ function New-VersionFixture {
         Copy-Item -LiteralPath $source -Destination $destination
 
         $content = Get-Content -Raw -LiteralPath $destination
-        if ($content.Contains($targetVersion)) {
-            [System.IO.File]::WriteAllText(
-                $destination,
-                $content.Replace($targetVersion, "1.0.6"),
-                [System.Text.UTF8Encoding]::new($false)
-            )
-        }
+        $content = $content.Replace($targetVersion, "1.0.6-beta.4").Replace("1000605", "1000604")
+        [System.IO.File]::WriteAllText(
+            $destination,
+            $content,
+            [System.Text.UTF8Encoding]::new($false)
+        )
     }
     return $fixtureRoot
 }

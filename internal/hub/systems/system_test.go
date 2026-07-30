@@ -260,6 +260,31 @@ func TestUpdateLocalSystemMarkerFromInfoDoesNotMarkRemoteDevWindowsHostAsHub(t *
 	require.Equal(t, "primary", record.GetString("primary_use"))
 }
 
+func TestSelectSystemIdentityIPUsesPhysicalLANAddressForLoopbackAgent(t *testing.T) {
+	details := &system.Details{NetworkInterfaces: []system.NetworkInterfaceDetails{
+		{Name: "docker0", Status: "up", IPv4: []string{"172.17.0.1"}},
+		{Name: "enp2s0", Status: "up", IPv4: []string{"192.168.1.30"}},
+	}}
+
+	require.Equal(t, "192.168.1.30", selectSystemIdentityIP("127.0.0.1", details))
+}
+
+func TestSelectSystemIdentityIPKeepsObservedAddressForRemoteAgent(t *testing.T) {
+	details := &system.Details{NetworkInterfaces: []system.NetworkInterfaceDetails{
+		{Name: "enp2s0", Status: "up", IPv4: []string{"192.168.1.30"}},
+	}}
+
+	require.Equal(t, "192.168.1.10", selectSystemIdentityIP("192.168.1.10", details))
+}
+
+func TestPersistedSystemIdentityIPKeepsLocalLANAddressWithoutFreshDetails(t *testing.T) {
+	record := newSystemTestRecord(t)
+	record.Set("is_local", true)
+	record.Set("info", system.Info{RemoteIP: "192.168.1.30"})
+
+	require.Equal(t, "192.168.1.30", persistedSystemIdentityIP(record, "127.0.0.1"))
+}
+
 func newSystemTestRecord(t *testing.T) *core.Record {
 	t.Helper()
 	app, err := pbtests.NewTestApp(t.TempDir())

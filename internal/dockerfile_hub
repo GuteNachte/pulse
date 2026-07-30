@@ -16,7 +16,7 @@ RUN update-ca-certificates
 
 # Build
 ARG TARGETOS TARGETARCH
-ARG HUB_VERSION=1.0.6-beta.4
+ARG HUB_VERSION=1.0.6-beta.5
 ARG HUB_BUILD_COMMIT=unknown
 ARG HUB_BUILD_TIME=unknown
 RUN CGO_ENABLED=0 GOGC=75 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags "-w -s -X gutenacht.site/pulse.Version=$HUB_VERSION -X gutenacht.site/pulse.BuildCommit=$HUB_BUILD_COMMIT -X gutenacht.site/pulse.BuildTime=$HUB_BUILD_TIME" -o /pulse ./internal/cmd/hub

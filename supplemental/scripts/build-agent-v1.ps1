@@ -1,5 +1,5 @@
 param(
-	[string]$Version = "1.0.6-beta.4",
+	[string]$Version = "1.0.6-beta.5",
 	[string]$OS = "windows",
 	[string]$Arch = "amd64",
 	[string]$GoProxy = "https://goproxy.cn,direct"

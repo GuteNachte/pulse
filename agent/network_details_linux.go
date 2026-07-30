@@ -24,7 +24,8 @@ func detectNetworkInterfaceDetails(valid map[string]struct{}) []system.NetworkIn
 		if displayName == "" {
 			displayName = name
 		}
-		details = append(details, makeNetworkInterfaceDetails(name, displayName, findInterfaceMac(interfaces, name), readLinuxLinkSpeed(name), readLinuxOperState(name), "", nil, nil, nil, nil))
+		ipv4, ipv6 := networkInterfaceAddresses(interfaces, name)
+		details = append(details, makeNetworkInterfaceDetails(name, displayName, findInterfaceMac(interfaces, name), readLinuxLinkSpeed(name), readLinuxOperState(name), "", ipv4, ipv6, nil, nil))
 	}
 	return details
 }

@@ -26,7 +26,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode project.hasProperty('pulseVersionCode') ? project.property('pulseVersionCode').toInteger() : file('../version-code.txt').text.trim().toInteger()
-        versionName project.hasProperty('pulseVersionName') ? project.property('pulseVersionName') : "1.0.6-beta.4"
+        versionName project.hasProperty('pulseVersionName') ? project.property('pulseVersionName') : "1.0.6-beta.5"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
