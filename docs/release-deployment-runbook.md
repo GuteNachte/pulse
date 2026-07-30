@@ -45,7 +45,7 @@ pwsh -NoProfile -File supplemental\scripts\build-android-release.ps1 `
   -SigningPropertiesPath '<仓库外 signing.properties 的绝对路径>'
 ```
 
-脚本必须确认包名 `site.gutenacht.pulse`、`versionName=1.0.6-beta.5`、`versionCode=1000604`、`debuggable=false`、v2 签名有效且证书指纹完全匹配。普通贡献者和验证 job 不需要也不应接触密钥。
+脚本必须确认包名 `site.gutenacht.pulse`、`versionName=1.0.6-beta.5`、`versionCode=1000605`、`debuggable=false`、v2 签名有效且证书指纹完全匹配。普通贡献者和验证 job 不需要也不应接触密钥。
 
 ## 2. 统一发布
 
@@ -82,7 +82,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\verify-
 - Web / Hub / Agent / Android / Compose / 文档版本一致。
 - Windows Agent 可执行文件存在，`--version` 返回目标版本。
 - Agent manifest 存在，且 Windows Agent SHA256 与实际文件一致。
-- Android APK metadata 的 `versionName` 是 `1.0.6-beta.5`，`versionCode` 是 `1000604`，应用不可调试，v2 签名有效，证书 SHA-256 与仓库固定值一致。
+- Android APK metadata 的 `versionName` 是 `1.0.6-beta.5`，`versionCode` 是 `1000605`，应用不可调试，v2 签名有效，证书 SHA-256 与仓库固定值一致。
 - Harbor 上 `pulse-hub:1.0.6-beta.5` 和 `pulse-agent:1.0.6-beta.5` 可被 `docker manifest inspect` 读取。
 - 可选 Hub URL 返回 `/api/health` 正常，`/api/pulse/public-info` 版本为 `1.0.6-beta.5`。
 
