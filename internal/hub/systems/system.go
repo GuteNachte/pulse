@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -288,12 +289,14 @@ func (sys *System) createRecords(data *system.CombinedData) (*core.Record, error
 		systemRecord.Set("status", up)
 		updateSystemNameFromDetails(systemRecord, data.Details)
 		info := sanitizeSystemInfo(data.Info)
-		if remoteIP := strings.TrimSpace(sys.RemoteIP); remoteIP != "" {
-			info.RemoteIP = remoteIP
+		connectionIP := strings.TrimSpace(sys.RemoteIP)
+		if connectionIP != "" {
+			info.RemoteIP = connectionIP
 		}
 		mergePersistedCapabilityResults(systemRecord, &info)
 		markStaleCapabilityStatuses(info.Capabilities, time.Now().UTC(), sys.smartFetchInterval())
 		updateLocalSystemMarkerFromInfo(systemRecord, info)
+		info.RemoteIP = persistedSystemIdentityIP(systemRecord, selectSystemIdentityIP(connectionIP, data.Details))
 		systemRecord.Set("info", info)
 		if err := txApp.SaveNoValidate(systemRecord); err != nil {
 			return err
@@ -325,6 +328,78 @@ func updateSystemNameFromDetails(record *core.Record, details *system.Details) {
 		return
 	}
 	record.Set("name", hostname)
+}
+
+func selectSystemIdentityIP(observedIP string, details *system.Details) string {
+	observedIP = strings.TrimSpace(observedIP)
+	if parsed := net.ParseIP(observedIP); parsed != nil && !parsed.IsLoopback() {
+		return observedIP
+	}
+	if details == nil {
+		return observedIP
+	}
+
+	type candidate struct {
+		value string
+		score int
+	}
+	candidates := make([]candidate, 0)
+	for _, iface := range details.NetworkInterfaces {
+		if isVirtualNetworkInterfaceName(iface.Name) {
+			continue
+		}
+		score := 0
+		if strings.EqualFold(strings.TrimSpace(iface.Status), "up") {
+			score += 2
+		}
+		if len(iface.Gateways) > 0 {
+			score++
+		}
+		for _, rawIP := range iface.IPv4 {
+			ip := net.ParseIP(strings.TrimSpace(rawIP))
+			if ip == nil || ip.To4() == nil || ip.IsLoopback() || ip.IsUnspecified() || ip.IsMulticast() || ip.IsLinkLocalUnicast() {
+				continue
+			}
+			candidateScore := score
+			if ip.IsPrivate() {
+				candidateScore += 4
+			}
+			candidates = append(candidates, candidate{value: ip.To4().String(), score: candidateScore})
+		}
+	}
+	if len(candidates) == 0 {
+		return observedIP
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].score != candidates[j].score {
+			return candidates[i].score > candidates[j].score
+		}
+		return candidates[i].value < candidates[j].value
+	})
+	return candidates[0].value
+}
+
+func persistedSystemIdentityIP(record *core.Record, selectedIP string) string {
+	if !isLoopbackIPString(selectedIP) || record == nil || !record.GetBool("is_local") {
+		return selectedIP
+	}
+	var previous system.Info
+	if err := record.UnmarshalJSONField("info", &previous); err == nil {
+		if ip := net.ParseIP(strings.TrimSpace(previous.RemoteIP)); ip != nil && !ip.IsLoopback() {
+			return strings.TrimSpace(previous.RemoteIP)
+		}
+	}
+	return selectedIP
+}
+
+func isVirtualNetworkInterfaceName(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	for _, prefix := range []string{"docker", "veth", "virbr", "br-", "cni", "flannel", "tailscale", "tun", "tap"} {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	return name == "lo"
 }
 
 func updateLocalSystemMarkerFromInfo(record *core.Record, info system.Info) {

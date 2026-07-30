@@ -3,7 +3,8 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $packagerPath = Join-Path $PSScriptRoot "package-public-release.ps1"
 $verifierPath = Join-Path $PSScriptRoot "verify-release-v1.ps1"
-$version = "1.0.6-beta.4"
+$version = (Get-Content -Raw -LiteralPath (Join-Path $repoRoot "internal\site\package.json") | ConvertFrom-Json).version
+$androidVersionCode = (Get-Content -Raw -LiteralPath (Join-Path $repoRoot "internal\site\android\version-code.txt")).Trim()
 $hubImage = "ghcr.io/local-validation/pulse-hub:$version"
 $agentImage = "ghcr.io/local-validation/pulse-agent:$version"
 $buildTimestamp = "2026-07-25T00:00:00Z"
@@ -158,11 +159,11 @@ Write-Output "Signer #1 certificate SHA-256 digest: BF114B3A8EA33125893B5B1E6865
 exit 0
 '@ | Set-Content -LiteralPath $fakeApkSigner -Encoding utf8NoBOM
     $fakeAapt2 = Join-Path $toolRoot "fake-aapt2.ps1"
-    @'
-param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)
-Write-Output "package: name='site.gutenacht.pulse' versionCode='1000604' versionName='1.0.6-beta.4'"
-exit 0
-'@ | Set-Content -LiteralPath $fakeAapt2 -Encoding utf8NoBOM
+    @(
+        'param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining)'
+        "Write-Output `"package: name='site.gutenacht.pulse' versionCode='$androidVersionCode' versionName='$version'`""
+        'exit 0'
+    ) | Set-Content -LiteralPath $fakeAapt2 -Encoding utf8NoBOM
 
     $validVerify = Invoke-PwshFile $verifierPath @(
         "-Version", $version,

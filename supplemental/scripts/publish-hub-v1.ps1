@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "1.0.6-beta.4",
+    [string]$Version = "1.0.6-beta.6",
     [string]$Image = "",
     [switch]$SkipPush,
     [switch]$DryRun

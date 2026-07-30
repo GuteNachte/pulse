@@ -6,7 +6,7 @@ import "github.com/blang/semver"
 
 // Version is the current version of the application.
 // It is a variable so release builds can inject Agent/Hub versions with -ldflags -X.
-var Version = "1.0.6-beta.4"
+var Version = "1.0.6-beta.6"
 
 // BuildCommit and BuildTime are injected by release and local build scripts.
 // Empty values mean the binary was built without build metadata, usually in a

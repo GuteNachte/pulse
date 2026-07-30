@@ -333,6 +333,24 @@ func TestRefreshNetworkInterfaceDetailsMarksDirtyWhenDetailsChange(t *testing.T)
 	assert.False(t, a.detailsDirty, "unchanged interface details should not force another details sync")
 }
 
+func TestNetworkInterfaceAddressesReturnsOnlyRequestedInterfaceAddresses(t *testing.T) {
+	interfaces := []psutilNet.InterfaceStat{
+		{
+			Name: "enp2s0",
+			Addrs: []psutilNet.InterfaceAddr{
+				{Addr: "192.168.1.30/24"},
+				{Addr: "fe80::1234/64"},
+			},
+		},
+		{Name: "docker0", Addrs: []psutilNet.InterfaceAddr{{Addr: "172.17.0.1/16"}}},
+	}
+
+	ipv4, ipv6 := networkInterfaceAddresses(interfaces, "enp2s0")
+
+	require.Equal(t, []string{"192.168.1.30"}, ipv4)
+	require.Equal(t, []string{"fe80::1234"}, ipv6)
+}
+
 func TestLoadAndTickNetBaseline(t *testing.T) {
 	a := &Agent{netIoStats: make(map[uint16]system.NetIoStats)}
 

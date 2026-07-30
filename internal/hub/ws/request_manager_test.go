@@ -7,8 +7,15 @@ import (
 	"testing"
 	"time"
 
+	"gutenacht.site/pulse/internal/common"
+
 	"github.com/stretchr/testify/assert"
 )
+
+func TestDefaultRequestTimeout(t *testing.T) {
+	assert.Equal(t, 30*time.Second, defaultRequestTimeout(common.GetData))
+	assert.Equal(t, 5*time.Second, defaultRequestTimeout(common.GetContainerInfo))
+}
 
 // TestRequestManager_BasicFunctionality tests the request manager without mocking gws.Conn
 func TestRequestManager_BasicFunctionality(t *testing.T) {

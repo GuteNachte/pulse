@@ -30,7 +30,9 @@ try {
 
     foreach ($published in @(
         @{ Version = "1.0.6-beta.2"; VersionCode = 1000602 },
-        @{ Version = "1.0.6-beta.3"; VersionCode = 1000603 }
+        @{ Version = "1.0.6-beta.3"; VersionCode = 1000603 },
+        @{ Version = "1.0.6-beta.4"; VersionCode = 1000604 },
+        @{ Version = "1.0.6-beta.5"; VersionCode = 1000605 }
     )) {
         [string]$published.VersionCode | Set-Content -LiteralPath $versionCodePath -Encoding ascii -NoNewline
         Invoke-FixtureGit @("add", "internal/site/android/version-code.txt")
@@ -39,29 +41,29 @@ try {
     }
 
     $result = Assert-AndroidVersionCodeMonotonic `
-        -Version "1.0.6-beta.4" `
-        -VersionCode 1000604 `
+        -Version "1.0.6-beta.6" `
+        -VersionCode 1000606 `
         -RepositoryRoot $fixtureRoot
-    if ($result.PreviousMaximum -ne 1000603) {
+    if ($result.PreviousMaximum -ne 1000605) {
         throw "Android versionCode history did not include the latest published versionCode."
     }
 
-    "1000604" | Set-Content -LiteralPath $versionCodePath -Encoding ascii -NoNewline
+    "1000606" | Set-Content -LiteralPath $versionCodePath -Encoding ascii -NoNewline
     Invoke-FixtureGit @("add", "internal/site/android/version-code.txt")
-    Invoke-FixtureGit @("commit", "--quiet", "-m", "release 1.0.6-beta.4")
-    Invoke-FixtureGit @("tag", "-a", "v1.0.6-beta.4", "-m", "Pulse 1.0.6-beta.4")
+    Invoke-FixtureGit @("commit", "--quiet", "-m", "release 1.0.6-beta.6")
+    Invoke-FixtureGit @("tag", "-a", "v1.0.6-beta.6", "-m", "Pulse 1.0.6-beta.6")
     $taggedResult = Assert-AndroidVersionCodeMonotonic `
-        -Version "1.0.6-beta.4" `
-        -VersionCode 1000604 `
+        -Version "1.0.6-beta.6" `
+        -VersionCode 1000606 `
         -RepositoryRoot $fixtureRoot
-    if ($taggedResult.PreviousMaximum -ne 1000603) {
+    if ($taggedResult.PreviousMaximum -ne 1000605) {
         throw "Android versionCode guard did not exclude the current release tag."
     }
 
     try {
         Assert-AndroidVersionCodeMonotonic `
-            -Version "1.0.6-beta.4" `
-            -VersionCode 1000603 `
+            -Version "1.0.6-beta.6" `
+            -VersionCode 1000605 `
             -RepositoryRoot $fixtureRoot | Out-Null
         throw "Android versionCode monotonic guard accepted a published versionCode."
     } catch {

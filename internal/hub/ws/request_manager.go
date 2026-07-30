@@ -32,6 +32,13 @@ type RequestManager struct {
 	nextID      atomic.Uint32
 }
 
+func defaultRequestTimeout(action common.WebSocketAction) time.Duration {
+	if action == common.GetData {
+		return 30 * time.Second
+	}
+	return 5 * time.Second
+}
+
 // NewRequestManager creates a new request manager for a WebSocket connection
 func NewRequestManager(conn *gws.Conn) *RequestManager {
 	rm := &RequestManager{
@@ -52,7 +59,7 @@ func (rm *RequestManager) SendRequest(ctx context.Context, action common.WebSock
 	if _, hasDeadline := ctx.Deadline(); hasDeadline {
 		reqCtx, cancel = context.WithCancel(ctx)
 	} else {
-		reqCtx, cancel = context.WithTimeout(ctx, 5*time.Second)
+		reqCtx, cancel = context.WithTimeout(ctx, defaultRequestTimeout(action))
 	}
 
 	req := &PendingRequest{
