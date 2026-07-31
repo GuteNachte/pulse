@@ -25,7 +25,12 @@ __debug_*
 .playwright-mcp/
 .worktrees/
 .public-audit/
+.vercel/
 *.png
+!docs/media/
+!docs/media/screenshots/
+!docs/media/screenshots/*.png
+!docs/media/social-preview.png
 *.log
 *.tmp
 /hub
