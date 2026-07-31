@@ -22,7 +22,7 @@
 		"typecheck": "lingui compile && tsc -p tsconfig.app.json --noEmit",
 		"check:fix": "biome check --fix .",
 		"test": "npm run test:asset-parameter-registry && npm run test:asset-completeness && npm run test:asset-type-spec && npm run test:asset-center && npm run test:modules && npm run test:network-topology && npm run test:websites",
-		"test:demo": "node --experimental-strip-types src/demo/mode.test.ts && node --experimental-strip-types src/demo/fixture-core.test.ts && node --experimental-strip-types src/demo/records.test.ts && node --experimental-strip-types src/demo/handlers.test.ts && node --experimental-strip-types src/demo/auth.test.ts && node --experimental-strip-types src/demo/browser-options.test.ts && node --experimental-strip-types src/demo/write-guard.test.ts",
+		"test:demo": "node --experimental-strip-types src/demo/mode.test.ts && node --experimental-strip-types src/demo/fixture-core.test.ts && node --experimental-strip-types src/demo/records.test.ts && node --experimental-strip-types src/demo/handlers.test.ts && node --experimental-strip-types src/demo/auth.test.ts && node --experimental-strip-types src/demo/browser-options.test.ts && node --experimental-strip-types src/demo/write-guard.test.ts && node --experimental-strip-types src/components/demo-mode-indicator.test.ts",
 		"test:asset-parameter-registry": "node --experimental-strip-types src/modules/asset-center/asset-parameter-registry.test.ts",
 		"test:asset-completeness": "node --experimental-strip-types src/modules/asset-center/asset-completeness-level.test.ts",
 		"test:asset-type-spec": "node --experimental-strip-types src/modules/asset-center/asset-type-specs.test.ts",
