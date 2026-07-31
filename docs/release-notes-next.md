@@ -6,6 +6,7 @@
 
 ### Web / Hub
 
+- 新增完全隔离的公开 Demo Mode：Vercel 静态站复用现有 Pulse 页面，由 MSW 提供版本化虚构 fixture 和本地演示身份；所有写入统一拒绝，演示构建不连接 PocketBase、Agent、NAS、局域网或其他真实环境，正式构建不包含演示数据。公开站已部署到 `https://pulse-demo-gute-nacht.vercel.app`，10 条主要路由通过桌面、平板和手机共 31 项 Playwright 验收。
 - `1.0.6-beta.6` 统一 Web、Hub、Agent 和 Android 版本；Android `versionCode=1000606`，发布契约补齐 beta.4 / beta.5 历史并验证单调递增，已发布的 `v1.0.6-beta.5` 标签保持不可变。
 - 修复完整系统采集超过 5 秒时机器短暂误报离线：`GetData` 默认等待时间单独放宽到 30 秒，其他 WebSocket 动作继续保持 5 秒；Agent 连接未断开时不再仅因首轮硬件或容器采集较慢就将整机标记离线。
 - 修复 Hub 同机 Agent 页面身份地址显示为 `127.0.0.1`：Hub 的本机 Token、`is_local` 与 `Hub` 标签仍按真实 loopback 连接判定，页面身份地址则改用 Agent 上报的物理网卡 LAN IPv4；静态网卡详情未在后续每轮重复上报时会保留已确认地址。
@@ -972,6 +973,7 @@
 
 ## 移动端 / Android
 
+- 本次公开演示与 GitHub 入口建设不改变 Android 运行时行为；Android App 继续与 Web、Hub、Agent 统一使用 `1.0.6-beta.6` 版本口径，后续正式发布仍需同版本同步构建和验证。
 - `1.0.6-beta.6` Android App 使用 `versionName=1.0.6-beta.6`、`versionCode=1000606`，继续复用固定 Release 证书和不可调试构建；本轮无新增原生功能。
 - 本轮没有新增 Android 原生能力；移动端 WebView 跟随 Web / Hub `1.0.6` 使用相同 ONT 严格字段、接口状态和关系规则，并完成 `390 × 844` 视口验收。
 - 移动端 WebView 同步使用 LAN CIDR 示例、简洁的位置选择与统一备注输入框。
@@ -1057,6 +1059,7 @@
 
 ## Agent / 部署
 
+- 本次不改变 Agent 协议、采集能力或正式部署参数；新增的是无后端、无密钥、无真实基础设施连接的 Vercel 静态演示部署，不能作为 Agent 连接或生产部署入口。
 - `1.0.6-beta.6` 重新统一构建 Hub、Linux / NAS Agent 镜像和 Windows Agent 安装包；Compose、安装说明与发布验证命令全部使用显式 beta.6，不使用 `latest`。
 - Linux Agent 补齐真实物理网卡 IPv4 / IPv6 采集；Hub 同机 Agent 仍通过 `127.0.0.1` 安全通道连接，但设备页面显示宿主机 LAN 地址，并排除 `docker0`、`veth`、容器网桥和隧道接口。外部 Agent 继续使用目标 Hub 的可达局域网地址，连接语义不变。
 
@@ -1082,7 +1085,9 @@
 - `docs\local-dev-runbook.md` 和 `docs\flynas-compose-checklist.md` 已接入发布验证脚本和回滚手册，避免发布流程只停在构建 / push 成功。
 - 修复本地开发服务重启脚本日志初始化：停止旧 Hub / Vite 后等待进程退出，日志清理改为可重试，避免 `hub.err.log` 句柄未释放时中断并导致 Hub 8090 未启动。
 
-## 版本规则
+## 文档 / 规则
+
+- 公开项目入口新增中英文 README、可重复生成的产品截图、社交预览图、贡献指南、支持边界、Contributor Covenant 2.1 行为准则，以及带隐私警告的 Issue / PR 模板；截图、fixture 和构建产物继续经过隐私审计，公开资料不得包含 Token、域名、IP、MAC、账号或家庭资产名称。
 
 - 新增 Vercel 公开演示站设计与十阶段实施计划：确定复用现有 React 页面，以编译时 Demo Mode 和 MSW 浏览器请求模拟提供完全虚构、无后端、无凭据的只读数据；首期覆盖首页、资产、双网络拓扑、客户端、容器、网站监控和备份页面，并以 Playwright 从同一演示站生成公开截图。实施按隐私契约、数据模拟、运行隔离、只读边界、Vercel 配置、浏览器验收、截图、部署、GitHub 入口和最终发布门禁推进；演示构建不得连接真实 Hub、Agent、NAS 或私人基础设施，正式构建继续保持原认证、采集和写入行为。
 

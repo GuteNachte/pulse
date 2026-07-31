@@ -8,12 +8,15 @@ body:
       label: 提交前确认
       description: |
         请尽量提供可复现的信息，包括版本、部署方式、系统环境、操作步骤和相关日志。
+        提交前必须删除 Token、密码、Cookie、真实域名、IP、MAC、账号、家庭资产名称和其他私人信息。
       options:
         - label: 我已经确认正在使用当前维护版本。
           required: true
         - label: 我已经搜索过现有问题，没有找到相同报告。
           required: true
         - label: 这是可复现的缺陷，不是单纯的使用咨询。
+          required: true
+        - label: 我已经对日志、截图和配置完成脱敏，没有提交 Token、域名、IP、MAC 或家庭资产名称。
           required: true
 
   - type: dropdown
@@ -26,6 +29,8 @@ body:
         - Agent
         - Hub & Agent
         - Web UI
+        - Android App
+        - 公开演示
         - 部署
       default: 0
     validations:
@@ -91,19 +96,19 @@ body:
     id: config
     attributes:
       label: 配置
-      description: 请提供相关 Compose、环境变量或服务配置。
+      description: 请只提供相关且已脱敏的 Compose、环境变量或服务配置，不要粘贴任何密钥或真实家庭网络信息。
       render: yaml
 
   - type: textarea
     id: hub-logs
     attributes:
       label: Hub 日志
-      description: 请提供 Hub 相关日志。
+      description: 请提供已经删除 Token、域名、IP、MAC、账号和家庭资产名称的 Hub 日志。
       render: json
 
   - type: textarea
     id: agent-logs
     attributes:
       label: Agent 日志
-      description: 如问题涉及 Agent，请提供 Agent 日志。
+      description: 如问题涉及 Agent，请提供已经脱敏的 Agent 日志。
       render: shell

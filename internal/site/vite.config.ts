@@ -39,6 +39,9 @@ const pulseHtmlMetadata = (demoMode: boolean) => ({
 
 export default defineConfig(({ mode }) => ({
 	base: mode === "capacitor" || mode === "demo" ? "/" : "./",
+	define: {
+		"import.meta.env.VITE_PULSE_DEMO": JSON.stringify(mode === "demo" ? "1" : "0"),
+	},
 	server: {
 		proxy: {
 			"/api": "http://127.0.0.1:8090",
