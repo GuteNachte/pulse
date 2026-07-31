@@ -99,13 +99,16 @@ function captureVisualState() {
 	const charts = Array.from(document.querySelectorAll<SVGElement>(".recharts-wrapper svg")).map(
 		(element) => element.outerHTML
 	)
-	const topology = Array.from(document.querySelectorAll<HTMLElement>(".react-flow")).map(
-		(element) => element.innerHTML
-	)
+	const topology = Array.from(document.querySelectorAll<HTMLElement>(".react-flow")).map((element) => element.innerHTML)
 	const progress = Array.from(document.querySelectorAll<HTMLElement>("[role='progressbar']")).map(
 		(element) => `${element.getAttribute("aria-valuenow")}|${element.getAttribute("style")}`
 	)
-	const images = Array.from(document.images).map((image) => [image.currentSrc, image.complete, image.naturalWidth, image.naturalHeight])
+	const images = Array.from(document.images).map((image) => [
+		image.currentSrc,
+		image.complete,
+		image.naturalWidth,
+		image.naturalHeight,
+	])
 
 	return JSON.stringify({ geometry, charts, topology, progress, images })
 }

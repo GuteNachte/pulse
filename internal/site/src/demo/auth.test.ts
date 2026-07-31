@@ -11,11 +11,11 @@ assert.equal(shouldUseRealtime(false), true)
 let realtimeConnects = 0
 const realtimeClient = {
 	realtime: {
-		subscribe: async () => {
+		subscribe: () => {
 			realtimeConnects += 1
-			return async () => undefined
+			return () => undefined
 		},
-		unsubscribe: async () => undefined,
+		unsubscribe: () => undefined,
 	},
 }
 disableDemoRealtime(realtimeClient as never)

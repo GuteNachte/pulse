@@ -371,4 +371,4 @@ async function bootstrap() {
 	root.render(<I18nApp />)
 }
 
-void bootstrap()
+bootstrap().catch((error) => console.error("application bootstrap", error))

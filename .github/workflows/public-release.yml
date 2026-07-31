@@ -383,7 +383,10 @@ jobs:
         shell: bash
         run: |
           gh release create "${{ needs.validate.outputs.tag }}" \
-            build/public-release/${{ needs.validate.outputs.version }}/* \
+            "build/public-release/${{ needs.validate.outputs.version }}/docker-compose.yml" \
+            "build/public-release/${{ needs.validate.outputs.version }}/pulse-agent.yml" \
+            "build/public-release/${{ needs.validate.outputs.version }}/pulse-agent-${{ needs.validate.outputs.version }}.exe" \
+            "build/public-release/${{ needs.validate.outputs.version }}/pulse-android-${{ needs.validate.outputs.version }}.apk" \
             --verify-tag \
             --title "Pulse ${{ needs.validate.outputs.version }}" \
             --generate-notes \

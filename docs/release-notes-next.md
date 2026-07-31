@@ -6,6 +6,8 @@
 
 ### Web / Hub
 
+- 公开入口文案重新整理为“在线演示 → 下载 → 三分钟部署 → 社区反馈”的用户路径，双语 README 补充截图索引、支持范围和 Release 文件用途；不改变 Hub、Agent 或 Demo 运行时行为。
+- 修复公开 Quality 的 Web 检查：Biome 排除由 MSW 自动生成且声明不可手工修改的 Worker，并收口 Demo 截图稳定器、演示身份测试与应用启动入口的真实格式 / lint 问题；公开分支现在可在 Linux CI 中完成后续 TypeScript、测试与构建门禁。
 - 新增完全隔离的公开 Demo Mode：Vercel 静态站复用现有 Pulse 页面，由 MSW 提供版本化虚构 fixture 和本地演示身份；所有写入统一拒绝，演示构建不连接 PocketBase、Agent、NAS、局域网或其他真实环境，正式构建不包含演示数据。公开站已部署到 `https://pulse-demo-gute-nacht.vercel.app`，10 条主要路由通过桌面、平板和手机共 31 项 Playwright 验收。
 - `1.0.6-beta.6` 统一 Web、Hub、Agent 和 Android 版本；Android `versionCode=1000606`，发布契约补齐 beta.4 / beta.5 历史并验证单调递增，已发布的 `v1.0.6-beta.5` 标签保持不可变。
 - 修复完整系统采集超过 5 秒时机器短暂误报离线：`GetData` 默认等待时间单独放宽到 30 秒，其他 WebSocket 动作继续保持 5 秒；Agent 连接未断开时不再仅因首轮硬件或容器采集较慢就将整机标记离线。
@@ -33,7 +35,7 @@
 - 修复公开 CI 在 GitHub 干净检出环境下的三项失败：Web `typecheck` 会先生成 Lingui 类型化语言包，Quality 的 Go job 会先构建 `internal/site/dist` 再执行依赖 `go:embed all:dist` 的 vet / test；Go 工具链固定为已修复标准库漏洞的 `1.26.5`，`golang.org/x/text` 升级到 `0.40.0`。工作流契约同步锁定生成顺序与最低安全版本，避免本地已有生成物掩盖 CI 回归。
 - 继续根治公开 Quality 在 Linux runner 暴露的环境依赖与生命周期问题：资产公网地址时间测试按运行环境的本地时区计算预期，不再写死东八区；GPU 测试恢复 `nvidia-smi`、`nvtop` 失败回退和 NVML 回退的真实契约，不再把可用收集器误判为错误；AlertManager 在应用终止时统一停止待发送定时器，Agent 多设备接入测试也会逐个停止连接循环，避免测试 Hub 销毁后持续重连并拖慢后续用例。针对单个 Hub 集成测试包超过 10 分钟的问题，Quality 和受控预发布验证会将全部顶层测试稳定分成 4 个并行分片；每片只编译一次测试二进制，并让每个顶层测试在独立进程中精确运行一次，避免进程级状态互相干扰。进一步确认超时根因是完整恢复测试在 Unix 上触发 PocketBase `execve` 后反复重启测试二进制；该测试现在通过官方恢复钩子验证正确的备份任务已提交，但不会真的替换测试进程。其他 Go 包仍完整执行，每个顶层测试继续保留 10 分钟硬上限，并由进程隔离回归与公开工作流契约共同锁定，不通过放宽超时掩盖回归。
 - 收口公开测试前端依赖风险：在不跨主版本、不修改业务代码的前提下，将锁文件中的 `tar`、`brace-expansion`、`postcss`、`nanoid` 与 `valibot` 更新到安全补丁版本；`npm audit --json` 从 4 项降为 0 项，并继续通过前端测试、构建、Android 同步与版本一致性检查。
-- 新增离线公开发布包：`package-public-release.ps1` 只收录 Windows Agent、Android APK、公开 Hub / Agent Compose、许可证、第三方声明、JSON 清单和 SHA256 校验文件；公开镜像必须是带当前显式版本的 GHCR `pulse-hub` / `pulse-agent`，源模板中的内部或示例仓库不会进入输出。固定构建时间与相同输入会生成逐文件哈希一致的结果，现有私有 Harbor 发布仅在显式传入公开参数时才附加生成该包。
+- 新增离线公开发布包：`package-public-release.ps1` 继续生成 Windows Agent、Android APK、公开 Hub / Agent Compose、许可证、第三方声明、JSON 清单和 SHA256 校验文件供发布门禁验证；GitHub Release 下载区只上传其中四个安装 / 部署文件，许可证、声明和构建元数据不再混入普通用户下载区。公开镜像必须是带当前显式版本的 GHCR `pulse-hub` / `pulse-agent`，固定构建时间与相同输入会生成逐文件哈希一致的结果。
 - 新增统一版本更新入口 `supplemental/scripts/set-pulse-version.ps1`：一次更新 Web、Hub、Agent、Android、Docker / Compose、发布脚本与部署文档的显式版本号；每项规则校验预期匹配数，写入后自动执行完整版本一致性检查，失败会按原始字节恢复全部已修改文件，重复执行同一版本不会产生文件变化。本轮已将公开测试版本统一为 `1.0.6-beta.1`。
 - 新增并实际通过公开仓库安全门禁：仓库自带 PowerShell 审计会检查运行数据、数据库、备份、日志、凭据、私钥、本地媒体、私有基础设施地址和完整 Git 历史，并通过固定 Gitleaks `8.30.1` 的最小权限 GitHub Actions 执行；许可证保留上游版权并补充 Pulse 修改署名，安全报告统一走 GitHub Private Vulnerability Reporting，新增本地数据、默认无遥测和主动外连边界说明。源码、测试、安装模板及历史文档中的私人 Gitea / Harbor 地址已替换为保留示例，审计同时识别原文和正则转义形式，历史净化在仓库外安全镜像和提交映射保护下完成；审计只检查待发布分支 `HEAD`，不会被共享仓库中的其他私有分支误阻塞。正式发布 Run `30271683147` 已通过完整验证与人工审批，GHCR 与 Release 发布成功；内部镜像仍可通过发布脚本参数显式传入。
 - 新增 Windows 开发环境一键启动入口：项目根目录 `Start-Pulse-Dev.cmd` 自动启动或复用 Hub 与 Vite，优先调用 PowerShell 7、未安装时回退到 Windows PowerShell 5.1，并只在健康检查成功后打开 Web；桌面“Pulse 开发环境”快捷方式可通过仓库脚本重复生成，启动失败会保留真实错误，不再出现只有页面外壳却没有资产数据的假启动。
