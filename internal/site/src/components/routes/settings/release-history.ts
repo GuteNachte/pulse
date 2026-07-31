@@ -604,7 +604,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "文档 / 规则",
 				items: [
-					"新增 Vercel 公开演示站设计：复用现有 React 页面，以编译时 Demo Mode 和 MSW 浏览器请求模拟提供完全虚构、无后端、无凭据的只读数据；首期覆盖首页、资产、双网络拓扑、客户端、容器、网站监控和备份页面，并由 Playwright 从同一演示站生成公开截图。演示构建禁止连接真实 Hub、Agent、NAS 或私人基础设施，正式构建行为保持不变。",
+					"新增 Vercel 公开演示站设计与十阶段实施计划：复用现有 React 页面，以编译时 Demo Mode 和 MSW 浏览器请求模拟提供完全虚构、无后端、无凭据的只读数据；首期覆盖首页、资产、双网络拓扑、客户端、容器、网站监控和备份页面，并由 Playwright 从同一演示站生成公开截图。实施按隐私契约、数据模拟、运行隔离、只读边界、Vercel 配置、浏览器验收、截图、部署、GitHub 入口和最终发布门禁推进；演示构建禁止连接真实 Hub、Agent、NAS 或私人基础设施，正式构建行为保持不变。",
 					"公开发布文档切换到 1.0.6-beta.6：保留 beta.5 不可变 tag，发布前要求 Android versionCode 1000606、完整版本一致性和旧标签不回移。",
 					"公开发布手册记录 beta.2 与 beta.3 的不可变 tag、失败运行、真实根因和零公开产物边界，并将后续命令切换到 1.0.6-beta.4；失败标签不移动、不删除、不复用。",
 					"公开发布完整性门禁新增不可变提交 SHA：受保护 publish job 只检出 validate 已验证的提交，并在人工审批后、镜像推送前和 GitHub Release 创建前三次确认远端 tag 仍指向同一提交；仓库 Ruleset 同时禁止 v* tag 更新和删除，嵌套 PowerShell、签名文件权限、包内 APK 和初始化失败清理均改为 fail-closed。",
