@@ -218,6 +218,7 @@ function website(
 		name,
 		url: `https://${host}`,
 		external_url: `https://${host}`,
+		icon_url: "/static/icon.svg",
 		description: "Pulse 公开演示服务",
 		group: "演示服务",
 		interval_seconds: 300,

@@ -21,10 +21,6 @@ assert.ok(demoInterfaces.every((item) => !item.mac || /^02(:[0-9A-F]{2}){5}$/i.t
 
 const assetIds = new Set(demoAssets.map((asset) => asset.id))
 assert.equal(assetIds.size, demoAssets.length)
-assert.ok(
-	demoRelations.every(
-		(relation) => assetIds.has(relation.source_asset) && assetIds.has(relation.target_asset)
-	)
-)
+assert.ok(demoRelations.every((relation) => assetIds.has(relation.source_asset) && assetIds.has(relation.target_asset)))
 
 console.log("demo fixture privacy contract passed")

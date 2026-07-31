@@ -34,6 +34,12 @@ try {
 	const backups = (await backupsResponse.json()) as { items: unknown[] }
 	assert.equal(backups.items.length, 3)
 
+	const websitesResponse = await fetch("http://demo.local/api/pulse/website-monitors?page=1&perPage=50")
+	assert.equal(websitesResponse.status, 200)
+	const websites = (await websitesResponse.json()) as { items: unknown[]; counts: Record<string, number> }
+	assert.equal(websites.items.length, 3)
+	assert.deepEqual(websites.counts, { all: 3, up: 2, down: 1, unknown: 0, stale: 0 })
+
 	for (const method of ["POST", "PATCH", "PUT", "DELETE"]) {
 		const response = await fetch("http://demo.local/api/collections/assets/records/demo-nas", { method })
 		assert.equal(response.status, 405)

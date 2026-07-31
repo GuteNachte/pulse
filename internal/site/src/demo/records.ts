@@ -25,23 +25,98 @@ function parseValue(quoted: string | undefined, primitive: string | undefined) {
 	return primitive
 }
 
-export function matchesFilter(record: DemoRecord, filter: string) {
-	const normalized = filter.trim()
-	if (!normalized) return true
-	return normalized.split(/\s*&&\s*/).every((rawExpression) => {
-		const expression = rawExpression
-			.trim()
-			.replace(/^\((.*)\)$/, "$1")
-			.trim()
-		const match = expression.match(/^([A-Za-z_][\w.]*)\s*(=|!=)\s*(?:"((?:\\.|[^"])*)"|(true|false|-?\d+(?:\.\d+)?))$/)
-		if (!match) {
-			throw new Error(`Unsupported demo filter: ${expression}`)
+function stripOuterParentheses(input: string) {
+	let value = input.trim()
+	while (value.startsWith("(") && value.endsWith(")")) {
+		let depth = 0
+		let quote = ""
+		let escaped = false
+		let wrapsWholeExpression = true
+		for (let index = 0; index < value.length; index += 1) {
+			const character = value[index]
+			if (escaped) {
+				escaped = false
+				continue
+			}
+			if (character === "\\" && quote) {
+				escaped = true
+				continue
+			}
+			if (quote) {
+				if (character === quote) quote = ""
+				continue
+			}
+			if (character === '"' || character === "'") {
+				quote = character
+				continue
+			}
+			if (character === "(") depth += 1
+			if (character === ")") depth -= 1
+			if (depth === 0 && index < value.length - 1) {
+				wrapsWholeExpression = false
+				break
+			}
 		}
-		const [, field, operator, quoted, primitive] = match
-		const expected = parseValue(quoted, primitive)
-		const actual = getField(record, field)
-		return operator === "=" ? actual === expected : actual !== expected
-	})
+		if (!wrapsWholeExpression) break
+		value = value.slice(1, -1).trim()
+	}
+	return value
+}
+
+function splitTopLevel(input: string, operator: "&&" | "||") {
+	const parts: string[] = []
+	let start = 0
+	let depth = 0
+	let quote = ""
+	let escaped = false
+	for (let index = 0; index < input.length; index += 1) {
+		const character = input[index]
+		if (escaped) {
+			escaped = false
+			continue
+		}
+		if (character === "\\" && quote) {
+			escaped = true
+			continue
+		}
+		if (quote) {
+			if (character === quote) quote = ""
+			continue
+		}
+		if (character === '"' || character === "'") {
+			quote = character
+			continue
+		}
+		if (character === "(") depth += 1
+		if (character === ")") depth -= 1
+		if (depth === 0 && input.slice(index, index + operator.length) === operator) {
+			parts.push(input.slice(start, index).trim())
+			start = index + operator.length
+			index += operator.length - 1
+		}
+	}
+	parts.push(input.slice(start).trim())
+	return parts
+}
+
+export function matchesFilter(record: DemoRecord, filter: string) {
+	const normalized = stripOuterParentheses(filter.trim())
+	if (!normalized) return true
+	return splitTopLevel(normalized, "||").some((orExpression) =>
+		splitTopLevel(orExpression, "&&").every((rawExpression) => {
+			const expression = stripOuterParentheses(rawExpression)
+			const match = expression.match(
+				/^([A-Za-z_][\w.]*)\s*(=|!=)\s*(?:"((?:\\.|[^"])*)"|'((?:\\.|[^'])*)'|(true|false|-?\d+(?:\.\d+)?))$/
+			)
+			if (!match) {
+				throw new Error(`Unsupported demo filter: ${expression}`)
+			}
+			const [, field, operator, doubleQuoted, singleQuoted, primitive] = match
+			const expected = parseValue(doubleQuoted ?? singleQuoted, primitive)
+			const actual = getField(record, field)
+			return operator === "=" ? actual === expected : actual !== expected
+		})
+	)
 }
 
 export function projectRecord<T extends DemoRecord>(record: T, fields?: string): Partial<T> {

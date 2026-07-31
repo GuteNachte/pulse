@@ -11,6 +11,13 @@ const requiredCollections = [
 	"asset_interfaces",
 	"asset_relations",
 	"asset_locations",
+	"asset_maintenance",
+	"asset_attachments",
+	"asset_visuals",
+	"asset_changes",
+	"asset_enrichment_reports",
+	"asset_enrichment_suggestions",
+	"ai_tasks",
 	"network_layouts",
 	"systems",
 	"system_details",
@@ -20,6 +27,7 @@ const requiredCollections = [
 	"website_monitor_checks",
 	"user_settings",
 	"module_settings",
+	"notification_failures",
 ] as const
 
 for (const name of requiredCollections) {

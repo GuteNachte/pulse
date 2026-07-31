@@ -18,6 +18,13 @@ export const demoCollections = {
 	asset_interfaces: demoInterfaces,
 	asset_relations: demoRelations,
 	asset_locations: demoLocations,
+	asset_maintenance: [],
+	asset_attachments: [],
+	asset_visuals: [],
+	asset_changes: [],
+	asset_enrichment_reports: [],
+	asset_enrichment_suggestions: [],
+	ai_tasks: [],
 	network_layouts: demoLayouts,
 	systems: demoSystems,
 	system_details: demoSystemDetails,
@@ -27,6 +34,7 @@ export const demoCollections = {
 	website_monitor_checks: demoWebsiteChecks,
 	user_settings: demoUserSettings,
 	module_settings: demoModuleSettings,
+	notification_failures: [],
 } satisfies Record<string, DemoRecord[]>
 
 export type DemoCollectionName = keyof typeof demoCollections

@@ -28,6 +28,20 @@ assert.deepEqual(
 	["c"]
 )
 
+const orUrl = new URL(
+	"https://demo.invalid/api/collections/interfaces/records?filter=asset%3D%22two%22%20%7C%7C%20name%3D%22LAN%202%22"
+)
+assert.deepEqual(
+	listRecords(records, orUrl).items.map((item) => item.id),
+	["b", "c"]
+)
+
+const singleQuoteUrl = new URL("https://demo.invalid/api/collections/interfaces/records?filter=asset%20%3D%20%27one%27")
+assert.deepEqual(
+	listRecords(records, singleQuoteUrl).items.map((item) => item.id),
+	["a", "c"]
+)
+
 assert.throws(
 	() => listRecords(records, new URL("https://demo.invalid/api/collections/interfaces/records?filter=name%20~%20LAN")),
 	/Unsupported demo filter/

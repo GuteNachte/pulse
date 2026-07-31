@@ -23,6 +23,11 @@ export function seedDemoAuth(client: PocketBase) {
 	client.authStore.save(demoAuthToken, demoAuthRecord)
 }
 
+export function disableDemoRealtime(client: Pick<PocketBase, "realtime">) {
+	client.realtime.subscribe = async () => async () => undefined
+	client.realtime.unsubscribe = async () => undefined
+}
+
 export function shouldUseRealtime(demoMode: boolean) {
 	return !demoMode
 }

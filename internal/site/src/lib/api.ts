@@ -35,8 +35,9 @@ pb.beforeSend = (url, options) => {
 export async function initializePocketBaseRuntime() {
 	await mobileAuthStoreAdapter.initial
 	if (import.meta.env.MODE === "demo") {
-		const { seedDemoAuth } = await import("@/demo/auth")
+		const { disableDemoRealtime, seedDemoAuth } = await import("@/demo/auth")
 		seedDemoAuth(pb)
+		disableDemoRealtime(pb)
 		return { environment: "web" as const, hubUrl: "", hubConfigured: true }
 	}
 	const runtime = await initializeMobileRuntime(pb)

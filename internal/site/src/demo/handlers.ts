@@ -1,5 +1,5 @@
 import { http, HttpResponse } from "msw"
-import { demoBackups, demoContainers, demoSystems } from "./fixture-monitoring.ts"
+import { demoBackups, demoContainers, demoSystems, demoWebsiteMonitors } from "./fixture-monitoring.ts"
 import { DEMO_FIXTURE_MARKER, demoCollections, demoDashboardSummary, type DemoCollectionName } from "./fixture.ts"
 import { getRecord, listRecords, type DemoRecord } from "./records.ts"
 
@@ -48,6 +48,34 @@ export const demoHandlers = [
 			}
 		})
 		return HttpResponse.json({ items, systems, system: requestedSystem, hasMore: false, limit: 5000 })
+	}),
+	http.get("*/api/pulse/website-monitors", ({ request }) => {
+		const url = new URL(request.url)
+		const search = (url.searchParams.get("search") ?? "").trim().toLocaleLowerCase()
+		const status = url.searchParams.get("status") ?? "all"
+		const system = url.searchParams.get("system") ?? ""
+		const filtered = demoWebsiteMonitors.filter((monitor) => {
+			const matchesSearch = !search || `${monitor.name} ${monitor.url}`.toLocaleLowerCase().includes(search)
+			const matchesStatus = status === "all" || monitor.last_status === status
+			const matchesSystem = !system || monitor.system === system
+			return matchesSearch && matchesStatus && matchesSystem
+		})
+		const page = Math.max(1, Number(url.searchParams.get("page")) || 1)
+		const perPage = Math.max(1, Number(url.searchParams.get("perPage")) || 50)
+		const items = filtered.slice((page - 1) * perPage, page * perPage)
+		return HttpResponse.json({
+			items,
+			page,
+			perPage,
+			hasMore: page * perPage < filtered.length,
+			counts: {
+				all: filtered.length,
+				up: filtered.filter((monitor) => monitor.last_status === "up").length,
+				down: filtered.filter((monitor) => monitor.last_status === "down").length,
+				unknown: filtered.filter((monitor) => monitor.last_status !== "up" && monitor.last_status !== "down").length,
+				stale: 0,
+			},
+		})
 	}),
 	http.get("*/api/pulse/backups", () => HttpResponse.json({ items: demoBackups })),
 	http.get("*/api/backups", () => HttpResponse.json({ items: demoBackups })),
