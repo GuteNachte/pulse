@@ -14,6 +14,7 @@ import { ThemeProvider } from "@/components/theme-provider.tsx"
 import { Button } from "@/components/ui/button.tsx"
 import { LoadingState } from "@/components/ui/loading-state.tsx"
 import { Toaster } from "@/components/ui/toaster.tsx"
+import { isDemoMode } from "@/demo/mode"
 import { alertManager } from "@/lib/alerts"
 import {
 	initializePocketBaseRuntime,
@@ -60,6 +61,7 @@ const App = memo(() => {
 	const moduleSettings = useStore($moduleSettings)
 
 	useEffect(() => {
+		const useRealtime = !isDemoMode()
 		// change auth store on auth change
 		const unsubscribeAuth = pb.authStore.onChange(() => {
 			$authenticated.set(pb.authStore.isValid)
@@ -79,11 +81,11 @@ const App = memo(() => {
 			// get current systems list
 			.refresh()
 			// subscribe to new system updates
-			.then(systemsManager.subscribe)
+			.then(() => (useRealtime ? systemsManager.subscribe() : undefined))
 			// get current alerts
 			.then(alertManager.refresh)
 			// subscribe to new alert updates
-			.then(alertManager.subscribe)
+			.then(() => (useRealtime ? alertManager.subscribe() : undefined))
 		return () => {
 			unsubscribeAuth()
 			alertManager.unsubscribe()
@@ -222,7 +224,7 @@ const Layout = () => {
 				if (ignore) {
 					return
 				}
-				if (pb.authStore.isValid) {
+				if (pb.authStore.isValid && !isDemoMode()) {
 					await verifyAuth()
 				}
 				if (ignore) {
@@ -309,6 +311,9 @@ function registerServiceWorker() {
 	if (!("serviceWorker" in navigator)) {
 		return
 	}
+	if (isDemoMode()) {
+		return
+	}
 	if (globalThis.PULSE?.DEV_BUILD || isAndroidApp()) {
 		navigator.serviceWorker.getRegistrations().then((registrations) => {
 			for (const registration of registrations) {
@@ -348,4 +353,22 @@ rootStore.__pulseRoot = root
 
 // StrictMode is intentionally disabled in dev because the double mount breaks
 // the clipboard dialog lifecycle.
-root.render(<I18nApp />)
+async function bootstrap() {
+	if (import.meta.env.MODE === "demo") {
+		try {
+			const { startDemoBrowser } = await import("@/demo/browser")
+			await startDemoBrowser()
+		} catch (error) {
+			console.error("public demo bootstrap", error)
+			root.render(
+				<div className="grid min-h-svh place-items-center bg-background px-4">
+					<LoadingState title="演示数据初始化失败" description="公开演示没有连接任何真实 Hub，请刷新页面重试。" />
+				</div>
+			)
+			return
+		}
+	}
+	root.render(<I18nApp />)
+}
+
+void bootstrap()

@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw"
 import { demoBackups, demoContainers, demoSystems } from "./fixture-monitoring.ts"
-import { demoCollections, demoDashboardSummary, type DemoCollectionName } from "./fixture.ts"
+import { DEMO_FIXTURE_MARKER, demoCollections, demoDashboardSummary, type DemoCollectionName } from "./fixture.ts"
 import { getRecord, listRecords, type DemoRecord } from "./records.ts"
 
 const notFound = (path: string) =>
@@ -57,6 +57,7 @@ export const demoHandlers = [
 			cu: false,
 			environment: "demo",
 			build_commit: "public-demo",
+			demo_fixture: DEMO_FIXTURE_MARKER,
 		})
 	),
 	http.get("*/api/pulse/info", () =>
@@ -65,6 +66,7 @@ export const demoHandlers = [
 			cu: false,
 			environment: "demo",
 			build_commit: "public-demo",
+			demo_fixture: DEMO_FIXTURE_MARKER,
 		})
 	),
 	http.get("*/api/pulse/assets/:id/media", () =>

@@ -1,6 +1,8 @@
 import PocketBase, { AsyncAuthStore } from "pocketbase"
 import { basePath } from "@/components/router"
 import { toast } from "@/components/ui/use-toast"
+import { isDemoMode } from "@/demo/mode"
+import { demoReadOnlyMessage, isDemoWriteRequest } from "@/demo/write-guard"
 import {
 	createMobileAuthStoreAdapter,
 	getInitialPocketBaseBaseUrl,
@@ -21,6 +23,9 @@ export const pb = new PocketBase(
 )
 
 pb.beforeSend = (url, options) => {
+	if (isDemoWriteRequest(isDemoMode(), options.method)) {
+		throw new Error(demoReadOnlyMessage)
+	}
 	if (isOfflineReadOnlyMode() && isWriteRequestMethod(options.method)) {
 		throw new Error(offlineReadOnlyMessage)
 	}
@@ -28,12 +33,21 @@ pb.beforeSend = (url, options) => {
 }
 
 export async function initializePocketBaseRuntime() {
-	const [runtime] = await Promise.all([initializeMobileRuntime(pb), mobileAuthStoreAdapter.initial])
+	await mobileAuthStoreAdapter.initial
+	if (import.meta.env.MODE === "demo") {
+		const { seedDemoAuth } = await import("@/demo/auth")
+		seedDemoAuth(pb)
+		return { environment: "web" as const, hubUrl: "", hubConfigured: true }
+	}
+	const runtime = await initializeMobileRuntime(pb)
 	await new Promise((resolve) => window.setTimeout(resolve, 0))
 	return runtime
 }
 
 export async function saveAndUseHubUrl(value: string) {
+	if (isDemoMode()) {
+		throw new Error(demoReadOnlyMessage)
+	}
 	const normalized = normalizeHubUrl(value)
 	await assertHubReachable(normalized)
 	pb.baseUrl = normalized
