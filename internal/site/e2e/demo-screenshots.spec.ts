@@ -19,7 +19,20 @@ const captures = [
 
 test.beforeEach(async ({ page }) => {
 	await page.addInitScript(() => {
-		Date.now = () => Date.parse("2026-07-31T10:00:00+08:00")
+		const NativeDate = Date
+		const fixedTimestamp = NativeDate.parse("2026-07-31T10:00:00+08:00")
+		const FixedDate = new Proxy(NativeDate, {
+			apply(target, thisArg, argumentsList) {
+				return argumentsList.length === 0
+					? new NativeDate(fixedTimestamp).toString()
+					: Reflect.apply(target, thisArg, argumentsList)
+			},
+			construct(target, argumentsList, newTarget) {
+				return Reflect.construct(target, argumentsList.length === 0 ? [fixedTimestamp] : argumentsList, newTarget)
+			},
+		})
+		FixedDate.now = () => fixedTimestamp
+		globalThis.Date = FixedDate
 		localStorage.setItem("pulse-theme", "light")
 	})
 })
@@ -50,9 +63,7 @@ async function openStableDemoPage(page: Page, path: string, marker: string) {
 	await expect(page.locator("#app")).not.toContainText(/正在加载|正在读取|加载中|读取失败|初始化失败/)
 	await page.evaluate(() => document.fonts.ready)
 
-	await expect
-		.poll(() => page.evaluate(measureStableElements), { timeout: 10_000 })
-		.toEqual(await page.evaluate(measureStableElements))
+	await waitForStableVisuals(page)
 
 	const hasHorizontalOverflow = await page.evaluate(
 		() => document.documentElement.scrollWidth > document.documentElement.clientWidth
@@ -60,17 +71,41 @@ async function openStableDemoPage(page: Page, path: string, marker: string) {
 	expect(hasHorizontalOverflow).toBe(false)
 }
 
-async function measureStableElements() {
-	const measure = () =>
-		Array.from(document.querySelectorAll<HTMLElement>("[data-slot='card'], .react-flow"))
-			.filter((element) => element.offsetParent !== null)
-			.slice(0, 24)
-			.map((element) => {
-				const rect = element.getBoundingClientRect()
-				return [rect.x, rect.y, rect.width, rect.height].map((value) => Math.round(value * 10) / 10)
-			})
+async function waitForStableVisuals(page: Page) {
+	let previous = await page.evaluate(captureVisualState)
+	let stableSamples = 0
 
-	const before = measure()
-	await new Promise<void>((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(() => resolveFrame())))
-	return { before, after: measure() }
+	await expect
+		.poll(
+			async () => {
+				const current = await page.evaluate(captureVisualState)
+				stableSamples = current === previous ? stableSamples + 1 : 0
+				previous = current
+				return stableSamples
+			},
+			{ timeout: 10_000, intervals: [100] }
+		)
+		.toBeGreaterThanOrEqual(3)
+}
+
+function captureVisualState() {
+	const geometry = Array.from(document.querySelectorAll<HTMLElement>("[data-slot='card'], .react-flow"))
+		.filter((element) => element.offsetParent !== null)
+		.slice(0, 24)
+		.map((element) => {
+			const rect = element.getBoundingClientRect()
+			return [rect.x, rect.y, rect.width, rect.height].map((value) => Math.round(value * 10) / 10)
+		})
+	const charts = Array.from(document.querySelectorAll<SVGElement>(".recharts-wrapper svg")).map(
+		(element) => element.outerHTML
+	)
+	const topology = Array.from(document.querySelectorAll<HTMLElement>(".react-flow")).map(
+		(element) => element.innerHTML
+	)
+	const progress = Array.from(document.querySelectorAll<HTMLElement>("[role='progressbar']")).map(
+		(element) => `${element.getAttribute("aria-valuenow")}|${element.getAttribute("style")}`
+	)
+	const images = Array.from(document.images).map((image) => [image.currentSrc, image.complete, image.naturalWidth, image.naturalHeight])
+
+	return JSON.stringify({ geometry, charts, topology, progress, images })
 }

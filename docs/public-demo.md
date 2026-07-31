@@ -46,11 +46,14 @@ Pop-Location
 Remove-Item Env:PULSE_DEMO_BASE_URL
 ```
 
-截图和隐私审计：
+生成截图并执行隐私审计：
 
 ```powershell
+npm.cmd --prefix internal/site run test:demo:screenshots
 pwsh -NoProfile -File supplemental/scripts/verify-demo-artifacts.ps1
 ```
+
+完整路由验证不会重写仓库截图；只有显式执行 `test:demo:screenshots` 才会更新 `docs/media` 中的公开素材。
 
 ## 发布方式
 
