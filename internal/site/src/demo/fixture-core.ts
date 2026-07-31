@@ -1,9 +1,11 @@
 import type {
 	AssetInterfaceKind,
 	AssetInterfaceRecord,
+	AssetLocationRecord,
 	AssetRecord,
 	AssetRelationRecord,
 	AssetType,
+	NetworkLayoutRecord,
 } from "@/types"
 
 export const DEMO_USER_ID = "demo_user_00001"
@@ -33,7 +35,7 @@ const demoAssetRows: DemoAssetRow[] = [
 	["demo-web", "家庭服务入口", "web_endpoint", "", "互联网服务监控", "shared"],
 ]
 
-function recordBase(id: string, collectionId: string, collectionName: string) {
+export function demoRecordBase(id: string, collectionId: string, collectionName: string) {
 	return {
 		id,
 		collectionId,
@@ -44,7 +46,7 @@ function recordBase(id: string, collectionId: string, collectionName: string) {
 
 function asset([id, name, type, managementIp, role, domain]: DemoAssetRow, index: number): AssetRecord {
 	return {
-		...recordBase(id, "demo_assets", "assets"),
+		...demoRecordBase(id, "demo_assets", "assets"),
 		user: DEMO_USER_ID,
 		name,
 		type,
@@ -53,6 +55,7 @@ function asset([id, name, type, managementIp, role, domain]: DemoAssetRow, index
 		vendor: type === "internet" || type === "web_endpoint" ? "Nebula Labs" : "Pulse Demo",
 		model: type === "web_endpoint" ? "Web Endpoint" : name,
 		role,
+		location: domain === "technology" ? "demo-location-lab" : domain === "home" ? "demo-location-home" : undefined,
 		tags: [domain === "shared" ? "共享" : domain === "home" ? "家庭网" : "科技网"],
 		metadata: {
 			asset_number: `DEMO-${String(index + 1).padStart(3, "0")}`,
@@ -81,7 +84,7 @@ type DemoInterfaceInput = {
 
 function networkInterface(input: DemoInterfaceInput): AssetInterfaceRecord {
 	return {
-		...recordBase(input.id, "demo_asset_interfaces", "asset_interfaces"),
+		...demoRecordBase(input.id, "demo_asset_interfaces", "asset_interfaces"),
 		user: DEMO_USER_ID,
 		asset: input.asset,
 		name: input.name,
@@ -99,24 +102,133 @@ function networkInterface(input: DemoInterfaceInput): AssetInterfaceRecord {
 }
 
 export const demoInterfaces: AssetInterfaceRecord[] = [
-	networkInterface({ id: "if-internet", asset: "demo-internet", name: "光纤入口", kind: "pon", speedMbps: 10_000, primary: true }),
-	networkInterface({ id: "if-ont-pon", asset: "demo-ont", name: "PON 上联", kind: "pon", speedMbps: 10_000, primary: true }),
-	networkInterface({ id: "if-ont-lan", asset: "demo-ont", name: "LAN 1", kind: "lan", mac: "02:50:00:00:01:01", ipv4: "192.168.50.1", speedMbps: 2_500 }),
-	networkInterface({ id: "if-switch-up", asset: "demo-switch", name: "电口 1", kind: "ethernet", mac: "02:50:00:00:02:01", ipv4: "192.168.50.2", speedMbps: 2_500, primary: true }),
+	networkInterface({
+		id: "if-internet",
+		asset: "demo-internet",
+		name: "光纤入口",
+		kind: "pon",
+		speedMbps: 10_000,
+		primary: true,
+	}),
+	networkInterface({
+		id: "if-ont-pon",
+		asset: "demo-ont",
+		name: "PON 上联",
+		kind: "pon",
+		speedMbps: 10_000,
+		primary: true,
+	}),
+	networkInterface({
+		id: "if-ont-lan",
+		asset: "demo-ont",
+		name: "LAN 1",
+		kind: "lan",
+		mac: "02:50:00:00:01:01",
+		ipv4: "192.168.50.1",
+		speedMbps: 2_500,
+	}),
+	networkInterface({
+		id: "if-switch-up",
+		asset: "demo-switch",
+		name: "电口 1",
+		kind: "ethernet",
+		mac: "02:50:00:00:02:01",
+		ipv4: "192.168.50.2",
+		speedMbps: 2_500,
+		primary: true,
+	}),
 	networkInterface({ id: "if-switch-ap", asset: "demo-switch", name: "电口 2", kind: "ethernet", speedMbps: 2_500 }),
 	networkInterface({ id: "if-switch-nas", asset: "demo-switch", name: "电口 3", kind: "ethernet", speedMbps: 2_500 }),
 	networkInterface({ id: "if-switch-pc", asset: "demo-switch", name: "电口 4", kind: "ethernet", speedMbps: 2_500 }),
 	networkInterface({ id: "if-switch-tech", asset: "demo-switch", name: "电口 5", kind: "ethernet", speedMbps: 1_000 }),
-	networkInterface({ id: "if-ap-up", asset: "demo-ap", name: "2.5GbE", kind: "ethernet", mac: "02:50:00:00:03:01", ipv4: "192.168.50.3", speedMbps: 2_500, primary: true }),
-	networkInterface({ id: "if-ap-wifi", asset: "demo-ap", name: "5 GHz Wi-Fi", kind: "wifi", metadata: { wifi_standard: "Wi-Fi 7", wifi_band: "5 GHz" } }),
-	networkInterface({ id: "if-nas", asset: "demo-nas", name: "2.5GbE", kind: "ethernet", mac: "02:50:00:00:10:01", ipv4: "192.168.50.10", speedMbps: 2_500, primary: true }),
-	networkInterface({ id: "if-windows", asset: "demo-windows", name: "2.5GbE", kind: "ethernet", mac: "02:50:00:00:20:01", ipv4: "192.168.50.20", speedMbps: 2_500, primary: true }),
-	networkInterface({ id: "if-phone", asset: "demo-phone", name: "5 GHz Wi-Fi", kind: "wifi", mac: "02:50:00:00:30:01", ipv4: "192.168.50.30", primary: true, metadata: { wifi_standard: "Wi-Fi 7", wifi_band: "5 GHz" } }),
-	networkInterface({ id: "if-tech-wan", asset: "demo-tech-router", name: "WAN", kind: "wan", mac: "02:50:00:00:40:01", ipv4: "192.168.50.40", speedMbps: 1_000, primary: true }),
+	networkInterface({
+		id: "if-ap-up",
+		asset: "demo-ap",
+		name: "2.5GbE",
+		kind: "ethernet",
+		mac: "02:50:00:00:03:01",
+		ipv4: "192.168.50.3",
+		speedMbps: 2_500,
+		primary: true,
+	}),
+	networkInterface({
+		id: "if-ap-wifi",
+		asset: "demo-ap",
+		name: "5 GHz Wi-Fi",
+		kind: "wifi",
+		metadata: { wifi_standard: "Wi-Fi 7", wifi_band: "5 GHz" },
+	}),
+	networkInterface({
+		id: "if-nas",
+		asset: "demo-nas",
+		name: "2.5GbE",
+		kind: "ethernet",
+		mac: "02:50:00:00:10:01",
+		ipv4: "192.168.50.10",
+		speedMbps: 2_500,
+		primary: true,
+	}),
+	networkInterface({
+		id: "if-windows",
+		asset: "demo-windows",
+		name: "2.5GbE",
+		kind: "ethernet",
+		mac: "02:50:00:00:20:01",
+		ipv4: "192.168.50.20",
+		speedMbps: 2_500,
+		primary: true,
+	}),
+	networkInterface({
+		id: "if-phone",
+		asset: "demo-phone",
+		name: "5 GHz Wi-Fi",
+		kind: "wifi",
+		mac: "02:50:00:00:30:01",
+		ipv4: "192.168.50.30",
+		primary: true,
+		metadata: { wifi_standard: "Wi-Fi 7", wifi_band: "5 GHz" },
+	}),
+	networkInterface({
+		id: "if-tech-wan",
+		asset: "demo-tech-router",
+		name: "WAN",
+		kind: "wan",
+		mac: "02:50:00:00:40:01",
+		ipv4: "192.168.50.40",
+		speedMbps: 1_000,
+		primary: true,
+	}),
 	networkInterface({ id: "if-tech-lan", asset: "demo-tech-router", name: "LAN 1", kind: "lan", speedMbps: 2_500 }),
-	networkInterface({ id: "if-linux", asset: "demo-linux", name: "2.5GbE", kind: "ethernet", mac: "02:50:00:00:41:01", ipv4: "192.168.50.41", speedMbps: 2_500, primary: true }),
-	networkInterface({ id: "if-light", asset: "demo-light", name: "2.4 GHz Wi-Fi", kind: "wifi", mac: "02:50:00:00:60:01", ipv4: "192.168.50.60", primary: true, metadata: { wifi_standard: "Wi-Fi 6", wifi_band: "2.4 GHz" } }),
-	networkInterface({ id: "if-sensor", asset: "demo-sensor", name: "2.4 GHz Wi-Fi", kind: "wifi", mac: "02:50:00:00:61:01", ipv4: "192.168.50.61", primary: true, metadata: { wifi_standard: "Wi-Fi 6", wifi_band: "2.4 GHz" } }),
+	networkInterface({
+		id: "if-linux",
+		asset: "demo-linux",
+		name: "2.5GbE",
+		kind: "ethernet",
+		mac: "02:50:00:00:41:01",
+		ipv4: "192.168.50.41",
+		speedMbps: 2_500,
+		primary: true,
+	}),
+	networkInterface({
+		id: "if-light",
+		asset: "demo-light",
+		name: "2.4 GHz Wi-Fi",
+		kind: "wifi",
+		mac: "02:50:00:00:60:01",
+		ipv4: "192.168.50.60",
+		primary: true,
+		metadata: { wifi_standard: "Wi-Fi 6", wifi_band: "2.4 GHz" },
+	}),
+	networkInterface({
+		id: "if-sensor",
+		asset: "demo-sensor",
+		name: "2.4 GHz Wi-Fi",
+		kind: "wifi",
+		mac: "02:50:00:00:61:01",
+		ipv4: "192.168.50.61",
+		primary: true,
+		metadata: { wifi_standard: "Wi-Fi 6", wifi_band: "2.4 GHz" },
+	}),
 ]
 
 type DemoRelationInput = {
@@ -131,7 +243,7 @@ type DemoRelationInput = {
 
 function relation(input: DemoRelationInput): AssetRelationRecord {
 	return {
-		...recordBase(input.id, "demo_asset_relations", "asset_relations"),
+		...demoRecordBase(input.id, "demo_asset_relations", "asset_relations"),
 		user: DEMO_USER_ID,
 		source_asset: input.from,
 		target_asset: input.to,
@@ -149,14 +261,156 @@ function relation(input: DemoRelationInput): AssetRelationRecord {
 }
 
 export const demoRelations: AssetRelationRecord[] = [
-	relation({ id: "rel-internet-ont", from: "demo-internet", to: "demo-ont", fromInterface: "if-internet", toInterface: "if-ont-pon", medium: "fiber", domain: "home" }),
-	relation({ id: "rel-ont-switch", from: "demo-ont", to: "demo-switch", fromInterface: "if-ont-lan", toInterface: "if-switch-up", medium: "ethernet", domain: "home" }),
-	relation({ id: "rel-switch-ap", from: "demo-switch", to: "demo-ap", fromInterface: "if-switch-ap", toInterface: "if-ap-up", medium: "ethernet", domain: "home" }),
-	relation({ id: "rel-switch-nas", from: "demo-switch", to: "demo-nas", fromInterface: "if-switch-nas", toInterface: "if-nas", medium: "ethernet", domain: "home" }),
-	relation({ id: "rel-switch-pc", from: "demo-switch", to: "demo-windows", fromInterface: "if-switch-pc", toInterface: "if-windows", medium: "ethernet", domain: "home" }),
-	relation({ id: "rel-ap-phone", from: "demo-ap", to: "demo-phone", fromInterface: "if-ap-wifi", toInterface: "if-phone", medium: "wifi", domain: "home" }),
-	relation({ id: "rel-ap-light", from: "demo-ap", to: "demo-light", fromInterface: "if-ap-wifi", toInterface: "if-light", medium: "wifi", domain: "home" }),
-	relation({ id: "rel-ap-sensor", from: "demo-ap", to: "demo-sensor", fromInterface: "if-ap-wifi", toInterface: "if-sensor", medium: "wifi", domain: "home" }),
-	relation({ id: "rel-switch-tech", from: "demo-switch", to: "demo-tech-router", fromInterface: "if-switch-tech", toInterface: "if-tech-wan", medium: "ethernet", domain: "technology" }),
-	relation({ id: "rel-tech-linux", from: "demo-tech-router", to: "demo-linux", fromInterface: "if-tech-lan", toInterface: "if-linux", medium: "ethernet", domain: "technology" }),
+	relation({
+		id: "rel-internet-ont",
+		from: "demo-internet",
+		to: "demo-ont",
+		fromInterface: "if-internet",
+		toInterface: "if-ont-pon",
+		medium: "fiber",
+		domain: "home",
+	}),
+	relation({
+		id: "rel-ont-switch",
+		from: "demo-ont",
+		to: "demo-switch",
+		fromInterface: "if-ont-lan",
+		toInterface: "if-switch-up",
+		medium: "ethernet",
+		domain: "home",
+	}),
+	relation({
+		id: "rel-switch-ap",
+		from: "demo-switch",
+		to: "demo-ap",
+		fromInterface: "if-switch-ap",
+		toInterface: "if-ap-up",
+		medium: "ethernet",
+		domain: "home",
+	}),
+	relation({
+		id: "rel-switch-nas",
+		from: "demo-switch",
+		to: "demo-nas",
+		fromInterface: "if-switch-nas",
+		toInterface: "if-nas",
+		medium: "ethernet",
+		domain: "home",
+	}),
+	relation({
+		id: "rel-switch-pc",
+		from: "demo-switch",
+		to: "demo-windows",
+		fromInterface: "if-switch-pc",
+		toInterface: "if-windows",
+		medium: "ethernet",
+		domain: "home",
+	}),
+	relation({
+		id: "rel-ap-phone",
+		from: "demo-ap",
+		to: "demo-phone",
+		fromInterface: "if-ap-wifi",
+		toInterface: "if-phone",
+		medium: "wifi",
+		domain: "home",
+	}),
+	relation({
+		id: "rel-ap-light",
+		from: "demo-ap",
+		to: "demo-light",
+		fromInterface: "if-ap-wifi",
+		toInterface: "if-light",
+		medium: "wifi",
+		domain: "home",
+	}),
+	relation({
+		id: "rel-ap-sensor",
+		from: "demo-ap",
+		to: "demo-sensor",
+		fromInterface: "if-ap-wifi",
+		toInterface: "if-sensor",
+		medium: "wifi",
+		domain: "home",
+	}),
+	relation({
+		id: "rel-switch-tech",
+		from: "demo-switch",
+		to: "demo-tech-router",
+		fromInterface: "if-switch-tech",
+		toInterface: "if-tech-wan",
+		medium: "ethernet",
+		domain: "technology",
+	}),
+	relation({
+		id: "rel-tech-linux",
+		from: "demo-tech-router",
+		to: "demo-linux",
+		fromInterface: "if-tech-lan",
+		toInterface: "if-linux",
+		medium: "ethernet",
+		domain: "technology",
+	}),
+]
+
+export const demoLocations: AssetLocationRecord[] = [
+	{
+		...demoRecordBase("demo-location-home", "demo_asset_locations", "asset_locations"),
+		user: DEMO_USER_ID,
+		name: "星云之家",
+		kind: "area",
+		sort_order: 1,
+		created: DEMO_TIMESTAMP,
+		updated: DEMO_TIMESTAMP,
+	},
+	{
+		...demoRecordBase("demo-location-lab", "demo_asset_locations", "asset_locations"),
+		user: DEMO_USER_ID,
+		name: "实验室",
+		kind: "area",
+		sort_order: 2,
+		created: DEMO_TIMESTAMP,
+		updated: DEMO_TIMESTAMP,
+	},
+]
+
+function layout(id: string, key: string, nodes: Record<string, { x: number; y: number }>): NetworkLayoutRecord {
+	return {
+		...demoRecordBase(id, "demo_network_layouts", "network_layouts"),
+		user: DEMO_USER_ID,
+		key,
+		layout: {
+			version: 2,
+			nodes,
+			edge_waypoints: {},
+			connection_modes: {},
+			viewport: { x: 20, y: 40, zoom: 0.82 },
+		},
+		created: DEMO_TIMESTAMP,
+		updated: DEMO_TIMESTAMP,
+	}
+}
+
+const homeNodes = {
+	"asset:demo-internet": { x: 48, y: 240 },
+	"asset:demo-ont": { x: 360, y: 240 },
+	"asset:demo-switch": { x: 672, y: 240 },
+	"asset:demo-ap": { x: 984, y: 64 },
+	"asset:demo-nas": { x: 984, y: 208 },
+	"asset:demo-windows": { x: 984, y: 352 },
+	"asset:demo-phone": { x: 1296, y: 32 },
+	"asset:demo-light": { x: 1296, y: 176 },
+	"asset:demo-sensor": { x: 1296, y: 320 },
+}
+
+const technologyNodes = {
+	"asset:demo-internet": { x: 48, y: 208 },
+	"asset:demo-tech-router": { x: 400, y: 208 },
+	"asset:demo-linux": { x: 752, y: 208 },
+}
+
+export const demoLayouts: NetworkLayoutRecord[] = [
+	layout("demo-layout-home", "network-home", homeNodes),
+	layout("demo-layout-technology", "network-technology", technologyNodes),
+	layout("demo-layout-overview", "home", { ...homeNodes, ...technologyNodes }),
 ]
