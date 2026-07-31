@@ -4,7 +4,9 @@ import { useStore } from "@nanostores/react"
 import {
 	BellIcon,
 	ArchiveIcon,
+	Code2Icon,
 	ContainerIcon,
+	DownloadIcon,
 	Globe2Icon,
 	HousePlugIcon,
 	LayoutDashboardIcon,
@@ -17,6 +19,7 @@ import {
 } from "lucide-react"
 import type { ReactNode } from "react"
 import { buttonVariants } from "@/components/ui/button"
+import { demoModeIndicatorModel, isDemoMode } from "@/demo/mode"
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -30,6 +33,7 @@ import { logOut, pb } from "@/lib/api"
 import { cn, runOnce } from "@/lib/utils"
 import { $moduleSettings } from "@/modules/module-state"
 import type { PulseModuleId } from "@/modules/types"
+import { DemoModeIndicator } from "./demo-mode-indicator"
 import { useMobileLayout } from "./mobile/mobile-ui"
 import { Logo } from "./logo"
 import { ModeToggle } from "./mode-toggle"
@@ -56,6 +60,7 @@ export default function Navbar() {
 	const alertsPath = getPagePath($router, "alerts")
 	const accountMenuActive = isActiveRoute("alerts", alertsPath) || isActiveRoute("settings", settingsPath)
 	const moduleEnabled = (id: PulseModuleId) => moduleSettings[id]?.effectiveEnabled !== false
+	const demoMode = isDemoMode()
 
 	return (
 		<div className="my-1 flex h-10 items-center rounded-none border-0 bg-transparent px-1 pe-0 sm:px-2 md:my-[10px] md:h-16 md:rounded-lg md:border md:border-border md:bg-card md:px-5 md:shadow-none">
@@ -67,6 +72,7 @@ export default function Navbar() {
 			>
 				<Logo className="text-[1.45rem] md:text-lg" />
 			</Link>
+			{!isMobile && <DemoModeIndicator />}
 
 			{isMobile ? (
 				<div className="ms-auto flex items-center text-base">
@@ -80,7 +86,10 @@ export default function Navbar() {
 							<MenuIcon />
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end" className="min-w-48">
-							<DropdownMenuLabel className="max-w-40 truncate">{pb.authStore.record?.email}</DropdownMenuLabel>
+							<DropdownMenuLabel className="grid max-w-52 gap-1.5">
+								{demoMode && <DemoModeIndicator className="w-fit" />}
+								<span className="truncate">{pb.authStore.record?.email}</span>
+							</DropdownMenuLabel>
 							<DropdownMenuSeparator />
 							<DropdownMenuGroup>
 								<DropdownMenuItem onSelect={navigateFromMenu(settingsIndexPath)}>
@@ -125,9 +134,26 @@ export default function Navbar() {
 								</DropdownMenuItem>
 							</DropdownMenuGroup>
 							<DropdownMenuSeparator />
-							<DropdownMenuItem onSelect={logOut}>
-								<Trans>Log Out</Trans>
-							</DropdownMenuItem>
+							{demoMode ? (
+								<DropdownMenuGroup>
+									<DropdownMenuItem asChild>
+										<a href={demoModeIndicatorModel.repositoryUrl} target="_blank" rel="noreferrer">
+											<Code2Icon className="me-2.5 h-4 w-4" />
+											查看 GitHub
+										</a>
+									</DropdownMenuItem>
+									<DropdownMenuItem asChild>
+										<a href={demoModeIndicatorModel.releaseUrl} target="_blank" rel="noreferrer">
+											<DownloadIcon className="me-2.5 h-4 w-4" />
+											下载测试版
+										</a>
+									</DropdownMenuItem>
+								</DropdownMenuGroup>
+							) : (
+								<DropdownMenuItem onSelect={logOut}>
+									<Trans>Log Out</Trans>
+								</DropdownMenuItem>
+							)}
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</div>
@@ -205,12 +231,29 @@ export default function Navbar() {
 								<span>系统设置</span>
 							</DropdownMenuItem>
 							<DropdownMenuSeparator />
-							<DropdownMenuItem onSelect={logOut}>
-								<LogOutIcon className="me-2.5 h-4 w-4" />
-								<span>
-									<Trans>Log Out</Trans>
-								</span>
-							</DropdownMenuItem>
+							{demoMode ? (
+								<>
+									<DropdownMenuItem asChild>
+										<a href={demoModeIndicatorModel.repositoryUrl} target="_blank" rel="noreferrer">
+											<Code2Icon className="me-2.5 h-4 w-4" />
+											查看 GitHub
+										</a>
+									</DropdownMenuItem>
+									<DropdownMenuItem asChild>
+										<a href={demoModeIndicatorModel.releaseUrl} target="_blank" rel="noreferrer">
+											<DownloadIcon className="me-2.5 h-4 w-4" />
+											下载测试版
+										</a>
+									</DropdownMenuItem>
+								</>
+							) : (
+								<DropdownMenuItem onSelect={logOut}>
+									<LogOutIcon className="me-2.5 h-4 w-4" />
+									<span>
+										<Trans>Log Out</Trans>
+									</span>
+								</DropdownMenuItem>
+							)}
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</div>

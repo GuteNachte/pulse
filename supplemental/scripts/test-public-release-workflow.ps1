@@ -145,6 +145,18 @@ if ($tagGuards.Count -ne 3) {
 }
 $imagePushIndex = $workflow.IndexOf('docker buildx build --platform linux/amd64 --push', [System.StringComparison]::Ordinal)
 $releaseCreateIndex = $workflow.IndexOf('gh release create', [System.StringComparison]::Ordinal)
+$releaseAssetAllowlist = @(
+    'build/public-release/${{ needs.validate.outputs.version }}/docker-compose.yml',
+    'build/public-release/${{ needs.validate.outputs.version }}/pulse-agent.yml',
+    'build/public-release/${{ needs.validate.outputs.version }}/pulse-agent-${{ needs.validate.outputs.version }}.exe',
+    'build/public-release/${{ needs.validate.outputs.version }}/pulse-android-${{ needs.validate.outputs.version }}.apk'
+)
+foreach ($assetPath in $releaseAssetAllowlist) {
+    Assert-Contains "Public release install asset allowlist" $workflow $assetPath
+}
+if ($workflow.Contains('build/public-release/${{ needs.validate.outputs.version }}/*')) {
+    throw "GitHub Release must upload only the explicit install/deployment asset allowlist, not every package file."
+}
 $prePublishGuardIndex = $workflow.IndexOf('- name: Reconfirm release tag before publishing artifacts', [System.StringComparison]::Ordinal)
 $preReleaseGuardIndex = $workflow.IndexOf('- name: Reconfirm release tag before creating GitHub Release', [System.StringComparison]::Ordinal)
 if ($prePublishGuardIndex -lt 0 -or $imagePushIndex -lt $prePublishGuardIndex) {

@@ -16,8 +16,32 @@ const pocketbaseImportMethodCompat = () => ({
 	},
 })
 
+const pulseHtmlMetadata = (demoMode: boolean) => ({
+	name: "pulse:html-metadata",
+	transformIndexHtml(html: string) {
+		if (!demoMode) {
+			return html
+		}
+
+		return html
+			.replace('<html lang="en"', '<html lang="zh-CN"')
+			.replace(
+				'<meta name="robots" content="noindex, nofollow" />',
+				'<meta name="description" content="Pulse 家庭资产、网络拓扑与设备监控公开演示" />\n\t\t<meta name="robots" content="index, follow" />'
+			)
+			.replace(
+				/<script id="pulse-theme-bootstrap">[\s\S]*?<\/script>/,
+				'<script src="/static/demo-bootstrap.js"></script>'
+			)
+			.replace(/\s*<script id="pulse-runtime-info">[\s\S]*?<\/script>/, "")
+	},
+})
+
 export default defineConfig(({ mode }) => ({
-	base: mode === "capacitor" ? "/" : "./",
+	base: mode === "capacitor" || mode === "demo" ? "/" : "./",
+	define: {
+		"import.meta.env.VITE_PULSE_DEMO": JSON.stringify(mode === "demo" ? "1" : "0"),
+	},
 	server: {
 		proxy: {
 			"/api": "http://127.0.0.1:8090",
@@ -25,6 +49,7 @@ export default defineConfig(({ mode }) => ({
 		},
 	},
 	plugins: [
+		pulseHtmlMetadata(mode === "demo"),
 		pocketbaseImportMethodCompat(),
 		react(),
 		babel({

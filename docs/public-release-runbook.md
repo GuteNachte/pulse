@@ -6,6 +6,10 @@
 
 仓库外的安全镜像、历史改写映射和两份净化克隆必须继续保留。公开发布失败、撤回或重做时，不删除这些本地保护材料。
 
+### Release 下载区策略
+
+普通用户的 GitHub Release 下载区只上传四个可直接使用的文件：Hub `docker-compose.yml`、独立 Agent `pulse-agent.yml`、Windows Agent `.exe` 和 Android `.apk`。`LICENSE`、`THIRD_PARTY_NOTICES.md`、`release-manifest.json` 与 `SHA256SUMS` 仍在发布工作目录和仓库中用于合规与验证，但不作为下载区附件；GitHub 自动生成的源码压缩包不属于工作流上传的 Release 附件，无法从 GitHub 页面移除。
+
 ## 双重发布门禁
 
 `.github/workflows/public-release.yml` 支持两种入口：

@@ -14,11 +14,12 @@ export const releaseHistory: ReleaseNote[] = [
 		version: "1.0.6-beta.6",
 		date: "2026-07-30",
 		title: "Pulse 1.0.6-beta.6 开发记录",
-		badges: ["公开测试版", "Web / Hub", "图片搜索 Agent", "网络拓扑", "智能家居", "工程质量", "项目独立化"],
+		badges: ["公开测试版", "Web / Hub", "公开演示", "社区协作", "网络拓扑", "工程质量", "项目独立化"],
 		sections: [
 			{
 				title: "Web / Hub",
 				items: [
+					"新增完全隔离的公开 Demo Mode：Vercel 静态站复用现有 Pulse 页面，由 MSW 提供版本化虚构 fixture 和本地演示身份；所有写入统一拒绝，演示构建不连接 PocketBase、Agent、NAS、局域网或其他真实环境，正式构建不包含演示数据。公开站 10 条主要路由已通过桌面、平板和手机共 31 项浏览器验收。",
 					"1.0.6-beta.6 延续并收口慢速完整采集修复：GetData 默认等待时间单独放宽到 30 秒，其他 WebSocket 动作继续保持 5 秒；连接未断开时不再仅因首轮硬件或容器采集较慢将整机标记离线。",
 					"1.0.6-beta.6 统一 Web、Hub、Agent 和 Android 版本；Android versionCode 升到 1000606，发布契约补齐 beta.4 / beta.5 历史并验证单调递增，旧 beta.5 tag 保持不可变。",
 					"修复 Hub 同机 Agent 页面身份地址显示为 127.0.0.1：本机 Token、Hub 标签和 is_local 仍按真实 loopback 连接判定，页面身份地址改用 Agent 上报的物理网卡 LAN IPv4，并在后续采集保留已确认地址。",
@@ -567,6 +568,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "移动端 / Android App",
 				items: [
+					"本次公开演示与 GitHub 入口建设不改变 Android 运行时行为；Android App 继续与 Web、Hub、Agent 统一使用 1.0.6-beta.6 版本口径，后续正式发布仍需同版本同步构建和验证。",
 					"Android App 随统一版本升到 1.0.6-beta.6，versionCode=1000606；本次不新增原生功能，继续使用固定 Release 证书和不可调试构建，保持 beta.2 之后的覆盖升级身份。",
 					"Android App 随候选版本升到 1.0.6-beta.4，versionCode=1000604；本次不新增原生功能，只兼容 Build Tools 37 的 APK 签名复核输出，长期 Release 证书和覆盖升级身份保持不变。",
 					"Android 安装序号改为显式单一来源，1.0.6-beta.2 使用 1000602；Gradle、Release 构建、APK 校验和版本一致性检查共同读取该值，发布门禁还会比较历史 tag 并要求高于已发布最大值，避免绕过升版脚本或让预发布版本被 Android 视为同一次安装。",
@@ -583,6 +585,7 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "Agent / 部署",
 				items: [
+					"本次不改变 Agent 协议、采集能力或正式部署参数；新增无后端、无密钥、无真实基础设施连接的 Vercel 静态演示部署，公开演示不能作为 Agent 连接或生产部署入口。",
 					"Linux Agent 补齐真实物理网卡 IPv4 / IPv6 采集；Hub 同机 Agent 仍通过 127.0.0.1 安全通道连接，但页面显示宿主机 LAN 地址，并排除 Docker、容器网桥和隧道接口。外部 Agent 继续使用目标 Hub 的可达局域网地址。",
 					"1.0.6-beta.6 重新统一构建 Hub、Linux / NAS Agent 镜像和 Windows Agent 安装包；Compose、安装说明和发布验证命令全部使用显式 beta.6，不使用 latest。",
 					"1.0.6-beta.2 与 beta.3 的 publish 均在上传附件和推送镜像前停止，因此没有对应 Hub / Agent GHCR 镜像、GitHub Release 或 FlyNAS 部署；beta.4 将重新通过 PR、完整 CI、发布门禁和部署验收。",
@@ -604,6 +607,10 @@ export const releaseHistory: ReleaseNote[] = [
 			{
 				title: "文档 / 规则",
 				items: [
+					"公开入口文案重新整理为“在线演示 → 下载 → 三分钟部署 → 社区反馈”的用户路径，双语 README 补充截图索引、支持范围和 Release 文件用途；公开 Release 下载区只保留四个安装 / 部署文件。",
+					"修复公开 Quality 的 Web 检查：Biome 排除 MSW 自动生成的 Worker，并收口 Demo 截图、演示身份测试与应用启动入口的真实格式 / lint 问题；公开分支现在可继续执行 TypeScript、测试与构建门禁。",
+					"公开项目入口新增中英文 README、可重复生成的产品截图、社交预览图、贡献指南、支持边界、Contributor Covenant 2.1 行为准则，以及带隐私警告的 Issue / PR 模板；截图生成固定日期并等待动态视觉内容稳定，31 项路由验收与 9 张素材生成使用独立命令，完整门禁不会无意重写公开图片。",
+					"新增 Vercel 公开演示站设计与十阶段实施计划：复用现有 React 页面，以编译时 Demo Mode 和 MSW 浏览器请求模拟提供完全虚构、无后端、无凭据的只读数据；首期覆盖首页、资产、双网络拓扑、客户端、容器、网站监控和备份页面，并由 Playwright 从同一演示站生成公开截图。实施按隐私契约、数据模拟、运行隔离、只读边界、Vercel 配置、浏览器验收、截图、部署、GitHub 入口和最终发布门禁推进；演示构建禁止连接真实 Hub、Agent、NAS 或私人基础设施，正式构建行为保持不变。",
 					"公开发布文档切换到 1.0.6-beta.6：保留 beta.5 不可变 tag，发布前要求 Android versionCode 1000606、完整版本一致性和旧标签不回移。",
 					"公开发布手册记录 beta.2 与 beta.3 的不可变 tag、失败运行、真实根因和零公开产物边界，并将后续命令切换到 1.0.6-beta.4；失败标签不移动、不删除、不复用。",
 					"公开发布完整性门禁新增不可变提交 SHA：受保护 publish job 只检出 validate 已验证的提交，并在人工审批后、镜像推送前和 GitHub Release 创建前三次确认远端 tag 仍指向同一提交；仓库 Ruleset 同时禁止 v* tag 更新和删除，嵌套 PowerShell、签名文件权限、包内 APK 和初始化失败清理均改为 fail-closed。",

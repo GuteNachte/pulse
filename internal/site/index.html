@@ -11,7 +11,7 @@
 		<style>
 			.dark { background: hsl(24 5% 8%); color-scheme: dark; }
 		</style>
-		<script>
+		<script id="pulse-theme-bootstrap">
 			(() => {
 				try {
 					const theme = localStorage.getItem("ui-theme");
@@ -21,7 +21,7 @@
 				} catch {}
 			})();
 		</script>
-		<script>
+		<script id="pulse-runtime-info">
 			globalThis.PULSE = "{info}"
 		</script>
 	</head>
