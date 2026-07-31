@@ -59,7 +59,7 @@ export const demoSystems: SystemRecord[] = [
 		asset: "demo-nas",
 		name: "Atlas NAS",
 		status: "up",
-		ip: "192.168.50.10",
+		ip: "192.0.2.10",
 		os: "Linux",
 		cpu: 18,
 		memory: 46,
@@ -70,7 +70,7 @@ export const demoSystems: SystemRecord[] = [
 		asset: "demo-windows",
 		name: "Studio PC",
 		status: "up",
-		ip: "192.168.50.20",
+		ip: "192.0.2.20",
 		os: "Windows",
 		cpu: 36,
 		memory: 58,
@@ -81,7 +81,7 @@ export const demoSystems: SystemRecord[] = [
 		asset: "demo-linux",
 		name: "Orion Server",
 		status: "down",
-		ip: "192.168.50.41",
+		ip: "192.0.2.41",
 		os: "Linux",
 		cpu: 0,
 		memory: 0,
@@ -119,7 +119,7 @@ function systemDetails(
 				status: "up",
 				ip_method: "static",
 				ipv4: [`${ip}/24`],
-				gateways: ["192.168.50.1"],
+				gateways: ["192.0.2.1"],
 				dns_servers: ["192.0.2.53"],
 			},
 		],
@@ -127,9 +127,9 @@ function systemDetails(
 }
 
 export const demoSystemDetails: SystemDetailsRecord[] = [
-	systemDetails("demo-details-nas", "demo-system-nas", "atlas-nas", "192.168.50.10"),
-	systemDetails("demo-details-windows", "demo-system-windows", "studio-pc", "192.168.50.20", true),
-	systemDetails("demo-details-linux", "demo-system-linux", "orion-server", "192.168.50.41"),
+	systemDetails("demo-details-nas", "demo-system-nas", "atlas-nas", "192.0.2.10"),
+	systemDetails("demo-details-windows", "demo-system-windows", "studio-pc", "192.0.2.20", true),
+	systemDetails("demo-details-linux", "demo-system-linux", "orion-server", "192.0.2.41"),
 ]
 
 function container(

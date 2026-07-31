@@ -16,11 +16,14 @@ for (const forbidden of forbiddenMarkers) {
 }
 
 assert.ok(demoAssets.length >= 12)
-assert.ok(demoAssets.every((asset) => !asset.management_ip || asset.management_ip.startsWith("192.168.50.")))
+assert.ok(demoAssets.every((asset) => !asset.management_ip || asset.management_ip.startsWith("192.0.2.")))
 assert.ok(demoInterfaces.every((item) => !item.mac || /^02(:[0-9A-F]{2}){5}$/i.test(item.mac)))
 
 const assetIds = new Set(demoAssets.map((asset) => asset.id))
 assert.equal(assetIds.size, demoAssets.length)
 assert.ok(demoRelations.every((relation) => assetIds.has(relation.source_asset) && assetIds.has(relation.target_asset)))
+const technologyUplink = demoRelations.find((relation) => relation.id === "rel-internet-tech")
+assert.equal(technologyUplink?.source_asset, "demo-internet")
+assert.equal(technologyUplink?.target_asset, "demo-tech-router")
 
 console.log("demo fixture privacy contract passed")
