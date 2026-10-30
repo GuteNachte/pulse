@@ -97,9 +97,9 @@ $rules.Add((New-VersionRule "supplemental\scripts\run-hub-local.ps1" ('(?<prefix
 
 foreach ($entry in @(
     @{ Path = "supplemental\docker\agent\docker-compose.yml"; Count = 1 },
-    @{ Path = "supplemental\docker\hub\docker-compose.yml"; Count = 2 },
+    @{ Path = "supplemental\docker\hub\docker-compose.yml"; Count = 3 },
     @{ Path = "supplemental\docker\local-dev\docker-compose.yml"; Count = 1 },
-    @{ Path = "supplemental\docker\same-system\docker-compose.yml"; Count = 2 },
+    @{ Path = "supplemental\docker\same-system\docker-compose.yml"; Count = 3 },
     @{ Path = "internal\site\index.html"; Count = 2 },
     @{ Path = "internal\site\public\static\manifest.json"; Count = 1 },
     @{ Path = "docs\agent-1.0-install.md"; Count = 2 },
