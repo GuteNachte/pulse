@@ -43,3 +43,20 @@ dockerfile_agent_dev
 *.jks
 *signing*.properties
 *android-recovery*
+
+# 2026-10-30 公开仓库不包含开发过程文档（计划、私有部署清单、开发日志）：
+# 这些文件保留在本地与内网 Git 归档分支，仅不进入公开仓库。
+docs/superpowers/
+docs/release-notes-next.md
+docs/production-acceptance-evidence.md
+docs/production-readiness-checklist.md
+docs/flynas-compose-checklist.md
+docs/current-dev-inventory.md
+docs/local-dev-runbook.md
+docs/dev-startup-checklist.md
+docs/collaboration-preferences.md
+docs/release-deployment-runbook.md
+docs/project-backlog.md
+docs/asset-parameter-organization-playbook.md
+docs/pocketbase-foundation-audit.md
+docs/agent-2.0-collection-design.md
