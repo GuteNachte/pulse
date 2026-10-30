@@ -6,7 +6,7 @@ import (
 	"gutenacht.site/pulse/internal/entities/system"
 )
 
-// 2026-10-24 主力机复现：NVML（nvml0「GeForce RTX 4080」）与 Windows 性能采集
+// 2026-10-24 一台 Windows 台式机复现：NVML（nvml0「GeForce RTX 4080」）与 Windows 性能采集
 // （w0「NVIDIA GeForce RTX 4080」）同卡双条目。输出端必须清退 w0、只留 nvml0。
 func TestSuppressWindowsPerfDuplicates(t *testing.T) {
 	gm := &GPUManager{GpuDataMap: map[string]*system.GPUData{}}

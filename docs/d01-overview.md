@@ -85,7 +85,7 @@
 | `internal/site/` | 前端工程：`src/components`（含 `routes/` 页面、`ui/` 基础件）、`src/modules/`（11 个模块目录 + registry）、`src/lib`（工具）、`src/locales`（Lingui 多语言）、`android/`（Capacitor Android 工程）、`e2e/`（Playwright） |
 | `windows/` | Windows 侧交付物：`installer/`（Inno Setup 脚本 + fixtures）、`agent-config/`（Wails 桌面 GUI，独立 go.mod） |
 | `supplemental/` | 脚本与部署模板：`scripts/`（24 个 PS1/mjs：开发启动、构建、发布、版本校验、安装器测试、回滚演练）、`docker/`（agent/hub/local-dev/same-system 四组 compose 模板）、`licenses/` |
-| `docs/` | 103 个 Markdown：runbook、checklist、release-notes（1.0.1→1.0.5 + next）、路线图、模块契约 `module-contract.json`、`superpowers/` 子目录（计划文档） |
+| `docs/` | 安装、Docker 上手、模块架构、Agent 能力边界、路线图与各版本更新记录；模块契约 `module-contract.json` |
 | `build/` | 构建产物目录（`dev`、`dev-logs`，未被 git 跟踪） |
 | `pulse_data/` | 本地运行的 PocketBase 数据目录（未跟踪） |
 | `.github/` | CI 工作流 ×3 + issue/PR 模板 |
@@ -353,7 +353,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\check-v
 | agent/gpu.go | 1 |
 | agent/system.go | 1 |
 | internal/hub/systems/systems_test.go | 1 |
-| docs/superpowers/plans/2026-08-04-network-topology-asset-driven.md | 1（历史计划文档中的流程性表述，非代码债） |
 
 最值得关注的 10 条（全部代码 TODO）：
 
@@ -366,7 +365,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\check-v
 7. `agent/gpu.go:721` — `// TODO: uncomment below when Apple collectors are confirmed to be working.`。解读：macOS GPU 采集代码写好了但被注释禁用，说明 Darwin 支持处于半成品状态（目录里确有 `gpu_darwin.go`）。
 8. `agent/system.go:238` — `// TODO: maybe refactor to methods on systemStats`。解读：采集函数到统计结构的过程式写法，作者自己标记的重构候选。
 9. `internal/hub/systems/systems_test.go:122` — `// TODO: test with websocket client`。解读：系统管理器测试目前只做单元级，缺真实 WS 客户端的端到端覆盖——Agent 链路回归主要靠手工验证时的已知薄弱点。
-10. （仅作说明）`docs/superpowers/plans/...:277` 出现的 "TODO" 是计划文档中「不许使用 TBD/TODO 占位」的规则表述，不是遗留任务，可忽略。
 
 ---
 
