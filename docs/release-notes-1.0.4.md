@@ -104,7 +104,7 @@ services:
 - Harbor 已验证可拉取 `registry.example.com/infra/pulse-hub:1.0.4`，digest 为 `sha256:c2e3c9c948ccf0cfceff484a4d61c37cdb004ca2bb842d4553a73c66e67d8215`。
 - Harbor 已验证可拉取 `registry.example.com/infra/pulse-agent:1.0.4`，digest 为 `sha256:85e743aa353f74bcce0c97e076c4b257455a6edf624208c50293fd5187125280`。
 - 飞牛正式目录 `/vol1/1000/docker/pulse/docker-compose.yml` 已更新为 `1.0.4` 镜像 tag。
-- 飞牛当前运行服务尚未完成容器重建：`http://192.168.1.30:8090/api/pulse/public-info` 仍返回 `v=1.0.3`；当前 SSH 用户无法访问 Docker socket，`sudo docker` 需要交互密码。
+- 飞牛当前运行服务尚未完成容器重建：`http://<NAS_LAN_IP>:8090/api/pulse/public-info` 仍返回 `v=1.0.3`；当前 SSH 用户无法访问 Docker socket，`sudo docker` 需要交互密码。
 
 ## 已知注意事项
 

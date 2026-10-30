@@ -15,7 +15,7 @@
 
 - 添加 / 编辑机器的信息模型拆分为“机器名称 / 机器类型 / 主要用途 / 说明”：机器名称由 Agent 上报的真实主机名生成，添加时不再手动填写名称。
 - “机器类型”收敛为物理机、虚拟机两个固定选项；旧的服务器、工作站、NAS、mini PC、路由网关、自定义等历史属性会统一归为物理机。
-- “主要用途”改为主力机、生产服务、开发调试、容器承载、网站服务、存储备份、下载任务、网络服务等固定选项，不再保留“自定义 / 其他”。
+- “主要用途”改为一台 Windows 主机、生产服务、开发调试、容器承载、网站服务、存储备份、下载任务、网络服务等固定选项，不再保留“自定义 / 其他”。
 - 新增 `systems.primary_use` 字段并迁移旧 `custom` 用途记录，避免列表继续显示含糊的“自定义”。
 - 客户端卡片将机器类型和主要用途移动到机器名称后方展示，并隐藏“属性 / 主要用途”前缀；说明行只显示机器说明内容。
 - 统一机器类型、主要用途和离线不告警标签样式：详情页顶部、客户端卡片和表格说明列改用同一组件。
@@ -141,5 +141,5 @@ Windows 主机版在设置页 Agent 管理中点击更新；如果客户端返�
 - 已完成 Compose 配置校验：`docker compose -f supplemental\docker\hub\docker-compose.yml config` 和 `docker compose -f supplemental\docker\same-system\docker-compose.yml config` 均通过，并确认默认镜像为 `1.0.2`。
 - 已完成 FlyNAS 真实 Linux host 网络临时验证：`1.0.2` Hub + `1.0.2` Agent 在 `/tmp/pulse-local-agent-check` 使用 `18090` 临时端口启动后，Hub 同机 Agent 自动注册为 Hub 机器，`is_local=true`，状态为 `up`，删除接口会拒绝删除 Hub 机器记录；验证完成后已停止并清理临时容器和数据目录。
 - Harbor 镜像已准备：`registry.example.com/infra/pulse-hub:1.0.2`、`registry.example.com/infra/pulse-agent:1.0.2`。
-- 已完成飞牛 `192.168.1.30` 正式部署更新：正式目录 `/vol1/1000/docker/pulse` 已切换到 Hub + Hub 同机 Agent 的同机 Compose，`pulse-hub` 和 `pulse-agent` 均为 `1.0.2`，状态 healthy，`network_mode` 均为 `host`。
-- 已验证正式 Hub 健康检查返回 `200`，`/api/pulse/public-info` 返回 `v=1.0.2` 和 `agent_hub_url=http://192.168.1.30:8090`，Hub 同机 Agent 日志显示 WebSocket 已连接。
+- 已完成飞牛 `<NAS_LAN_IP>` 正式部署更新：正式目录 `/vol1/1000/docker/pulse` 已切换到 Hub + Hub 同机 Agent 的同机 Compose，`pulse-hub` 和 `pulse-agent` 均为 `1.0.2`，状态 healthy，`network_mode` 均为 `host`。
+- 已验证正式 Hub 健康检查返回 `200`，`/api/pulse/public-info` 返回 `v=1.0.2` 和 `agent_hub_url=http://<NAS_LAN_IP>:8090`，Hub 同机 Agent 日志显示 WebSocket 已连接。

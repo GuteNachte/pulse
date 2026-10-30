@@ -50,7 +50,7 @@
 
 ## 部署 / 发布
 
-本次已完成飞牛 `192.168.1.30` 正式部署：
+本次已完成飞牛 `<NAS_LAN_IP>` 正式部署：
 
 - `publish-release-v1.ps1` 作为统一发布入口，后续每个新版本都必须同步构建并推送 Hub、Linux Agent 镜像和 Windows Agent 安装包。
 - Harbor 宿主机启用 `harbor-compose-recover.service`，Docker 启动后自动恢复 `/opt/harbor` 编排，降低 Harbor 重启后只剩 `harbor-log` 的复发风险。
@@ -103,7 +103,7 @@ services:
 - Harbor 已验证可拉取 `registry.example.com/infra/pulse-agent:1.0.3`，digest 为 `sha256:fc99f4400cafcfda7b3a5caa04adb107ed30920fd3033d8fde20d4dc2f143132`。
 - 飞牛 `docker compose ps` 已确认 `pulse-hub` 与 `pulse-agent` 均为 `Up ... (healthy)`。
 - 飞牛 Hub 健康检查 `http://127.0.0.1:8090/api/health` 返回 `200`。
-- 飞牛 `http://127.0.0.1:8090/api/pulse/public-info` 返回 `v=1.0.3`，`agent_hub_url=http://192.168.1.30:8090`。
+- 飞牛 `http://127.0.0.1:8090/api/pulse/public-info` 返回 `v=1.0.3`，`agent_hub_url=http://<NAS_LAN_IP>:8090`。
 - 飞牛容器内版本检查：`pulse version 1.0.3`，`pulse-agent 1.0.3`。
 - 飞牛 Agent 日志显示 `WebSocket connected host=127.0.0.1:8090`。
 

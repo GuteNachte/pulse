@@ -132,5 +132,5 @@ Windows 主机版可以在 Agent 管理页登记 `1.0.1` 发布包后，对支�
 - Hub 集成测试同步到新逻辑：首个用户创建请求补齐用户名字段，容器操作超时断言匹配放宽后的真实超时，通用 Token WebSocket 用例等待系统状态落库并清理每轮 Agent。
 - Agent 测试收敛：WebSocket / ConnectionManager 用例改为轻量 Agent，Linux GPU 工具模拟用例在 Windows 上跳过，文件不存在断言不再依赖英文错误文案。
 - 2026-06-05 已推送 Harbor 镜像 `registry.example.com/infra/pulse-hub:1.0.1` 和 `registry.example.com/infra/pulse-agent:1.0.1`。
-- 2026-06-05 已在飞牛 `192.168.1.30` 完成 Hub 和 Agent Compose 更新，两个容器均为 `healthy`。
-- 飞牛 Hub `/api/pulse/public-info` 已验证返回 `{"v":"1.0.1","cu":false,"agent_hub_url":"http://192.168.1.30:8090"}`。
+- 2026-06-05 已在飞牛 `<NAS_LAN_IP>` 完成 Hub 和 Agent Compose 更新，两个容器均为 `healthy`。
+- 飞牛 Hub `/api/pulse/public-info` 已验证返回 `{"v":"1.0.1","cu":false,"agent_hub_url":"http://<NAS_LAN_IP>:8090"}`。

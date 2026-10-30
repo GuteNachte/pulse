@@ -58,7 +58,7 @@ pwsh -NoProfile -File supplemental/scripts/verify-demo-artifacts.ps1
 
 ## 发布方式
 
-Vercel 项目为 `gute-nacht/pulse-demo`，关联 GitHub 仓库 `GuteNachte/pulse`，生产分支固定为 `main`。功能分支先生成 Preview，经远程 Playwright 验证后再晋级同一份构建，避免验证与正式环境不是同一产物。
+Vercel 项目为 `gute-nacht/pulse-demo`，关联 GitHub 仓库 `Pulse 主机e/pulse`，生产分支固定为 `main`。功能分支先生成 Preview，经远程 Playwright 验证后再晋级同一份构建，避免验证与正式环境不是同一产物。
 
 当前首次部署由公开准备分支触发，并已验证不可变部署后绑定正式别名。后续发布优先使用 Git 集成，避免在本机上传依赖目录。
 
