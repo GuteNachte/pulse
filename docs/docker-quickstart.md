@@ -89,12 +89,12 @@ Agent 提供四个变体，按宿主硬件选择（Hub 镜像只有默认一个�
 
 | 标签 | 适用场景 | 架构 |
 | --- | --- | --- |
-|  | 默认，Alpine + dmidecode/pciutils/smartmontools | amd64 / arm64 |
-|  | 精简版，只装最基础工具 | amd64 / arm64 |
-|  | 带 ，采集 Intel 核显指标 | amd64 |
-|  | 基于 CUDA 运行时，配合 NVIDIA GPU 使用 | amd64 |
+| `pulse-agent:1.0.8` | 默认，Alpine + dmidecode/pciutils/smartmontools | amd64 / arm64 |
+| `pulse-agent:1.0.8-alpine` | 精简版，只装最基础工具 | amd64 / arm64 |
+| `pulse-agent:1.0.8-intel` | 带 `igt-gpu-tools`，采集 Intel 核显指标 | amd64 |
+| `pulse-agent:1.0.8-nvidia` | 基于 CUDA 运行时，配合 NVIDIA GPU 使用 | amd64 |
 
-把 compose 里的  镜像换成对应标签即可，其余参数不用改。
+把 compose 里的 `pulse-agent` 镜像换成对应标签即可，其余参数不用改。
 
 ## 可选：换成你自己的镜像仓库
 
