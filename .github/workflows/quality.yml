@@ -1,0 +1,92 @@
+name: Quality
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: 1.27.x
+          cache: true
+      - name: Verify gofmt
+        shell: bash
+        run: |
+          unformatted="$(gofmt -l $(git ls-files '*.go'))"
+          if [ -n "$unformatted" ]; then
+            echo "The following files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: Prepare embedded site placeholder
+        run: |
+          mkdir -p internal/site/dist/static
+          printf "<!doctype html><title>placeholder</title>" > internal/site/dist/index.html
+          cp internal/site/public/sw.js internal/site/dist/sw.js
+          cp internal/site/public/static/manifest.json internal/site/dist/static/manifest.json
+      - name: Run go vet
+        run: go vet -tags=testing ./...
+      # 2026-10-30 hub 包在免费 runner 的慢盘上 SQLite 密集测试约 30 分钟（本地 190 秒），
+      # 与其余包拆开各自计时，避免整体任务超时；hub 单包给 60 分钟上限。
+      - name: Run Go tests (excluding hub)
+        run: go test -tags=testing -count=1 -timeout=900s $(go list ./... | grep -v '/internal/hub$')
+
+  go-hub:
+    name: Go quality (hub)
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: 1.27.x
+          cache: true
+      - name: Prepare embedded site placeholder
+        run: |
+          mkdir -p internal/site/dist/static
+          printf "<!doctype html><title>placeholder</title>" > internal/site/dist/index.html
+          cp internal/site/public/sw.js internal/site/dist/sw.js
+          cp internal/site/public/static/manifest.json internal/site/dist/static/manifest.json
+      - name: Run hub package tests
+        run: go test -tags=testing -count=1 -timeout=3600s ./internal/hub/
+
+  web:
+    name: Web quality
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: internal/site
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: internal/site/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Compile i18n catalogs
+        run: npm run sync
+      - name: Run Biome check
+        run: npm run check
+      - name: Run TypeScript check
+        run: npm run typecheck
+      - name: Run web regression tests
+        run: npm run test
+        env:
+          # 时间显示断言按作者本地时区（UTC+8）固定，CI 与本地行为一致
+          TZ: Asia/Shanghai
+      - name: Build web app
+        run: npm run build

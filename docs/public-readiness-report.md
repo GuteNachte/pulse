@@ -1,0 +1,53 @@
+# Pulse Public Readiness Report
+
+审计日期：2026-07-25
+
+**Status: blocked**
+
+## 审计范围
+
+- 当前 Git 跟踪树：运行数据、数据库、备份、日志、生成凭据、私钥、本地媒体、凭据赋值和私有基础设施端点。
+- 完整 Git 历史：Gitleaks 默认规则，以及仓库规则中登记的私有基础设施端点。
+- 法律与政策：上游 MIT 版权、Pulse 修改署名、Homelable 第三方声明、安全报告入口和公开测试隐私边界。
+- 自动化：最小权限 GitHub Actions、完整历史检出、固定扫描器版本与校验和、失败时仅上传脱敏报告。
+
+## 执行命令与工具
+
+```powershell
+pwsh -NoProfile -File supplemental/scripts/test-public-repository-audit.ps1
+pwsh -NoProfile -File supplemental/scripts/audit-public-repository.ps1 -SkipHistoryScan
+pwsh -NoProfile -File supplemental/scripts/audit-public-repository.ps1
+gitleaks version
+```
+
+- Gitleaks：`8.30.1`
+- CI 下载校验：Linux x64 官方发布压缩包 SHA256 已固定在 `.github/workflows/public-readiness.yml`。
+- 审计输出：`.public-audit/findings.json` 和脱敏的 `.public-audit/gitleaks-history.json`，均不提交仓库。
+
+## 当前结果
+
+- 当前树扫描通过：33 个源码、测试、安装模板、发布脚本和历史文档中的私人基础设施地址已替换为保留示例；内部镜像目标仍可通过发布脚本参数显式传入。
+- Gitleaks 完整历史扫描通过：扫描器未报告密钥类命中。
+- 精确私有端点历史扫描发现 39 个“提交 + 路径”记录，集中在 5 个历史提交；报告只记录规则 ID、路径和提交哈希，不记录匹配内容。
+- 审计契约覆盖禁止路径、允许占位符、源码端点、历史端点、扫描器输出隔离和政策文件。
+
+## 许可证与隐私检查
+
+- `LICENSE` 保留 `Copyright (c) 2024 henrygd`，并单独声明 `Copyright (c) 2026 Pulse contributors`。
+- `THIRD_PARTY_NOTICES.md` 保留 Homelable 来源、版本、提交、改编范围和 MIT 许可全文，并说明与仓库主许可证的关系。
+- `SECURITY.md` 使用 GitHub Private Vulnerability Reporting，不公开未确认的个人邮箱。
+- `docs/public-security-and-privacy.md` 说明 `pulse_data` 本地数据、默认无遥测、用户主动外连和公开演示脱敏边界。
+
+## 待完成治理
+
+- 在仓库外创建只读安全克隆，记录重写前引用和提交映射。
+- 使用 `git filter-repo` 只替换两类已登记的私有基础设施端点，不删除业务文件或提交。
+- 在净化克隆中重新运行当前树、完整历史、Gitleaks、Go、前端和差异检查。
+- 把净化后的分支作为后续公开分发阶段输入；任何公开仓库、GHCR、Release 或 Pages 操作仍需单独授权。
+
+## 剩余风险
+
+- 公开 GitHub 仓库身份和 GHCR owner 尚未确认，因此 `registry.example.com` 只是不可部署的保留示例，不能作为正式镜像地址。
+- `npm ci` 当前报告 4 个依赖漏洞（1 个中危、2 个高危、1 个严重），需要在公开分发阶段评估可利用性并升级或记录接受依据，不能直接运行破坏性自动修复。
+- 历史重写会改变提交哈希；完成前不得推送、合并或把该分支作为公开源。
+- 本报告不是法律意见，也不替代第三方依赖许可证和运行环境安全审查。

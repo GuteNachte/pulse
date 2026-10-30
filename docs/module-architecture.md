@@ -1,0 +1,178 @@
+# Pulse 模块化架构约束
+
+> 从 `1.0.6` 起，Pulse 按“基础底座 + 可管理功能模块”的方向演进。这个文件是后续新增功能、拆分旧功能和设置页模块管理的硬约束。
+
+Pulse 的项目定位是家庭资产管理与监控。所有模块都应围绕家庭资产主数据、可采集状态叠加和长期维护闭环设计；资产中心是主数据源，监控、拓扑、告警、通知和智能家居只消费或补充已确认的资产信息。
+
+## 目标
+
+- 项目后续可能持续变大，功能必须能独立维护、独立开关、独立观测。
+- 所有业务功能都要有清晰模块边界，避免页面、Hub API、Agent 采集、数据库集合和设置入口互相缠在一起。
+- 设置页需要能看到每个模块的只读说明、依赖和运行边界；模块启停不在当前页面提供操作入口。
+- 关闭模块时不能破坏已有数据；只停止入口、采集、任务、通知、操作和展示。
+
+## 模块分层与粒度
+
+### 基础分层
+
+这里要区分“底层技术基座”和“Pulse 自己的模块”，它们不是同一个东西：
+
+- **PocketBase：底层技术基座。** 负责底层运行时、数据库、集合迁移、认证基础能力、基础权限、文件存储、realtime、基础 API 和管理后台入口。PocketBase 不是 Pulse 的业务模块，也不参与可选模块开关。
+- **`foundation`：Pulse 内核。** 负责启动并初始化 PocketBase、Pulse 模块注册表、模块状态、模块设置、基础运行状态、全局基础设置、关于页、模块说明入口和统一基础错误处理。`foundation` 依赖 PocketBase，但不等同于 PocketBase。
+- **必需业务模块：** `asset-center`、`account-access` 和 `maintenance` 建立在 PocketBase 与 `foundation` 之上，分别负责资产主数据、Pulse 业务账号权限，以及备份 / 日志 / 审计维护能力。它们是业务模块，不属于 PocketBase 本身。
+
+基础能力的归属边界：
+
+- PocketBase 提供底层认证集合、会话、文件和数据 API；`account-access` 负责 Pulse 的用户管理、角色、MFA 和业务权限边界。
+- `foundation` 提供启动、迁移、模块和全局基础设置；具体资产、账号维护、备份恢复和操作审计展示由对应业务模块负责。
+- 资产主数据、资产接口、资产关系、位置主数据和 AI / 识别配置统一归 `asset-center`，后续监控、拓扑、告警和智能家居优先消费资产中心数据。
+- 操作审计、系统日志、备份恢复和运行诊断统一归 `maintenance`；`foundation` 只提供底层调用所需的基础运行能力。
+
+### 大模块清单
+
+模块只按“可独立管理的大能力”定义，不按页面或小功能定义。下面是当前固定的大模块边界：
+
+- `foundation`：Pulse 内核、全局基础设置、关于页、模块说明和启动运行能力；底层 PocketBase 由它初始化和使用，但不作为 `foundation` 的业务模块内容。
+- `asset-center`：资产中心，管理资产、资产接口、资产关系、位置主数据和后续各模块的对象来源；必需模块，不能关闭。
+- `smarthome`：智能家居，基于资产中心查看家居网关、灯具、插座、传感器、门锁、扫地机器人和 IoT 设备档案；第一版只读总览，后续再接 Home Assistant / Matter / Zigbee 等采集来源。
+- `client-monitoring`：客户端监控，包含原客户端列表、添加系统、机器详情、容器、S.M.A.R.T.、系统图表和 Agent 采集结果展示。
+- `website-monitoring`：网站监控，包含网页端点、自定义网页监控、内外网检测、检测历史和网站状态汇总。
+- `network-topology`：网络拓扑，基于资产中心维护家庭网络关系，并叠加 Agent 采集到的机器状态、网卡和流量。
+- `alerts`：告警中心，包含告警规则、当前告警、历史告警和告警状态。
+- `notifications`：通知模块，包含通知通道、发送诊断、失败记录和告警触达状态。
+- `agent-management`：Agent 管理，包含安装模板、6 位长期配对码、版本仓库和 Agent 更新；机器连接凭据由 Hub 在配对成功后自动发放，不提供人工 Token 管理。
+- `account-access`：账号管理与权限，包含用户、角色、登录、MFA 和只读权限。
+- `maintenance`：备份、日志与审计，包含备份恢复、系统日志、操作审计、高级维护和运行诊断。
+
+下面这些不是独立模块，只能作为所属大模块里的页面或子能力：
+
+- `system-detail`、`smart`、`containers` 属于 `client-monitoring`。
+- `settings-general`、`settings-about`、`settings-modules` 属于 `foundation`。
+- `settings-ai` 属于 `asset-center`。
+- `settings-users` 属于 `account-access`。
+- `settings-agent` 属于 `agent-management`；人工 Token 管理页面已移除。
+- `settings-notifications` 属于 `notifications`。
+- `settings-backups`、`settings-logs`、`settings-audit`、`settings-advanced` 属于 `maintenance`。
+
+后续新增功能必须先判断属于哪个大模块；只有达到独立产品能力级别，才允许新增大模块。
+
+## 目录约束
+
+新增功能默认按模块放置。除非是全局基础组件、通用工具或内核能力，不允许把业务代码散落在共享目录。
+
+建议结构：
+
+```text
+internal/modules/<module-id>/
+  module.go
+  collections.go
+  routes.go
+  jobs.go
+  permissions.go
+  tests/
+
+internal/site/src/modules/<module-id>/
+  index.ts
+  manifest.ts
+  routes.tsx
+  components/
+  lib/
+  hooks/
+  tests/
+
+agent/modules/<module-id>/
+  module.go
+  collector.go
+  operations.go
+  diagnostics.go
+  tests/
+```
+
+现有代码不要求一次性大迁移，但以后每次改到某个功能时，应优先把它向模块目录收敛。
+
+## 模块清单
+
+每个模块必须有 manifest。manifest 至少包含：
+
+- `id`：稳定模块 ID，例如 `network-topology`。
+- `name`：中文显示名称。
+- `description`：一句话说明模块负责什么。
+- `version`：跟随当前 Pulse 版本。
+- `category`：显示分组，例如 `监控`、`接入`、`设置`、`维护`。
+- `defaultEnabled`：默认是否启用。
+- `required`：是否内核必需；必需模块不能关闭。
+- `dependencies`：依赖模块 ID。
+- `routes`：前端路由入口。
+- `collections`：使用的数据库集合。
+- `jobs`：后台任务或定时任务。
+- `agentCapabilities`：需要 Agent 哪些采集 / 操作能力。
+- `healthChecks`：模块登记的检查范围；当前用于说明检查对象，不代表页面已经实时执行逐模块健康检查。
+
+## 开关语义
+
+模块关闭必须满足：
+
+- 前端入口隐藏或显示“模块已关闭”的中性空态。
+- Hub API 对普通业务请求返回明确的模块关闭状态。
+- 后台任务、定时检测、通知触发和 Agent 下发操作停止。
+- 不删除数据库集合，不删除历史数据，不清理用户配置。
+- 重新开启后能继续使用已有配置和历史数据。
+- 必需模块不能关闭，包括 `foundation`、`asset-center`、`account-access` 和 `maintenance`。`alerts`、`notifications`、`agent-management` 目前属于可管理模块，是否可用还会受到依赖关系影响。
+
+模块开启必须满足：
+
+- 依赖模块已启用。
+- 必需数据库集合和迁移已存在。
+- 需要 Agent 能力时，设置页能显示能力缺失或未采集原因。
+- 如果模块后续接入实时健康检查，健康检查需要说明模块当前是否可用、降级或异常；当前 manifest 中的 `healthChecks` 只登记检查范围。
+
+## 设置页模块说明
+
+设置页提供“模块说明”入口，页面只读展示：
+
+- 模块名称、分类、版本、必需 / 可选标识。
+- 必需模块 / 可选模块标识。
+- 依赖关系。
+- 登记的检查范围；当前不承诺这里展示实时检查时间、成功 / 失败状态或错误摘要。
+- 关联路由、数据库集合、后台任务、Agent 能力。
+- 只读展示模块说明、依赖、路由、集合、任务、Agent 能力和登记的检查范围；不提供模块开启 / 关闭操作。
+
+模块说明页面不直接替代各模块自己的设置页。它负责只读总览、依赖说明和登记的检查范围；具体业务配置仍放在对应模块设置里。真正的逐模块实时健康检查另行建设。
+
+## 开发验收规则
+
+新增功能合并前必须回答：
+
+- 这个功能属于哪个模块？
+- 是否有 manifest？
+- 是否有独立目录？
+- 是否有独立路由 / API / 采集 / 任务边界？
+- 关闭模块后 UI、API、后台任务、Agent 能力会发生什么？
+- 设置页是否能看到模块状态？
+- 是否更新 `docs/release-notes-next.md` 和 About 版本记录？
+
+现有功能改造时优先顺序：
+
+1. 先建立模块 manifest 和设置页可见状态。
+2. 再把前端路由和组件迁入模块目录。
+3. 再把 Hub API、集合、后台任务迁入模块目录。
+4. 最后拆 Agent 采集和操作能力。
+
+## 当前结论
+
+- `1.0.6` 已落地第一版模块化底座：`module_settings` 保留用户级模块状态兼容数据，前端 `internal/site/src/modules` 保存大模块 manifest 和 registry，设置页“模块说明”负责模块只读总览、依赖状态和代码边界说明，不提供启停操作。
+- 模块 registry 已从页面级小模块收敛为大模块，旧的 `system-detail`、`smart`、`settings-*` 不再作为独立模块出现。
+- 资产中心已成为核心数据来源：新增 `assets`、`asset_interfaces`、`asset_relations` 和 `asset_locations`，并在 `systems`、`website_monitors` 上使用 `asset` 关联字段绑定资产主数据；公网入口也按 `internet` 资产维护，可支持多条宽带、运营商和上下行带宽信息；房间、区域、机柜和桌面等位置开始收敛为资产中心主数据。
+- 资产中心新增 / 编辑入口按资产类型维护长期稳定参数：字段 schema 放在 `internal/site/src/modules/asset-center/asset-schema.ts`，页面只负责渲染和保存；固定 IP、MAC、管理 URL、端口速率、硬件规格、生命周期和公网带宽等数据进入资产主数据，主网卡 / 管理口 / 公网入口同步到 `asset_interfaces` 供网络拓扑复用。
+- 资产详情页是资产中心第一阶段主数据承载面：`/assets/:id` 浏览态集中展示资产档案、设备图片和已确认硬件规格；接口、关系、维护、附件、监控绑定和长期变更统一由编辑工作台维护，避免浏览页混入操作与重复卡片。位置管理入口在资产中心维护 `asset_locations`，资产表单的位置字段复用这些主数据；购买、上线、维修、升级、保修、退役等长期事件进入 `asset_maintenance`，设备照片、发票、保修凭证、说明书和配置备份进入 `asset_attachments`；后续保修提醒、告警历史和采集差异仍归属资产中心数据模型，而不是分散到监控模块里。
+- 客户端监控和网站监控已具备第一版资产关联骨架；网络拓扑只按 `assets`、`asset_interfaces` 和 `asset_relations` 构图，新增拓扑设备 / 端口 / 链路入口写入资产中心，前端不再读取旧 `network_devices`、`network_ports`、`network_links`，Hub 也拒绝这些旧主数据集合的 API 新增和更新；`network_layouts` 仅作为拓扑布局和节点显示配置保留。
+- 智能家居模块已新增第一版 `/smarthome` 只读总览和 `smarthome` manifest，页面只读取资产中心里的智能家居资产，不做自动发现、不伪造实时控制状态；网关归属优先读取 `asset_relations` 中指向 `smarthome_gateway` 资产的真实关系，没有关系时才回退到 `metadata.gateway_name`，后续接 Home Assistant / Matter / Zigbee 时继续保持资产中心主数据来源。
+- 后续新增大功能必须 module-first。
+- 后续每次维护旧功能，都顺手减少跨模块耦合。
+
+## 数据迁移与维护模块边界
+
+- 资产迁移包属于 `asset-center` 模块，只迁移当前账号的资产集合、引用关系和对应文件，不承担账号、监控历史或全局设置恢复。
+- 完整实例便携备份属于 `maintenance` 模块，以 PocketBase 原生备份为数据库载荷，并补充版本清单、哈希、外置媒体、上传预检、恢复任务和自动安全备份。
+- 两类包都必须由 Hub 执行安全检查、路径限制和哈希核验；前端只负责文件选择、预检展示、模式 / 目标选择和任务状态显示。
+- 恢复任务状态必须位于可替换数据树之外，确保 PocketBase 恢复并重启后仍可继续外置文件放置和核验。

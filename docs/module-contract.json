@@ -1,0 +1,67 @@
+[
+  {
+    "id": "foundation",
+    "required": true,
+    "dependencies": []
+  },
+  {
+    "id": "asset-center",
+    "required": true,
+    "dependencies": ["foundation"]
+  },
+  {
+    "id": "smarthome",
+    "required": false,
+    "dependencies": ["asset-center"]
+  },
+  {
+    "id": "asset-monitoring",
+    "required": false,
+    "dependencies": ["asset-center"]
+  },
+  {
+    "id": "client-monitoring",
+    "required": false,
+    "dependencies": ["asset-center", "agent-management"]
+  },
+  {
+    "id": "website-monitoring",
+    "required": false,
+    "dependencies": ["asset-center"]
+  },
+  {
+    "id": "asset-presence",
+    "required": false,
+    "dependencies": ["asset-center"]
+  },
+  {
+    "id": "alerts",
+    "required": false,
+    "dependencies": ["client-monitoring"]
+  },
+  {
+    "id": "notifications",
+    "required": false,
+    "dependencies": ["alerts"]
+  },
+  {
+    "id": "agent-management",
+    "required": false,
+    "dependencies": ["foundation"]
+  },
+  {
+    "id": "network-topology",
+    "required": false,
+    "dependencies": ["asset-center"]
+  },
+  {
+    "id": "account-access",
+    "required": true,
+    "dependencies": ["foundation"]
+  },
+  {
+    "id": "maintenance",
+    "required": true,
+    "dependencies": ["foundation"]
+  }
+]

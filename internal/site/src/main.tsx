@@ -1,0 +1,444 @@
+import "./index.css"
+import { i18n } from "@lingui/core"
+import { I18nProvider } from "@lingui/react"
+import { useStore } from "@nanostores/react"
+import { getPagePath } from "@nanostores/router"
+import { DirectionProvider } from "@radix-ui/react-direction"
+import { lazy, memo, Suspense, useEffect, useState } from "react"
+import ReactDOM from "react-dom/client"
+import { ArrowLeftIcon, HomeIcon, SearchXIcon } from "lucide-react"
+import Navbar from "@/components/navbar.tsx"
+import { $router, Link, navigate } from "@/components/router.tsx"
+import Settings from "@/components/routes/settings/layout.tsx"
+import Profile from "@/components/routes/profile.tsx"
+import { ThemeProvider } from "@/components/theme-provider.tsx"
+import { Button } from "@/components/ui/button.tsx"
+import { LoadingState } from "@/components/ui/loading-state.tsx"
+import { Toaster } from "@/components/ui/toaster.tsx"
+import { isDemoMode } from "@/demo/mode"
+import { alertManager } from "@/lib/alerts"
+import {
+	initializePocketBaseRuntime,
+	isAdmin,
+	isPocketBaseAutoCancel,
+	pb,
+	updateUserSettings,
+	verifyAuth,
+} from "@/lib/api.ts"
+import { pageTitle } from "@/lib/branding"
+import { dynamicActivate, getLocale } from "@/lib/i18n"
+import { syncAgentHubURLFromRuntime } from "@/lib/runtime-info"
+import { $authenticated, $copyContent, $direction } from "@/lib/stores.ts"
+import * as systemsManager from "@/lib/systemsManager.ts"
+import { $moduleSettings, refreshModuleSettings } from "@/modules/module-state"
+import { getModuleForAppRoute, getPulseModule } from "@/modules/registry"
+import { MobileBottomNav } from "@/components/mobile/mobile-bottom-nav"
+import { MobileHubSetup } from "@/components/mobile/mobile-hub-setup"
+import { MobileOfflineBanner, MobileSnapshotBridge } from "@/components/mobile/mobile-offline"
+import { useMobileLayout } from "@/components/mobile/mobile-ui"
+import { ensureMobileNotificationPermission } from "@/lib/mobile-notifications"
+import { isAndroidApp } from "@/lib/mobile-runtime"
+import { cn } from "@/lib/utils"
+
+dynamicActivate(getLocale())
+
+const LoginPage = lazy(() => import("@/components/login/login.tsx"))
+const Home = lazy(() => import("@/components/routes/home.tsx"))
+const Assets = lazy(() => import("@/components/routes/assets.tsx"))
+const AssetDetail = lazy(() => import("@/modules/asset-center/asset-detail-page.tsx"))
+const AssetEditPage = lazy(() => import("@/modules/asset-center/asset-edit-page.tsx"))
+const Smarthome = lazy(() => import("@/modules/smarthome/page.tsx"))
+const NetworkTopologyEditor = lazy(() => import("@/components/routes/network-topology-editor.tsx"))
+const AssetMonitoring = lazy(() => import("@/modules/asset-monitoring/page.tsx"))
+const Containers = lazy(() => import("@/components/routes/containers.tsx"))
+const AlertsCenter = lazy(() => import("@/components/routes/alerts.tsx"))
+const NotificationsCenter = lazy(() => import("@/components/routes/notifications.tsx"))
+const Smart = lazy(() => import("@/components/routes/smart.tsx"))
+const SystemDetail = lazy(() => import("@/components/routes/system.tsx"))
+const CopyToClipboardDialog = lazy(() => import("@/components/copy-to-clipboard.tsx"))
+
+const App = memo(() => {
+	const page = useStore($router)
+	const moduleSettings = useStore($moduleSettings)
+
+	useEffect(() => {
+		// 公开演示不建立实时订阅（MSW 无 WebSocket 语义），只做一次静态加载
+		const useRealtime = !isDemoMode()
+		// change auth store on auth change
+		const unsubscribeAuth = pb.authStore.onChange(() => {
+			$authenticated.set(pb.authStore.isValid)
+		})
+		// get general hub info for authenticated users
+		syncAgentHubURLFromRuntime().catch((error) => {
+			if (!isPocketBaseAutoCancel(error)) {
+				console.error(error)
+			}
+		})
+		// get user settings
+		updateUserSettings()
+		refreshModuleSettings()
+		// need to get system list before alerts
+		systemsManager.init()
+		systemsManager
+			// get current systems list
+			.refresh()
+			// subscribe to new system updates
+			.then(useRealtime ? systemsManager.subscribe : () => undefined)
+			// get current alerts
+			.then(alertManager.refresh)
+			// subscribe to new alert updates
+			.then(useRealtime ? alertManager.subscribe : () => undefined)
+		return () => {
+			unsubscribeAuth()
+			alertManager.unsubscribe()
+			systemsManager.unsubscribe()
+		}
+	}, [])
+
+	if (!page) {
+		return <NotFoundPage />
+	}
+
+	const pageParams = page.params as { id?: string; name?: unknown; domain?: unknown }
+	const settingsName = typeof pageParams.name === "string" ? pageParams.name : undefined
+	const moduleId = getModuleForAppRoute(page.route, settingsName)
+	if (moduleId && moduleSettings[moduleId]?.effectiveEnabled === false) {
+		return <ModuleDisabledPage moduleId={moduleId} />
+	} else if (page.route === "home") {
+		return <Home />
+	} else if (page.route === "profile") {
+		return <Profile />
+	} else if (page.route === "assets") {
+		return <Assets />
+	} else if (page.route === "asset") {
+		return <AssetDetail id={page.params.id} />
+	} else if (page.route === "assetEdit") {
+		return <AssetEditPage id={page.params.id} />
+	} else if (page.route === "smarthome") {
+		return <Smarthome />
+	} else if (page.route === "networkEdit") {
+		return <NetworkTopologyEditor />
+	} else if (page.route === "network") {
+		// 2026-10-25 只读完整拓扑页下线（与首页重复）：旧地址直接进入编辑页
+		return <LegacyNetworkEditRedirect domain={typeof pageParams.domain === "string" ? pageParams.domain : ""} />
+	} else if (page.route === "monitoring") {
+		return <AssetMonitoring />
+	} else if (page.route === "clients") {
+		return <LegacyMonitoringRedirect provider="agent" />
+	} else if (page.route === "system") {
+		return <SystemDetail id={page.params.id} />
+	} else if (page.route === "containers") {
+		return <Containers />
+	} else if (page.route === "websites") {
+		return <LegacyMonitoringRedirect provider="website" />
+	} else if (page.route === "alerts") {
+		return <AlertsCenter />
+	} else if (page.route === "notifications") {
+		return <NotificationsCenter />
+	} else if (page.route === "smart") {
+		return <Smart />
+	} else if (page.route === "settings") {
+		return <Settings />
+	}
+})
+
+function LegacyMonitoringRedirect({ provider }: { provider: "agent" | "website" }) {
+	useEffect(() => {
+		const current = new URLSearchParams(window.location.search)
+		const next = new URLSearchParams({ provider })
+		for (const key of ["asset", "system", "binding"] as const) {
+			const value = current.get(key)
+			if (value) next.set(key, value)
+		}
+		const monitor = current.get("monitor")
+		if (monitor) next.set("website", monitor)
+		if (current.get("asset") && (provider === "agent" || current.get("add") === "1")) {
+			next.set("add", "1")
+		}
+		navigate(`${getPagePath($router, "monitoring")}?${next.toString()}`)
+	}, [provider])
+	return (
+		<div className="grid h-dvh place-items-center bg-background text-sm text-muted-foreground">正在打开资产监控…</div>
+	)
+}
+
+function LegacyNetworkEditRedirect({ domain }: { domain: string }) {
+	useEffect(() => {
+		const current = new URLSearchParams(window.location.search)
+		const next = new URLSearchParams(current)
+		// 保留原网段（/network/technology → canvas=technology），其余查询参数原样透传
+		if ((domain === "home" || domain === "technology") && !next.get("canvas")) {
+			next.set("canvas", domain)
+		}
+		const query = next.toString()
+		navigate(`${getPagePath($router, "networkEdit")}${query ? `?${query}` : ""}`)
+	}, [domain])
+	return (
+		<div className="grid h-dvh place-items-center bg-background text-sm text-muted-foreground">正在打开拓扑编辑…</div>
+	)
+}
+
+function ModuleDisabledPage({ moduleId }: { moduleId: ReturnType<typeof getModuleForAppRoute> }) {
+	const module = moduleId ? getPulseModule(moduleId) : undefined
+	useEffect(() => {
+		document.title = pageTitle(module ? `${module.name}已关闭` : "模块已关闭")
+	}, [module])
+
+	return (
+		<section className="mx-auto grid min-h-[calc(100svh-10rem)] w-full max-w-3xl place-items-center py-10 sm:py-16">
+			<div className="w-full rounded-lg border border-border/70 bg-card p-3 shadow-none">
+				<div className="rounded-md bg-surface-soft p-5 text-center sm:p-8">
+					<div className="mx-auto grid size-12 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground shadow-none">
+						<SearchXIcon className="size-5" strokeWidth={1.9} />
+					</div>
+					<div className="mt-5 text-xs font-medium text-muted-foreground">Module disabled</div>
+					<h1 className="mt-2 text-balance text-2xl font-semibold text-foreground sm:text-3xl">
+						{module?.name ?? "模块"}已关闭
+					</h1>
+					<p className="mx-auto mt-3 max-w-md text-pretty text-sm leading-relaxed text-muted-foreground">
+						入口和直接访问已暂停，历史数据和配置仍保留。
+					</p>
+					<div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-center">
+						<Button variant="outline" className="gap-2" onClick={() => window.history.back()}>
+							<ArrowLeftIcon className="size-4" />
+							返回上一页
+						</Button>
+						<Button asChild className="gap-2">
+							<Link href={getPagePath($router, "settings", { name: isAdmin() ? "modules" : "about" })}>
+								<HomeIcon className="size-4" />
+								{isAdmin() ? "打开模块说明" : "打开关于页"}
+							</Link>
+						</Button>
+					</div>
+				</div>
+			</div>
+		</section>
+	)
+}
+
+function NotFoundPage() {
+	useEffect(() => {
+		document.title = pageTitle("页面不存在")
+	}, [])
+
+	return (
+		<section className="mx-auto grid min-h-[calc(100svh-10rem)] w-full max-w-3xl place-items-center py-10 sm:py-16">
+			<div className="w-full rounded-lg border border-border/70 bg-card p-3 shadow-none">
+				<div className="rounded-md bg-surface-soft p-5 text-center sm:p-8">
+					<div className="mx-auto grid size-12 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground shadow-none">
+						<SearchXIcon className="size-5" strokeWidth={1.9} />
+					</div>
+					<div className="mt-5 text-xs font-medium text-muted-foreground">404 / Not found</div>
+					<h1 className="mt-2 text-balance text-2xl font-semibold text-foreground sm:text-3xl">这个页面不存在</h1>
+					<p className="mx-auto mt-3 max-w-md text-pretty text-sm leading-relaxed text-muted-foreground">
+						链接可能已经失效，或当前版本没有这个入口。你可以回到首页继续查看监控状态。
+					</p>
+					<div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-center">
+						<Button variant="outline" className="gap-2" onClick={() => window.history.back()}>
+							<ArrowLeftIcon className="size-4" />
+							返回上一页
+						</Button>
+						<Button asChild className="gap-2">
+							<Link href="/">
+								<HomeIcon className="size-4" />
+								回到首页
+							</Link>
+						</Button>
+					</div>
+				</div>
+			</div>
+		</section>
+	)
+}
+
+const Layout = () => {
+	const authenticated = useStore($authenticated)
+	const copyContent = useStore($copyContent)
+	const direction = useStore($direction)
+	const page = useStore($router)
+	const { isMobile } = useMobileLayout()
+	const [runtimeReady, setRuntimeReady] = useState(false)
+	const [hubConfigured, setHubConfigured] = useState(true)
+
+	useEffect(() => {
+		document.documentElement.dir = direction
+	}, [direction])
+
+	useEffect(() => {
+		let ignore = false
+		initializePocketBaseRuntime()
+			.then(async (runtime) => {
+				if (ignore) {
+					return
+				}
+				// 公开演示身份是本地种子 token（无签名 JWT），不做 authRefresh
+				if (pb.authStore.isValid && !isDemoMode()) {
+					await verifyAuth()
+				}
+				if (ignore) {
+					return
+				}
+				setHubConfigured(runtime.hubConfigured)
+				setRuntimeReady(true)
+				$authenticated.set(pb.authStore.isValid)
+				registerServiceWorker()
+				ensureMobileNotificationPermission().catch((error) => console.error("mobile notification permission", error))
+			})
+			.catch((error) => {
+				console.error(error)
+				if (!ignore) {
+					setRuntimeReady(true)
+					setHubConfigured(false)
+				}
+			})
+		return () => {
+			ignore = true
+		}
+	}, [])
+
+	if (!runtimeReady) {
+		return (
+			<div className="grid min-h-svh place-items-center bg-background px-4">
+				<LoadingState title="正在启动 Pulse" description="连接 Hub 并恢复本地运行环境" />
+			</div>
+		)
+	}
+
+	if (!hubConfigured) {
+		return <MobileHubSetup onReady={() => setHubConfigured(true)} />
+	}
+
+	return (
+		<DirectionProvider dir={direction}>
+			{!authenticated ? (
+				<Suspense fallback={<AppRouteLoading title="正在打开登录页" />}>
+					<LoginPage />
+				</Suspense>
+			) : (
+				<div
+					className={cn(
+						isMobile && "pulse-mobile-root",
+						isMobile && isAndroidApp() && "pulse-android-app",
+						// 桌面端固定视口应用壳：顶栏布局性固定（不再 sticky），
+						// 只有内容区内部滚动——整页滚动彻底消失，顶栏零位移。
+						!isMobile && "flex h-[100dvh] flex-col overflow-hidden"
+					)}
+				>
+					<div
+						className={cn(
+							"container shrink-0",
+							!isMobile && "bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85"
+						)}
+					>
+						<Navbar />
+					</div>
+					<div
+						className={cn(
+							"container relative min-h-0 flex-1",
+							isMobile ? "pulse-mobile-content" : "overflow-y-auto pb-0"
+						)}
+					>
+						<MobileOfflineBanner />
+						<Suspense fallback={<AppRouteLoading title="正在加载页面" />}>
+							<App />
+						</Suspense>
+						<MobileSnapshotBridge />
+						{copyContent && (
+							<Suspense fallback={<AppRouteLoading title="正在准备复制内容" compact />}>
+								<CopyToClipboardDialog content={copyContent} />
+							</Suspense>
+						)}
+					</div>
+					<MobileBottomNav activeRoute={page?.route} />
+				</div>
+			)}
+		</DirectionProvider>
+	)
+}
+
+function AppRouteLoading({ title, compact = false }: { title: string; compact?: boolean }) {
+	return (
+		<LoadingState
+			title={title}
+			description="正在加载页面资源"
+			compact={compact}
+			className={compact ? "min-h-0 p-0" : "my-4"}
+		/>
+	)
+}
+
+function registerServiceWorker() {
+	if (!("serviceWorker" in navigator)) {
+		return
+	}
+	// 公开演示是纯静态站，不注册 PWA Service Worker
+	if (isDemoMode()) {
+		return
+	}
+	if (globalThis.PULSE?.DEV_BUILD || isAndroidApp()) {
+		navigator.serviceWorker.getRegistrations().then((registrations) => {
+			for (const registration of registrations) {
+				registration.unregister().catch((error) => console.error("service worker unregister", error))
+			}
+		})
+		if ("caches" in window) {
+			caches
+				.keys()
+				.then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+				.catch((error) => console.error("service worker cache cleanup", error))
+		}
+		return
+	}
+	const base = (globalThis.PULSE?.BASE_PATH || "").replace(/\/$/, "")
+	const swUrl = `${base}/sw.js`
+	navigator.serviceWorker.register(swUrl).catch((error) => console.error("service worker", error))
+}
+
+const I18nApp = () => {
+	return (
+		<I18nProvider i18n={i18n}>
+			<ThemeProvider>
+				<Layout />
+				<Toaster />
+			</ThemeProvider>
+		</I18nProvider>
+	)
+}
+
+const appElement = document.getElementById("app") as HTMLElement
+const rootStore = globalThis as typeof globalThis & {
+	__pulseRoot?: ReturnType<typeof ReactDOM.createRoot>
+}
+const root =
+	rootStore.__pulseRoot ??
+	ReactDOM.createRoot(appElement, {
+		onUncaughtError: (error) => {
+			const w = window as typeof window & { __uncaught?: string[] }
+			if (!w.__uncaught) w.__uncaught = []
+			const messages = w.__uncaught as string[]
+			messages.push(String((error as Error)?.message ?? error).slice(0, 500))
+		},
+	})
+rootStore.__pulseRoot = root
+
+// StrictMode is intentionally disabled in dev because the double mount breaks
+// the clipboard dialog lifecycle.
+async function bootstrap() {
+	if (import.meta.env.MODE === "demo") {
+		try {
+			const { startDemoBrowser } = await import("@/demo/browser")
+			await startDemoBrowser()
+		} catch (error) {
+			console.error("public demo bootstrap", error)
+			root.render(
+				<div className="grid min-h-svh place-items-center bg-background px-4">
+					<LoadingState title="演示数据初始化失败" description="公开演示没有连接任何真实 Hub，请刷新页面重试。" />
+				</div>
+			)
+			return
+		}
+	}
+	root.render(<I18nApp />)
+}
+
+bootstrap().catch((error) => console.error("application bootstrap", error))

@@ -1,0 +1,44 @@
+services:
+  pulse-hub:
+    image: registry.example.com:443/infra/pulse-hub:1.0.8
+    container_name: pulse-hub
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./pulse_data:/pulse_data
+    command: ["serve", "--dir=/pulse_data", "--http=0.0.0.0:8090"]
+
+  pulse-agent:
+    image: registry.example.com:443/infra/pulse-agent:1.0.8
+    container_name: pulse-agent
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    depends_on:
+      - pulse-hub
+    security_opt:
+      # Docker 默认会屏蔽 /sys/firmware；放开后才能读取 DMI 内存条详情。
+      - systempaths=unconfined
+    volumes:
+      # 同机部署时需要读写 Docker socket，才能控制本机容器和 Compose 堆栈。
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /:/host:ro
+      # 读取 SMBIOS / DMI 硬件信息，用于采集内存条型号、容量、频率等详情。
+      - /sys/firmware/dmi:/sys/firmware/dmi:ro
+      - ./pulse_agent_data:/var/lib/pulse-agent
+    # 如果宿主机存在核显设备或需要更完整的 DMI 采集，再按需打开下面的映射。
+    # devices:
+    #   - /dev/dri:/dev/dri
+    #   - /dev/mem:/dev/mem
+    cap_add:
+      - CAP_PERFMON
+      - CAP_SYS_RAWIO
+    environment:
+      TOKEN: "${PULSE_LOCAL_AGENT_TOKEN:-pulse-local-agent}"
+      HUB_URL: "${PULSE_AGENT_HUB_URL:-http://127.0.0.1:8090}"
+      INSTALL_METHOD: docker
+      RUN_MODE: docker
+      AGENT_PROFILE: linux-container
+
+
+

@@ -1,0 +1,544 @@
+import { useStore } from "@nanostores/react"
+import { getPagePath } from "@nanostores/router"
+import { subscribeKeys } from "nanostores"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { pb } from "@/lib/api"
+import { pageTitle } from "@/lib/branding"
+import { getChartDataPointLimit, limitChartRecords } from "@/lib/chart-sampling"
+import { SystemStatus } from "@/lib/enums"
+import { getSystemDisplayName } from "@/lib/system-roles"
+import {
+	$allSystemsById,
+	$allSystemsByName,
+	$chartTime,
+	$direction,
+	$maxValues,
+	$systems,
+	$userSettings,
+} from "@/lib/stores"
+import { chartTimeData, compareSemVer, listen, parseSemVer } from "@/lib/utils"
+import type {
+	ChartData,
+	ContainerStatsRecord,
+	SystemDetailsRecord,
+	SystemInfo,
+	SystemRecord,
+	SmartDeviceRecord,
+	SystemStats,
+	SystemStatsRecord,
+} from "@/types"
+import { $router, navigate } from "../../router"
+import { appendData, cache, getStats, getTimeData, makeContainerData, makeContainerPoint } from "./chart-data"
+
+export type SystemData = ReturnType<typeof useSystemData>
+
+const SEMVER_0_13_0 = parseSemVer("0.13.0")
+const SYSTEM_FULL_FIELDS =
+	"id,name,display_name,role,custom_role,primary_use,is_nas,description,suppress_offline_alerts,hide_from_home,is_local,target_ip,connect_ip,reported_ips,fingerprint_summary,agent_profile,info,status,created,updated"
+
+type ContainerSummaryResponse = {
+	systems?: { id: string; total: number; running: number; stopped: number }[]
+	items?: unknown[]
+	system?: string
+}
+
+export function useSystemData(id: string) {
+	const direction = useStore($direction)
+	const systems = useStore($systems)
+	const chartTime = useStore($chartTime)
+	const maxValues = useStore($maxValues)
+	const grid = true
+	const [activeTab, setActiveTabRaw] = useState(initialSystemDetailTab)
+	const [mountedTabs, setMountedTabs] = useState(() => new Set<string>([initialSystemDetailTab()]))
+	const tabsRef = useRef<string[]>(["overview", "containers", "history", "disk"])
+
+	function setActiveTab(tab: string) {
+		setActiveTabRaw(tab)
+		setMountedTabs((prev) => (prev.has(tab) ? prev : new Set([...prev, tab])))
+	}
+	const [system, setSystem] = useState({} as SystemRecord)
+	const [systemStats, setSystemStats] = useState([] as SystemStatsRecord[])
+	const [containerData, setContainerData] = useState([] as ChartData["containerData"])
+	const persistChartTime = useRef(false)
+	const statsRequestId = useRef(0)
+	const [chartLoading, setChartLoading] = useState(true)
+	const [details, setDetails] = useState<SystemDetailsRecord>({} as SystemDetailsRecord)
+	const [currentContainerCount, setCurrentContainerCount] = useState<number | undefined>(undefined)
+	const [smartTotalCapacity, setSmartTotalCapacity] = useState(0)
+	const [smartDiskModels, setSmartDiskModels] = useState<string[]>([])
+	const [smartDisks, setSmartDisks] = useState<
+		{ model?: string; name?: string; type?: string; media_type?: string; temp?: number }[]
+	>([])
+
+	useEffect(() => {
+		return () => {
+			if (!persistChartTime.current) {
+				$chartTime.set($userSettings.get().chartTime)
+			}
+			persistChartTime.current = false
+			setSystemStats([])
+			setContainerData([])
+			setDetails({} as SystemDetailsRecord)
+			setCurrentContainerCount(undefined)
+			setSmartTotalCapacity(0)
+			setSmartDiskModels([])
+			setSmartDisks([])
+		}
+	}, [id])
+
+	// find matching system and update when it changes
+	useEffect(() => {
+		const applySystem = (sys?: SystemRecord) => {
+			if (sys) {
+				setSystem((previous) => {
+					const merged = mergeSystemForDetail(previous, sys)
+					document.title = pageTitle(getSystemDisplayName(merged))
+					return merged
+				})
+			}
+		}
+
+		// allow old system-name slug to work, but always try the ID store first
+		const currentSystem = $allSystemsById.get()[id] ?? $allSystemsByName.get()[id]
+		applySystem(currentSystem)
+
+		let cancelled = false
+		let unsubscribeSystem: (() => void) | undefined
+		const targetID = currentSystem?.id ?? id
+		pb.collection<SystemRecord>("systems")
+			.getOne(targetID, {
+				fields: SYSTEM_FULL_FIELDS,
+			})
+			.then((record) => {
+				if (!cancelled) {
+					applySystem(record)
+				}
+			})
+			.catch(() => {
+				if (systems.length) {
+					applySystem($allSystemsByName.get()[id])
+				}
+			})
+		pb.collection<SystemRecord>("systems")
+			.subscribe(
+				targetID,
+				({ record }) => {
+					if (!cancelled) {
+						applySystem(record)
+					}
+				},
+				{ fields: SYSTEM_FULL_FIELDS }
+			)
+			.then((unsub) => {
+				if (cancelled) {
+					unsub()
+					return
+				}
+				unsubscribeSystem = unsub
+			})
+			.catch(() => undefined)
+
+		const unsubById = subscribeKeys($allSystemsById, [id], (newSystems) => applySystem(newSystems[id]))
+		const unsubByName = subscribeKeys($allSystemsByName, [id], (newSystems) => applySystem(newSystems[id]))
+		return () => {
+			cancelled = true
+			unsubscribeSystem?.()
+			unsubById()
+			unsubByName()
+		}
+	}, [id, systems.length])
+
+	// hide 1m chart time if system agent version is less than 0.13.0
+	useEffect(() => {
+		if (compareSemVer(parseSemVer(system?.info?.v), SEMVER_0_13_0) < 0) {
+			$chartTime.set("1h")
+		}
+	}, [system?.info?.v])
+
+	// fetch system details
+	useEffect(() => {
+		if (!system.id) {
+			return
+		}
+		const controller = new AbortController()
+		pb.collection<SystemDetailsRecord>("system_details")
+			.getOne(system.id, {
+				fields:
+					"hostname,kernel,cores,threads,cpu,cpu_vendor,cpu_frequency_mhz,os,os_name,arch,memory,memory_modules,podman,container_runtime_name,container_runtime_version,network_interfaces,virtualization",
+				headers: {
+					"Cache-Control": "public, max-age=60",
+				},
+				signal: controller.signal,
+			})
+			.then((record) => {
+				if (!controller.signal.aborted) setDetails(record)
+			})
+			.catch((error) => {
+				if (!controller.signal.aborted && !error?.isAbort) {
+					setDetails({} as SystemDetailsRecord)
+				}
+			})
+		return () => controller.abort()
+	}, [system.id])
+
+	useEffect(() => {
+		if (!system.id) {
+			setCurrentContainerCount(undefined)
+			return
+		}
+		let cancelled = false
+		const params = new URLSearchParams({ system: system.id, limit: "1" })
+		pb.send<ContainerSummaryResponse>(`/api/pulse/containers?${params.toString()}`, {
+			method: "GET",
+			requestKey: null,
+		})
+			.then((response) => {
+				if (cancelled) return
+				const summary = response.systems?.find((item) => item.id === system.id)
+				setCurrentContainerCount(summary?.total ?? response.items?.length ?? 0)
+			})
+			.catch((err) => {
+				if (!cancelled && !err?.isAbort) {
+					setCurrentContainerCount(undefined)
+				}
+			})
+		return () => {
+			cancelled = true
+		}
+	}, [system.id, system.updated])
+
+	useEffect(() => {
+		if (!system.id) {
+			return
+		}
+		const controller = new AbortController()
+
+		pb.collection<SmartDeviceRecord>("smart_devices")
+			.getFullList({
+				filter: pb.filter("system = {:system}", { system: system.id }),
+				fields: "id,capacity,model,name,type,media_type,temp",
+				signal: controller.signal,
+				// 与 SMART 表格各自的 AbortController 独立，避免共用自动取消键互相打断
+				requestKey: null,
+			})
+			.then((devices) => {
+				if (controller.signal.aborted) {
+					return
+				}
+				setSmartTotalCapacity(devices.reduce((sum, device) => sum + (device.capacity || 0), 0))
+				setSmartDiskModels(
+					[...new Set(devices.map((device) => (device.model || device.name || "").trim()).filter(Boolean))].slice(0, 2)
+				)
+				setSmartDisks(
+					devices.map((device) => ({
+						model: device.model,
+						name: device.name,
+						type: device.type,
+						media_type: device.media_type,
+						temp: device.temp,
+					}))
+				)
+			})
+			.catch((err) => {
+				if (!err.isAbort && !controller.signal.aborted) {
+					setSmartTotalCapacity(0)
+					setSmartDiskModels([])
+					setSmartDisks([])
+				}
+			})
+
+		return () => controller.abort()
+	}, [system.id])
+
+	// subscribe to realtime metrics if chart time is 1m
+	useEffect(() => {
+		let unsub = () => {}
+		if (!system.id || chartTime !== "1m") {
+			return
+		}
+		if (system.status !== SystemStatus.Up || compareSemVer(parseSemVer(system?.info?.v), SEMVER_0_13_0) < 0) {
+			$chartTime.set("1h")
+			return
+		}
+		let isFirst = true
+		pb.realtime
+			.subscribe(
+				`rt_metrics`,
+				(data: { container: ContainerStatsRecord[]; info: SystemInfo; stats: SystemStats }) => {
+					const dataPointLimit = getChartDataPointLimit("1m")
+					const now = Date.now()
+					const statsPoint = { created: now, stats: data.stats } as SystemStatsRecord
+					const containerPoint =
+						data.container?.length > 0
+							? makeContainerPoint(now, data.container as unknown as ContainerStatsRecord["stats"])
+							: null
+					// on first message, make sure we clear out data from other time periods
+					if (isFirst) {
+						isFirst = false
+						setSystemStats([statsPoint])
+						setContainerData(containerPoint ? [containerPoint] : [])
+						return
+					}
+					setSystemStats((prev) =>
+						limitChartRecords(appendData(prev, [statsPoint], 1000, dataPointLimit), dataPointLimit)
+					)
+					if (containerPoint) {
+						setContainerData((prev) =>
+							limitChartRecords(appendData(prev, [containerPoint], 1000, dataPointLimit), dataPointLimit)
+						)
+					}
+				},
+				{ query: { system: system.id } }
+			)
+			.then((us) => {
+				unsub = us
+			})
+		return () => {
+			unsub?.()
+		}
+	}, [chartTime, system.id])
+
+	const agentVersion = useMemo(() => parseSemVer(system?.info?.v), [system?.info?.v])
+
+	const chartData: ChartData = useMemo(() => {
+		const lastCreated = Math.max(
+			(systemStats.at(-1)?.created as number) ?? 0,
+			(containerData.at(-1)?.created as number) ?? 0
+		)
+		return {
+			systemStats,
+			containerData,
+			chartTime,
+			orientation: direction === "rtl" ? "right" : "left",
+			...getTimeData(chartTime, lastCreated),
+			agentVersion,
+		}
+	}, [systemStats, containerData, direction, chartTime, agentVersion])
+
+	// get stats when system "changes." (Not just system to system,
+	// also when new info comes in via systemManager realtime connection, indicating an update)
+	useEffect(() => {
+		if (!system.id || !chartTime || chartTime === "1m") {
+			return
+		}
+
+		const systemId = system.id
+		const { expectedInterval } = chartTimeData[chartTime]
+		const dataPointLimit = getChartDataPointLimit(chartTime)
+		const ss_cache_key = `${systemId}_${chartTime}_system_stats`
+		const cs_cache_key = `${systemId}_${chartTime}_container_stats`
+		const requestId = ++statsRequestId.current
+
+		const cachedSystemStats = limitChartRecords(
+			(cache.get(ss_cache_key) as SystemStatsRecord[] | undefined) ?? [],
+			dataPointLimit
+		)
+		const cachedContainerData = limitChartRecords(
+			(cache.get(cs_cache_key) as ChartData["containerData"] | undefined) ?? [],
+			dataPointLimit
+		)
+
+		// Render from cache immediately if available
+		if (cachedSystemStats.length) {
+			setSystemStats(cachedSystemStats)
+			setContainerData(cachedContainerData)
+			setChartLoading(false)
+			cache.set(ss_cache_key, cachedSystemStats)
+			cache.set(cs_cache_key, cachedContainerData)
+
+			// Skip the fetch if the latest cached point is recent enough that no new point is expected yet
+			const lastCreated = cachedSystemStats.at(-1)?.created as number | undefined
+			if (lastCreated && Date.now() - lastCreated < expectedInterval * 0.9) {
+				return
+			}
+		} else {
+			setChartLoading(true)
+		}
+
+		Promise.allSettled([
+			getStats<SystemStatsRecord>("system_stats", systemId, chartTime),
+			getStats<ContainerStatsRecord>("container_stats", systemId, chartTime),
+		]).then(([systemStats, containerStats]) => {
+			// If another request has been made since this one, ignore the results
+			if (requestId !== statsRequestId.current) {
+				return
+			}
+
+			setChartLoading(false)
+
+			// make new system stats
+			let systemData = (cache.get(ss_cache_key) || []) as SystemStatsRecord[]
+			if (systemStats.status === "fulfilled" && systemStats.value.length) {
+				systemData = limitChartRecords(
+					appendData(systemData, systemStats.value, expectedInterval, dataPointLimit),
+					dataPointLimit
+				)
+				cache.set(ss_cache_key, systemData)
+			}
+			setSystemStats(systemData)
+			// make new container stats
+			let containerData = (cache.get(cs_cache_key) || []) as ChartData["containerData"]
+			if (containerStats.status === "fulfilled" && containerStats.value.length) {
+				containerData = limitChartRecords(
+					appendData(containerData, makeContainerData(containerStats.value), expectedInterval, dataPointLimit),
+					dataPointLimit
+				)
+				cache.set(cs_cache_key, containerData)
+			}
+			setContainerData(containerData)
+		})
+	}, [system, chartTime])
+
+	// keyboard navigation between systems
+	// in tabs mode: arrow keys switch tabs, shift+arrow switches systems
+	// in default mode: arrow keys switch systems
+	useEffect(() => {
+		if (!systems.length) {
+			return
+		}
+		const handleKeyUp = (e: KeyboardEvent) => {
+			if (
+				e.target instanceof HTMLInputElement ||
+				e.target instanceof HTMLTextAreaElement ||
+				e.ctrlKey ||
+				e.metaKey ||
+				e.altKey
+			) {
+				return
+			}
+
+			const isLeft = e.key === "ArrowLeft" || e.key === "h"
+			const isRight = e.key === "ArrowRight" || e.key === "l"
+			if (!isLeft && !isRight) {
+				return
+			}
+
+			// plain arrows switch tabs, shift+arrows switch systems
+			if (!e.shiftKey) {
+				// skip if focused in tablist (Radix handles it natively)
+				if (e.target instanceof HTMLElement && e.target.closest('[role="tablist"]')) {
+					return
+				}
+				const tabs = tabsRef.current
+				const currentIdx = tabs.indexOf(activeTab)
+				const nextIdx = isLeft ? (currentIdx - 1 + tabs.length) % tabs.length : (currentIdx + 1) % tabs.length
+				setActiveTab(tabs[nextIdx])
+				return
+			}
+
+			const currentIndex = systems.findIndex((s) => s.id === id)
+			if (currentIndex === -1 || systems.length <= 1) {
+				return
+			}
+			if (isLeft) {
+				const prevIndex = (currentIndex - 1 + systems.length) % systems.length
+				persistChartTime.current = true
+				setActiveTabRaw("overview")
+				setMountedTabs(new Set(["overview"]))
+				return navigate(getPagePath($router, "system", { id: systems[prevIndex].id }))
+			}
+			if (isRight) {
+				const nextIndex = (currentIndex + 1) % systems.length
+				persistChartTime.current = true
+				setActiveTabRaw("overview")
+				setMountedTabs(new Set(["overview"]))
+				return navigate(getPagePath($router, "system", { id: systems[nextIndex].id }))
+			}
+		}
+		return listen(document, "keyup", handleKeyUp)
+	}, [id, systems, activeTab])
+
+	// derived values
+	const isLongerChart = !["1m", "1h"].includes(chartTime)
+	const showMax = maxValues && isLongerChart
+	const dataEmpty = !chartLoading && chartData.systemStats.length === 0
+	const lastGpus = systemStats.at(-1)?.stats?.g
+	const isPodman = details?.podman ?? system.info?.p ?? false
+
+	let hasGpuData = false
+	let hasGpuEnginesData = false
+	let hasGpuPowerData = false
+
+	if (lastGpus) {
+		hasGpuData = Object.keys(lastGpus).length > 0
+		for (let i = 0; i < systemStats.length && (!hasGpuEnginesData || !hasGpuPowerData); i++) {
+			const gpus = systemStats[i].stats?.g
+			if (!gpus) continue
+			for (const id in gpus) {
+				if (!hasGpuEnginesData && gpus[id].e !== undefined) {
+					hasGpuEnginesData = true
+				}
+				if (!hasGpuPowerData && (gpus[id].p !== undefined || gpus[id].pp !== undefined)) {
+					hasGpuPowerData = true
+				}
+				if (hasGpuEnginesData && hasGpuPowerData) break
+			}
+		}
+	}
+
+	return {
+		system,
+		systemStats,
+		containerData,
+		currentContainerCount,
+		chartData,
+		details,
+		smartTotalCapacity,
+		smartDiskModels,
+		smartDisks,
+		grid,
+		activeTab,
+		setActiveTab,
+		mountedTabs,
+		tabsRef,
+		maxValues,
+		isLongerChart,
+		showMax,
+		dataEmpty,
+		isPodman,
+		lastGpus,
+		hasGpuData,
+		hasGpuEnginesData,
+		hasGpuPowerData,
+	}
+}
+
+function mergeSystemForDetail(previous: SystemRecord, next: SystemRecord): SystemRecord {
+	if (!previous?.id || previous.id !== next.id) {
+		return next
+	}
+	const previousCap = previous.info?.cap
+	const nextCap = next.info?.cap
+	if (!previousCap || !nextCap) {
+		return {
+			...previous,
+			...next,
+			info: {
+				...(previous.info ?? {}),
+				...(next.info ?? {}),
+			},
+		}
+	}
+	return {
+		...previous,
+		...next,
+		info: {
+			...(previous.info ?? {}),
+			...(next.info ?? {}),
+			cap: {
+				...previousCap,
+				...nextCap,
+				collection_results: nextCap.collection_results ?? previousCap.collection_results,
+				diagnostics: nextCap.diagnostics ?? previousCap.diagnostics,
+			},
+		},
+	}
+}
+
+function initialSystemDetailTab() {
+	if (typeof window === "undefined") {
+		return "overview"
+	}
+	const tab = new URLSearchParams(window.location.search).get("tab")
+	return tab === "history" ? "history" : "overview"
+}
