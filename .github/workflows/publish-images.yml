@@ -69,9 +69,29 @@ jobs:
           cache-to: type=gha,mode=max,scope=hub
 
   agent:
-    name: Agent image
+    name: Agent image (${{ matrix.variant }})
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: default
+            dockerfile: internal/dockerfile_agent
+            platforms: linux/amd64,linux/arm64
+            suffix: ""
+          - variant: alpine
+            dockerfile: internal/dockerfile_agent_alpine
+            platforms: linux/amd64,linux/arm64
+            suffix: "-alpine"
+          - variant: intel
+            dockerfile: internal/dockerfile_agent_intel
+            platforms: linux/amd64
+            suffix: "-intel"
+          - variant: nvidia
+            dockerfile: internal/dockerfile_agent_nvidia
+            platforms: linux/amd64
+            suffix: "-nvidia"
     steps:
       - uses: actions/checkout@v6
 
@@ -95,18 +115,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Agent
+      - name: Build and push Agent (${{ matrix.variant }})
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: internal/dockerfile_agent
-          platforms: linux/amd64,linux/arm64
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platforms }}
           push: true
           build-args: |
             AGENT_VERSION=${{ steps.meta.outputs.version }}
             AGENT_BUILD_COMMIT=${{ github.sha }}
           tags: |
-            ghcr.io/${{ steps.meta.outputs.owner }}/pulse-agent:${{ steps.meta.outputs.version }}
-            ghcr.io/${{ steps.meta.outputs.owner }}/pulse-agent:latest
-          cache-from: type=gha,scope=agent
-          cache-to: type=gha,mode=max,scope=agent
+            ghcr.io/${{ steps.meta.outputs.owner }}/pulse-agent:${{ steps.meta.outputs.version }}${{ matrix.suffix }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/pulse-agent:latest${{ matrix.suffix }}
+          cache-from: type=gha,scope=agent-${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=agent-${{ matrix.variant }}
