@@ -13,7 +13,7 @@
 
 **项目类型**：混合型——一个 Go 单仓库里同时包含：Web 后端服务（Hub）、常驻采集客户端（Agent）、React 前端（Web App）、Android 壳应用（Capacitor）、Windows 桌面配置工具（Wails）、Windows 安装器（Inno Setup 脚本）、PowerShell 发布/开发脚本集。不是库，不是纯 CLI，是以「Hub 服务端」为中心的完整产品型仓库。
 
-**项目用途**（依据 `readme.md:3-5`，与代码结构交叉验证一致）：面向**家庭场景**的资产管理与监控平台。核心思路是先把家里所有电子设备（数码硬件、网络设备、智能设备、网站端点）建成可信的「资产主档」，能采集的设备叠加 Agent / SNMP / 网站监控，不能采集的靠手动档案；再叠加告警、通知、操作审计、备份。给谁用：个人/家庭用户（自部署，正式部署在家庭 NAS 的 Docker Compose 上，见 `AGENTS.md` 约定与 `docs/flynas-compose-checklist.md`）。
+**项目用途**（依据 `readme.md:3-5`，与代码结构交叉验证一致）：面向**家庭场景**的资产管理与监控平台。核心思路是先把家里所有电子设备（数码硬件、网络设备、智能设备、网站端点）建成可信的「资产主档」，能采集的设备叠加 Agent / SNMP / 网站监控，不能采集的靠手动档案；再叠加告警、通知、操作审计、备份。给谁用：个人/家庭用户。
 
 **两大运行组件**（`readme.md:23-26`）：
 
@@ -22,7 +22,7 @@
 | Hub | 基于 PocketBase 的 Go 服务（含内嵌 Web UI） | 页面、API、告警、审计、设置、备份、Agent 版本与发布管理 |
 | Agent | 被监控机器上的常驻进程（Windows/Linux/NAS/容器） | 采集 CPU/内存/磁盘/网络/GPU/温度/电池/SMART/容器/服务/软件，主动 WebSocket 连 Hub |
 
-**架构上的第三个一等公民是「模块系统」**：从 `1.0.6` 起 Pulse 按「基础底座 + 可管理功能模块」演进（`AGENTS.md`、`docs/module-architecture.md`），共 11 个模块（foundation、asset-center、smarthome、client-monitoring、website-monitoring、network-topology、alerts、notifications、agent-management、account-access、maintenance），带依赖关系、默认开关和集合级 API 门禁（详见第 7 节与附录 A 的 `internal/hub/module_gate.go`）。
+**架构上的第三个一等公民是「模块系统」**：从 `1.0.6` 起 Pulse 按「基础底座 + 可管理功能模块」演进，共 11 个模块（foundation、asset-center、smarthome、client-monitoring、website-monitoring、network-topology、alerts、notifications、agent-management、account-access、maintenance），带依赖关系、默认开关和集合级 API 门禁（详见第 7 节与附录 A 的 `internal/hub/module_gate.go`）。
 
 **规模概况**（`git ls-files` 统计）：Go 非测试文件 295 个 + 测试文件 137 个；前端 ts/tsx 399 个（其中测试 78 个）；`docs/` 下 Markdown 103 个。单包最大的是 `internal/hub`（顶层 133 个 .go 文件、38,658 行，含测试）。
 
@@ -91,7 +91,7 @@
 | `.github/` | CI 工作流 ×3 + issue/PR 模板 |
 | `.agents/skills/` | ZCode 技能：`pulse-dev`（开发环境启动验证）、`pulse-ui-check`（UI 实查流程） |
 | `.codex/` | 旧 Codex 协作配置（config.toml） |
-| 根文件 | `readme.md`、`AGENTS.md`（协作规则）、`Makefile`、`go.mod`/`go.sum`、`pulse.go`（版本常量）、`Start-Pulse-Dev.cmd`（开发一键启动）、`i18n.yml`（Crowdin 映射）、`LICENSE`、`SECURITY.md`、`THIRD_PARTY_NOTICES.md`、`hub.exe`（43MB 本地构建产物，未跟踪） |
+| 根文件 | `readme.md`、`AGENTS.md`（本地协作规则，不随仓库分发）、`Makefile`、`go.mod`/`go.sum`、`pulse.go`（版本常量）、`Start-Pulse-Dev.cmd`（开发一键启动）、`i18n.yml`（Crowdin 映射）、`LICENSE`、`SECURITY.md`、`THIRD_PARTY_NOTICES.md`、`hub.exe`（43MB 本地构建产物，未跟踪） |
 
 七类目录定位：
 
@@ -100,7 +100,7 @@
 | 源码主目录 | `agent/`、`internal/`（后端）；`internal/site/src/`（前端）；`windows/agent-config/`（桌面） |
 | 测试目录 | 与源码同目录内嵌（`*_test.go` 137 个、`*.test.ts` 78 个）+ `internal/site/e2e/` + `agent/test-data/` + `supplemental/scripts/test-*.ps1`（14 个） |
 | 配置目录 | 无独立 config 目录：构建配置在根 `Makefile`、`internal/site/*.config.ts`、`internal/site/biome.json`、`internal/site/tsconfig*.json`；CI 在 `.github/workflows/`；模块契约在 `docs/module-contract.json` |
-| 文档目录 | `docs/`（主）+ 根 `readme.md`/`AGENTS.md`/`SECURITY.md` |
+| 文档目录 | `docs/`（主）+ 根 `readme.md`/`SECURITY.md` |
 | 脚本/工具目录 | `supplemental/scripts/`；`agent/tools/fetchsmartctl/`；根 `Start-Pulse-Dev.cmd` |
 | 部署/CI 目录 | `internal/dockerfile_hub`、`internal/dockerfile_agent*`（×4 变体）；`supplemental/docker/`（4 组 compose）；`.github/workflows/`；`windows/installer/` |
 | 产物目录 | `build/`、`internal/site/dist/`（构建时生成）、`pulse_data/`（运行时数据）、根 `hub.exe`（本地遗留） |
@@ -383,7 +383,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\check-v
 ### 9.2 最可能存在的 3 类问题（给风险扫描定向）
 
 1. **权限/集合规则的漂移与双真源**：迁移 JSON 里内嵌一套旧规则（如 `assets_collections.go:13-17` 的 userMatches 旧规则），启动时又被 `collections.go:114-122` 覆盖成家庭共享新规则——同一集合的规则在两处定义、时间点不同；加上 `SHARE_ALL_SYSTEMS` 环境变量在四个文件里各自判断（collections.go、dashboard_summary.go:114、important_monitoring.go:294、systems/system.go:514），读模型一致性容易出现缝隙（历史上已发生过 PBL-023 这类读模型缺口，见 git log `29a9481d`）。
-2. **四端版本一致性与构建链的人工依赖**：Hub/Agent/Web/Android 必须同版本发布（AGENTS.md 硬规则），靠 `supplemental/scripts/check-version-consistency.ps1` 保障；但 go.mod 声明 go 1.27 而 CI 固定 Go 1.26.x（quality.yml:22）依赖工具链自动下载、前端版本散布在 package.json/pulse.go/Makefile/About 页 JSON 多处，版本错位风险是结构性的。另外发布/构建关键路径在 24 个 PowerShell 脚本里，跨平台可重复性弱。
+2. **四端版本一致性与构建链的人工依赖**：Hub/Agent/Web/Android 必须同版本发布，靠 `supplemental/scripts/check-version-consistency.ps1` 保障；但 go.mod 声明 go 1.27 而 CI 固定 Go 1.26.x（quality.yml:22）依赖工具链自动下载、前端版本散布在 package.json/pulse.go/Makefile/About 页 JSON 多处，版本错位风险是结构性的。另外发布/构建关键路径在 24 个 PowerShell 脚本里，跨平台可重复性弱。
 3. **巨包与超长命令行的可维护性**：`internal/hub` 单包 133 文件（asset_enrichment 系列 10+ 文件、asset_media 8+ 文件全在一个包里）；前端 `package.json` 的 `test:asset-center` 是一条串了 40+ 个 `node --experimental-strip-types` 的超长单行命令，且前端测试没有断言框架（纯 node 运行 .ts 测试文件），测试能力与 399 个文件的规模不匹配。
 
 ### 9.3 一眼看到但来不及细讲的异常
@@ -484,7 +484,7 @@ internal/cmd/hub ──> internal/hub ──> internal/alerts（告警/通知，
                          └──> internal/site/dist（embed 进 Hub 二进制的 Web UI，internal/site/embed.go）
 ```
 
-`internal/entities/system` 是 Agent 与 Hub 的共享数据契约（CombinedData/Info/Details/Stats），`agent/` 采集产出它、`internal/hub/systems` 消费它——改这个包等于改协议，必须两端同版本发布，这正是 AGENTS.md 版本同步规则的代码层原因。
+`internal/entities/system` 是 Agent 与 Hub 的共享数据契约（CombinedData/Info/Details/Stats），`agent/` 采集产出它、`internal/hub/systems` 消费它——改这个包等于改协议，必须两端同版本发布，这正是版本同步规则的代码层原因。
 
 ---
 

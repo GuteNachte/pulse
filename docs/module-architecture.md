@@ -149,7 +149,7 @@ agent/modules/<module-id>/
 - 是否有独立路由 / API / 采集 / 任务边界？
 - 关闭模块后 UI、API、后台任务、Agent 能力会发生什么？
 - 设置页是否能看到模块状态？
-- 是否更新 `docs/release-notes-next.md` 和 About 版本记录？
+- 是否同步更新版本更新记录（About 页 / GitHub Releases）？
 
 现有功能改造时优先顺序：
 
