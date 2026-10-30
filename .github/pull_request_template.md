@@ -12,4 +12,4 @@
 
 ## 发布说明
 
-- 已更新 `docs/release-notes-next.md`
+- 已更新版本更新记录（About 页 / GitHub Releases）

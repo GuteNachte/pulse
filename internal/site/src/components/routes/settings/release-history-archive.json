@@ -112,7 +112,7 @@
 					"2026-09-30 前端格式化函数去重：时间、链路速率、下载文件、资产速率的重复实现收敛到共享库，空值时间统一显示为短横线。",
 					"2026-09-30 日志规范统一：records 与 users 包的日志调用统一为 slog，与项目日志规范对齐。",
 					"2026-09-30 修复 Hub 测试基线 4 处过时用例：管理员配对码重置测试的指纹准备改为项目统一的查找或创建写法，windows.ps1 安装脚本 3 个用例从已废弃的 token 参数改为 6 位配对码参数；产品代码零改动。",
-					"2026-09-30 文档口径收口：readme 版本口径与验证命令更新为开发中版本 1.0.6；current-dev-inventory.md 更新开发版本口径、Android 验证跳过约定和工作区状态。"
+					"2026-09-30 文档口径统一：readme 的版本口径与验证命令同步为开发中版本 1.0.6，并补充 Android 验证跳过约定。"
 				]
 			},
 			{
@@ -847,12 +847,12 @@
 					"Hub 配置同步模块继续收口：删除没有任何路由注册或运行入口的 config.yml YAML 导出 HTTP 包装函数，保留启动时 config.yml 同步和 GenerateYAML 测试覆盖，避免误删仍可用的配置同步能力。",
 					"Android 模板继续去杂质：删除 Capacitor 默认生成的 ExampleUnitTest 和 ExampleInstrumentedTest，避免保留 com.getcapacitor.myapp 的模板测试和错误包名断言。",
 					"Android 启动页资源补齐：恢复 @drawable/splash 对应的轻量启动背景资源，避免清理模板文件后 Gradle 在 processDebugResources 阶段因缺失 splash drawable 中断。",
-					"公开仓库前敏感信息继续收口：current-dev-inventory.md 不再记录本地开发库管理员邮箱和明文密码，改为本机初始化占位说明，避免把个人开发凭据带进仓库。",
+					"公开前敏感信息收口：部署清单改为初始化占位说明，不在仓库中出现任何账号凭据。",
 					"生产验收证据继续脱敏：production-acceptance-evidence.md 中的 MFA 登录示例密码改为占位文本，保留验收结论但不把测试口令留在仓库。",
 					"当前开发盘点文档收口到 1.0.5 固定后口径：删除过期的 1.0.4 / 1.0.3 运行快照、旧镜像 digest 和临时下一步建议，保留当前 Agent 形态、部署口径、能力边界、风险和收口前验证清单。",
 					"公开仓库模板继续去杂质：移除 GitHub workflow 里残留的外部项目来源注释，缺陷模板版本占位改为当前 1.0.5，安装方式选项统一为“一台 NAS / NAS”中文口径。",
 					"GitHub 维护自动化继续本地化：长期无响应议题的 stale / close 自动回复、workflow 名称和讨论模板安装方式选项统一为中文 Pulse 口径。",
-					"文档树继续清理内部执行计划残留：删除 docs/superpowers/plans 下仅供 Codex 执行用的阶段计划文件，保留面向发布和维护的 checklist、验收证据、安装文档和 runbook。",
+					"文档树清理：移除内部阶段计划文件，保留面向发布与维护的安装文档和操作手册。",
 					"路线图同步到 1.0.5 固定后边界：补齐 Linux 通用、一台 NAS / NAS、Unraid 和 Hub 同机 Agent 形态，稳定版口径从 1.0.4 更新为 1.0.5，后续优先级改为 macOS Agent、公开仓库收口和完整回归。",
 					"生产验收证据继续校准状态口径：本地固定验证命令和正式 FlyNAS / Harbor / 回滚验证分开记录，避免把 -SkipRegistry 本地验证误写成正式部署项已通过。",
 					"Windows Agent 的 smartctl.exe 内置方式改为显式 build tag：仓库不再需要提交本地二进制也能在 Windows 上编译，运行时会回退查找系统安装路径；需要内置 smartctl 的发布构建再通过 go generate 和 embedded_smartctl 标签启用。",
@@ -876,7 +876,7 @@
 					"2026-10-14 版本说明补录参数获取下线与粘贴填写 Agent 批次；supplemental/searxng/ 部署材料不再被代码引用（保留待决定删除）。",
 					"新增正式环境故障处置清单：统一网页 / Hub、Agent 失联、升级失败、数据异常和凭据风险的判断、证据保存、恢复、验证、观察期与复盘步骤。",
 					"新增资产驱动拓扑设计与实施计划，明确只读边界、IP 排序、关系条、高亮交互、响应式布局和浏览器验收标准。",
-					"仓库忽略 .superpowers/ 本地设计会话产物；可复用的正式设计、计划和维护结论继续写入 docs/，避免临时 HTML、进程状态和预览文件进入项目提交。",
+					"仓库忽略本地设计会话产物，可复用的正式设计继续写入 docs/，避免临时文件进入提交。",
 					"FlyNAS 部署文档按 2026-07-29 真实运行态更新：区分 Windows 开发 Hub 与 FlyNAS 正式 Hub，记录专用 Token、Compose 项目标签、NAS 敏感备份目录和首次迁移回滚路径，避免后续维护继续沿用过期拓扑。",
 					"新增 Pulse 公开测试与社区协作设计及五阶段实施计划：确定 GitHub 公开主仓库、GHCR 镜像、GitHub Releases 和 1.0.6-beta.1 首发链路；公开前必须完成全历史敏感信息与许可证审计，再依次完成公开分发、虚拟演示与中英文文档、贡献规范和首发演练。未获最终授权前不执行任何公开发布。",
 					"补充资产迁移包与完整实例备份的职责边界、上传预检、自动安全备份、恢复续跑、敏感数据保护和 FlyNAS 持久化检查；恢复演练必须使用临时空实例，禁止指向当前 pulse_data。",
@@ -1384,7 +1384,7 @@
 				"items": [
 					"新增发布验证脚本 verify-release-v1.ps1，发布后会检查版本一致性、Windows Agent 产物、Agent manifest、Android APK metadata、Harbor Hub / Agent 镜像 tag，并可选验证正在运行的 Hub 版本。",
 					"新增 release-deployment-runbook.md，补齐发布前备份、统一发布、发布产物验证、Harbor 手动确认、FlyNAS 拉取重建、运行态验收和上一稳定版回滚步骤。",
-					"local-dev-runbook.md 和 flynas-compose-checklist.md 已接入发布验证脚本和回滚手册，避免发布流程只停在构建 / push 成功。",
+					"本地开发手册与部署清单已接入发布验证脚本和回滚手册，避免发布流程只停在构建 / push 成功。",
 					"本地开发服务重启脚本修复日志初始化：停止旧 Hub / Vite 后等待进程退出，日志清理改为可重试，避免 hub.err.log 句柄未释放时中断并导致 Hub 8090 未启动。"
 				]
 			},
