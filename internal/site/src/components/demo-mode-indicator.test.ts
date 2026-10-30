@@ -3,8 +3,8 @@ import { demoCollections } from "../demo/fixture.ts"
 import { demoModeIndicatorModel } from "../demo/mode.ts"
 
 assert.equal(demoModeIndicatorModel.label, "公开演示")
-assert.equal(demoModeIndicatorModel.repositoryUrl, "https://github.com/GuteNachte/pulse")
-assert.equal(demoModeIndicatorModel.releaseUrl, "https://github.com/GuteNachte/pulse/releases/latest")
+assert.equal(demoModeIndicatorModel.repositoryUrl, "https://github.com/TestHoste/pulse")
+assert.equal(demoModeIndicatorModel.releaseUrl, "https://github.com/TestHoste/pulse/releases/latest")
 
 const requiredCollections = [
 	"assets",
