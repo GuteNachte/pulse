@@ -25,7 +25,7 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Assert-ReleaseVersionConsistency -Version $Version
 
 if ([string]::IsNullOrWhiteSpace($LinuxImage)) {
-    $LinuxImage = "registry.example.com/infra/pulse-agent:$Version"
+    $LinuxImage = "ghcr.io/gutenachte/pulse-agent:$Version"
 }
 
 if (-not (Test-Path $source)) {

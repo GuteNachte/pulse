@@ -146,10 +146,10 @@ function Test-HubRuntime {
 }
 
 if ([string]::IsNullOrWhiteSpace($HubImage)) {
-    $HubImage = "registry.example.com/infra/pulse-hub:$Version"
+    $HubImage = "ghcr.io/gutenachte/pulse-hub:$Version"
 }
 if ([string]::IsNullOrWhiteSpace($LinuxAgentImage)) {
-    $LinuxAgentImage = "registry.example.com/infra/pulse-agent:$Version"
+    $LinuxAgentImage = "ghcr.io/gutenachte/pulse-agent:$Version"
 }
 
 $failures = [System.Collections.Generic.List[string]]::new()

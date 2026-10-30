@@ -1,10 +1,16 @@
 param(
-    [string]$Version = "1.0.6",
+    # 2026-10-31 默认版本对齐主链：此前停在 1.0.6，导致安装包版本落后
+    [string]$Version = "",
     [string]$InnoCompiler = "$env:LOCALAPPDATA/Programs/Inno Setup 6/ISCC.exe"
 )
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+# 默认版本从 package.json 动态读取，避免安装包版本落后于主链
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $pkgJson = Join-Path $repoRoot "internal\site\package.json"
+    $Version = (Get-Content -Raw -LiteralPath $pkgJson | ConvertFrom-Json).version
+}
 $releaseDir = Join-Path $repoRoot "build\releases\windows-installer"
 $wails = Join-Path $env:USERPROFILE "go\bin\wails.exe"
 $go = (Get-Command go -ErrorAction Stop).Source
