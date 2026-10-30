@@ -28,7 +28,7 @@ import {
 	buildWindowsPairingInstallCommand,
 	DEFAULT_WINDOWS_AGENT_INSTALL_OPTIONS,
 	DEFAULT_LINUX_AGENT_DATA_DIR,
-	DEFAULT_LINUX_AGENT_IMAGE,
+	getDefaultLinuxAgentImage,
 	FLYNAS_LINUX_AGENT_DATA_DIR,
 	type LinuxAgentDockerSocketMode,
 	type LinuxAgentInstallOptions,
@@ -97,7 +97,7 @@ export function AgentInstallWorkbench({ releases, hubUrl }: { releases: AgentRel
 	const windowsVersion = windowsRelease?.version || AGENT_VERSION
 	const linuxVersion = linuxRelease?.version || AGENT_VERSION
 	const windowsDownloadUrl = windowsRelease?.download_url || buildDefaultWindowsAgentDownloadURL(hubUrl)
-	const linuxImage = linuxRelease?.download_url || DEFAULT_LINUX_AGENT_IMAGE
+	const linuxImage = linuxRelease?.download_url || getDefaultLinuxAgentImage()
 	const isLinuxTarget = target !== "windows-host"
 	const selectedLinuxTarget = isLinuxTarget ? linuxInstallTargetMeta[target] : null
 	const preview = useMemo(() => {

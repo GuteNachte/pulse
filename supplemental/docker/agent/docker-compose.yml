@@ -1,6 +1,6 @@
 services:
   pulse-agent:
-    image: registry.example.com:443/infra/pulse-agent:1.0.8
+    image: ghcr.io/gutenachte/pulse-agent:1.0.8
     container_name: pulse-agent
     restart: unless-stopped
     network_mode: host

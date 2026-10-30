@@ -24,6 +24,18 @@
 - **Agent**：Windows 服务版 / Linux（NAS、飞牛、UNRAID）容器版，采集系统指标、容器、服务、硬件能力与网络详情。
 - **模块化底座**：功能以模块组织（资产中心、设备在线探测、通知、AI 能力……），可在设置页按需开关；Hub、Agent、Web、Android 四端使用同一显式版本号发布。
 
+## 快速开始（Docker）
+
+如果你只想先把 Pulse 跑起来看看，用公开镜像一条命令即可：
+
+```bash
+mkdir -p ~/pulse && cd ~/pulse
+curl -fsSLO https://raw.githubusercontent.com/GuteNachte/pulse/main/supplemental/docker/same-system/docker-compose.yml
+docker compose up -d
+```
+
+然后打开 `http://<主机局域网IP>:8090`。完整说明（端口、数据目录、自建镜像、升级、排错）见 [docs/docker-quickstart.md](docs/docker-quickstart.md)。
+
 ## 本地开发
 
 Windows 日常开发直接双击项目根目录的 `Start-Pulse-Dev.cmd`：它会启动或复用 Hub 与 Vite，健康检查通过后自动打开 Web 页面；优先使用 PowerShell 7，未安装时兼容回退到 Windows PowerShell 5.1。

@@ -1,5 +1,6 @@
 import type { PulseInfo } from "@/types"
 import { pb } from "./api"
+import { setDefaultLinuxAgentImage } from "./agent-install"
 import { setAgentHubURL } from "./utils"
 
 export async function fetchPublicPulseInfo() {
@@ -24,6 +25,9 @@ export async function syncAgentHubURLFromRuntime() {
 	const info = await fetchPublicPulseInfo()
 	if (info.agent_hub_url) {
 		setAgentHubURL(info.agent_hub_url)
+	}
+	if (info.agent_image) {
+		setDefaultLinuxAgentImage(info.agent_image)
 	}
 	return info
 }
