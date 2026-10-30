@@ -74,6 +74,15 @@ Hub 装在常开的 NAS 上，其它机器（Windows 台式机、另一台 NAS�
 2. 浏览器进入 Hub → **设置 → Agent 管理**，页面会给出对应平台的安装命令，复制到目标机器执行。
 3. Hub 生成的镜像地址来自它自己的配置：容器部署时由 `PULSE_AGENT_IMAGE` 环境变量决定，默认使用 `ghcr.io/gutenachte/pulse-agent:1.0.8`。
 
+## 国内网络说明
+
+`ghcr.io` 在国内多数宽带下可以直连（实测家庭网络直接 `docker pull` 成功），但偶有变慢或超时。如果拉取失败，两种办法：
+
+1. 给 Docker 配置代理：在 `/etc/systemd/system/docker.service.d/proxy.conf` 里设置 `HTTP_PROXY`/`HTTPS_PROXY` 后 `systemctl daemon-reload && systemctl restart docker`；
+2. 用镜像加速/自建仓库：把镜像 `docker pull` 下来后 `docker tag` 成自己的地址再推送，把 compose 里的镜像名换掉即可。
+
+Windows / macOS 的 Docker Desktop 可在设置里直接填代理。
+
 ## 可选：换成你自己的镜像仓库
 
 Pulse 的镜像是标准 OCI 镜像，可以自己构建、自己托管：

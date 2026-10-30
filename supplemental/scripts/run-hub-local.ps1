@@ -141,6 +141,7 @@ if ($HostCheck) {
         --name $hostCheckName `
         --network host `
         -e "PULSE_HUB_AGENT_HUB_URL=$agentHubUrl" `
+    -e "PULSE_AGENT_IMAGE=$agentImageEnv" `
         -v "${dockerHostCheckData}:/pulse_data" `
         $Image `
         serve --dir=/pulse_data --http=0.0.0.0:8090 | Out-Null
@@ -170,6 +171,7 @@ if (-not [string]::IsNullOrWhiteSpace($BackupMount)) {
     $backupMountPath = $BackupMount.Replace("\", "/")
     $volumeArgs += @("-v", "${backupMountPath}:/pulse_backups")
 }
+$agentImageEnv = if ($env:PULSE_AGENT_IMAGE) { $env:PULSE_AGENT_IMAGE } else { "ghcr.io/gutenachte/pulse-agent:1.0.8" }
 $appUrlArgs = @()
 if (-not [string]::IsNullOrWhiteSpace($AppUrl)) {
     $appUrlArgs = @("-e", "APP_URL=$AppUrl")
