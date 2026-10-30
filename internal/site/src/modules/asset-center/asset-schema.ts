@@ -91,7 +91,7 @@ const connectionOptions = [
 ]
 
 const commonIdentityFields: AssetFieldDefinition[] = [
-	{ key: "name", label: "资产名称", source: "asset", required: true, placeholder: "例如 GuteNacht / V271-20" },
+	{ key: "name", label: "资产名称", source: "asset", required: true, placeholder: "例如 客厅主机 / V271-20" },
 	{ key: "status", label: "状态", source: "asset", type: "select", options: STATUS_OPTIONS },
 	// 2026-10-04 产品决策：位置全部选填（docs/asset-create-flow-redesign.md）
 	{ key: "location", label: "位置", source: "asset", placeholder: "例如 家 / 书房 / 电脑桌" },

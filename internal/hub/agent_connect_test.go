@@ -1044,7 +1044,7 @@ func TestRepairLocalSystemMarkersKeepsDevLoopbackHubRecord(t *testing.T) {
 	require.NoError(t, err)
 
 	devLocalRecord, err := createTestRecord(testApp, "systems", map[string]any{
-		"name":              "GuteNacht",
+		"name":              "TestHost",
 		"is_local":          true,
 		"pairing_confirmed": true,
 		"users":             []string{userRecord.Id},
@@ -1206,7 +1206,7 @@ func TestFindOrCreateLocalSystemDoesNotReuseStaleLocalFingerprint(t *testing.T) 
 	require.NoError(t, err)
 
 	staleLocalRecord, err := createTestRecord(testApp, "systems", map[string]any{
-		"name":        "GuteNacht",
+		"name":        "TestHost",
 		"is_local":    true,
 		"users":       []string{userRecord.Id},
 		"description": "自己主要用的机器",
@@ -1252,7 +1252,7 @@ func TestFindOrCreateLocalSystemDoesNotReuseStaleLocalFingerprint(t *testing.T) 
 	updatedStaleRecord, err := testApp.FindRecordById("systems", staleLocalRecord.Id)
 	require.NoError(t, err)
 	assert.False(t, updatedStaleRecord.GetBool("is_local"))
-	assert.Equal(t, "GuteNacht", updatedStaleRecord.GetString("name"))
+	assert.Equal(t, "TestHost", updatedStaleRecord.GetString("name"))
 }
 
 func TestFindOrCreateLocalSystemRejectsKnownWindowsHostFingerprint(t *testing.T) {
@@ -1264,7 +1264,7 @@ func TestFindOrCreateLocalSystemRejectsKnownWindowsHostFingerprint(t *testing.T)
 	require.NoError(t, err)
 
 	windowsRecord, err := createTestRecord(testApp, "systems", map[string]any{
-		"name":  "GuteNacht",
+		"name":  "TestHost",
 		"users": []string{userRecord.Id},
 		"info": map[string]any{
 			"cap": map[string]any{
@@ -1305,7 +1305,7 @@ func TestFindOrCreateLocalSystemRejectsKnownWindowsHostFingerprint(t *testing.T)
 
 	updatedWindowsRecord, err := testApp.FindRecordById("systems", windowsRecord.Id)
 	require.NoError(t, err)
-	assert.Equal(t, "GuteNacht", updatedWindowsRecord.GetString("name"))
+	assert.Equal(t, "TestHost", updatedWindowsRecord.GetString("name"))
 	assert.False(t, updatedWindowsRecord.GetBool("is_local"))
 
 	updatedHubRecord, err := testApp.FindRecordById("systems", hubRecord.Id)
@@ -1323,7 +1323,7 @@ func TestFindOrCreateLocalSystemReclaimsMarkedLocalWindowsHostFingerprint(t *tes
 	require.NoError(t, err)
 
 	windowsRecord, err := createTestRecord(testApp, "systems", map[string]any{
-		"name":     "GuteNacht",
+		"name":     "TestHost",
 		"is_local": true,
 		"users":    []string{userRecord.Id},
 		"info": map[string]any{

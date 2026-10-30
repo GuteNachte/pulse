@@ -289,7 +289,7 @@ func TestSystemCreateRecordsPreservesLocalSystemDisplayName(t *testing.T) {
 	require.NoError(t, err)
 
 	systemRecord, err := tests.CreateRecord(hub, "systems", map[string]any{
-		"name":     "GuteNacht",
+		"name":     "TestHost",
 		"is_local": true,
 		"users":    []string{user.Id},
 	})
@@ -299,13 +299,13 @@ func TestSystemCreateRecordsPreservesLocalSystemDisplayName(t *testing.T) {
 	_, err = sys.CreateRecords(&system.CombinedData{
 		Stats:   system.Stats{},
 		Info:    system.Info{},
-		Details: &system.Details{Hostname: "GuteNacht"},
+		Details: &system.Details{Hostname: "TestHost"},
 	})
 	require.NoError(t, err)
 
 	updatedRecord, err := hub.FindRecordById("systems", systemRecord.Id)
 	require.NoError(t, err)
-	assert.Equal(t, "GuteNacht", updatedRecord.GetString("name"))
+	assert.Equal(t, "TestHost", updatedRecord.GetString("name"))
 	assert.True(t, updatedRecord.GetBool("is_local"))
 }
 
@@ -347,7 +347,7 @@ func TestSystemCreateRecordsClearsLocalMarkerForWindowsHostAgent(t *testing.T) {
 	require.NoError(t, err)
 
 	systemRecord, err := tests.CreateRecord(hub, "systems", map[string]any{
-		"name":        "GuteNacht",
+		"name":        "TestHost",
 		"is_local":    true,
 		"users":       []string{user.Id},
 		"description": "自己主要用的机器",
@@ -365,13 +365,13 @@ func TestSystemCreateRecordsClearsLocalMarkerForWindowsHostAgent(t *testing.T) {
 				AgentProfile:  "windows-host",
 			},
 		},
-		Details: &system.Details{Hostname: "GuteNacht"},
+		Details: &system.Details{Hostname: "TestHost"},
 	})
 	require.NoError(t, err)
 
 	updatedRecord, err := hub.FindRecordById("systems", systemRecord.Id)
 	require.NoError(t, err)
-	assert.Equal(t, "GuteNacht", updatedRecord.GetString("name"))
+	assert.Equal(t, "TestHost", updatedRecord.GetString("name"))
 	assert.False(t, updatedRecord.GetBool("is_local"))
 }
 

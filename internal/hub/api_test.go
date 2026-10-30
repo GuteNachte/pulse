@@ -1605,7 +1605,7 @@ func TestAlertHistoryPagedList(t *testing.T) {
 				`"hasMore":true`,
 				"CPU",
 				"网站：Harbor",
-				"GuteNacht",
+				"TestHost",
 			},
 			NotExpectedContent: []string{
 				"Status",
@@ -1698,7 +1698,7 @@ func TestAlertHistoryPagedList(t *testing.T) {
 func seedAlertHistoryRecords(hub *pulseTests.TestHub, user *core.Record, otherUser *core.Record) error {
 	ownSystem, err := pulseTests.CreateRecord(hub, "systems", map[string]any{
 		"name":              "gutenacht-host",
-		"display_name":      "GuteNacht",
+		"display_name":      "TestHost",
 		"users":             []string{user.Id},
 		"pairing_confirmed": true,
 	})
