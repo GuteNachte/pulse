@@ -1,8 +1,8 @@
 name: Publish container images
 
 # 2026-10-30 公开部署：把 Hub / Agent 镜像发到 GitHub Container Registry（ghcr.io），
-# 其他人无需私有仓库即可 docker pull 直接部署。仅打标签时触发，使用仓库内置 GITHUB_TOKEN，
-# 不需要任何自建密钥。
+# 其他人无需私有仓库即可 docker pull 直接部署。打 v* 标签时自动触发，
+# 使用仓库内置 GITHUB_TOKEN，不需要任何自建密钥。
 on:
   push:
     tags:
@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "镜像标签（默认取 package.json 版本）"
+        description: "镜像标签（留空则取当前 package.json 版本）"
         required: false
         type: string
 
@@ -22,23 +22,35 @@ jobs:
   hub:
     name: Hub image
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
-      - uses: docker/setup-buildx-action@v3
-      - name: Prepare embedded Agent release dir
-        run: mkdir -p build/releases/agent
-      - name: Resolve version
-        id: version
+
+      - name: Resolve version and namespace
+        id: meta
+        shell: bash
         run: |
           raw="${{ github.event.inputs.version || github.ref_name }}"
-          echo "value=${raw#v}" >> "$GITHUB_OUTPUT"
+          if [ -z "$raw" ] || [ "$raw" = "main" ]; then
+            raw="$(node -p "require('./internal/site/package.json').version")"
+          fi
+          echo "version=${raw#v}" >> "$GITHUB_OUTPUT"
+          # GHCR 要求仓库路径全小写，GitHub 用户名可能含大写
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Hub 镜像会内嵌 build/releases/agent 目录，CI 中需要先建空目录
+      - name: Prepare embedded Agent release dir
+        run: mkdir -p build/releases/agent
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and push Hub
         uses: docker/build-push-action@v6
         with:
@@ -47,33 +59,42 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
-            HUB_VERSION=${{ steps.version.outputs.value }}
+            HUB_VERSION=${{ steps.meta.outputs.version }}
             HUB_BUILD_COMMIT=${{ github.sha }}
             HUB_BUILD_TIME=${{ github.event.repository.updated_at }}
           tags: |
-            ghcr.io/${{ github.repository }}/pulse-hub:${{ steps.version.outputs.value }}
-            ghcr.io/${{ github.repository }}/pulse-hub:latest
+            ghcr.io/${{ steps.meta.outputs.owner }}/pulse-hub:${{ steps.meta.outputs.version }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/pulse-hub:latest
           cache-from: type=gha,scope=hub
           cache-to: type=gha,mode=max,scope=hub
 
   agent:
     name: Agent image
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
-      - uses: docker/setup-buildx-action@v3
-      - name: Resolve version
-        id: version
+
+      - name: Resolve version and namespace
+        id: meta
+        shell: bash
         run: |
           raw="${{ github.event.inputs.version || github.ref_name }}"
-          echo "value=${raw#v}" >> "$GITHUB_OUTPUT"
+          if [ -z "$raw" ] || [ "$raw" = "main" ]; then
+            raw="$(node -p "require('./internal/site/package.json').version")"
+          fi
+          echo "version=${raw#v}" >> "$GITHUB_OUTPUT"
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and push Agent
         uses: docker/build-push-action@v6
         with:
@@ -82,10 +103,10 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
-            AGENT_VERSION=${{ steps.version.outputs.value }}
+            AGENT_VERSION=${{ steps.meta.outputs.version }}
             AGENT_BUILD_COMMIT=${{ github.sha }}
           tags: |
-            ghcr.io/${{ github.repository }}/pulse-agent:${{ steps.version.outputs.value }}
-            ghcr.io/${{ github.repository }}/pulse-agent:latest
+            ghcr.io/${{ steps.meta.outputs.owner }}/pulse-agent:${{ steps.meta.outputs.version }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/pulse-agent:latest
           cache-from: type=gha,scope=agent
           cache-to: type=gha,mode=max,scope=agent
