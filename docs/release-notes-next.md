@@ -3927,3 +3927,11 @@
 - **仓库公开**：`github.com/GuteNachte/pulse` 转为 Public。公开后 Vercel 自动恢复部署，此前因仓库转私有被拦的全部部署一并恢复。
 - **演示站更新到 1.0.8**：线上 <https://pulse-demo-gute-nacht.vercel.app> 已是 1.0.8 版本（公开演示徽标、拓扑设备地图、设备图例、待办面板全部就位）；实测 49 个 JS 产物零敏感串。
 - 后续建议（安全）：`hb.gutenacht.site` 解析到家庭宽带公网 IP 且 66 端口对公网可达，建议在路由器收紧只放行局域网/VPN，这与仓库可见性无关但影响更大。
+
+## 公开镜像仓库：任何人可直接 docker compose 部署（2026-10-30 续一百三十三）
+- 用户提出「有没有其他方法专门放镜像，让别人直接 Docker 部署」。采用 **GitHub Container Registry（ghcr.io）**：与仓库同源、公共镜像匿名可拉、无需另外注册账号、不暴露自建 Harbor 与家庭公网 IP。
+- **自动发布流水线**：新增 `.github/workflows/publish-images.yml`，打 `v*` 标签即自动构建并推送 Hub / Agent 的 **linux/amd64 + linux/arm64** 双架构镜像（`ghcr.io/gutenachte/pulse-hub|pulse-agent`），使用仓库内置 GITHUB_TOKEN，零自建密钥；带 GHA 层缓存。
+- **修两处构建阻塞**：GHCR 要求路径全小写（用户名 `GuteNachte` 会被拒）且镜像名不能出现 `pulse/pulse-hub` 重复段；Agent 镜像的 `igt-gpu-tools` 在 Alpine 无 aarch64 包，改为仅 amd64 安装，其余依赖全架构保留。
+- **每个部署实例可用自己的镜像**：Hub 新增 `PULSE_AGENT_IMAGE` 环境变量，经 `/api/pulse/public-info` 的 `agent_image` 下发，前端安装命令据此生成——私有部署显示自家 Harbor，公开部署显示 ghcr.io，留空则退回构建期兜底占位符。三个调用点改用 `getDefaultLinuxAgentImage()`。
+- **文档**：新增 `docs/docker-quickstart.md`（一体化/分体部署、端口与网络、数据备份、自建镜像、升级、常见问题），README 增加「快速开始（Docker）」；部署模板改为公共镜像并注入 `PULSE_AGENT_IMAGE`。
+- **实测**：两个镜像构建成功且**匿名 `docker pull` 通过**；Hub 镜像起容器 `/api/health` 200、`public-info` 版本 1.0.8、`agent_image` 正确下发为 ghcr 地址。版本一致性检查与公开审计（含 gitleaks）全绿。
