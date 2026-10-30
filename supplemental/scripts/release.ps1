@@ -142,8 +142,9 @@ if ($SkipVerify) {
     go vet -tags=testing ./...
     if ($LASTEXITCODE -ne 0) { throw "go vet 失败" }
     # hub 包在慢盘上约 30 分钟，这里只跑除 hub 外的包（hub 包由 CI go-hub job 覆盖）
-    $pkgs = (go list ./... | Where-Object { $_ -notmatch "/internal/hub$" }) -join " "
-    go test -tags=testing -count=1 -timeout=900s $pkgs
+    # 注意：包列表必须作为数组逐个传参，PowerShell 会把 -join " " 的单字符串当成一个参数
+    $pkgs = @(go list ./... | Where-Object { $_ -notmatch "/internal/hub$" })
+    go test -tags=testing -count=1 -timeout=900s @pkgs
     if ($LASTEXITCODE -ne 0) { throw "Go 测试失败" }
 }
 
