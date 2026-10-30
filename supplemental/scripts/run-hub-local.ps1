@@ -1,9 +1,9 @@
 param(
-    [string]$Image = "pulse-hub:1.0.8",
+    [string]$Image = "pulse-hub:1.0.9",
     [string]$ContainerName = "pulse-hub",
     [string]$DataDir = "pulse_data",
     [int]$Port = 8090,
-    [string]$HubVersion = "1.0.8",
+    [string]$HubVersion = "1.0.9",
     [switch]$HostCheck,
     [switch]$SkipBuild,
     # Publish the port on all interfaces so LAN agents can connect (local-production mode).

@@ -1,4 +1,4 @@
-export const AGENT_VERSION = "1.0.8"
+export const AGENT_VERSION = "1.0.9"
 // 2026-10-30 镜像仓库地址改由构建期注入（vite define）：公开演示构建使用占位符，
 // 避免把私有 Harbor 域名写进公开站点产物；正式构建仍是实际地址。
 export const PULSE_REGISTRY_HOST = import.meta.env.VITE_PULSE_REGISTRY_HOST || "your-registry.example.com:443"
