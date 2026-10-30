@@ -1,0 +1,50 @@
+name: 功能建议
+description: 提出 Pulse 的新功能或改进建议。
+title: "[功能]: "
+labels: ["enhancement"]
+body:
+  - type: checkboxes
+    attributes:
+      label: 提交前确认
+      description: |
+        请尽量说明这个功能解决什么问题、适合什么场景，以及它和现有能力的关系。
+      options:
+        - label: 我已经搜索过现有建议，没有找到相同需求。
+          required: true
+        - label: 这是功能建议，不是缺陷报告或使用咨询。
+          required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: 模块
+      description: 这个建议主要涉及哪一部分？
+      options:
+        - Hub
+        - Agent
+        - Hub & Agent
+        - Web UI
+        - 部署
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 功能描述
+      description: 请描述你希望增加或调整的能力。
+      placeholder: |
+        - 这个功能是什么？
+        - 它解决什么问题？
+        - 你希望它如何工作？
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: 使用场景
+      description: 请说明真实使用场景或当前痛点。
+    validations:
+      required: true

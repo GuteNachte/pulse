@@ -1,0 +1,78 @@
+body:
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: 提交前确认
+      description: |
+        请提供 Pulse 版本、部署方式、系统环境和你已经尝试过的排查步骤。
+      options:
+        - label: 我已经确认正在使用当前维护版本。
+          required: true
+        - label: 我已经搜索过现有问题和讨论。
+          required: true
+        - label: 我已经准备好相关日志或截图。
+          required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: 模块
+      description: 这个问题主要发生在哪一部分？
+      options:
+        - Hub
+        - Agent
+        - Hub & Agent
+        - Web UI
+        - 部署
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 请描述你的问题、目标和已经尝试过的操作。
+    validations:
+      required: true
+
+  - type: input
+    id: system
+    attributes:
+      label: 系统 / 架构
+      placeholder: linux/amd64 (agent), windows/amd64 (hub)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: 安装方式
+      options:
+        - Docker
+        - 二进制
+        - 飞牛 / NAS
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: 配置
+      description: 请提供相关服务配置。
+      render: yaml
+
+  - type: textarea
+    id: hub-logs
+    attributes:
+      label: Hub 日志
+      description: 请提供 Hub 相关日志。
+      render: json
+
+  - type: textarea
+    id: agent-logs
+    attributes:
+      label: Agent 日志
+      description: 如问题涉及 Agent，请提供 Agent 日志。
+      render: shell

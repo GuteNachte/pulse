@@ -1,0 +1,237 @@
+import type {
+	AITaskRecord,
+	AssetChangeRecord,
+	AssetEnrichmentReportRecord,
+	AssetEnrichmentSuggestionRecord,
+	AssetInterfaceRecord,
+	AssetLocationRecord,
+	AssetRecord,
+	AssetRelationRecord,
+	AssetVisualRecord,
+} from "../../types"
+import { loadLatestAITasksByKind } from "./asset-ai-task-query.ts"
+import {
+	loadLatestReportSuggestions,
+	loadPendingOfficialColorSuggestions,
+} from "./asset-enrichment-suggestion-query.ts"
+import { escapePocketBaseFilterValue } from "./asset-query.ts"
+import { loadDisplayAssetVisuals, type AssetVisualFileURLBuilder } from "./asset-visual-query.ts"
+
+export type AssetDetailState = {
+	asset?: AssetRecord
+	assets: AssetRecord[]
+	interfaces: AssetInterfaceRecord[]
+	allInterfaces: AssetInterfaceRecord[]
+	editCatalogLoaded: boolean
+	relations: AssetRelationRecord[]
+	locations: AssetLocationRecord[]
+	visuals: AssetVisualRecord[]
+	aiTasks: AITaskRecord[]
+	changes: AssetChangeRecord[]
+	enrichmentReports: AssetEnrichmentReportRecord[]
+	enrichmentSuggestions: AssetEnrichmentSuggestionRecord[]
+	officialColorSuggestions: AssetEnrichmentSuggestionRecord[]
+}
+
+export const emptyAssetDetailState: AssetDetailState = {
+	assets: [],
+	interfaces: [],
+	allInterfaces: [],
+	editCatalogLoaded: false,
+	relations: [],
+	locations: [],
+	visuals: [],
+	aiTasks: [],
+	changes: [],
+	enrichmentReports: [],
+	enrichmentSuggestions: [],
+	officialColorSuggestions: [],
+}
+
+type PrimaryAssetCollection = {
+	getOne: (id: string, options: { requestKey: null }) => Promise<AssetRecord>
+}
+
+type FilteredCollection<T> = {
+	getFullList: (options: { filter: string; sort: string; requestKey: null; expand?: string }) => Promise<T[]>
+}
+
+type PagedCollection<T> = {
+	getList: (
+		page: number,
+		perPage: number,
+		options: { filter: string; sort: string; requestKey: null }
+	) => Promise<{ items: T[] }>
+}
+
+export type AssetDetailPrimaryData = {
+	asset: AssetRecord
+	interfaces: AssetInterfaceRecord[]
+	allInterfaces: AssetInterfaceRecord[]
+	relations: AssetRelationRecord[]
+}
+
+export function applyAssetDetailPrimaryData(
+	state: AssetDetailState,
+	data: AssetDetailPrimaryData,
+	options?: { preserveSecondaryData?: boolean }
+): AssetDetailState {
+	if (!options?.preserveSecondaryData) {
+		return {
+			...emptyAssetDetailState,
+			asset: data.asset,
+			assets: [data.asset],
+			interfaces: data.interfaces,
+			allInterfaces: data.allInterfaces,
+			relations: data.relations,
+		}
+	}
+	const assets = state.assets.some((item) => item.id === data.asset.id)
+		? state.assets.map((item) => (item.id === data.asset.id ? data.asset : item))
+		: [data.asset, ...state.assets]
+	const allInterfaces = state.editCatalogLoaded
+		? [...state.allInterfaces.filter((item) => item.asset !== data.asset.id), ...data.interfaces]
+		: data.interfaces
+	return {
+		...state,
+		asset: data.asset,
+		assets,
+		interfaces: data.interfaces,
+		allInterfaces,
+		relations: data.relations,
+	}
+}
+
+export async function loadAssetDetailPrimaryData(
+	collections: {
+		assets: PrimaryAssetCollection
+		interfaces: FilteredCollection<AssetInterfaceRecord>
+		relations: FilteredCollection<AssetRelationRecord>
+	},
+	assetId: string
+): Promise<AssetDetailPrimaryData> {
+	const [asset, relations] = await Promise.all([
+		collections.assets.getOne(assetId, { requestKey: null }),
+		collections.relations.getFullList({
+			filter: `source_asset="${escapePocketBaseFilterValue(assetId)}" || target_asset="${escapePocketBaseFilterValue(assetId)}"`,
+			sort: "kind,created",
+			expand: "source_asset,target_asset",
+			requestKey: null,
+		}),
+	])
+	const relationInterfaceIds = Array.from(
+		new Set(
+			relations.flatMap((relation) =>
+				[relation.metadata?.source_interface, relation.metadata?.target_interface].filter(
+					(value): value is string => typeof value === "string" && value.trim().length > 0
+				)
+			)
+		)
+	)
+	const interfaceFilter = [
+		`asset="${escapePocketBaseFilterValue(assetId)}"`,
+		...relationInterfaceIds.map((interfaceId) => `id="${escapePocketBaseFilterValue(interfaceId)}"`),
+	].join(" || ")
+	const allInterfaces = await collections.interfaces.getFullList({
+		filter: interfaceFilter,
+		sort: "-primary,kind,name",
+		requestKey: null,
+	})
+	const interfaces = allInterfaces.filter((record) => record.asset === assetId)
+	return { asset, interfaces, allInterfaces, relations }
+}
+
+export type AssetDetailSecondaryData = {
+	visuals: AssetVisualRecord[]
+	aiTasks: AITaskRecord[]
+	changes: AssetChangeRecord[]
+	enrichmentReports: AssetEnrichmentReportRecord[]
+	enrichmentSuggestions: AssetEnrichmentSuggestionRecord[]
+	officialColorSuggestions: AssetEnrichmentSuggestionRecord[]
+}
+
+type LatestAITaskCollection = {
+	getList: (
+		page: number,
+		perPage: number,
+		options: { filter: string; sort: string; fields: string; requestKey: null }
+	) => Promise<{ items: AITaskRecord[] }>
+}
+
+type SuggestionCollection = FilteredCollection<AssetEnrichmentSuggestionRecord> &
+	PagedCollection<AssetEnrichmentSuggestionRecord>
+
+export async function loadAssetDetailSecondaryData(
+	collections: {
+		visuals: { getList: Parameters<typeof loadDisplayAssetVisuals>[0]["getList"] }
+		buildAssetVisualFileURL?: AssetVisualFileURLBuilder
+		aiTasks: LatestAITaskCollection
+		changes: PagedCollection<AssetChangeRecord>
+		enrichmentReports: PagedCollection<AssetEnrichmentReportRecord>
+		suggestions: SuggestionCollection
+	},
+	assetId: string
+): Promise<AssetDetailSecondaryData> {
+	const [visuals, aiTasks, changes, enrichmentReports] = await Promise.all([
+		loadDisplayAssetVisuals(collections.visuals, assetId, collections.buildAssetVisualFileURL),
+		loadLatestAITasksByKind(collections.aiTasks, { assetId }),
+		collections.changes.getList(1, 20, {
+			filter: `asset="${escapePocketBaseFilterValue(assetId)}"`,
+			sort: "-created",
+			requestKey: null,
+		}),
+		collections.enrichmentReports.getList(1, 10, {
+			filter: `asset="${escapePocketBaseFilterValue(assetId)}"`,
+			sort: "-created",
+			requestKey: null,
+		}),
+	])
+
+	const [enrichmentSuggestions, officialColorSuggestions] = await Promise.all([
+		loadLatestReportSuggestions(collections.suggestions, enrichmentReports.items[0]?.id),
+		loadPendingOfficialColorSuggestions(collections.suggestions, assetId),
+	])
+
+	return {
+		visuals,
+		aiTasks,
+		changes: changes.items,
+		enrichmentReports: enrichmentReports.items,
+		enrichmentSuggestions,
+		officialColorSuggestions,
+	}
+}
+
+export function applyAssetDetailSecondaryData(
+	state: AssetDetailState,
+	assetId: string,
+	data: AssetDetailSecondaryData
+): AssetDetailState {
+	if (state.asset?.id !== assetId) return state
+	return { ...state, ...data }
+}
+
+export function applyAssetDetailEditCatalog(
+	state: AssetDetailState,
+	options: {
+		assetId: string
+		fallbackAsset: AssetRecord
+		fallbackInterfaces: AssetInterfaceRecord[]
+		assets: AssetRecord[]
+		interfaces: AssetInterfaceRecord[]
+		locations: AssetLocationRecord[]
+	}
+): AssetDetailState {
+	if (state.asset?.id !== options.assetId) return state
+	const assets = options.assets.some((item) => item.id === options.assetId)
+		? options.assets
+		: [options.fallbackAsset, ...options.assets]
+	const allInterfaces = options.interfaces.length > 0 ? options.interfaces : options.fallbackInterfaces
+	return {
+		...state,
+		assets,
+		allInterfaces,
+		locations: options.locations,
+		editCatalogLoaded: true,
+	}
+}

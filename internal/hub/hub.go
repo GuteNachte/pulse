@@ -1,0 +1,180 @@
+// Package hub handles updating systems and serving the web UI.
+package hub
+
+import (
+	"errors"
+	"fmt"
+	"net/url"
+	"strings"
+	"sync/atomic"
+	"time"
+
+	"gutenacht.site/pulse/internal/alerts"
+	"gutenacht.site/pulse/internal/hub/config"
+	"gutenacht.site/pulse/internal/hub/systems"
+	"gutenacht.site/pulse/internal/hub/utils"
+	"gutenacht.site/pulse/internal/records"
+	"gutenacht.site/pulse/internal/users"
+
+	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/core"
+)
+
+// Hub is the application. It embeds the PocketBase app and keeps references to subcomponents.
+type Hub struct {
+	core.App
+	*alerts.AlertManager
+	um              *users.UserManager
+	rm              *records.RecordManager
+	sm              *systems.SystemManager
+	loginLimiter    *loginFailureLimiter
+	pairLimiter     *loginFailureLimiter
+	appURL          string
+	dailyBackupBusy atomic.Bool
+	cronHeartbeats  *cronHeartbeatTracker
+	startedAt       time.Time
+}
+
+// NewHub creates a new Hub instance with default configuration
+func NewHub(app core.App) *Hub {
+	hub := &Hub{
+		App:            app,
+		loginLimiter:   newLoginFailureLimiter(),
+		pairLimiter:    newPairAttemptLimiter(),
+		cronHeartbeats: newCronHeartbeatTracker(),
+		startedAt:      time.Now(),
+	}
+	hub.AlertManager = alerts.NewAlertManager(hub)
+	hub.um = users.NewUserManager(hub)
+	hub.rm = records.NewRecordManager(hub)
+	hub.rm.SetSystemProcessingFilter(hub.shouldProcessClientMonitoringSystem)
+	hub.sm = systems.NewSystemManager(hub)
+	hub.bindAuthSecurityHooks()
+	hub.bindAgentReleaseHooks()
+	hub.bindWebsiteMonitorHooks()
+	hub.bindAssetPresenceHooks()
+	hub.bindSystemDeleteProtectionHooks()
+	hub.bindAssetMasterValidationHooks()
+	hub.bindAssetBindingValidationHooks()
+	hub.bindAssetMonitorHooks()
+	hub.bindNetworkTopologyLegacyValidationHooks()
+	hub.bindModuleCollectionGates()
+	hub.bindModuleRuntimeHooks()
+	hub.bindCollectionAuditHooks()
+	hub.bindAssetChangeHooks()
+	_ = onAfterBootstrapAndMigrations(app, hub.initialize)
+	return hub
+}
+
+// onAfterBootstrapAndMigrations ensures the provided function runs after the database is set up and migrations are applied.
+// This is a workaround for behavior in PocketBase where onBootstrap runs before migrations, forcing use of onServe for this purpose.
+// However, PB's tests.TestApp is already bootstrapped, generally doesn't serve, but does handle migrations.
+// So this ensures that the provided function runs at the right time either way, after DB is ready and migrations are done.
+func onAfterBootstrapAndMigrations(app core.App, fn func(app core.App) error) error {
+	// pb tests.TestApp is already bootstrapped and doesn't serve
+	if app.IsBootstrapped() {
+		return fn(app)
+	}
+	// Must use OnServe because OnBootstrap appears to run before migrations, even if calling e.Next() before anything else
+	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
+		if err := fn(e.App); err != nil {
+			return err
+		}
+		return e.Next()
+	})
+	return nil
+}
+
+// StartHub sets up event handlers and starts the PocketBase server
+func (h *Hub) StartHub() error {
+	h.App.OnServe().BindFunc(func(e *core.ServeEvent) error {
+		if err := h.resumePendingPortableRestore(); err != nil {
+			h.Logger().Error("Failed to resume portable restore", "err", err)
+		}
+		// sync systems with config
+		if err := config.SyncSystems(e); err != nil {
+			return err
+		}
+		// register middlewares
+		h.registerMiddlewares(e)
+		// register api routes
+		if err := h.registerApiRoutes(e); err != nil {
+			return err
+		}
+		if count, err := h.syncLocalAgentReleases(); err != nil {
+			return err
+		} else if count > 0 {
+			h.Logger().Info("Local agent releases synced", "count", count)
+		}
+		if err := pruneOldAgentReleases(h.App, agentReleaseRetentionLimit); err != nil {
+			return err
+		}
+		if err := h.repairLocalSystemMarkers(); err != nil {
+			return err
+		}
+		// register cron jobs
+		if err := h.registerCronJobs(e); err != nil {
+			return err
+		}
+		go h.refreshActiveInternetAddresses()
+		// start server
+		if err := h.startServer(e); err != nil {
+			return err
+		}
+		// start system updates
+		if err := h.sm.Initialize(); err != nil {
+			return err
+		}
+		return e.Next()
+	})
+
+	pb, ok := h.App.(*pocketbase.PocketBase)
+	if !ok {
+		return errors.New("not a pocketbase app")
+	}
+	return pb.Start()
+}
+
+// initialize sets up initial configuration (collections, settings, etc.)
+func (h *Hub) initialize(app core.App) error {
+	// set general settings
+	settings := app.Settings()
+	// batch requests (for alerts)
+	settings.Batch.Enabled = true
+	// set URL if APP_URL env is set
+	if appURL, isSet := utils.GetEnv("APP_URL"); isSet {
+		h.appURL = appURL
+		settings.Meta.AppURL = appURL
+	}
+	if err := app.Save(settings); err != nil {
+		return err
+	}
+	if err := h.reconcileAssetMonitorBindings(); err != nil {
+		h.Logger().Warn("asset monitor binding reconcile failed", "err", err)
+	}
+	// set auth settings
+	return setCollectionAuthSettings(app)
+}
+
+// registerCronJobs sets up scheduled tasks
+func (h *Hub) registerCronJobs(_ *core.ServeEvent) error {
+	// 6 个定时任务全部用心跳包装：只额外记录最近一次开始 / 结束 / 错误（内存），
+	// 调度表达式、执行函数和频率与历史完全一致（定义见 cronTaskDefinitions）。
+	for _, task := range h.cronTaskDefinitions() {
+		h.Cron().MustAdd(task.cronName, task.schedule, h.withCronHeartbeat(task))
+	}
+	return nil
+}
+
+// MakeLink formats a link with the app URL and path segments.
+// Only path segments should be provided.
+func (h *Hub) MakeLink(parts ...string) string {
+	base := strings.TrimSuffix(h.Settings().Meta.AppURL, "/")
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		base = fmt.Sprintf("%s/%s", base, url.PathEscape(part))
+	}
+	return base
+}

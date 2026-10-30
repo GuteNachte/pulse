@@ -1,0 +1,436 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant light (&:is(.light *));
+@custom-variant dark (&:is(.dark *));
+@custom-variant safari (@supports (hanging-punctuation: first) and (-webkit-appearance: none));
+
+:root {
+	--pulse-safe-top: env(safe-area-inset-top, 0px);
+	--pulse-safe-right: env(safe-area-inset-right, 0px);
+	--pulse-safe-bottom: env(safe-area-inset-bottom, 0px);
+	--pulse-safe-left: env(safe-area-inset-left, 0px);
+	--pulse-mobile-top-gap: max(0.75rem, var(--pulse-safe-top));
+	--pulse-mobile-bottom-gap: max(0.75rem, var(--pulse-safe-bottom));
+	--pulse-card-gap: 10px;
+	--pulse-page-gutter: 10px;
+	--background: hsl(0 0% 100%);
+	--foreground: hsl(0 0% 7%);
+	--card: hsl(0 0% 100%);
+	--card-foreground: hsl(0 0% 7%);
+	--popover: hsl(0 0% 100%);
+	--popover-foreground: hsl(0 0% 7%);
+	--primary: hsl(0 0% 7%);
+	--primary-foreground: hsl(0 0% 100%);
+	--secondary: hsl(0 0% 96%);
+	--secondary-foreground: hsl(0 0% 7%);
+	--muted: hsl(0 0% 96%);
+	--muted-foreground: hsl(220 9% 42%);
+	--accent: hsl(210 20% 98%);
+	--accent-foreground: hsl(0 0% 7%);
+	--destructive: hsl(0 67% 52%);
+	--destructive-foreground: hsl(0 0% 97%);
+	--border: hsl(220 13% 91%);
+	--input: hsl(220 13% 91%);
+	--ring: hsl(0 0% 7%);
+	--radius: 0.75rem;
+	--surface-soft: hsl(210 20% 98%);
+	--surface-card: hsl(0 0% 96%);
+	--surface-strong: hsl(220 13% 91%);
+	--surface-dark: hsl(0 0% 6%);
+	--pulse-shadow-popover: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 6px 14px rgba(0, 0, 0, 0.05);
+	--pulse-shadow-toast: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.05);
+	--pulse-shadow-tooltip: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 4px 10px rgba(0, 0, 0, 0.08);
+	--shadow-popover: var(--pulse-shadow-popover);
+	--shadow-toast: var(--pulse-shadow-toast);
+	--shadow-tooltip: var(--pulse-shadow-tooltip);
+	--chart-1: hsl(213 94% 68%);
+	--chart-2: hsl(158 64% 52%);
+	--chart-3: hsl(38 92% 50%);
+	--chart-4: hsl(262 83% 66%);
+	--chart-5: hsl(346 77% 62%);
+	--table-header: hsl(210 20% 98%);
+	--chart-saturation: 65%;
+	--chart-lightness: 50%;
+	--container: 100%;
+}
+
+.dark {
+	color-scheme: dark;
+	--background: hsl(24 5% 8%);
+	--foreground: hsl(36 8% 96%);
+	--card: hsl(24 5% 10.5%);
+	--card-foreground: hsl(36 8% 96%);
+	--popover: hsl(24 5% 9%);
+	--popover-foreground: hsl(36 8% 96%);
+	--primary: hsl(36 8% 96%);
+	--primary-foreground: hsl(24 5% 8%);
+	--secondary: hsl(24 5% 15%);
+	--secondary-foreground: hsl(36 8% 96%);
+	--muted: hsl(24 5% 15%);
+	--muted-foreground: hsl(30 5% 68%);
+	--accent: hsl(24 5% 15%);
+	--accent-foreground: hsl(36 8% 96%);
+	--destructive: hsl(0 62% 47%);
+	--border: hsl(24 4% 18%);
+	--input: hsl(24 4% 23%);
+	--ring: hsl(36 8% 96%);
+	--table-header: hsl(24 5% 12%);
+	--surface-soft: hsl(24 5% 12%);
+	--surface-card: hsl(24 5% 15%);
+	--surface-strong: hsl(24 4% 23%);
+	--surface-dark: hsl(0 0% 6%);
+	--pulse-shadow-popover: 0 0 0 1px rgba(255, 255, 255, 0.08);
+	--pulse-shadow-toast: 0 0 0 1px rgba(255, 255, 255, 0.08);
+	--pulse-shadow-tooltip: 0 0 0 1px rgba(255, 255, 255, 0.12);
+	--radius: 0.75rem;
+	--chart-saturation: 60%;
+	--chart-lightness: 55%;
+}
+
+@theme inline {
+	--font-sans: Inter, InterVariable, sans-serif;
+
+	--breakpoint-xs: 26.6rem;
+	--breakpoint-450: 28rem;
+	--breakpoint-2xl: 90rem;
+
+	--radius-sm: 0.375rem;
+	--radius-md: 0.5rem;
+	--radius-lg: 0.75rem;
+	--radius-xl: 1rem;
+
+	--color-green-50: hsl(140 60% 95%);
+	--color-green-100: hsl(140 50% 90%);
+	--color-green-200: hsl(140 49% 80%);
+	--color-green-300: hsl(140 48% 70%);
+	--color-green-400: hsl(140 49% 60%);
+	--color-green-500: hsl(140 50% 48%);
+	--color-green-600: hsl(140 52% 38%);
+	--color-green-700: hsl(140 53% 29%);
+	--color-green-800: hsl(140 54% 20%);
+	--color-green-900: hsl(140 54% 12%);
+	--color-green-950: hsl(140 57% 6%);
+
+	--color-gh-dark: #22272e;
+
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-destructive: var(--destructive);
+	--color-destructive-foreground: var(--destructive-foreground);
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+	--color-chart-1: var(--chart-1);
+	--color-chart-2: var(--chart-2);
+	--color-chart-3: var(--chart-3);
+	--color-chart-4: var(--chart-4);
+	--color-chart-5: var(--chart-5);
+	--color-table-header: var(--table-header);
+	--color-surface-soft: var(--surface-soft);
+	--color-surface-card: var(--surface-card);
+	--color-surface-strong: var(--surface-strong);
+	--color-surface-dark: var(--surface-dark);
+	--shadow-popover: var(--pulse-shadow-popover);
+	--shadow-toast: var(--pulse-shadow-toast);
+	--shadow-tooltip: var(--pulse-shadow-tooltip);
+}
+
+@layer utilities {
+	/* Fonts */
+	@supports (font-variation-settings: normal) {
+		:root {
+			font-family: Inter, InterVariable, sans-serif;
+		}
+	}
+
+	@font-face {
+		font-family: InterVariable;
+		font-style: normal;
+		font-weight: 100 900;
+		font-display: swap;
+		src: url("/static/InterVariable.woff2?v=4.0") format("woff2");
+	}
+
+	@font-face {
+		font-family: Righteous;
+		font-style: normal;
+		font-weight: 400;
+		font-display: swap;
+		src: url("/static/Righteous-latin-400.woff2") format("woff2");
+	}
+
+	.logo-wordmark {
+		font-family: Righteous, Inter, InterVariable, sans-serif;
+		letter-spacing: 0;
+	}
+
+	.logo-wordmark {
+		transition-property: color, transform;
+		transition-duration: 180ms;
+		transition-timing-function: ease-out;
+	}
+
+	.group:hover .logo-wordmark,
+	.group:focus-visible .logo-wordmark {
+		color: hsl(213 94% 68%);
+	}
+
+	.pulse-card-gap {
+		gap: var(--pulse-card-gap);
+	}
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+		overflow-anchor: none;
+	}
+
+	html {
+		scrollbar-gutter: stable;
+		overflow-y: scroll;
+	}
+
+	body {
+		@apply bg-background text-foreground;
+		font-variant-ligatures: no-contextual;
+		font-variant-numeric: tabular-nums;
+		-webkit-font-smoothing: antialiased;
+		-webkit-tap-highlight-color: transparent;
+		text-rendering: geometricPrecision;
+		min-height: 100svh;
+		overscroll-behavior-y: none;
+	}
+
+	body[data-scroll-locked] {
+		margin-right: 0 !important;
+		padding-right: 0 !important;
+	}
+
+	button {
+		cursor: pointer;
+		touch-action: manipulation;
+	}
+
+	h1,
+	h2,
+	h3 {
+		text-wrap: balance;
+	}
+
+	p,
+	li {
+		text-wrap: pretty;
+	}
+
+	a,
+	input,
+	select,
+	textarea {
+		touch-action: manipulation;
+	}
+
+	/* cosmetic patch for half pixel gap in table headers when scrolling content shows at top  */
+	thead.sticky:before {
+		content: "";
+		@apply absolute -top-2 left-0 w-full h-4 bg-table-header z-50;
+	}
+}
+
+@utility container {
+	width: 100%;
+	max-width: 100%;
+	padding-inline: var(--pulse-page-gutter);
+	@apply mx-auto;
+}
+
+@utility link {
+	@apply text-primary font-medium underline-offset-4 hover:underline;
+}
+
+@utility ns-dialog {
+	/* New system dialog width */
+	min-width: 30.3rem;
+}
+
+/* 全局隐藏滚动条：滚动功能不受影响，页面切换时不会因滚动条出现/消失而产生错位感 */
+* {
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+	display: none;
+	width: 0;
+	height: 0;
+}
+
+@utility scrollbar-hide {
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}
+
+@utility text-card-title {
+	@apply text-[1.4rem] sm:text-2xl;
+}
+
+@media (max-width: 1023px) {
+	.container {
+		padding-left: max(0.75rem, var(--pulse-safe-left));
+		padding-right: max(0.75rem, var(--pulse-safe-right));
+	}
+
+	.pulse-mobile-root {
+		min-height: 100dvh;
+		padding-top: var(--pulse-safe-top);
+	}
+
+	.pulse-android-app {
+		--pulse-safe-top: max(env(safe-area-inset-top, 0px), 1.75rem);
+		--pulse-safe-bottom: max(env(safe-area-inset-bottom, 0px), 1.35rem);
+	}
+
+	.pulse-mobile-content {
+		padding-bottom: calc(4.75rem + var(--pulse-mobile-bottom-gap));
+	}
+
+	.pulse-mobile-topbar {
+		top: 0;
+		padding-top: 0.5rem;
+	}
+
+	.pulse-mobile-bottom-nav {
+		padding-bottom: calc(var(--pulse-mobile-bottom-gap) + 0.35rem);
+	}
+
+	[data-radix-dialog-content],
+	[role="dialog"] {
+		max-width: calc(100vw - 1rem);
+	}
+
+	table {
+		min-width: max-content;
+	}
+
+	.recharts-wrapper,
+	.recharts-responsive-container {
+		min-width: 0 !important;
+	}
+
+	[data-radix-dialog-content] {
+		max-height: calc(100dvh - var(--pulse-safe-top) - var(--pulse-safe-bottom) - 1rem);
+		overflow-y: auto;
+	}
+}
+
+.operation-progress-bar {
+	animation: operation-progress-slide 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes operation-progress-slide {
+	0% {
+		transform: translateX(-120%);
+	}
+
+	100% {
+		transform: translateX(320%);
+	}
+}
+
+.recharts-tooltip-wrapper {
+	z-index: 51;
+	@apply tabular-nums;
+}
+
+.recharts-yAxis {
+	@apply tabular-nums;
+}
+
+.dark [data-chart],
+.dark [data-chart] .recharts-wrapper,
+.dark [data-chart] .recharts-responsive-container,
+.dark [data-chart] .recharts-surface {
+	background: transparent !important;
+}
+
+.dark [data-chart] .recharts-area-area,
+.dark [data-chart] .recharts-radial-bar-background-sector,
+.dark [data-chart] .recharts-rectangle.recharts-tooltip-cursor,
+.dark [data-chart] .recharts-curve.recharts-tooltip-cursor {
+	fill: transparent !important;
+	stroke: transparent !important;
+}
+
+/* 展示页复用编辑器节点：连接点只读不可拖拽；是否显示由节点卡片按「有无连线」决定。 */
+.pulse-topology-readonly {
+	background-color: #0f1115;
+}
+
+.pulse-topology-readonly .react-flow__handle {
+	pointer-events: none;
+}
+
+/* 拓扑编辑页为独立全屏工作台：隐藏常规导航与页面留白，退出路由自动恢复。 */
+body.pulse-topology-editor-mode {
+	overflow: hidden;
+}
+
+/* 固定视口应用壳下顶栏容器是 .container.shrink-0（旧选择器 .container.sticky 已失效）：
+   桌面端编辑页直接隐藏顶栏，内容区占满整个视口，编辑页 h-dvh 不再溢出 84px。 */
+@media (min-width: 1024px) {
+	body.pulse-topology-editor-mode .container.shrink-0 {
+		display: none;
+	}
+}
+
+body.pulse-topology-editor-mode .container.relative {
+	max-width: 100%;
+	padding-inline: 0;
+}
+
+/* 完整拓扑页复用首页 React Flow 工作台；桌面端锁住页面滚动，画布内部仍可缩放平移。 */
+@media (min-width: 1280px) {
+	html:has(.pulse-network-topology-workspace-page) {
+		scrollbar-gutter: auto;
+		overflow: hidden;
+	}
+
+	body:has(.pulse-network-topology-workspace-page) {
+		overflow: hidden;
+	}
+}
+
+/* 2026-10-18 首页拓扑改用 React Flow：画布、控件、小地图跟随主题变量，避免深色模式白底 */
+.pulse-topology-flow {
+	--xy-background-color: var(--card);
+	--xy-background-pattern-color: var(--border);
+	--xy-edge-label-background-color: var(--card);
+	--xy-edge-label-color: var(--muted-foreground);
+	--xy-controls-button-background-color: var(--card);
+	--xy-controls-button-background-color-hover: var(--surface-soft);
+	--xy-controls-button-color: var(--foreground);
+	--xy-controls-button-border-color: var(--border);
+	--xy-minimap-background-color: var(--card);
+	background: var(--card);
+}
+
+/* 2026-10-25 隐藏 React Flow 角标：组件层已设 proOptions.hideAttribution，这里兜底覆盖旧样式残留。 */
+.pulse-topology-flow .react-flow__attribution,
+.pulse-topology-editor-flow .react-flow__attribution {
+	display: none;
+}

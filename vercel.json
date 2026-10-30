@@ -1,0 +1,22 @@
+{
+	"$schema": "https://openapi.vercel.sh/vercel.json",
+	"framework": "vite",
+	"installCommand": "npm ci --prefix internal/site",
+	"buildCommand": "npm --prefix internal/site run build:demo",
+	"outputDirectory": "internal/site/dist",
+	"rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+	"headers": [
+		{
+			"source": "/(.*)",
+			"headers": [
+				{ "key": "X-Content-Type-Options", "value": "nosniff" },
+				{ "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+				{ "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
+				{
+					"key": "Content-Security-Policy",
+					"value": "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
+				}
+			]
+		}
+	]
+}

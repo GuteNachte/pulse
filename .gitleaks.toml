@@ -1,0 +1,12 @@
+title = "Pulse public repository audit"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Reserved documentation placeholders"
+regexTarget = "match"
+regexes = [
+  '''example-redacted''',
+  '''(?:192\.0\.2\.|198\.51\.100\.|203\.0\.113\.)'''
+]

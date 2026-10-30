@@ -1,0 +1,793 @@
+import type { AssetStatus, AssetType } from "../../types"
+
+export type AssetFieldInputMode =
+	| "manual_required"
+	| "manual_optional"
+	| "fixed_choice"
+	| "captured_candidate"
+	| "not_applicable"
+
+export type AssetTypeFieldSpec = {
+	key: string
+	label: string
+	group: string
+	inputMode: AssetFieldInputMode
+	source: "asset" | "metadata"
+	type?: "text" | "number" | "date" | "url" | "select"
+	options?: readonly { value: string; label: string }[]
+	placeholder?: string
+	pattern?: string
+	title?: string
+	unit?: string
+	readOnly?: boolean
+	span?: "full"
+}
+
+export type AssetTypeSpec = {
+	type: AssetType
+	detailTitle: string
+	providerOptions: readonly { value: string; label: string }[]
+	statusOptions: readonly { value: AssetStatus; label: string }[]
+	notApplicable: {
+		location: boolean
+		role: boolean
+		interfaces: boolean
+		hardware: boolean
+	}
+	sections: readonly { title: string; fields: readonly AssetTypeFieldSpec[] }[]
+}
+
+const internetProviderOptions = [
+	{ value: "中国电信", label: "中国电信" },
+	{ value: "中国联通", label: "中国联通" },
+	{ value: "中国移动", label: "中国移动" },
+] as const
+
+const internetStatusOptions = [
+	{ value: "active", label: "使用中" },
+	{ value: "inactive", label: "暂停服务" },
+	{ value: "retired", label: "已注销" },
+] as const
+
+const accessTechnologyOptions = [
+	{ value: "ftth", label: "家庭光纤宽带（FTTH）" },
+	{ value: "dedicated_line", label: "专线" },
+	{ value: "mobile", label: "移动网络（4G / 5G）" },
+] as const
+
+const authModeOptions = [
+	{ value: "pppoe", label: "PPPoE 拨号" },
+	{ value: "dhcp", label: "DHCP / IPoE 自动获取" },
+	{ value: "static", label: "静态 IP" },
+] as const
+
+const billingCycleOptions = [
+	{ value: "monthly", label: "月付" },
+	{ value: "quarterly", label: "季付" },
+	{ value: "semiannual", label: "半年付" },
+	{ value: "yearly", label: "年付" },
+] as const
+
+const yesNoOptions = [
+	{ value: "yes", label: "是" },
+	{ value: "no", label: "否" },
+] as const
+
+const ontCarrierOptions = [
+	{ value: "中国电信", label: "中国电信" },
+	{ value: "中国联通", label: "中国联通" },
+	{ value: "中国移动", label: "中国移动" },
+] as const
+
+const ontOperatingRoleOptions = [
+	{ value: "bridge_ont", label: "桥接光猫" },
+	{ value: "router_ont", label: "光猫路由一体机" },
+	{ value: "ifttr_main_gateway", label: "iFTTR 主网关" },
+] as const
+
+const enabledStatusOptions = [
+	{ value: "enabled", label: "启用" },
+	{ value: "disabled", label: "未启用" },
+] as const
+
+const supportedStatusOptions = [
+	{ value: "supported", label: "支持" },
+	{ value: "unsupported", label: "不支持" },
+] as const
+
+const ontStatusOptions = [
+	{ value: "active", label: "使用中" },
+	{ value: "inactive", label: "未启用" },
+	{ value: "retired", label: "已停用" },
+] as const
+
+const switchManagementLevelOptions = [
+	{ value: "unmanaged", label: "非网管" },
+	{ value: "smart", label: "轻管理" },
+	{ value: "managed", label: "全管理" },
+] as const
+
+const switchManagementAccessOptions = [
+	{ value: "none", label: "无" },
+	{ value: "web", label: "Web" },
+	{ value: "app", label: "App" },
+	{ value: "desktop", label: "桌面客户端" },
+	{ value: "cli", label: "命令行" },
+] as const
+
+const switchFeatureStatusOptions = [
+	{ value: "unsupported", label: "不支持" },
+	{ value: "disabled", label: "未启用" },
+	{ value: "enabled", label: "已启用" },
+] as const
+
+const switchPowerModeOptions = [
+	{ value: "external", label: "外置电源" },
+	{ value: "internal", label: "内置电源" },
+	{ value: "other", label: "其他" },
+	{ value: "unknown", label: "未确认" },
+] as const
+
+const switchForwardingMethodOptions = [
+	{ value: "store_and_forward", label: "存储转发" },
+	{ value: "cut_through", label: "直通转发" },
+] as const
+
+export const internetAssetTypeSpec: AssetTypeSpec = {
+	type: "internet",
+	detailTitle: "线路档案",
+	providerOptions: internetProviderOptions,
+	statusOptions: internetStatusOptions,
+	notApplicable: { location: true, role: false, interfaces: true, hardware: true },
+	sections: [
+		{
+			title: "基础资料",
+			fields: [
+				{
+					key: "vendor",
+					label: "运营商",
+					group: "基础资料",
+					inputMode: "fixed_choice",
+					source: "asset",
+					type: "select",
+					options: internetProviderOptions,
+				},
+				{
+					key: "role",
+					label: "用途 / 角色",
+					group: "基础资料",
+					inputMode: "manual_required",
+					source: "asset",
+					placeholder: "例如 家庭宽带主线路",
+				},
+			],
+		},
+		{
+			title: "线路参数",
+			fields: [
+				{
+					key: "access_technology",
+					label: "线路接入技术",
+					group: "线路参数",
+					inputMode: "fixed_choice",
+					source: "metadata",
+					type: "select",
+					options: accessTechnologyOptions,
+				},
+				{
+					key: "auth_mode",
+					label: "联网认证方式",
+					group: "线路参数",
+					inputMode: "fixed_choice",
+					source: "metadata",
+					type: "select",
+					options: authModeOptions,
+				},
+				{
+					key: "down_mbps",
+					label: "下行带宽",
+					group: "线路参数",
+					inputMode: "manual_required",
+					source: "metadata",
+					type: "number",
+					placeholder: "1000",
+					unit: "Mbps",
+				},
+				{
+					key: "up_mbps",
+					label: "上行带宽",
+					group: "线路参数",
+					inputMode: "manual_required",
+					source: "metadata",
+					type: "number",
+					placeholder: "300",
+					unit: "Mbps",
+				},
+			],
+		},
+		{
+			title: "动态公网地址",
+			fields: [
+				{
+					key: "public_ipv4",
+					label: "公网 IPv4",
+					group: "动态公网地址",
+					inputMode: "captured_candidate",
+					source: "metadata",
+					readOnly: true,
+				},
+				{
+					key: "public_ipv6",
+					label: "公网 IPv6",
+					group: "动态公网地址",
+					inputMode: "captured_candidate",
+					source: "metadata",
+					readOnly: true,
+				},
+			],
+		},
+		{
+			title: "套餐与续费",
+			fields: [
+				{
+					key: "package_name",
+					label: "套餐名称",
+					group: "套餐与续费",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "例如 联通千兆融合套餐",
+				},
+				{
+					key: "recurring_price_cny",
+					label: "套餐费用（元）",
+					group: "套餐与续费",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+					placeholder: "165",
+				},
+			],
+		},
+		{
+			// 2026-10-20 用户拍板：宽带独有的订阅周期分类（计费周期/到期/自动续费），
+			// 从「套餐与续费」拆出，作为右侧硬件档案里的独立分组展示与编辑。
+			title: "订阅周期",
+			fields: [
+				{
+					key: "billing_cycle",
+					label: "计费周期",
+					group: "订阅周期",
+					inputMode: "fixed_choice",
+					source: "metadata",
+					type: "select",
+					options: billingCycleOptions,
+				},
+				{
+					key: "renewal_date",
+					label: "到期日期",
+					group: "订阅周期",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "date",
+				},
+				{
+					key: "auto_renew",
+					label: "自动续费",
+					group: "订阅周期",
+					inputMode: "fixed_choice",
+					source: "metadata",
+					type: "select",
+					options: yesNoOptions,
+				},
+			],
+		},
+		{
+			title: "备注",
+			fields: [
+				{
+					key: "notes",
+					label: "备注",
+					group: "备注",
+					inputMode: "manual_optional",
+					source: "asset",
+					span: "full",
+				},
+			],
+		},
+	],
+}
+
+export const ontAssetTypeSpec: AssetTypeSpec = {
+	type: "ont",
+	detailTitle: "光猫 / ONT 档案",
+	providerOptions: [],
+	statusOptions: ontStatusOptions,
+	notApplicable: { location: false, role: false, interfaces: false, hardware: false },
+	sections: [
+		{
+			title: "身份与归属",
+			fields: [
+				{
+					key: "role",
+					label: "用途 / 角色",
+					group: "身份与归属",
+					inputMode: "manual_required",
+					source: "asset",
+					placeholder: "例如 家庭主路由 / 主网关",
+				},
+				capturedField("product_series", "产品系列", "身份与归属"),
+				fixedChoiceField("carrier", "运营商", "身份与归属", ontCarrierOptions),
+				fixedChoiceField("operating_role", "工作角色", "身份与归属", ontOperatingRoleOptions),
+				{ ...capturedField("manufacture_date", "生产日期", "身份与归属"), type: "date" },
+				capturedField("color", "外观颜色", "身份与归属"),
+			],
+		},
+		{
+			title: "光纤接入",
+			fields: [
+				capturedField("onu_type", "ONU 类型", "光纤接入"),
+				capturedField("pon_standard", "PON 标准", "光纤接入"),
+				capturedField("pon_uplink_capacity", "PON 上联能力", "光纤接入"),
+				capturedField("optical_connector", "光纤连接器", "光纤接入"),
+				{ ...capturedField("downstream_optical_port_count", "下联光口数量", "光纤接入"), type: "number" },
+				fixedChoiceField("downstream_optical_status", "下联光口状态", "光纤接入", enabledStatusOptions),
+			],
+		},
+		{
+			title: "路由与管理",
+			fields: [
+				fixedChoiceField("router_status", "主路由", "路由与管理", enabledStatusOptions),
+				fixedChoiceField("gateway_status", "主网关", "路由与管理", enabledStatusOptions),
+				fixedChoiceField("dhcp_status", "DHCP", "路由与管理", enabledStatusOptions),
+				{
+					key: "fixed_ipv4",
+					label: "管理 IPv4",
+					group: "路由与管理",
+					inputMode: "manual_required",
+					source: "metadata",
+				},
+				{
+					key: "management_url",
+					label: "管理 URL",
+					group: "路由与管理",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "url",
+				},
+				{
+					key: "lan_subnet",
+					label: "LAN 网段",
+					group: "路由与管理",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "例如 192.168.1.0/24",
+					pattern: "(?:\\d{1,3}\\.){3}\\d{1,3}/(?:[0-9]|[12][0-9]|3[0-2])",
+					title: "请输入 IPv4 CIDR 格式，例如 192.168.1.0/24",
+				},
+			],
+		},
+		{
+			title: "无线网络",
+			fields: [
+				capturedField("wifi_standard", "无线标准", "无线网络"),
+				fixedChoiceField("wifi_24_supported", "2.4 GHz 支持", "无线网络", supportedStatusOptions),
+				fixedChoiceField("wifi_24_enabled", "2.4 GHz 状态", "无线网络", enabledStatusOptions),
+				fixedChoiceField("wifi_5_supported", "5 GHz 支持", "无线网络", supportedStatusOptions),
+				fixedChoiceField("wifi_5_enabled", "5 GHz 状态", "无线网络", enabledStatusOptions),
+				fixedChoiceField("wps_supported", "WPS", "无线网络", supportedStatusOptions),
+			],
+		},
+		{
+			title: "有线网络",
+			fields: [
+				{ ...capturedField("lan_port_count", "LAN 总数", "有线网络"), type: "number" },
+				{ ...capturedField("lan_2500_count", "2.5GbE LAN 数量", "有线网络"), type: "number" },
+				{ ...capturedField("lan_1000_count", "1GbE LAN 数量", "有线网络"), type: "number" },
+			],
+		},
+		{
+			title: "其他端口与电源",
+			fields: [
+				{ ...capturedField("usb_port_count", "USB 数量", "其他端口与电源"), type: "number" },
+				{ ...capturedField("voice_port_count", "电话接口数量", "其他端口与电源"), type: "number" },
+				capturedField("power_spec", "电源规格", "其他端口与电源"),
+				fixedChoiceField("indicator_control", "指示灯控制", "其他端口与电源", supportedStatusOptions),
+				fixedChoiceField("wireless_control", "无线 / WPS 控制", "其他端口与电源", supportedStatusOptions),
+				fixedChoiceField("reset_supported", "复位能力", "其他端口与电源", supportedStatusOptions),
+				fixedChoiceField("power_switch_supported", "电源开关", "其他端口与电源", supportedStatusOptions),
+			],
+		},
+		{
+			title: "设备身份标识",
+			fields: [
+				capturedField("product_number", "产品编号", "设备身份标识"),
+				capturedField("pon_sn", "PON SN", "设备身份标识"),
+				{ ...capturedField("serial_number", "设备序列号", "设备身份标识"), source: "asset" },
+				capturedField("mac", "MAC", "设备身份标识"),
+				{ ...capturedField("radio_approval_code", "无线电型号核准编号", "设备身份标识"), span: "full" },
+			],
+		},
+		{
+			title: "备注",
+			fields: [
+				{
+					key: "notes",
+					label: "备注",
+					group: "备注",
+					inputMode: "manual_optional",
+					source: "asset",
+					span: "full",
+				},
+			],
+		},
+	],
+}
+
+export const switchAssetTypeSpec: AssetTypeSpec = {
+	type: "switch",
+	detailTitle: "交换机档案",
+	providerOptions: [],
+	statusOptions: ontStatusOptions,
+	notApplicable: { location: false, role: false, interfaces: false, hardware: false },
+	sections: [
+		{
+			title: "接入信息",
+			fields: [
+				{
+					key: "role",
+					label: "用途 / 角色",
+					group: "接入信息",
+					inputMode: "manual_required",
+					source: "asset",
+					placeholder: "例如 家庭网络汇聚交换机",
+				},
+				{
+					key: "official_url",
+					label: "厂家资料页",
+					group: "接入信息",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "url",
+				},
+				{ key: "fixed_ipv4", label: "管理 IPv4", group: "接入信息", inputMode: "manual_optional", source: "metadata" },
+				{ key: "mac", label: "MAC", group: "接入信息", inputMode: "manual_optional", source: "metadata" },
+				{
+					key: "management_url",
+					label: "管理 URL",
+					group: "接入信息",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "url",
+				},
+			],
+		},
+		{
+			title: "硬件与端口能力",
+			fields: [
+				{
+					key: "ethernet_port_count",
+					label: "电口数量",
+					group: "硬件与端口能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "optical_port_count",
+					label: "光口数量",
+					group: "硬件与端口能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "other_port_count",
+					label: "其他端口数量",
+					group: "硬件与端口能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "default_ethernet_speed_mbps",
+					label: "默认电口速率 Mbps",
+					group: "硬件与端口能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "default_optical_speed_mbps",
+					label: "默认光口速率 Mbps",
+					group: "硬件与端口能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "switching_capacity_gbps",
+					label: "交换容量 Gbps",
+					group: "硬件与端口能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "ethernet_supported_speeds",
+					label: "电口支持速率",
+					group: "硬件与端口能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "10 / 100 / 1000 / 2500 Mbps",
+				},
+				{
+					key: "optical_supported_speeds",
+					label: "光口支持速率",
+					group: "硬件与端口能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "10 Gbps",
+				},
+				fixedChoiceField("power_mode", "供电方式", "硬件与端口能力", switchPowerModeOptions),
+			],
+		},
+		{
+			title: "设备与环境",
+			fields: [
+				{
+					key: "net_weight_g",
+					label: "净重 g",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "dimensions_mm",
+					label: "外观尺寸 mm",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "长 × 宽 × 高",
+				},
+				{
+					key: "installation_method",
+					label: "安装方式",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "桌面 / 壁挂",
+				},
+				fixedChoiceField("forwarding_method", "转发方式", "设备与环境", switchForwardingMethodOptions),
+				{
+					key: "mac_table_entries",
+					label: "MAC 地址表容量",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "lightning_protection_kv",
+					label: "防雷等级 kV",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+				{
+					key: "cooling_method",
+					label: "散热方式",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "例如 全铝散热器 + 钢壳机身",
+				},
+				{
+					key: "power_input",
+					label: "输入电源",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "12V 1.5A Max",
+				},
+				{
+					key: "operating_temperature_range",
+					label: "工作温度",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "0°C ~ 40°C",
+				},
+				{
+					key: "operating_humidity_range",
+					label: "工作湿度",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "10% ~ 90% RH 无凝结",
+				},
+				{
+					key: "storage_temperature_range",
+					label: "存储温度",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "-40°C ~ 70°C",
+				},
+				{
+					key: "storage_humidity_range",
+					label: "存储湿度",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "5% ~ 90% RH 无凝结",
+				},
+				{
+					key: "warranty_months",
+					label: "保修期 月",
+					group: "设备与环境",
+					inputMode: "manual_optional",
+					source: "metadata",
+					type: "number",
+				},
+			],
+		},
+		{
+			title: "管理与网络能力",
+			fields: [
+				fixedChoiceField("management_level", "管理级别", "管理与网络能力", switchManagementLevelOptions),
+				fixedChoiceField("management_access", "管理方式", "管理与网络能力", switchManagementAccessOptions),
+				{
+					key: "supported_features",
+					label: "支持功能",
+					group: "管理与网络能力",
+					inputMode: "manual_optional",
+					source: "metadata",
+					placeholder: "例如 VLAN / 端口隔离 / 带宽控制",
+				},
+				fixedChoiceField("vlan_status", "VLAN 支持", "管理与网络能力", switchFeatureStatusOptions),
+				fixedChoiceField("port_isolation_status", "端口隔离", "管理与网络能力", switchFeatureStatusOptions),
+				fixedChoiceField("link_aggregation_status", "链路聚合", "管理与网络能力", switchFeatureStatusOptions),
+			],
+		},
+		{
+			title: "备注",
+			fields: [
+				{ key: "notes", label: "备注", group: "备注", inputMode: "manual_optional", source: "asset", span: "full" },
+			],
+		},
+	],
+}
+
+function capturedField(key: string, label: string, group: string): AssetTypeFieldSpec {
+	return { key, label, group, inputMode: "captured_candidate", source: "metadata" }
+}
+
+function fixedChoiceField(
+	key: string,
+	label: string,
+	group: string,
+	options: readonly { value: string; label: string }[]
+): AssetTypeFieldSpec {
+	return { key, label, group, inputMode: "fixed_choice", source: "metadata", type: "select", options }
+}
+
+export function getAssetTypeSpec(type: AssetType) {
+	if (type === "internet") return internetAssetTypeSpec
+	if (type === "ont") return ontAssetTypeSpec
+	if (type === "switch") return switchAssetTypeSpec
+	return undefined
+}
+
+export function getAssetTypeCapabilities(type: AssetType) {
+	const notApplicable = getAssetTypeSpec(type)?.notApplicable
+	return {
+		showLocation: !notApplicable?.location,
+		showRole: !notApplicable?.role,
+		showHardware: !notApplicable?.hardware,
+		showInterfaces: !notApplicable?.interfaces,
+	}
+}
+
+export function normalizeInternetProvider(value: string) {
+	const normalized = value.trim()
+	const aliases: Record<string, string> = {
+		电信: "中国电信",
+		联通: "中国联通",
+		移动: "中国移动",
+	}
+	return aliases[normalized] ?? normalized
+}
+
+export function getInternetStatusLabel(status: AssetStatus) {
+	return internetStatusOptions.find((option) => option.value === status)?.label ?? status
+}
+
+export function getAssetTypeOptionLabel(type: AssetType, fieldKey: string, value: string) {
+	const field = getAssetTypeSpec(type)
+		?.sections.flatMap((section) => section.fields)
+		.find((item) => item.key === fieldKey)
+	return field?.options?.find((option) => option.value === value)?.label ?? value
+}
+
+const sensitiveAssetMetadataKeys = new Set([
+	"password",
+	"passwd",
+	"secret",
+	"token",
+	"credential",
+	"ssid",
+	"wifiname",
+	"qrcode",
+	"broadbandaccount",
+])
+
+export function validateAssetImportMetadata(type: AssetType, metadata: Record<string, string>) {
+	const errors: string[] = []
+	const allowed =
+		type === "ont" || type === "switch"
+			? new Set([
+					"asset_tag",
+					"official_url",
+					"official_image_url",
+					...(type === "ont" ? ontAssetTypeSpec : switchAssetTypeSpec).sections
+						.flatMap((section) => section.fields)
+						.filter((field) => field.source === "metadata")
+						.map((field) => field.key),
+				])
+			: undefined
+	for (const key of Object.keys(metadata)) {
+		const normalizedKey = key.toLowerCase().replace(/[\s_-]+/g, "")
+		if (sensitiveAssetMetadataKeys.has(normalizedKey)) {
+			errors.push(`包含不允许保存的敏感字段 metadata.${key}`)
+			continue
+		}
+		if (allowed && !allowed.has(key)) {
+			errors.push(`字段 metadata.${key} 不属于${type === "switch" ? "交换机" : "光猫"} 严格模板`)
+		}
+	}
+	return errors
+}
+
+export function validateInternetAssetValues(values: {
+	name: string
+	provider: string
+	status: AssetStatus
+	accessTechnology: string
+	authMode: string
+	downMbps?: number
+	upMbps?: number
+}) {
+	const errors: string[] = []
+	if (!values.name.trim()) errors.push("资源名称")
+	if (!internetProviderOptions.some((option) => option.value === normalizeInternetProvider(values.provider))) {
+		errors.push("运营商")
+	}
+	if (!internetStatusOptions.some((option) => option.value === values.status)) errors.push("使用状态")
+	if (!accessTechnologyOptions.some((option) => option.value === values.accessTechnology)) errors.push("线路接入技术")
+	if (!authModeOptions.some((option) => option.value === values.authMode)) errors.push("联网认证方式")
+	if (!values.downMbps || values.downMbps <= 0) errors.push("下行带宽")
+	if (!values.upMbps || values.upMbps <= 0) errors.push("上行带宽")
+	return errors
+}
+
+export function validateOntAssetValues(values: {
+	name: string
+	vendor: string
+	model: string
+	status: AssetStatus
+	location: string
+	carrier: string
+	operatingRole: string
+}) {
+	const errors: string[] = []
+	if (!values.name.trim()) errors.push("资产名称")
+	if (!values.vendor.trim()) errors.push("品牌")
+	if (!values.model.trim()) errors.push("型号 / 规格")
+	if (!ontStatusOptions.some((option) => option.value === values.status)) errors.push("使用状态")
+	if (!values.location.trim()) errors.push("位置")
+	if (!ontCarrierOptions.some((option) => option.value === values.carrier)) errors.push("运营商")
+	if (!ontOperatingRoleOptions.some((option) => option.value === values.operatingRole)) errors.push("工作角色")
+	return errors
+}
