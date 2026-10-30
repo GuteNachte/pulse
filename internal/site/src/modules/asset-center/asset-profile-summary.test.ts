@@ -33,7 +33,7 @@ const broadband = {
 	name: "宽带",
 	vendor: "中国联通",
 	model: "中国联通",
-	metadata: { public_ipv4: "111.199.69.55" },
+	metadata: { public_ipv4: "203.0.113.10" },
 } as unknown as AssetRecord
 
 assertEqual(getAssetModelDisplay(broadband), "中国联通")

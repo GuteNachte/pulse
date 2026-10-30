@@ -488,7 +488,7 @@ const internetManual = {
 		down_mbps: 300,
 		up_mbps: 300,
 		public_ip_mode: "manual",
-		public_ipv4: "140.235.140.170",
+		public_ipv4: "203.0.113.11",
 		public_ipv6: "2408:8207:9014:abf0:c8d9:bfa0:c6e1:1a17",
 		public_ip_checked_at: "2026-10-20T10:00:00Z",
 		public_ip_auto_refresh: "no",
@@ -501,7 +501,7 @@ assertDeepEqual(
 		.find((group) => group.title === "公网地址")
 		?.rows.map((row) => [row.label, row.value]),
 	[
-		["当前公网 IPv4", "140.235.140.170"],
+		["当前公网 IPv4", "203.0.113.11"],
 		["当前公网 IPv6", "2408:8207:9014:abf0:c8d9:bfa0:c6e1:1a17"],
 		["维护方式", "手动填写"],
 		["上次维护时间", "2026-10-20 18:00"],

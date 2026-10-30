@@ -163,7 +163,7 @@ export const demoContainers: ContainerRecord[] = [
 		"demo-container-pulse",
 		"demo-system-nas",
 		"pulse-hub",
-		"ghcr.io/gutenachte/pulse-hub:1.0.8",
+		"ghcr.io/example/pulse-hub:1.0.8",
 		"running",
 		"pulse"
 	),
@@ -171,7 +171,7 @@ export const demoContainers: ContainerRecord[] = [
 		"demo-container-agent",
 		"demo-system-nas",
 		"pulse-agent",
-		"ghcr.io/gutenachte/pulse-agent:1.0.8",
+		"ghcr.io/example/pulse-agent:1.0.8",
 		"running",
 		"pulse"
 	),

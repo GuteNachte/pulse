@@ -712,7 +712,7 @@ export function AssetParameterGroupEditDialog({
 										<Input
 											value={internetAddressManualIPv4}
 											onChange={(event) => setInternetAddressManualIPv4(event.target.value)}
-											placeholder="例如 140.235.140.170"
+											placeholder="例如 203.0.113.11"
 											disabled={readOnly || internetAddressSaving}
 											className="h-8"
 										/>
