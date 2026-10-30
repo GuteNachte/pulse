@@ -291,6 +291,9 @@ $siteDir = Join-Path $repoRoot "internal\site"
 $dataPath = Join-Path $repoRoot $DataDir
 $logDir = Join-Path $repoRoot "build\dev-logs"
 $devBinDir = Join-Path $repoRoot "build\dev"
+# 2026-10-30 公开镜像：安装命令默认指向 ghcr.io（env 由 Hub 下发给前端）
+if (-not $env:PULSE_AGENT_IMAGE) { $env:PULSE_AGENT_IMAGE = "ghcr.io/gutenachte/pulse-agent:1.0.8" }
+
 $hubExePath = Join-Path $devBinDir "hub-dev.exe"
 $goPath = "C:\Program Files\Go\bin\go.exe"
 
