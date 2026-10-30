@@ -142,8 +142,8 @@ func TestInternetAddressScheduleTargetsOnlyActiveInternetAssets(t *testing.T) {
 }
 
 func TestNormalizeManualPublicAddress(t *testing.T) {
-	ipv4, message := normalizeManualPublicAddress("140.235.140.170", true)
-	require.Equal(t, "140.235.140.170", ipv4)
+	ipv4, message := normalizeManualPublicAddress("203.0.113.11", true)
+	require.Equal(t, "203.0.113.11", ipv4)
 	require.Empty(t, message)
 
 	ipv6, message := normalizeManualPublicAddress("2408:8207:9014:abf0:c8d9:bfa0:c6e1:1a17", false)

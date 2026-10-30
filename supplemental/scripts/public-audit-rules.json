@@ -49,14 +49,26 @@
       "description": "The legacy private API endpoint must not appear in public-facing files.",
       "pathPattern": "(?s).*",
       "pattern": "192\\.168\\.1\\.20:3005",
-      "historyLiteralParts": ["192.168.1.", "20:3005"]
+      "historyLiteralParts": [
+        "192.168.1.",
+        "20:3005"
+      ]
     },
     {
       "id": "private-harbor-endpoint",
       "description": "The private Harbor endpoint must not appear in public-facing files.",
       "pathPattern": "(?s).*",
       "pattern": "hb\\.gutenacht\\.site:66",
-      "historyLiteralParts": ["hb.gutenacht.site", ":66"]
+      "historyLiteralParts": [
+        "hb.gutenacht.site",
+        ":66"
+      ]
+    },
+    {
+      "id": "private-public-ip",
+      "description": "The operator home public IP must not appear in public-facing files.",
+      "pathPattern": "(?s).*",
+      "pattern": "111\\.199\\.69\\.55|140\\.235\\.140\\.170"
     }
   ],
   "allowedFindings": [
