@@ -20,7 +20,7 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Assert-ReleaseVersionConsistency -Version $Version
 
 if ([string]::IsNullOrWhiteSpace($Image)) {
-    $Image = "registry.example.com/infra/pulse-hub:$Version"
+    $Image = "ghcr.io/gutenachte/pulse-hub:$Version"
 }
 
 $repository = Get-DockerImageRepository $Image

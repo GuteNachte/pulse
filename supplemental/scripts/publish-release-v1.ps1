@@ -33,11 +33,12 @@ if (-not [string]::IsNullOrWhiteSpace($AndroidSigningPropertiesPath) -and
 $androidReleaseBuilt = $false
 
 if ([string]::IsNullOrWhiteSpace($HubImage)) {
-    $HubImage = "registry.example.com/infra/pulse-hub:$Version"
+    # 2026-10-31 默认镜像改为 GHCR：1.0.8 发布时因默认占位 registry.example.com 推送失败踩过坑
+    $HubImage = "ghcr.io/gutenachte/pulse-hub:$Version"
 }
 
 if ([string]::IsNullOrWhiteSpace($LinuxAgentImage)) {
-    $LinuxAgentImage = "registry.example.com/infra/pulse-agent:$Version"
+    $LinuxAgentImage = "ghcr.io/gutenachte/pulse-agent:$Version"
 }
 
 Push-Location $repoRoot

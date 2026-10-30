@@ -36,6 +36,10 @@ docker compose up -d
 
 然后打开 `http://<主机局域网IP>:8090`。完整说明（端口、数据目录、自建镜像、升级、排错）见 [docs/docker-quickstart.md](docs/docker-quickstart.md)。
 
+## 发布流程
+
+项目自身的发版用 `supplemental/scripts/release.ps1` 向导一条命令完成（版本改写→验证→审计→构建→镜像→离线包→GitHub Release），流程详见 [docs/release-process.md](docs/release-process.md)。
+
 ## 本地开发
 
 Windows 日常开发直接双击项目根目录的 `Start-Pulse-Dev.cmd`：它会启动或复用 Hub 与 Vite，健康检查通过后自动打开 Web 页面；优先使用 PowerShell 7，未安装时兼容回退到 Windows PowerShell 5.1。

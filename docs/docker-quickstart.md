@@ -96,7 +96,7 @@ Agent 提供四个变体，按宿主硬件选择（Hub 镜像只有默认一个�
 
 把 compose 里的 `pulse-agent` 镜像换成对应标签即可，其余参数不用改。
 
-## 可选：换成你自己的镜像仓库
+## 换成你自己的镜像仓库
 
 Pulse 的镜像是标准 OCI 镜像，可以自己构建、自己托管：
 
@@ -108,7 +108,7 @@ docker push <你的仓库>/pulse-hub:1.0.8
 docker push <你的仓库>/pulse-agent:1.0.8
 ```
 
-然后把 Hub 容器里的 `PULSE_AGENT_IMAGE` 改成你自己的地址，安装命令就会自动跟着变。
+然后把 Hub 容器里的 `PULSE_AGENT_IMAGE` 改成你自己的地址，安装命令就会自动跟着变。项目自身的发版流程见 [release-process.md](release-process.md)。
 
 ## 端口与网络
 
