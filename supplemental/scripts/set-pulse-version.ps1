@@ -106,7 +106,7 @@ foreach ($entry in @(
     @{ Path = "docs\flynas-compose-checklist.md"; Count = 11 },
     @{ Path = "docs\local-dev-runbook.md"; Count = 6 },
     @{ Path = "docs\release-deployment-runbook.md"; Count = 23 },
-    @{ Path = "readme.md"; Count = 2 }
+    @{ Path = "readme.md"; Count = 3 }
 )) {
     $rules.Add((New-VersionRule $entry.Path $old $target $entry.Count)) | Out-Null
 }

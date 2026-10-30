@@ -1,6 +1,6 @@
 # Pulse
 
-![Version](https://img.shields.io/badge/version-1.0.8-3B82F6) ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20Android-2E9E8F) ![Backend](https://img.shields.io/badge/backend-PocketBase%20%2B%20Go-6D5AA8) ![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20Vite%20%2B%20Tailwind-A8743E)
+![Version](https://img.shields.io/badge/version-1.0.9-3B82F6) ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20Android-2E9E8F) ![Backend](https://img.shields.io/badge/backend-PocketBase%20%2B%20Go-6D5AA8) ![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20Vite%20%2B%20Tailwind-A8743E)
 
 **Pulse** 是一个面向家庭场景的自托管资产管理与监控平台：把家里的数码硬件、网络设备、智能设备、服务端点统一建成清晰的资产主档，能采集的设备叠加 Agent / SNMP / 网站监控，不能采集的设备也保持一目了然；在此之上提供网络拓扑设备地图、真实在线探测、容器与网站监控、告警与操作审计。
 
@@ -72,7 +72,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\run-hub
 
 ## 版本
 
-当前正式版本为 `1.0.8`（2026-10-29 发布）。
+当前正式版本为 `1.0.9`（2026-10-29 发布）。
 
 版本发布要求：
 
@@ -86,7 +86,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\run-hub
 npm.cmd --prefix internal/site run check -- --max-diagnostics=200
 npm.cmd --prefix internal/site run build
 go test -tags=testing -count=1 -timeout=240s ./...
-powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\check-version-consistency.ps1 -Version 1.0.8
+powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\check-version-consistency.ps1 -Version 1.0.9
 ```
 
 ## 文档

@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "1.0.8",
+    [string]$Version = "1.0.9",
     [string]$BuildDir = "build/releases/agent",
     [string]$DataDir = "pulse_data",
     [string]$LinuxImage = "",
