@@ -1022,6 +1022,8 @@ export interface PulseInfo {
 	agent_actual_versions?: AgentVersionSummary[]
 	agent_total_systems?: number
 	agent_online_systems?: number
+	/** 部署实例自配的 Agent 镜像地址（PULSE_AGENT_IMAGE 环境变量下发） */
+	agent_image?: string
 	readiness?: PulseReadinessCheck[]
 }
 

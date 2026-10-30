@@ -3,6 +3,7 @@ package hub
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 
@@ -51,7 +52,9 @@ func (h *Hub) getInfo(e *core.RequestEvent) error {
 		AgentActualVersions []agentVersionSummary `json:"agent_actual_versions,omitempty"`
 		AgentTotalSystems   int                   `json:"agent_total_systems,omitempty"`
 		AgentOnlineSystems  int                   `json:"agent_online_systems,omitempty"`
-		Readiness           []readinessCheck      `json:"readiness,omitempty"`
+		// 2026-10-30 公开部署：镜像仓库由各部署实例自配，通过环境变量下发给前端安装命令。
+		AgentImage string           `json:"agent_image,omitempty"`
+		Readiness  []readinessCheck `json:"readiness,omitempty"`
 	}
 	info := infoResponse{
 		Version:     pulse.Version,
@@ -59,6 +62,7 @@ func (h *Hub) getInfo(e *core.RequestEvent) error {
 		Environment: hubRuntimeEnvironment(),
 		BuildCommit: strings.TrimSpace(pulse.BuildCommit),
 		BuildTime:   strings.TrimSpace(pulse.BuildTime),
+		AgentImage:  strings.TrimSpace(os.Getenv("PULSE_AGENT_IMAGE")),
 	}
 	if e.Auth != nil {
 		agentInfo := h.buildAgentVersionInfo(e.Auth)

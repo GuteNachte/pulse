@@ -2,7 +2,18 @@ export const AGENT_VERSION = "1.0.8"
 // 2026-10-30 镜像仓库地址改由构建期注入（vite define）：公开演示构建使用占位符，
 // 避免把私有 Harbor 域名写进公开站点产物；正式构建仍是实际地址。
 export const PULSE_REGISTRY_HOST = import.meta.env.VITE_PULSE_REGISTRY_HOST || "your-registry.example.com:443"
-export const DEFAULT_LINUX_AGENT_IMAGE = `${PULSE_REGISTRY_HOST}/infra/pulse-agent:${AGENT_VERSION}`
+// 构建期兜底值；运行时可由部署实例通过 PULSE_AGENT_IMAGE 环境变量覆盖（见 setDefaultLinuxAgentImage）。
+export const BUILD_TIME_LINUX_AGENT_IMAGE = `${PULSE_REGISTRY_HOST}/infra/pulse-agent:${AGENT_VERSION}`
+let runtimeLinuxAgentImage = ""
+/** 部署实例自配的镜像地址（Hub 通过 public-info 下发），为空时退回构建期兜底值。 */
+export function setDefaultLinuxAgentImage(image: string | undefined) {
+	runtimeLinuxAgentImage = (image ?? "").trim()
+}
+export function getDefaultLinuxAgentImage() {
+	return runtimeLinuxAgentImage || BUILD_TIME_LINUX_AGENT_IMAGE
+}
+/** @deprecated 使用 getDefaultLinuxAgentImage()，保留常量以兼容既有引用 */
+export const DEFAULT_LINUX_AGENT_IMAGE = BUILD_TIME_LINUX_AGENT_IMAGE
 export const DEFAULT_LINUX_AGENT_DATA_DIR = "/opt/pulse-agent/data"
 export const FLYNAS_LINUX_AGENT_DATA_DIR = "/vol1/1000/docker/pulse-agent/data"
 export const UNRAID_LINUX_AGENT_DATA_DIR = "/mnt/user/appdata/pulse-agent"

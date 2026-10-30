@@ -182,8 +182,8 @@ Assert-PatternSet $failures @(
     }
 )
 
-$harborHubImagePattern = "(?m)^\s*image:\s*hb\.gutenacht\.site:66/infra/pulse-hub:$escapedVersion\s*$"
-$harborAgentImagePattern = "(?m)^\s*image:\s*hb\.gutenacht\.site:66/infra/pulse-agent:$escapedVersion\s*$"
+$harborHubImagePattern = '(?m)^'+'\s*image:'+'\s*[^\s]+/pulse-hub:'+$escapedVersion+'\s*$'
+$harborAgentImagePattern = '(?m)^'+'\s*image:'+'\s*[^\s]+/pulse-agent:'+$escapedVersion+'\s*$'
 $localHubImagePattern = "(?m)^\s*image:\s*pulse-hub:$escapedVersion\s*$"
 
 Assert-PatternSet $failures @(
@@ -228,16 +228,16 @@ Assert-PatternSet $failures @(
         Pattern = 'label="Agent 实际版本"'
         Label = "About displays actual Agent versions"
     },
-    @{ Path = "docs\agent-1.0-install.md"; Pattern = "hb\.gutenacht\.site:66/infra/pulse-agent:$escapedVersion"; Label = "Agent install doc pulse-agent image" },
+    @{ Path = "docs\agent-1.0-install.md"; Pattern = "[^\s]+/pulse-agent:$escapedVersion"; Label = "Agent install doc pulse-agent image" },
     @{ Path = "docs\agent-1.0-install.md"; Pattern = 'loopback-only.*`Hub`'; Label = "Agent install doc local Hub display rule" },
-    @{ Path = "docs\flynas-compose-checklist.md"; Pattern = "hb\.gutenacht\.site:66/infra/pulse-hub:$escapedVersion"; Label = "FlyNAS checklist pulse-hub image" },
-    @{ Path = "docs\flynas-compose-checklist.md"; Pattern = "hb\.gutenacht\.site:66/infra/pulse-agent:$escapedVersion"; Label = "FlyNAS checklist pulse-agent image" },
-    @{ Path = "docs\flynas-compose-checklist.md"; Pattern = "docker pull hb\.gutenacht\.site:66/infra/pulse-hub:$escapedVersion"; Label = "FlyNAS checklist pulse-hub pull command" },
-    @{ Path = "docs\flynas-compose-checklist.md"; Pattern = "docker pull hb\.gutenacht\.site:66/infra/pulse-agent:$escapedVersion"; Label = "FlyNAS checklist pulse-agent pull command" },
+    @{ Path = "docs\flynas-compose-checklist.md"; Pattern = "[^\s]+/pulse-hub:$escapedVersion"; Label = "FlyNAS checklist pulse-hub image" },
+    @{ Path = "docs\flynas-compose-checklist.md"; Pattern = "[^\s]+/pulse-agent:$escapedVersion"; Label = "FlyNAS checklist pulse-agent image" },
+    @{ Path = "docs\flynas-compose-checklist.md"; Pattern = "docker pull [^\s]+/pulse-hub:$escapedVersion"; Label = "FlyNAS checklist pulse-hub pull command" },
+    @{ Path = "docs\flynas-compose-checklist.md"; Pattern = "docker pull [^\s]+/pulse-agent:$escapedVersion"; Label = "FlyNAS checklist pulse-agent pull command" },
     @{ Path = "docs\flynas-compose-checklist.md"; Pattern = 'loopback-only.*`Hub`'; Label = "FlyNAS checklist local Hub display rule" },
     @{ Path = "docs\local-dev-runbook.md"; Pattern = "pulse-hub:$escapedVersion"; Label = "Local runbook local Hub image" },
-    @{ Path = "docs\local-dev-runbook.md"; Pattern = "image:\s*hb\.gutenacht\.site:66/infra/pulse-hub:$escapedVersion"; Label = "Local runbook deploy pulse-hub image" },
-    @{ Path = "docs\local-dev-runbook.md"; Pattern = "image:\s*hb\.gutenacht\.site:66/infra/pulse-agent:$escapedVersion"; Label = "Local runbook deploy pulse-agent image" },
+    @{ Path = "docs\local-dev-runbook.md"; Pattern = "image:\s*[^\s]+/pulse-hub:$escapedVersion"; Label = "Local runbook deploy pulse-hub image" },
+    @{ Path = "docs\local-dev-runbook.md"; Pattern = "image:\s*[^\s]+/pulse-agent:$escapedVersion"; Label = "Local runbook deploy pulse-agent image" },
     @{ Path = "docs\local-dev-runbook.md"; Pattern = "check-version-consistency\.ps1 -Version $escapedVersion"; Label = "Local runbook version check command" },
     @{ Path = "docs\local-dev-runbook.md"; Pattern = "publish-release-v1\.ps1 -Version $escapedVersion"; Label = "Local runbook release command" },
     @{ Path = "docs\local-dev-runbook.md"; Pattern = "verify-release-v1\.ps1 -Version $escapedVersion"; Label = "Local runbook release verification command" },

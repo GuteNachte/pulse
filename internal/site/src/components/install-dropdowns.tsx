@@ -7,7 +7,7 @@ import {
 	buildLinuxAgentPairCompose,
 	buildLinuxAgentPairDockerRun,
 	buildWindowsPairingInstallCommand,
-	DEFAULT_LINUX_AGENT_IMAGE,
+	getDefaultLinuxAgentImage,
 	FLYNAS_LINUX_AGENT_DATA_DIR,
 	UNRAID_LINUX_AGENT_DATA_DIR,
 	normalizeLocalAgentDownloadUrl,
@@ -66,7 +66,7 @@ async function getAgentReleaseDownload(platform: AgentReleasePlatform, agentHubU
 	}
 	return {
 		version: AGENT_VERSION,
-		url: platform === "windows" ? buildDefaultWindowsAgentDownloadURL(agentHubURL) : DEFAULT_LINUX_AGENT_IMAGE,
+		url: platform === "windows" ? buildDefaultWindowsAgentDownloadURL(agentHubURL) : getDefaultLinuxAgentImage(),
 	}
 }
 

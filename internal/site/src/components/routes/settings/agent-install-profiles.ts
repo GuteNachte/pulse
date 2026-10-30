@@ -6,7 +6,7 @@ import {
 	buildLinuxAgentPairDockerRun,
 	buildUnraidAgentTemplate,
 	buildWindowsPairingInstallCommand,
-	DEFAULT_LINUX_AGENT_IMAGE,
+	getDefaultLinuxAgentImage,
 	DEFAULT_LINUX_AGENT_DATA_DIR,
 	FLYNAS_LINUX_AGENT_DATA_DIR,
 	UNRAID_LINUX_AGENT_DATA_DIR,
@@ -47,7 +47,7 @@ export function buildInstallProfiles({
 	const windowsDownloadUrl = windowsRelease?.download_url || buildDefaultWindowsAgentDownloadURL(hubUrl)
 	const windowsVersion = windowsRelease?.version || AGENT_VERSION
 	const linuxRelease = selectAgentUpdateTarget(releases, "linux", "amd64").target
-	const linuxImage = linuxRelease?.download_url || DEFAULT_LINUX_AGENT_IMAGE
+	const linuxImage = linuxRelease?.download_url || getDefaultLinuxAgentImage()
 	const linuxVersion = linuxRelease?.version || AGENT_VERSION
 	const windowsCommand = buildWindowsPairingInstallCommand(pairingCode, hubUrl, {
 		version: windowsVersion,
