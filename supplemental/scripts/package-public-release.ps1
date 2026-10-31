@@ -38,9 +38,7 @@ if ([string]::IsNullOrWhiteSpace($WindowsAgentPath)) {
 } elseif (-not [System.IO.Path]::IsPathRooted($WindowsAgentPath)) {
     $WindowsAgentPath = Join-Path $repoRoot $WindowsAgentPath
 }
-if ([string]::IsNullOrWhiteSpace($AndroidApkPath)) {
-    $AndroidApkPath = Join-Path $repoRoot "internal\site\android\app\build\outputs\apk\debug\app-debug.apk"
-} elseif (-not [System.IO.Path]::IsPathRooted($AndroidApkPath)) {
+if (-not [string]::IsNullOrWhiteSpace($AndroidApkPath) -and -not [System.IO.Path]::IsPathRooted($AndroidApkPath)) {
     $AndroidApkPath = Join-Path $repoRoot $AndroidApkPath
 }
 if (-not [System.IO.Path]::IsPathRooted($OutputDirectory)) {
@@ -49,11 +47,15 @@ if (-not [System.IO.Path]::IsPathRooted($OutputDirectory)) {
 
 foreach ($required in @(
     @{ Path = $WindowsAgentPath; Label = "Windows Agent" },
-    @{ Path = $AndroidApkPath; Label = "Android APK" },
     @{ Path = (Join-Path $repoRoot "supplemental\docker\hub\docker-compose.yml"); Label = "Hub Compose template" },
     @{ Path = (Join-Path $repoRoot "supplemental\docker\agent\docker-compose.yml"); Label = "Agent Compose template" },
     @{ Path = (Join-Path $repoRoot "LICENSE"); Label = "LICENSE" },
     @{ Path = (Join-Path $repoRoot "THIRD_PARTY_NOTICES.md"); Label = "third-party notices" }
+) + @(
+    # 2026-10-31 Android 暂停期（PBL-008）：仅当显式提供了 APK 路径时才校验
+    if (-not [string]::IsNullOrWhiteSpace($AndroidApkPath)) {
+        @{ Path = $AndroidApkPath; Label = "Android APK" }
+    }
 )) {
     if (-not (Test-Path -LiteralPath $required.Path -PathType Leaf)) {
         throw "$($required.Label) is missing: $($required.Path)"
@@ -118,7 +120,10 @@ function Set-PublicComposeImages {
 }
 
 Copy-Item -LiteralPath $WindowsAgentPath -Destination (Join-Path $OutputDirectory $agentFileName) -Force
-Copy-Item -LiteralPath $AndroidApkPath -Destination (Join-Path $OutputDirectory $androidFileName) -Force
+# 2026-10-31 Android 暂停期：未提供 APK 时不复制，release-manifest 里也不登记 Android 条目
+if (-not [string]::IsNullOrWhiteSpace($AndroidApkPath)) {
+    Copy-Item -LiteralPath $AndroidApkPath -Destination (Join-Path $OutputDirectory $androidFileName) -Force
+}
 Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSE") -Destination (Join-Path $OutputDirectory "LICENSE") -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "THIRD_PARTY_NOTICES.md") -Destination (Join-Path $OutputDirectory "THIRD_PARTY_NOTICES.md") -Force
 
@@ -131,9 +136,7 @@ Set-PublicComposeImages `
     -DestinationPath (Join-Path $OutputDirectory "pulse-agent.yml") `
     -IncludeHub $false
 
-$artifactNames = @(
-    $agentFileName,
-    $androidFileName,
+$artifactNames = @( $agentFileName ) + @( if (-not [string]::IsNullOrWhiteSpace($AndroidApkPath)) { $androidFileName } ) + @(
     "docker-compose.yml",
     "pulse-agent.yml",
     "LICENSE",
