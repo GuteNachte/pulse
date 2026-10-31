@@ -3,12 +3,7 @@
 		"version": "1.0.9",
 		"date": "2026-10-31",
 		"title": "Pulse 1.0.9 发布记录",
-		"badges": [
-			"Web / Hub",
-			"Agent / 部署",
-			"移动端 / Android App",
-			"文档 / 规则"
-		],
+		"badges": ["Web / Hub", "Agent / 部署", "移动端 / Android App", "文档 / 规则"],
 		"sections": [
 			{
 				"title": "Web / Hub",

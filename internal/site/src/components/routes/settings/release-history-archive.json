@@ -3,12 +3,7 @@
 		"version": "1.0.8",
 		"date": "2026-10-28",
 		"title": "Pulse 1.0.8 开发记录",
-		"badges": [
-			"Web / Hub",
-			"Agent / 部署",
-			"移动端 / Android App",
-			"文档 / 规则"
-		],
+		"badges": ["Web / Hub", "Agent / 部署", "移动端 / Android App", "文档 / 规则"],
 		"sections": [
 			{
 				"title": "Web / Hub",
@@ -50,12 +45,7 @@
 		"version": "1.0.7",
 		"date": "2026-10-23",
 		"title": "Pulse 1.0.7 开发记录",
-		"badges": [
-			"Web / Hub",
-			"Agent / 部署",
-			"移动端 / Android App",
-			"文档 / 规则"
-		],
+		"badges": ["Web / Hub", "Agent / 部署", "移动端 / Android App", "文档 / 规则"],
 		"sections": [
 			{
 				"title": "Web / Hub",
@@ -943,14 +933,7 @@
 		"version": "1.0.5",
 		"date": "2026-06-23",
 		"title": "Pulse 1.0.5 正式发布",
-		"badges": [
-			"正式版",
-			"Web / Hub",
-			"Android App",
-			"Agent",
-			"部署 / 发布",
-			"版本规则"
-		],
+		"badges": ["正式版", "Web / Hub", "Android App", "Agent", "部署 / 发布", "版本规则"],
 		"sections": [
 			{
 				"title": "Web / Hub",
@@ -1483,12 +1466,7 @@
 		"version": "1.0.4",
 		"date": "2026-06-13",
 		"title": "移动端重设计、容器治理与 Hub / Agent 同步发布",
-		"badges": [
-			"Web / Hub",
-			"Android App",
-			"Agent",
-			"部署 / 发布"
-		],
+		"badges": ["Web / Hub", "Android App", "Agent", "部署 / 发布"],
 		"sections": [
 			{
 				"title": "Web / Hub",
@@ -1540,12 +1518,7 @@
 		"version": "1.0.3",
 		"date": "2026-06-10",
 		"title": "Pulse 归属、设置页与发布部署收敛",
-		"badges": [
-			"Web / Hub",
-			"Agent",
-			"部署 / 发布",
-			"版本规则"
-		],
+		"badges": ["Web / Hub", "Agent", "部署 / 发布", "版本规则"],
 		"sections": [
 			{
 				"title": "Web / Hub",
@@ -1558,9 +1531,7 @@
 			},
 			{
 				"title": "移动端 / Android App",
-				"items": [
-					"本版本尚未包含独立 Android App 功能改动；移动端版本号随 Hub / Agent / Web 口径保持一致。"
-				]
+				"items": ["本版本尚未包含独立 Android App 功能改动；移动端版本号随 Hub / Agent / Web 口径保持一致。"]
 			},
 			{
 				"title": "Agent",
@@ -1595,12 +1566,7 @@
 		"version": "1.0.2",
 		"date": "2026-06-08",
 		"title": "Hub 同机 Agent、手动更新和从属监控收敛版",
-		"badges": [
-			"Web / Hub",
-			"Agent",
-			"部署 / 发布",
-			"版本规则"
-		],
+		"badges": ["Web / Hub", "Agent", "部署 / 发布", "版本规则"],
 		"sections": [
 			{
 				"title": "Web / Hub",
@@ -1614,9 +1580,7 @@
 			},
 			{
 				"title": "移动端 / Android App",
-				"items": [
-					"本版本尚未包含独立 Android App 功能改动；移动端版本号随 Hub / Agent / Web 口径保持一致。"
-				]
+				"items": ["本版本尚未包含独立 Android App 功能改动；移动端版本号随 Hub / Agent / Web 口径保持一致。"]
 			},
 			{
 				"title": "Agent",
@@ -1657,12 +1621,7 @@
 		"version": "1.0.1",
 		"date": "2026-06-05",
 		"title": "首个正式版后的收敛更新",
-		"badges": [
-			"Web / Hub",
-			"Agent",
-			"部署 / 发布",
-			"版本规则"
-		],
+		"badges": ["Web / Hub", "Agent", "部署 / 发布", "版本规则"],
 		"sections": [
 			{
 				"title": "Web / Hub",
@@ -1678,9 +1637,7 @@
 			},
 			{
 				"title": "移动端 / Android App",
-				"items": [
-					"本版本尚未包含独立 Android App 功能改动；移动端版本号随 Hub / Agent / Web 口径保持一致。"
-				]
+				"items": ["本版本尚未包含独立 Android App 功能改动；移动端版本号随 Hub / Agent / Web 口径保持一致。"]
 			},
 			{
 				"title": "Agent",
@@ -1722,10 +1679,7 @@
 		"version": "1.0.0",
 		"date": "2026-06-05",
 		"title": "首个正式基线版本",
-		"badges": [
-			"正式版",
-			"基线"
-		],
+		"badges": ["正式版", "基线"],
 		"sections": [
 			{
 				"title": "版本定位",
