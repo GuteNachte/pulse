@@ -60,3 +60,5 @@ docs/project-backlog.md
 docs/asset-parameter-organization-playbook.md
 docs/pocketbase-foundation-audit.md
 docs/agent-2.0-collection-design.md
+.archify/
+docs/idle-reports/
