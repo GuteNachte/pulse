@@ -26,7 +26,7 @@ function Read-TextFile {
     }
 
     if (-not $textFileCache.ContainsKey($RelativePath)) {
-        $textFileCache[$RelativePath] = Get-Content -Raw -LiteralPath $path
+        $textFileCache[$RelativePath] = Get-Content -Raw -Encoding UTF8 -LiteralPath $path
     }
     return $textFileCache[$RelativePath]
 }
@@ -260,7 +260,8 @@ $versionedTextFiles = @(
     "docs\agent-1.0-install.md",
     "docs\flynas-compose-checklist.md",
     "docs\local-dev-runbook.md",
-    "docs\release-deployment-runbook.md"
+    "docs\release-deployment-runbook.md",
+    "docs\docker-quickstart.md"
 )
 foreach ($relativePath in $versionedTextFiles) {
     Assert-FilePattern $failures $relativePath $escapedVersion "$relativePath contains $Version"

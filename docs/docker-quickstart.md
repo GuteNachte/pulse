@@ -21,7 +21,7 @@ mkdir -p ~/pulse && cd ~/pulse
 ```yaml
 services:
   pulse-hub:
-    image: ghcr.io/gutenachte/pulse-hub:1.0.8
+    image: ghcr.io/gutenachte/pulse-hub:1.0.9
     container_name: pulse-hub
     restart: unless-stopped
     network_mode: host
@@ -30,10 +30,10 @@ services:
     command: ["serve", "--dir=/pulse_data", "--http=0.0.0.0:8090"]
     environment:
       # 让 Hub 生成的 Agent 安装命令指向可用的公共镜像
-      PULSE_AGENT_IMAGE: ghcr.io/gutenachte/pulse-agent:1.0.8
+      PULSE_AGENT_IMAGE: ghcr.io/gutenachte/pulse-agent:1.0.9
 
   pulse-agent:
-    image: ghcr.io/gutenachte/pulse-agent:1.0.8
+    image: ghcr.io/gutenachte/pulse-agent:1.0.9
     container_name: pulse-agent
     restart: unless-stopped
     network_mode: host
@@ -72,7 +72,7 @@ Hub 装在常开的 NAS 上，其它机器（Windows 台式机、另一台 NAS�
 
 1. 只启动上面的 `pulse-hub` 服务。
 2. 浏览器进入 Hub → **设置 → Agent 管理**，页面会给出对应平台的安装命令，复制到目标机器执行。
-3. Hub 生成的镜像地址来自它自己的配置：容器部署时由 `PULSE_AGENT_IMAGE` 环境变量决定，默认使用 `ghcr.io/gutenachte/pulse-agent:1.0.8`。
+3. Hub 生成的镜像地址来自它自己的配置：容器部署时由 `PULSE_AGENT_IMAGE` 环境变量决定，默认使用 `ghcr.io/gutenachte/pulse-agent:1.0.9`。
 
 ## 国内网络说明
 
@@ -89,10 +89,10 @@ Agent 提供四个变体，按宿主硬件选择（Hub 镜像只有默认一个�
 
 | 标签 | 适用场景 | 架构 |
 | --- | --- | --- |
-| `pulse-agent:1.0.8` | 默认，Alpine + dmidecode/pciutils/smartmontools | amd64 / arm64 |
-| `pulse-agent:1.0.8-alpine` | 精简版，只装最基础工具 | amd64 / arm64 |
-| `pulse-agent:1.0.8-intel` | 带 `igt-gpu-tools`，采集 Intel 核显指标 | amd64 |
-| `pulse-agent:1.0.8-nvidia` | 基于 CUDA 运行时，配合 NVIDIA GPU 使用 | amd64 |
+| `pulse-agent:1.0.9` | 默认，Alpine + dmidecode/pciutils/smartmontools | amd64 / arm64 |
+| `pulse-agent:1.0.9-alpine` | 精简版，只装最基础工具 | amd64 / arm64 |
+| `pulse-agent:1.0.9-intel` | 带 `igt-gpu-tools`，采集 Intel 核显指标 | amd64 |
+| `pulse-agent:1.0.9-nvidia` | 基于 CUDA 运行时，配合 NVIDIA GPU 使用 | amd64 |
 
 把 compose 里的 `pulse-agent` 镜像换成对应标签即可，其余参数不用改。
 
@@ -102,10 +102,10 @@ Pulse 的镜像是标准 OCI 镜像，可以自己构建、自己托管：
 
 ```bash
 # 在源码仓库根目录
-docker build -f internal/dockerfile_hub   -t <你的仓库>/pulse-hub:1.0.8   .
-docker build -f internal/dockerfile_agent -t <你的仓库>/pulse-agent:1.0.8 .
-docker push <你的仓库>/pulse-hub:1.0.8
-docker push <你的仓库>/pulse-agent:1.0.8
+docker build -f internal/dockerfile_hub   -t <你的仓库>/pulse-hub:1.0.9   .
+docker build -f internal/dockerfile_agent -t <你的仓库>/pulse-agent:1.0.9 .
+docker push <你的仓库>/pulse-hub:1.0.9
+docker push <你的仓库>/pulse-agent:1.0.9
 ```
 
 然后把 Hub 容器里的 `PULSE_AGENT_IMAGE` 改成你自己的地址，安装命令就会自动跟着变。项目自身的发版流程见 [release-process.md](release-process.md)。
@@ -124,7 +124,7 @@ docker push <你的仓库>/pulse-agent:1.0.8
 ## 升级
 
 ```bash
-# 把 compose 里的 1.0.8 改成新版本号，然后
+# 把 compose 里的 1.0.9 改成新版本号，然后
 docker compose pull && docker compose up -d
 ```
 

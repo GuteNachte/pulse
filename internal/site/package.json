@@ -33,7 +33,7 @@
 		"test:e2e:network-topology": "playwright test e2e/network-topology.spec.ts",
 		"test:websites": "node --experimental-strip-types src/modules/website-monitoring/endpoint-assets-query.test.ts && node --experimental-strip-types src/components/routes/websites/asset-form.test.ts",
 		"test:modules": "node --experimental-strip-types src/modules/registry.test.ts && node --experimental-strip-types src/modules/module-contract.test.ts && node --experimental-strip-types src/components/navbar-menu-navigation.test.ts && node --experimental-strip-types src/components/card-spacing.test.ts && node --experimental-strip-types src/components/systems-table/systems-card-layout.test.ts",
-		"check:versions": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../supplemental/scripts/check-version-consistency.ps1"
+		"check:versions": "pwsh -NoProfile -ExecutionPolicy Bypass -File ../../supplemental/scripts/check-version-consistency.ps1"
 	},
 	"dependencies": {
 		"@capacitor/android": "^8.4.1",
