@@ -72,7 +72,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\run-hub
 
 ## 版本
 
-当前正式版本为 `1.0.9`（2026-10-29 发布）。
+当前正式版本为 `1.0.9`（2026-10-31 发布）。
 
 版本发布要求：
 
@@ -86,7 +86,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\run-hub
 npm.cmd --prefix internal/site run check -- --max-diagnostics=200
 npm.cmd --prefix internal/site run build
 go test -tags=testing -count=1 -timeout=240s ./...
-powershell -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\check-version-consistency.ps1 -Version 1.0.9
+pwsh -NoProfile -ExecutionPolicy Bypass -File supplemental\scripts\check-version-consistency.ps1 -Version 1.0.9
 ```
 
 ## 文档
